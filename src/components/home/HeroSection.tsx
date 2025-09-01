@@ -34,6 +34,16 @@ export function HeroSection() {
             </span>
           </h1>
 
+          {/* Imagem da médica com prancheta */}
+          <div className="max-w-2xl mx-auto mb-8">
+            <img 
+              src="/src/assets/hero-doctor-clipboard.jpg" 
+              alt="Médica profissional segurando prancheta e sorrindo"
+              className="rounded-2xl shadow-[var(--shadow-medical)] w-full h-auto"
+              loading="eager"
+            />
+          </div>
+
           {/* Subtítulo */}
           <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
             Conecte-se com médicos qualificados através de consultas online seguras, 

@@ -33,10 +33,14 @@ export function ServicosSection() {
               {opcoes.map((opcao) => (
                 <Button
                   key={opcao.code}
-                  variant={planoSelecionado === opcao.code ? "medical" : "outline"}
+                  variant="outline"
                   size="sm"
                   onClick={() => setPlanoSelecionado(opcao.code)}
-                  className="relative"
+                  className={`relative ${
+                    planoSelecionado === opcao.code
+                      ? "bg-green-600 text-white border-green-600 hover:bg-green-700"
+                      : "bg-white text-green-700 border-green-600 hover:bg-green-50"
+                  }`}
                 >
                   {opcao.nome}
                   {opcao.code === "FAMILIAR" && (

@@ -110,8 +110,8 @@ const Planos = () => {
                     onClick={() => setDuracaoSelecionada(duracao.meses)}
                     className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                       duracaoSelecionada === duracao.meses
-                        ? "bg-primary text-primary-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                         ? "bg-green-600 text-white border-green-600"
+                         : "bg-white text-green-700 border border-green-600 hover:bg-green-50"
                     }`}
                   >
                     {duracao.label}

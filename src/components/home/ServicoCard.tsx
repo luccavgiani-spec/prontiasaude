@@ -29,6 +29,9 @@ export function ServicoCard({ servico, planoSelecionado, showDesconto = false }:
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
+  // Cálculo do desconto visual de 45% para assinantes de plano
+  const precoComDesconto = showDesconto && planoSelecionado ? servico.precoBase * 0.55 : servico.precoBase;
+
   const handleAgendar = async (email?: string) => {
     const emailParaUsar = email || getEmailAtual();
     
@@ -98,8 +101,8 @@ export function ServicoCard({ servico, planoSelecionado, showDesconto = false }:
             </p>
           </div>
           {showDesconto && planoSelecionado && (
-            <Badge variant="secondary" className="bg-primary/10 text-primary border-primary/20">
-              Com desconto no plano
+            <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
+              45% OFF para assinantes
             </Badge>
           )}
         </div>
@@ -131,22 +134,38 @@ export function ServicoCard({ servico, planoSelecionado, showDesconto = false }:
 
         {/* Preço e CTA */}
         <div className="flex items-center justify-between pt-4 border-t border-border">
-          <div>
-            <span className="text-2xl font-bold text-foreground">
-              {formataPreco(servico.precoBase)}
-            </span>
-            {!planoSelecionado && (
-              <p className="text-xs text-muted-foreground">
-                Sem desconto do plano
-              </p>
+          <div className="flex-1">
+            {showDesconto && planoSelecionado ? (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-medium text-muted-foreground line-through">
+                    {formataPreco(servico.precoBase)}
+                  </span>
+                  <span className="text-2xl font-bold text-green-600">
+                    {formataPreco(precoComDesconto)}
+                  </span>
+                </div>
+                <p className="text-xs text-green-600 font-medium">
+                  Economize 45% com o plano
+                </p>
+              </div>
+            ) : (
+              <div>
+                <span className="text-2xl font-bold text-foreground">
+                  {formataPreco(servico.precoBase)}
+                </span>
+                <p className="text-xs text-muted-foreground">
+                  Sem desconto do plano
+                </p>
+              </div>
             )}
           </div>
           <Button 
             onClick={() => handleAgendar()}
-            variant="medical"
+            variant="outline"
             size="default"
             disabled={isLoading}
-            className="group-hover:scale-105 transition-transform"
+            className="bg-green-600 text-white border-green-600 hover:bg-green-700 ml-4 group-hover:scale-105 transition-transform"
           >
             {isLoading ? "Processando..." : "Agendar"}
           </Button>
