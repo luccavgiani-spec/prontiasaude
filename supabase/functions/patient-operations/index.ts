@@ -8,18 +8,20 @@ const corsHeaders = {
 };
 
 interface PatientData {
-  name: string;
-  email: string;
-  phone_e164: string;
+  name?: string;
   first_name?: string;
   last_name?: string;
-  cpf?: string;
-  birth_date?: string;
-  address_line?: string;
+  email: string;
+  phone?: string;
 }
 
+// Google Sheets configuration
+const SHEET_ID = '1JdHLB0zShDDX462L7KkhH-Hdrmwd4lJubKqhvlY9m04';
+const PATIENTS_GID = '537090397';
+const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+
 const logStep = (step: string, details?: any) => {
-  console.log(`[PATIENT-OPS] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
+  console.log(`[PATIENT-OPERATIONS] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
 };
 
 serve(async (req) => {
@@ -28,7 +30,7 @@ serve(async (req) => {
   }
 
   try {
-    logStep('Function started', { method: req.method });
+    logStep('Function started');
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -38,7 +40,7 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      throw new Error("No authorization header provided");
+      throw new Error("Authentication required");
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -47,19 +49,16 @@ serve(async (req) => {
     const user = userData.user;
     if (!user?.email) throw new Error("User not authenticated");
 
-    const { operation, ...requestData } = await req.json();
+    const { operation, ...patientData } = await req.json();
     logStep('Operation requested', { operation, user: user.email });
 
-    // Initialize Google Sheets API
-    const serviceAccount = JSON.parse(Deno.env.get('GOOGLE_SERVICE_ACCOUNT') || '{}');
-    const jwt = await createJWT(serviceAccount);
-    const accessToken = await getAccessToken(jwt);
-
+    const accessToken = await getAccessToken();
+    
     switch (operation) {
       case 'upsert_patient':
-        return await upsertPatient(requestData, user, accessToken, supabaseClient);
+        return await upsertPatient(patientData, user, supabaseClient, accessToken);
       case 'get_patient':
-        return await getPatient(user, accessToken, supabaseClient);
+        return await getPatient(user, supabaseClient, accessToken);
       default:
         throw new Error(`Unknown operation: ${operation}`);
     }
@@ -73,75 +72,231 @@ serve(async (req) => {
   }
 });
 
-async function createJWT(serviceAccount: any) {
+async function createJWT(): Promise<string> {
+  logStep('Creating JWT for Google Sheets API');
+  
+  const serviceAccount = JSON.parse(Deno.env.get('GOOGLE_SERVICE_ACCOUNT') || '{}');
+  const privateKey = serviceAccount.private_key?.replace(/\\n/g, '\n');
+  
+  if (!privateKey) throw new Error('Google service account private key not found');
+
   const header = {
-    alg: "RS256",
-    typ: "JWT"
+    alg: 'RS256',
+    typ: 'JWT'
   };
 
   const now = Math.floor(Date.now() / 1000);
   const payload = {
     iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-    aud: "https://oauth2.googleapis.com/token",
+    scope: GOOGLE_SHEETS_SCOPE,
+    aud: 'https://oauth2.googleapis.com/token',
     exp: now + 3600,
     iat: now
   };
 
-  const encodedHeader = btoa(JSON.stringify(header));
-  const encodedPayload = btoa(JSON.stringify(payload));
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-  // For production, you would need to implement proper JWT signing
-  // This is a simplified version - in real implementation, use proper crypto
-  return unsignedToken;
+  const encoder = new TextEncoder();
+  const headerBytes = encoder.encode(JSON.stringify(header));
+  const payloadBytes = encoder.encode(JSON.stringify(payload));
+  
+  const headerB64 = btoa(String.fromCharCode(...headerBytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const payloadB64 = btoa(String.fromCharCode(...payloadBytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  const message = `${headerB64}.${payloadB64}`;
+  
+  // Import private key for signing
+  const keyData = await crypto.subtle.importKey(
+    'pkcs8',
+    new TextEncoder().encode(privateKey),
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256',
+    },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    keyData,
+    encoder.encode(message)
+  );
+  
+  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  
+  return `${message}.${signatureB64}`;
 }
 
-async function getAccessToken(jwt: string) {
-  // This is a placeholder - in production, implement proper OAuth2 flow
-  // For now, return a mock token
-  return "mock_access_token";
+async function getAccessToken(): Promise<string> {
+  logStep('Getting access token from Google OAuth2');
+  
+  const jwt = await createJWT();
+  
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
+  });
+
+  if (!response.ok) {
+    throw new Error(`OAuth2 token request failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  logStep('Access token obtained successfully');
+  return data.access_token;
 }
 
-async function upsertPatient(data: PatientData, user: any, accessToken: string, supabase: any) {
-  logStep('Upserting patient', { email: data.email });
+async function updateGoogleSheet(accessToken: string, range: string, values: any[][]) {
+  logStep('Updating Google Sheet', { range, rowCount: values.length });
+  
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}?valueInputOption=RAW`;
+  
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      values: values
+    }),
+  });
 
-  // Split name into first_name and last_name if provided
-  if (data.name && !data.first_name && !data.last_name) {
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Google Sheets update failed: ${response.status} - ${error}`);
+  }
+
+  logStep('Google Sheet updated successfully');
+  return await response.json();
+}
+
+async function findPatientRow(accessToken: string, userId: string): Promise<number | null> {
+  logStep('Searching for existing patient', { userId });
+  
+  const range = `Pacientes!A:A`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`;
+  
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data = await response.json();
+  const values = data.values || [];
+  
+  for (let i = 0; i < values.length; i++) {
+    if (values[i][0] === userId) {
+      logStep('Found existing patient at row', { row: i + 1 });
+      return i + 1;
+    }
+  }
+  
+  logStep('Patient not found, will create new row');
+  return null;
+}
+
+async function upsertPatient(data: PatientData, user: any, supabase: any, accessToken: string) {
+  logStep('Upserting patient', { 
+    name: data.name || `${data.first_name} ${data.last_name}`, 
+    email: data.email 
+  });
+
+  // Split name if needed
+  let firstName = data.first_name;
+  let lastName = data.last_name;
+  
+  if (data.name && !firstName && !lastName) {
     const nameParts = data.name.trim().split(' ');
-    data.first_name = nameParts[0];
-    data.last_name = nameParts.slice(1).join(' ');
+    firstName = nameParts[0];
+    lastName = nameParts.slice(1).join(' ');
   }
 
-  // Update Supabase first
-  const { error: supabaseError } = await supabase
+  const patientRecord = {
+    user_id: user.id,
+    email: data.email,
+    first_name: firstName,
+    last_name: lastName,
+    phone_e164: data.phone,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    profile_complete: true,
+    intake_complete: false
+  };
+
+  // Update Supabase
+  const { error } = await supabase
     .from('patients')
-    .upsert({
-      id: user.id,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      phone_e164: data.phone_e164,
-      cpf: data.cpf,
-      birth_date: data.birth_date,
-      address_line: data.address_line,
-      updated_at: new Date().toISOString()
-    });
+    .upsert(patientRecord, { onConflict: 'id' });
 
-  if (supabaseError) {
-    logStep('Supabase error', supabaseError);
-    throw new Error(`Database error: ${supabaseError.message}`);
+  if (error) throw new Error(`Supabase error: ${error.message}`);
+
+  // Update Google Sheets
+  try {
+    const existingRow = await findPatientRow(accessToken, user.id);
+    const now = new Date().toISOString();
+    
+    const rowData = [
+      user.id,                    // user_id
+      data.email,                 // email  
+      firstName || '',            // first_name
+      lastName || '',             // last_name
+      data.phone || '',           // phone_e164
+      '',                         // cpf
+      '',                         // birth_date
+      '',                         // address_line
+      existingRow ? '' : now,     // created_at (only set if new)
+      now,                        // updated_at
+      'true',                     // profile_complete
+      'false'                     // intake_complete
+    ];
+
+    if (existingRow) {
+      // Update existing row
+      await updateGoogleSheet(accessToken, `Pacientes!A${existingRow}:L${existingRow}`, [rowData]);
+    } else {
+      // Append new row
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Pacientes!A:L:append?valueInputOption=RAW`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: [rowData]
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        logStep('Google Sheets append failed', { error });
+      } else {
+        logStep('Patient added to Google Sheets');
+      }
+    }
+  } catch (sheetsError) {
+    logStep('Google Sheets update failed, but Supabase succeeded', { error: sheetsError.message });
   }
 
-  // TODO: Update Google Sheets with the access token
-  // This would involve calling the Google Sheets API
   logStep('Patient upserted successfully');
 
-  return new Response(JSON.stringify({ success: true }), {
+  return new Response(JSON.stringify({ 
+    success: true, 
+    patient: patientRecord 
+  }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
 
-async function getPatient(user: any, accessToken: string, supabase: any) {
+async function getPatient(user: any, supabase: any, accessToken: string) {
   logStep('Getting patient', { userId: user.id });
 
   const { data, error } = await supabase
@@ -150,12 +305,16 @@ async function getPatient(user: any, accessToken: string, supabase: any) {
     .eq('id', user.id)
     .single();
 
-  if (error && error.code !== 'PGRST116') {
-    logStep('Supabase error', error);
-    throw new Error(`Database error: ${error.message}`);
+  if (error) {
+    logStep('No patient found in Supabase');
+    return new Response(JSON.stringify({ patient: null }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
-  return new Response(JSON.stringify(data || null), {
+  logStep('Patient found', { patient: data });
+
+  return new Response(JSON.stringify({ patient: data }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
