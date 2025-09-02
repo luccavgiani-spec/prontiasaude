@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Shield, Clock, Star } from "lucide-react";
+import heroImage from "@/assets/hero-doctor-modern.jpg";
+import { ArrowRight, CheckCircle } from "lucide-react";
 
 export function HeroSection() {
   const scrollToServicos = () => {
@@ -10,85 +11,111 @@ export function HeroSection() {
   };
 
   return (
-    <section className="relative py-16 md:py-24 bg-[var(--gradient-subtle)] overflow-hidden">
-      {/* Background decorativo */}
-      <div className="absolute inset-0 opacity-5">
-        <div className="absolute top-20 left-10 w-32 h-32 bg-primary rounded-full blur-xl"></div>
-        <div className="absolute bottom-20 right-10 w-48 h-48 bg-secondary rounded-full blur-xl"></div>
-        <div className="absolute top-40 right-20 w-24 h-24 bg-accent rounded-full blur-xl"></div>
-      </div>
-
-      <div className="container mx-auto px-4 relative">
-        <div className="max-w-4xl mx-auto text-center">
-          {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/20 rounded-full text-sm font-medium text-primary mb-6">
-            <Shield className="h-4 w-4" />
-            <span>Plataforma Médica Verificada</span>
-          </div>
-
-          {/* Título principal */}
-          <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
-            Consulta online a partir de{" "}
-            <span className="text-primary bg-[var(--gradient-primary)] bg-clip-text text-transparent">
-              R$ 15,90
-            </span>
-          </h1>
-
-          {/* Imagem da médica com prancheta */}
-          <div className="max-w-2xl mx-auto mb-8">
-            <img 
-              src="/src/assets/hero-doctor-clipboard.jpg" 
-              alt="Médica profissional segurando prancheta e sorrindo"
-              className="rounded-2xl shadow-[var(--shadow-medical)] w-full h-auto"
-              loading="eager"
-            />
-          </div>
-
-          {/* Subtítulo */}
-          <p className="text-xl md:text-2xl text-muted-foreground mb-8 max-w-3xl mx-auto">
-            Conecte-se com médicos qualificados através de consultas online seguras, 
-            rápidas e acessíveis. Sua saúde em primeiro lugar.
-          </p>
-
-          {/* CTAs */}
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">
-            <Button 
-              onClick={scrollToServicos}
-              variant="hero" 
-              size="xl"
-              className="group"
-            >
-              Agendar Consulta Agora
-              <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="xl"
-              asChild
-            >
-              <a href="/quem-somos">Como Funciona</a>
-            </Button>
-          </div>
-
-          {/* Proof points */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 md:gap-8 max-w-3xl mx-auto">
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <Clock className="h-5 w-5 text-primary" />
-              <span className="text-sm md:text-base">
-                <strong className="text-foreground">+2.000</strong> atendimentos
-              </span>
+    <section className="relative min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
+      {/* Modern geometric background */}
+      <div className="absolute inset-0 geometric-pattern" />
+      <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
+      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl floating-animation" style={{ animationDelay: '2s' }} />
+      
+      <div className="container mx-auto px-4 py-20 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-16 items-center min-h-[600px]">
+          {/* Content Column */}
+          <div className="space-y-10">
+            {/* Modern badge */}
+            <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg">
+              <CheckCircle className="w-5 h-5" />
+              Plataforma Médica Certificada
             </div>
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <Star className="h-5 w-5 text-accent fill-current" />
-              <span className="text-sm md:text-base">
-                <strong className="text-foreground">4.9★</strong> avaliação
-              </span>
+            
+            {/* Modern headline */}
+            <div className="space-y-6">
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
+                <span className="text-foreground">Saúde digital</span>
+                <br />
+                <span className="medical-gradient-text">completa</span>
+                <br />
+                <span className="text-foreground">a partir de</span>
+                <br />
+                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 49</span>
+              </h1>
+              
+              <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
+                Conecte-se com médicos especialistas para consultas online
+                <span className="font-medium text-primary"> seguras, rápidas e acessíveis</span>.
+                <br />Cuide da sua saúde com a tecnologia mais avançada.
+              </p>
             </div>
-            <div className="flex items-center justify-center gap-2 text-muted-foreground">
-              <Shield className="h-5 w-5 text-primary" />
-              <span className="text-sm md:text-base">
-                <strong className="text-foreground">+50</strong> especialistas
-              </span>
+            
+            {/* Modern CTAs */}
+            <div className="flex flex-col sm:flex-row gap-6 pt-4">
+              <Button
+                onClick={scrollToServicos}
+                size="xl"
+                className="medical-button-primary text-xl px-12 py-8 rounded-2xl shadow-2xl group"
+              >
+                Agendar Consulta
+                <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
+              </Button>
+              <Button
+                variant="outline"
+                size="xl"
+                className="text-xl px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300"
+              >
+                Saiba Como Funciona
+              </Button>
+            </div>
+            
+            {/* Enhanced social proof */}
+            <div className="grid grid-cols-3 gap-8 pt-12 border-t border-border/50">
+              <div className="text-center group">
+                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">15k+</div>
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Atendimentos</div>
+              </div>
+              <div className="text-center group">
+                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">4.9★</div>
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Avaliação</div>
+              </div>
+              <div className="text-center group">
+                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">200+</div>
+                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Especialistas</div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Modern Image Column */}
+          <div className="relative flex justify-center lg:justify-end">
+            <div className="relative">
+              {/* Enhanced background effects */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
+              
+              {/* Modern doctor image container */}
+              <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1">
+                <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10" />
+                <img
+                  src={heroImage}
+                  alt="Médico especialista em consulta online"
+                  className="w-full max-w-lg h-auto object-cover"
+                />
+              </div>
+              
+              {/* Modern floating badges */}
+              <div className="absolute -top-6 -right-6 glass-effect text-white px-6 py-4 rounded-2xl text-lg font-bold shadow-2xl animate-bounce backdrop-blur-md">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                  Online 24/7
+                </div>
+              </div>
+              
+              <div className="absolute -bottom-6 -left-6 bg-gradient-to-r from-secondary to-secondary-glow text-white px-6 py-4 rounded-2xl text-lg font-bold shadow-2xl animate-pulse">
+                <div className="flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  Certificado
+                </div>
+              </div>
+              
+              <div className="absolute top-1/2 -left-8 bg-gradient-to-r from-accent to-accent-light text-accent-foreground px-4 py-3 rounded-xl font-bold shadow-xl floating-animation" style={{ animationDelay: '1s' }}>
+                Consulta Rápida
+              </div>
             </div>
           </div>
         </div>

@@ -18,85 +18,91 @@ export function Navbar() {
   const isActive = (href: string) => location.pathname === href;
 
   return (
-    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 text-xl font-bold text-primary">
-            <div className="p-2 bg-[var(--gradient-primary)] rounded-lg">
-              <Heart className="h-5 w-5 text-white" />
+    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
+      <div className="container mx-auto px-6 sm:px-8 lg:px-12">
+        <div className="flex justify-between items-center h-20">
+          {/* Modern Logo */}
+          <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-primary group">
+            <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+              <Heart className="h-6 w-6 text-white" />
             </div>
-            <span className="hidden sm:inline">Médicos do Bem</span>
+            <span className="hidden sm:inline bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              Médicos do Bem
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-10">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 to={item.href}
                 className={cn(
-                  "text-sm font-medium transition-colors hover:text-primary",
+                  "text-lg font-medium transition-all duration-300 relative group",
                   isActive(item.href) 
-                    ? "text-primary border-b-2 border-primary pb-1" 
-                    : "text-muted-foreground"
+                    ? "text-primary" 
+                    : "text-muted-foreground hover:text-primary"
                 )}
               >
                 {item.label}
+                <span className={cn(
+                  "absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300",
+                  isActive(item.href) ? "w-full" : "w-0 group-hover:w-full"
+                )} />
               </Link>
             ))}
           </div>
 
-          {/* Desktop CTA */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Modern Desktop CTAs */}
+          <div className="hidden md:flex items-center gap-4">
             <Link to="/area-do-paciente">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="lg" className="text-lg px-8 py-6 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
                 Área do Paciente
               </Button>
             </Link>
             <Link to="/#servicos">
-              <Button variant="medical" size="sm">
+              <Button size="lg" className="medical-button-primary text-lg px-8 py-6 rounded-xl">
                 Agendar Consulta
               </Button>
             </Link>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Modern Mobile Menu Button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
+            className="md:hidden p-3 rounded-xl hover:bg-primary/10 transition-colors duration-300"
           >
-            {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
 
-        {/* Mobile Navigation */}
+        {/* Enhanced Mobile Navigation */}
         {isOpen && (
-          <div className="md:hidden py-4 border-t border-border">
-            <div className="flex flex-col gap-4">
+          <div className="md:hidden py-8 border-t border-border/50 bg-gradient-to-b from-background to-muted/30 rounded-b-2xl">
+            <div className="flex flex-col gap-6">
               {navItems.map((item) => (
                 <Link
                   key={item.href}
                   to={item.href}
                   onClick={() => setIsOpen(false)}
                   className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary px-2 py-1",
+                    "text-lg font-medium transition-all duration-300 px-4 py-3 rounded-xl",
                     isActive(item.href) 
-                      ? "text-primary bg-primary/10 rounded-lg" 
-                      : "text-muted-foreground"
+                      ? "text-primary bg-primary/10 border border-primary/20" 
+                      : "text-muted-foreground hover:text-primary hover:bg-primary/5"
                   )}
                 >
                   {item.label}
                 </Link>
               ))}
-              <div className="flex flex-col gap-2 pt-2 border-t border-border">
+              <div className="flex flex-col gap-4 pt-6 border-t border-border/50">
                 <Link to="/area-do-paciente" onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full">
+                  <Button variant="outline" size="lg" className="w-full text-lg py-6 rounded-xl">
                     Área do Paciente
                   </Button>
                 </Link>
                 <Link to="/#servicos" onClick={() => setIsOpen(false)}>
-                  <Button variant="medical" size="sm" className="w-full">
+                  <Button size="lg" className="medical-button-primary w-full text-lg py-6 rounded-xl">
                     Agendar Consulta
                   </Button>
                 </Link>
