@@ -130,8 +130,10 @@ const Cadastrar = () => {
 
     setIsLoading(true);
     
-    const { error } = await supabase.auth.signUp({
+    // First create user with password then send magic link
+    const { error: signUpError } = await supabase.auth.signUp({
       email: formData.email,
+      password: 'temp_password_' + Math.random().toString(36),
       options: {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
         data: {
@@ -147,18 +149,34 @@ const Cadastrar = () => {
       }
     });
 
-    if (error) {
+    if (signUpError) {
       toast({
         title: "Erro no cadastro",
-        description: error.message,
+        description: signUpError.message,
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Magic link enviado",
-        description: "Verifique seu email para acessar sua conta.",
+      // Send magic link for login
+      const { error: magicError } = await supabase.auth.signInWithOtp({
+        email: formData.email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
       });
-      navigate('/entrar');
+      
+      if (magicError) {
+        toast({
+          title: "Erro ao enviar magic link",
+          description: magicError.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Magic link enviado",
+          description: "Verifique seu email para acessar sua conta.",
+        });
+        navigate('/entrar');
+      }
     }
     
     setIsLoading(false);

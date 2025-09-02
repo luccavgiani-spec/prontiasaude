@@ -14,7 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      patients: {
+        Row: {
+          address_line: string | null
+          allergies: string | null
+          birth_date: string | null
+          chronic_meds: string | null
+          comorbidities: string | null
+          cpf: string | null
+          created_at: string | null
+          first_name: string | null
+          has_allergies: boolean | null
+          has_chronic_meds: boolean | null
+          has_comorbidities: boolean | null
+          id: string
+          intake_complete: boolean | null
+          last_name: string | null
+          marketing_opt_in: boolean | null
+          phone_e164: string | null
+          pregnancy_status: string | null
+          profile_complete: boolean | null
+          terms_accepted_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address_line?: string | null
+          allergies?: string | null
+          birth_date?: string | null
+          chronic_meds?: string | null
+          comorbidities?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          first_name?: string | null
+          has_allergies?: boolean | null
+          has_chronic_meds?: boolean | null
+          has_comorbidities?: boolean | null
+          id: string
+          intake_complete?: boolean | null
+          last_name?: string | null
+          marketing_opt_in?: boolean | null
+          phone_e164?: string | null
+          pregnancy_status?: string | null
+          profile_complete?: boolean | null
+          terms_accepted_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address_line?: string | null
+          allergies?: string | null
+          birth_date?: string | null
+          chronic_meds?: string | null
+          comorbidities?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          first_name?: string | null
+          has_allergies?: boolean | null
+          has_chronic_meds?: boolean | null
+          has_comorbidities?: boolean | null
+          id?: string
+          intake_complete?: boolean | null
+          last_name?: string | null
+          marketing_opt_in?: boolean | null
+          phone_e164?: string | null
+          pregnancy_status?: string | null
+          profile_complete?: boolean | null
+          terms_accepted_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

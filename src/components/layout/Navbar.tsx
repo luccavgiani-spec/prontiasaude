@@ -49,7 +49,7 @@ export function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to="/paciente">
+            <Link to="/area-do-paciente">
               <Button variant="outline" size="sm">
                 Área do Paciente
               </Button>
@@ -90,7 +90,7 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                <Link to="/paciente" onClick={() => setIsOpen(false)}>
+                <Link to="/area-do-paciente" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">
                     Área do Paciente
                   </Button>

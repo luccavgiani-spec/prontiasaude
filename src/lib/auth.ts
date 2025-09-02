@@ -37,7 +37,7 @@ export const requireAuth = async (): Promise<{ user: User; session: Session } | 
 
 export const getPatient = async (userId: string): Promise<Patient | null> => {
   const { data, error } = await supabase
-    .from('patients')
+    .from('patients' as any)
     .select('*')
     .eq('id', userId)
     .single();
@@ -47,12 +47,12 @@ export const getPatient = async (userId: string): Promise<Patient | null> => {
     return null;
   }
   
-  return data;
+  return data as unknown as Patient;
 };
 
 export const upsertPatient = async (userId: string, patientData: Partial<Patient>): Promise<Patient | null> => {
   const { data, error } = await supabase
-    .from('patients')
+    .from('patients' as any)
     .upsert({ 
       id: userId, 
       ...patientData,
@@ -66,7 +66,7 @@ export const upsertPatient = async (userId: string, patientData: Partial<Patient
     throw error;
   }
   
-  return data;
+  return data as unknown as Patient;
 };
 
 export const checkAuthFlow = async (userId: string): Promise<string> => {

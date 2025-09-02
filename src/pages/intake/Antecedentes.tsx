@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Heart, Baby, Pills, Stethoscope } from "lucide-react";
+import { Loader2, Heart, Baby, Pill, Stethoscope } from "lucide-react";
 import { requireAuth, getPatient, upsertPatient } from "@/lib/auth";
 import { isIntakeComplete } from "@/lib/validations";
 
@@ -15,7 +15,7 @@ const Antecedentes = () => {
   const [formData, setFormData] = useState({
     has_allergies: false,
     allergies: "",
-    pregnancy_status: "" as 'never' | 'pregnant_now' | 'pregnant_past' | '',
+    pregnancy_status: "never" as 'never' | 'pregnant_now' | 'pregnant_past',
     has_comorbidities: false,
     comorbidities: "",
     has_chronic_meds: false,
@@ -39,7 +39,7 @@ const Antecedentes = () => {
         setFormData({
           has_allergies: patient.has_allergies || false,
           allergies: patient.allergies || "",
-          pregnancy_status: patient.pregnancy_status || "",
+          pregnancy_status: patient.pregnancy_status || "never",
           has_comorbidities: patient.has_comorbidities || false,
           comorbidities: patient.comorbidities || "",
           has_chronic_meds: patient.has_chronic_meds || false,
@@ -252,7 +252,7 @@ const Antecedentes = () => {
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <Pills className="h-5 w-5 text-yellow-600" />
+                    <Pill className="h-5 w-5 text-yellow-600" />
                     Medicamentos de uso contínuo
                   </CardTitle>
                 </CardHeader>

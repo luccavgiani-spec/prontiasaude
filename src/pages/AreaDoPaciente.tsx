@@ -10,7 +10,7 @@ import {
   User, 
   Heart, 
   Baby, 
-  Pills, 
+  Pill, 
   Stethoscope, 
   CheckCircle, 
   AlertCircle, 
@@ -251,7 +251,7 @@ const AreaDoPaciente = () => {
               
               <div>
                 <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Pills className="h-3 w-3" /> Medicamentos contínuos
+                  <Pill className="h-3 w-3" /> Medicamentos contínuos
                 </Label>
                 <p className="text-foreground">
                   {patient?.has_chronic_meds 
