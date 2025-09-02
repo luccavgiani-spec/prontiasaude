@@ -8,8 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Loader2, User, MapPin, Phone, Calendar } from "lucide-react";
-import { requireAuth, getPatient, upsertPatient } from "@/lib/auth";
-import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, isProfileComplete } from "@/lib/validations";
+import { requireAuth, getPatient } from "@/lib/auth";
+import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
+import { upsertPatientBasic } from "@/lib/patients";
 
 const CompletarPerfil = () => {
   const [formData, setFormData] = useState({
@@ -101,24 +102,26 @@ const CompletarPerfil = () => {
     setIsLoading(true);
     
     try {
-      const patientData = {
-        ...formData,
-        terms_accepted_at: formData.terms_accepted ? new Date().toISOString() : null,
-        profile_complete: true
-      };
-
-      await upsertPatient(currentUser.id, patientData);
+      await upsertPatientBasic({
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        address_line: formData.address_line,
+        cpf: formData.cpf,
+        phone_e164: formData.phone_e164,
+        birth_date: formData.birth_date,
+        termsAccepted: formData.terms_accepted
+      });
       
       toast({
         title: "Perfil atualizado",
         description: "Suas informações foram salvas com sucesso.",
       });
       
-      navigate('/intake/antecedentes');
-    } catch (error) {
+      window.location.replace('/intake/antecedentes');
+    } catch (error: any) {
       toast({
         title: "Erro ao salvar",
-        description: "Não foi possível salvar suas informações. Tente novamente.",
+        description: error.message || "Não foi possível salvar suas informações. Tente novamente.",
         variant: "destructive",
       });
     } finally {

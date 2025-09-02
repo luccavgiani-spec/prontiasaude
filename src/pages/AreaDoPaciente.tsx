@@ -33,33 +33,42 @@ const AreaDoPaciente = () => {
 
   useEffect(() => {
     const loadPatientData = async () => {
-      const auth = await requireAuth();
-      if (!auth) return;
-
-      setCurrentUser(auth.user);
-      
-      const patientData = await getPatient(auth.user.id);
-      if (patientData) {
-        setPatient(patientData);
-        
-        // Check if profile needs completion
-        if (!patientData.profile_complete) {
-          navigate('/completar-perfil');
-          return;
-        }
-        
-        // Check if intake needs completion
-        if (!patientData.intake_complete) {
-          navigate('/intake/antecedentes');
-          return;
-        }
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        window.location.replace('/entrar');
+        return;
       }
       
+      setCurrentUser(session.user);
+      
+      const { data, error } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', session.user.id)
+        .maybeSingle();
+
+      if (error) { 
+        console.error('Fetch patient error:', error);
+        window.location.replace('/completar-perfil'); 
+        return; 
+      }
+
+      if (!data?.profile_complete) {
+        window.location.replace('/completar-perfil'); 
+        return;
+      }
+      
+      if (!data?.intake_complete) {
+        window.location.replace('/intake/antecedentes'); 
+        return;
+      }
+      
+      setPatient(data as Patient);
       setIsLoading(false);
     };
 
     loadPatientData();
-  }, [navigate]);
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
