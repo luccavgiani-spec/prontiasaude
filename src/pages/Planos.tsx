@@ -32,7 +32,7 @@ const Planos = () => {
       return;
     }
 
-    const emailParaUsar = email || getEmailAtual();
+    const emailParaUsar = email || await getEmailAtual();
     
     if (!emailParaUsar) {
       setPlanoSelecionado(planoCode);

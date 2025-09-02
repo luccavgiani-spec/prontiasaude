@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { supabase } from '@/integrations/supabase/client'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -33,9 +34,24 @@ export function normalizaPhoneE164(telefone: string): string {
 }
 
 // Gerenciamento de email no localStorage
-export function getEmailAtual(): string | null {
+export async function getEmailAtual(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('medicosDoBem_email');
+  
+  // First, check if user is logged in via Supabase
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.email) {
+      console.log('Email from Supabase session:', session.user.email);
+      return session.user.email;
+    }
+  } catch (error) {
+    console.error('Error getting Supabase session:', error);
+  }
+  
+  // Fallback to localStorage
+  const localEmail = localStorage.getItem('medicosDoBem_email');
+  console.log('Email from localStorage:', localEmail);
+  return localEmail;
 }
 
 export function setEmailAtual(email: string): void {

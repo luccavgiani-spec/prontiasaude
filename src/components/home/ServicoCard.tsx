@@ -33,7 +33,7 @@ export function ServicoCard({ servico, planoSelecionado, showDesconto = false }:
   const precoComDesconto = showDesconto && planoSelecionado ? servico.precoBase * 0.55 : servico.precoBase;
 
   const handleAgendar = async (email?: string) => {
-    const emailParaUsar = email || getEmailAtual();
+    const emailParaUsar = email || await getEmailAtual();
     
     if (!emailParaUsar) {
       setIsModalOpen(true);

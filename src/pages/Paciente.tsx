@@ -19,12 +19,16 @@ const Paciente = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    const emailSalvo = getEmailAtual();
-    if (emailSalvo) {
-      setEmail(emailSalvo);
-      setIsLoggedIn(true);
-      carregarDadosPaciente(emailSalvo);
-    }
+    const loadEmailAndData = async () => {
+      const emailSalvo = await getEmailAtual();
+      if (emailSalvo) {
+        setEmail(emailSalvo);
+        setIsLoggedIn(true);
+        carregarDadosPaciente(emailSalvo);
+      }
+    };
+    
+    loadEmailAndData();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {

@@ -31,7 +31,7 @@ const ServicoDetalhe = () => {
   }
 
   const handleAgendar = async (email?: string) => {
-    const emailParaUsar = email || getEmailAtual();
+    const emailParaUsar = email || await getEmailAtual();
     
     if (!emailParaUsar) {
       setIsModalOpen(true);
