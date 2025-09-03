@@ -1,54 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { getAppointments, AppointmentData } from '@/lib/appointments';
 import { useToast } from '@/hooks/use-toast';
-import { CalendarIcon, ClockIcon, VideoIcon, RefreshCwIcon } from 'lucide-react';
+import { CalendarIcon, ClockIcon, VideoIcon, RefreshCwIcon, CopyIcon } from 'lucide-react';
 
-const MeusAgendamentos: React.FC = () => {
-  const [email, setEmail] = useState('');
+interface MeusAgendamentosProps {
+  userEmail: string;
+}
+
+const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({ userEmail }) => {
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searched, setSearched] = useState(false);
   const { toast } = useToast();
 
-  const handleSearch = async () => {
-    if (!email) {
-      toast({
-        title: "E-mail obrigatório",
-        description: "Digite seu e-mail para buscar os agendamentos.",
-        variant: "destructive",
-      });
-      return;
+  useEffect(() => {
+    if (userEmail) {
+      loadAppointments();
     }
+  }, [userEmail]);
 
+  const loadAppointments = async () => {
     setLoading(true);
-    setSearched(true);
-
+    
     try {
-      const result = await getAppointments(email);
+      const result = await getAppointments(userEmail);
       
       if (!result.success) {
-        throw new Error(result.error || 'Erro ao buscar agendamentos');
+        throw new Error(result.error || 'Erro ao buscar consultas');
       }
 
       setAppointments(result.appointments || []);
-      
-      if (!result.appointments || result.appointments.length === 0) {
-        toast({
-          title: "Nenhum agendamento encontrado",
-          description: "Não foram encontrados agendamentos para este e-mail.",
-        });
-      }
 
     } catch (error) {
-      console.error('Erro ao buscar agendamentos:', error);
+      console.error('Erro ao buscar consultas:', error);
       toast({
         title: "Erro",
-        description: "Erro ao buscar agendamentos. Tente novamente.",
+        description: "Erro ao buscar consultas. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -57,8 +46,22 @@ const MeusAgendamentos: React.FC = () => {
   };
 
   const refreshAppointments = () => {
-    if (email) {
-      handleSearch();
+    loadAppointments();
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Link copiado!",
+        description: "O link da reunião foi copiado para a área de transferência.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao copiar",
+        description: "Não foi possível copiar o link.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -107,55 +110,68 @@ const MeusAgendamentos: React.FC = () => {
     return serviceNames[serviceCode as keyof typeof serviceNames] || serviceCode;
   };
 
-  return (
-    <div className="w-full max-w-4xl mx-auto space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Meus Agendamentos</CardTitle>
-          <CardDescription>
-            Digite seu e-mail para visualizar seus agendamentos
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <Label htmlFor="email">E-mail</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-              />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button onClick={handleSearch} disabled={loading}>
-                {loading ? 'Buscando...' : 'Buscar'}
-              </Button>
-              {searched && (
-                <Button variant="outline" size="icon" onClick={refreshAppointments} disabled={loading}>
-                  <RefreshCwIcon className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+  // Separar consultas próximas e anteriores
+  const now = new Date();
+  const upcomingAppointments = appointments
+    .filter(apt => {
+      if (!apt.start_at_local) return false;
+      const appointmentDate = new Date(apt.start_at_local);
+      return appointmentDate >= now && ['scheduled', 'confirmed'].includes(apt.status || '');
+    })
+    .sort((a, b) => new Date(a.start_at_local).getTime() - new Date(b.start_at_local).getTime());
+    
+  const pastAppointments = appointments
+    .filter(apt => {
+      if (!apt.start_at_local) return false;
+      const appointmentDate = new Date(apt.start_at_local);
+      return appointmentDate < now;
+    })
+    .sort((a, b) => new Date(b.start_at_local).getTime() - new Date(a.start_at_local).getTime());
 
-      {searched && appointments.length === 0 && !loading && (
+  return (
+    <div className="w-full space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Suas Consultas</h3>
+          <p className="text-sm text-muted-foreground">
+            Consultas agendadas para: {userEmail}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={refreshAppointments} disabled={loading}>
+          <RefreshCwIcon className="h-4 w-4 mr-2" />
+          {loading ? 'Atualizando...' : 'Atualizar'}
+        </Button>
+      </div>
+
+      {appointments.length === 0 && !loading && (
         <Card>
-          <CardContent className="text-center py-8">
+          <CardContent className="text-center py-12">
+            <div className="bg-muted/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CalendarIcon className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <h4 className="font-semibold mb-2">Nenhuma consulta encontrada</h4>
             <p className="text-muted-foreground">
-              Nenhum agendamento encontrado para este e-mail.
+              Você ainda não tem consultas. Clique em "Nova Consulta" para contratar um serviço.
             </p>
           </CardContent>
         </Card>
       )}
 
-      {appointments.length > 0 && (
-        <div className="grid gap-4">
-          {appointments.map((appointment) => (
-            <Card key={appointment.appointment_id} className="relative">
+      {loading && (
+        <Card>
+          <CardContent className="text-center py-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Carregando consultas...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Próximas Consultas */}
+      {upcomingAppointments.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="font-semibold text-primary">Próximas Consultas</h4>
+          {upcomingAppointments.map((appointment) => (
+            <Card key={appointment.appointment_id} className="border-primary/20">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
@@ -188,42 +204,94 @@ const MeusAgendamentos: React.FC = () => {
 
                 {appointment.teams_join_url && (
                   <div className="pt-2 border-t">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <VideoIcon className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">Link da Reunião</span>
+                      <span className="text-sm font-medium">Link da Reunião Disponível</span>
                     </div>
-                    <Button 
-                      asChild 
-                      variant="default" 
-                      size="sm"
-                      className="w-full sm:w-auto"
-                    >
-                      <a 
-                        href={appointment.teams_join_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
+                    <div className="flex gap-2">
+                      <Button 
+                        asChild 
+                        variant="default" 
+                        size="sm"
+                        className="flex-1"
                       >
-                        Entrar na Reunião
-                      </a>
-                    </Button>
+                        <a 
+                          href={appointment.teams_join_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                        >
+                          Entrar na Consulta
+                        </a>
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => copyToClipboard(appointment.teams_join_url)}
+                      >
+                        <CopyIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 )}
 
                 {appointment.status === 'scheduled' && !appointment.teams_join_url && (
                   <div className="pt-2 border-t">
-                    <p className="text-sm text-muted-foreground">
-                      O link da reunião será disponibilizado após a confirmação do pagamento.
-                    </p>
-                  </div>
-                )}
-
-                {appointment.created_at && (
-                  <div className="text-xs text-muted-foreground">
-                    Criado em: {formatDateTime(appointment.created_at)}
+                    <div className="bg-accent/10 rounded-lg p-3">
+                      <p className="text-sm text-muted-foreground">
+                        ⏱️ O link da reunião será disponibilizado automaticamente após a confirmação do pagamento.
+                      </p>
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Consultas Anteriores */}
+      {pastAppointments.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="font-semibold text-muted-foreground">Consultas Anteriores</h4>
+          {pastAppointments.map((appointment) => (
+          <Card key={appointment.appointment_id} className="opacity-75">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">
+                    {getServiceName(appointment.service_code)}
+                  </CardTitle>
+                  <CardDescription>
+                    ID: {appointment.appointment_id}
+                  </CardDescription>
+                </div>
+                {getStatusBadge(appointment.status || 'scheduled')}
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {formatDateTime(appointment.start_at_local)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <ClockIcon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">
+                    {appointment.duration_min} minutos
+                  </span>
+                </div>
+              </div>
+
+              {appointment.created_at && (
+                <div className="text-xs text-muted-foreground">
+                  Realizada em: {formatDateTime(appointment.start_at_local)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           ))}
         </div>
       )}

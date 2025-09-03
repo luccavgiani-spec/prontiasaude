@@ -1,38 +1,100 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Mail, Calendar } from "lucide-react";
+import { CheckCircle, Mail, Calendar, Clock } from "lucide-react";
+import { getAppointments, AppointmentData } from "@/lib/appointments";
+import { requireAuth } from "@/lib/auth";
 
 const Confirmacao = () => {
   const [searchParams] = useSearchParams();
-  const [countdown, setCountdown] = useState(3);
+  const [user, setUser] = useState<any>(null);
+  const [foundAppointment, setFoundAppointment] = useState<AppointmentData | null>(null);
+  const [pollingCountdown, setPollingCountdown] = useState(30);
+  const [isPolling, setIsPolling] = useState(true);
   const email = searchParams.get('email');
+  const navigate = useNavigate();
 
   useEffect(() => {
-    if (email) {
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
+    const checkAuth = async () => {
+      const authResult = await requireAuth();
+      if (!authResult) {
+        navigate('/entrar');
+        return;
+      }
+      setUser(authResult.user);
+    };
+    
+    checkAuth();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (user?.email) {
+      // Iniciar polling para encontrar a consulta criada
+      const pollInterval = setInterval(pollForAppointment, 3000);
+      const countdownInterval = setInterval(() => {
+        setPollingCountdown(prev => {
           if (prev <= 1) {
-            clearInterval(timer);
-            window.location.href = `/paciente?email=${encodeURIComponent(email)}`;
+            setIsPolling(false);
+            clearInterval(pollInterval);
+            clearInterval(countdownInterval);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
 
-      return () => clearInterval(timer);
+      return () => {
+        clearInterval(pollInterval);
+        clearInterval(countdownInterval);
+      };
     }
-  }, [email]);
+  }, [user]);
 
-  const handleRedirectManual = () => {
-    if (email) {
-      window.location.href = `/paciente?email=${encodeURIComponent(email)}`;
-    } else {
-      const emailInput = prompt("Por favor, informe seu email para acessar a área do paciente:");
-      if (emailInput) {
-        window.location.href = `/paciente?email=${encodeURIComponent(emailInput)}`;
+  const pollForAppointment = async () => {
+    if (!user?.email) return;
+
+    try {
+      const result = await getAppointments(user.email);
+      if (!result.success || !result.appointments) return;
+
+      // Procurar por consultas confirmadas criadas nas últimas 3 horas
+      const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+      const recentConfirmedAppointment = result.appointments.find(apt => {
+        const createdAt = apt.created_at ? new Date(apt.created_at) : null;
+        return apt.status === 'confirmed' && 
+               createdAt && 
+               createdAt >= threeHoursAgo &&
+               apt.teams_join_url;
+      });
+
+      if (recentConfirmedAppointment) {
+        setFoundAppointment(recentConfirmedAppointment);
+        setIsPolling(false);
       }
+    } catch (error) {
+      console.error('Erro durante polling:', error);
+    }
+  };
+
+  const handleGoToConsultas = () => {
+    navigate('/agendamento');
+  };
+
+  const formatDateTime = (dateTimeStr: string) => {
+    if (!dateTimeStr) return 'Data não definida';
+    
+    try {
+      const date = new Date(dateTimeStr);
+      return date.toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Data inválida';
     }
   };
 
@@ -50,27 +112,79 @@ const Confirmacao = () => {
             Obrigado pela sua compra!
           </h1>
 
-          {/* Mensagem */}
-          <p className="text-lg text-muted-foreground mb-8">
-            Seu pagamento foi processado com sucesso. Em breve você receberá um email 
-            com as instruções para acessar sua consulta.
-          </p>
+          {/* Status da consulta */}
+          {foundAppointment ? (
+            <div className="mb-8">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
+                <h2 className="text-xl font-semibold text-green-800 mb-2">🎉 Consulta Agendada!</h2>
+                <p className="text-green-700 mb-4">
+                  Sua consulta foi agendada para: <strong>{formatDateTime(foundAppointment.start_at_local)}</strong>
+                </p>
+                {foundAppointment.teams_join_url && (
+                  <Button 
+                    asChild 
+                    className="w-full sm:w-auto"
+                    size="lg"
+                  >
+                    <a 
+                      href={foundAppointment.teams_join_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                    >
+                      Entrar na Consulta
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : isPolling ? (
+            <div className="mb-8">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                  <h2 className="text-xl font-semibold text-blue-800">Agendando sua consulta...</h2>
+                </div>
+                <p className="text-blue-700 mb-2">
+                  Estamos processando seu agendamento para daqui a 30 minutos.
+                </p>
+                <p className="text-sm text-blue-600">
+                  Aguardando confirmação... ({pollingCountdown}s)
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="mb-8">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
+                <h2 className="text-xl font-semibold text-amber-800 mb-2">Seu agendamento está quase pronto</h2>
+                <p className="text-amber-700 mb-4">
+                  Ele aparecerá em "Minhas Consultas" nos próximos instantes.
+                </p>
+                <Button 
+                  onClick={() => window.location.reload()}
+                  variant="outline"
+                  size="sm"
+                >
+                  Atualizar Página
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Próximos passos */}
           <div className="bg-muted/30 rounded-xl p-6 mb-8">
-            <h2 className="text-xl font-semibold text-foreground mb-4">Próximos Passos:</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-4">Como funciona:</h2>
             <div className="space-y-3 text-left">
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">1</div>
-                <span className="text-muted-foreground">Você receberá um email de confirmação</span>
+                <span className="text-muted-foreground">Pagamento confirmado automaticamente</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">2</div>
-                <span className="text-muted-foreground">Nossa equipe entrará em contato para agendar</span>
+                <span className="text-muted-foreground">Consulta agendada para 30 minutos após pagamento</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">3</div>
-                <span className="text-muted-foreground">Você receberá o link da videochamada</span>
+                <span className="text-muted-foreground">Link da reunião gerado automaticamente</span>
               </div>
             </div>
           </div>
@@ -79,42 +193,24 @@ const Confirmacao = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8 p-4 bg-accent/10 rounded-lg border border-accent/20">
             <div className="flex items-center gap-2 text-accent-foreground">
               <Mail className="h-5 w-5" />
-              <span className="text-sm font-medium">Verifique sua caixa de email</span>
+              <span className="text-sm font-medium">Email de confirmação enviado</span>
             </div>
             <div className="flex items-center gap-2 text-accent-foreground">
-              <Calendar className="h-5 w-5" />
-              <span className="text-sm font-medium">Consulta em até 24h</span>
+              <Clock className="h-5 w-5" />
+              <span className="text-sm font-medium">Consulta automática em 30min</span>
             </div>
           </div>
 
-          {/* Redirecionamento */}
-          {email ? (
-            <div className="mb-6">
-              <p className="text-muted-foreground mb-3">
-                Redirecionando para a área do paciente em <strong>{countdown}s</strong>...
-              </p>
-              <Button 
-                onClick={handleRedirectManual}
-                variant="medical" 
-                size="lg"
-              >
-                Ir para Área do Paciente
-              </Button>
-            </div>
-          ) : (
-            <div className="mb-6">
-              <p className="text-muted-foreground mb-3">
-                Acesse sua área do paciente para acompanhar o agendamento
-              </p>
-              <Button 
-                onClick={handleRedirectManual}
-                variant="medical" 
-                size="lg"
-              >
-                Acessar Área do Paciente
-              </Button>
-            </div>
-          )}
+          {/* Ações */}
+          <div className="mb-6">
+            <Button 
+              onClick={handleGoToConsultas}
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              Ver Minhas Consultas
+            </Button>
+          </div>
 
           {/* Links adicionais */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

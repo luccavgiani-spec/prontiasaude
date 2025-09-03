@@ -114,13 +114,10 @@ serve(async (req) => {
         user_id: user?.id || '',
         product_sku: checkoutData.product_sku || '',
         plan_code: checkoutData.plan_code || '',
-        // Metadata para agendamentos (OBRIGATÓRIO para webhook)
-        appointment_id: checkoutData.appointment_id || '',
+        // Metadata para webhook (OBRIGATÓRIO - novo fluxo automático)
         email: checkoutData.email,
-        service_code: checkoutData.service_code || '',
-        start_at_local: checkoutData.start_at_local || '',
-        duration_min: checkoutData.duration_min ? String(checkoutData.duration_min) : '',
-        order_id: checkoutData.order_id || ''
+        service_code: checkoutData.service_code || 'CONSULTA_CLINICA',
+        duration_min: checkoutData.duration_min ? String(checkoutData.duration_min) : '30',
       },
     });
 
