@@ -102,29 +102,31 @@ const Planos = () => {
             </p>
 
             {/* Seletor de duração */}
-            <div className="inline-block bg-muted/50 rounded-2xl p-2">
-              <div className="flex gap-1">
-                {duracoes.map((duracao) => (
-                  <button
-                    key={duracao.meses}
-                    onClick={() => setDuracaoSelecionada(duracao.meses)}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                      duracaoSelecionada === duracao.meses
-                         ? "bg-green-600 text-white border-green-600"
-                         : "bg-white text-green-700 border border-green-600 hover:bg-green-50"
-                    }`}
-                  >
-                    {duracao.label}
-                    {duracao.desconto && (
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-xs px-1"
-                      >
-                        -{duracao.desconto}
-                      </Badge>
-                    )}
-                  </button>
-                ))}
+            <div className="flex justify-center mb-8">
+              <div className="inline-block bg-muted/50 rounded-2xl p-1.5">
+                <div className="flex gap-1">
+                  {duracoes.map((duracao) => (
+                    <button
+                      key={duracao.meses}
+                      onClick={() => setDuracaoSelecionada(duracao.meses)}
+                      className={`relative px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        duracaoSelecionada === duracao.meses
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-white text-green-700 border border-green-600 hover:bg-green-50"
+                      }`}
+                    >
+                      {duracao.label}
+                      {duracao.desconto && (
+                        <Badge 
+                          variant="secondary" 
+                          className="absolute -top-1.5 -right-1.5 bg-accent text-accent-foreground text-xs px-1 py-0"
+                        >
+                          -{duracao.desconto}
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
