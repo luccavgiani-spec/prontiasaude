@@ -77,21 +77,41 @@ const Antecedentes = () => {
     setIsLoading(true);
     
     try {
+      console.log('Salvando rascunho...');
+      
       const patientData = {
         ...formData,
         intake_complete: false
       };
 
-      await upsertPatient(currentUser.id, patientData);
+      // Timeout menor para rascunho (20s)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: Operação demorou mais que 20 segundos')), 20000)
+      );
+
+      await Promise.race([
+        upsertPatient(currentUser.id, patientData),
+        timeoutPromise
+      ]);
+      
+      console.log('Rascunho salvo com sucesso');
       
       toast({
         title: "Rascunho salvo",
         description: "Suas informações foram salvas como rascunho.",
       });
     } catch (error) {
+      console.error('Erro ao salvar rascunho:', error);
+      
+      let errorMessage = "Não foi possível salvar o rascunho. Verifique sua conexão e tente novamente.";
+      
+      if (error instanceof Error && error.message.includes('Timeout')) {
+        errorMessage = "A operação está demorando mais que o esperado. Tente novamente.";
+      }
+      
       toast({
         title: "Erro ao salvar",
-        description: "Não foi possível salvar o rascunho. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -107,23 +127,49 @@ const Antecedentes = () => {
     setIsLoading(true);
     
     try {
+      console.log('Iniciando salvamento dos antecedentes médicos...');
+      
       const patientData = {
         ...formData,
         intake_complete: true
       };
 
-      await upsertPatient(currentUser.id, patientData);
+      // Timeout de 30s para mobile
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: Operação demorou mais que 30 segundos')), 30000)
+      );
+
+      await Promise.race([
+        upsertPatient(currentUser.id, patientData),
+        timeoutPromise
+      ]);
+      
+      console.log('Antecedentes médicos salvos com sucesso');
       
       toast({
         title: "Antecedentes concluídos",
         description: "Suas informações médicas foram registradas com sucesso.",
       });
       
-      navigate('/area-do-paciente');
+      // Pequeno delay antes da navegação para garantir que o toast seja visto
+      setTimeout(() => navigate('/area-do-paciente'), 1000);
+      
     } catch (error) {
+      console.error('Erro ao completar antecedentes:', error);
+      
+      let errorMessage = "Não foi possível salvar suas informações. Verifique sua conexão e tente novamente.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes('Timeout')) {
+          errorMessage = "A operação está demorando mais que o esperado. Verifique sua conexão com a internet e tente novamente.";
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = "Problema de conexão. Verifique sua internet e tente novamente.";
+        }
+      }
+      
       toast({
         title: "Erro ao salvar",
-        description: "Não foi possível salvar suas informações. Tente novamente.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -291,20 +337,32 @@ const Antecedentes = () => {
                   type="button"
                   variant="outline" 
                   onClick={handleSaveDraft}
-                  className="flex-1"
+                  className="flex-1 min-h-12"
                   disabled={isLoading}
                 >
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Salvar rascunho
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span className="text-sm">Salvando...</span>
+                    </div>
+                  ) : (
+                    "Salvar rascunho"
+                  )}
                 </Button>
                 
                 <Button 
                   type="submit"
-                  className="flex-1 bg-primary hover:bg-primary/90"
+                  className="flex-1 bg-primary hover:bg-primary/90 min-h-12"
                   disabled={isLoading}
                 >
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Concluir antecedentes
+                  {isLoading ? (
+                    <div className="flex items-center">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <span className="text-sm">Salvando...</span>
+                    </div>
+                  ) : (
+                    "Concluir antecedentes"
+                  )}
                 </Button>
               </div>
             </form>
