@@ -21,6 +21,7 @@ import ResetPassword from "./pages/auth/Reset";
 import CompletarPerfil from "./pages/CompletarPerfil";
 import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
+import Agendamento from "./pages/Agendamento";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/auth/reset" element={<ResetPassword />} />
               <Route path="/completar-perfil" element={<CompletarPerfil />} />
               <Route path="/intake/antecedentes" element={<Antecedentes />} />
+              <Route path="/agendamento" element={<Agendamento />} />
               <Route path="/area-do-paciente" element={<AreaDoPaciente />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

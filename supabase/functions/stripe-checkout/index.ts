@@ -18,12 +18,18 @@ interface CheckoutRequest {
   plan_code?: string;
   success_url?: string;
   cancel_url?: string;
+  // Novos campos para agendamentos
+  appointment_id?: string;
+  service_code?: string;
+  start_at_local?: string;
+  duration_min?: number;
+  order_id?: string;
 }
 
-// Google Sheets configuration
-const SHEET_ID = '1JdHLB0zShDDX462L7KkhH-Hdrmwd4lJubKqhvlY9m04';
-const ORDERS_GID = '1480017981';
+// Google Sheets configuration - NOVO SPREADSHEET
+const SHEET_ID = '1w9DkrKnwvfCiVvGVFUzu272by0khGy5qx4Voh43H56I';
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const SITE_BASE_URL = 'https://medicosdobem.com';
 
 const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-CHECKOUT] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
@@ -102,12 +108,19 @@ serve(async (req) => {
       customer_email: customerId ? undefined : checkoutData.email,
       line_items: lineItems,
       mode: checkoutData.mode,
-      success_url: checkoutData.success_url || `${origin}/sucesso?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: checkoutData.cancel_url || `${origin}/cancelado`,
+      success_url: checkoutData.success_url || `${SITE_BASE_URL}/confirmacao?session_id={CHECKOUT_SESSION_ID}&email=${encodeURIComponent(checkoutData.email)}`,
+      cancel_url: checkoutData.cancel_url || `${SITE_BASE_URL}/servicos?cancel=1`,
       metadata: {
         user_id: user?.id || '',
         product_sku: checkoutData.product_sku || '',
         plan_code: checkoutData.plan_code || '',
+        // Metadata para agendamentos (OBRIGATÓRIO para webhook)
+        appointment_id: checkoutData.appointment_id || '',
+        email: checkoutData.email,
+        service_code: checkoutData.service_code || '',
+        start_at_local: checkoutData.start_at_local || '',
+        duration_min: checkoutData.duration_min ? String(checkoutData.duration_min) : '',
+        order_id: checkoutData.order_id || ''
       },
     });
 
@@ -170,9 +183,21 @@ async function createJWT(): Promise<string> {
   const message = `${headerB64}.${payloadB64}`;
   
   // Import private key for signing
+  const pemHeader = "-----BEGIN PRIVATE KEY-----";
+  const pemFooter = "-----END PRIVATE KEY-----";
+  const pemContents = privateKey
+    .replace(pemHeader, "")
+    .replace(pemFooter, "")
+    .replace(/\s/g, "");
+  
+  logStep('Importing private key for signing...');
+  
+  // Convert base64 to ArrayBuffer
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
   const keyData = await crypto.subtle.importKey(
     'pkcs8',
-    new TextEncoder().encode(privateKey),
+    binaryDer.buffer,
     {
       name: 'RSASSA-PKCS1-v1_5',
       hash: 'SHA-256',
@@ -219,23 +244,22 @@ async function recordOrderInSheet(accessToken: string, session: any, checkoutDat
   logStep('Recording order in Google Sheets', { sessionId: session.id });
   
   const now = new Date().toISOString();
-  const orderId = crypto.randomUUID();
+  const orderId = checkoutData.order_id || crypto.randomUUID();
   
+  // Orders: order_id | customer_id | payment_intent | product_sku | amount_cents | status | email | created_at | raw_json
   const rowData = [
     orderId,                              // order_id
-    user?.id || '',                       // user_id
-    checkoutData.email,                   // email
-    session.id,                           // stripe_session_id
-    checkoutData.product_sku || checkoutData.plan_code || '', // product_sku
-    checkoutData.product_name || checkoutData.plan_name || '', // product_name
-    (session.amount_total || 0).toString(), // amount
-    'BRL',                                // currency
+    user?.id || '',                       // customer_id
+    '',                                   // payment_intent (preenchido pelo webhook)
+    checkoutData.product_sku || checkoutData.service_code || '', // product_sku
+    (session.amount_total || 0),          // amount_cents
     'pending',                            // status
+    checkoutData.email,                   // email
     now,                                  // created_at
-    checkoutData.mode === 'subscription' ? 'monthly' : '' // subscription_period
+    JSON.stringify(session)               // raw_json
   ];
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Pedidos!A:K:append?valueInputOption=RAW`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Orders!A:I:append?valueInputOption=RAW`;
   
   const response = await fetch(url, {
     method: 'POST',

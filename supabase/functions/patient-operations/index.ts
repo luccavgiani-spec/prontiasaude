@@ -15,9 +15,8 @@ interface PatientData {
   phone?: string;
 }
 
-// Google Sheets configuration
-const SHEET_ID = '1JdHLB0zShDDX462L7KkhH-Hdrmwd4lJubKqhvlY9m04';
-const PATIENTS_GID = '537090397';
+// Google Sheets configuration - NOVO SPREADSHEET
+const SHEET_ID = '1w9DkrKnwvfCiVvGVFUzu272by0khGy5qx4Voh43H56I';
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
 const logStep = (step: string, details?: any) => {
@@ -178,7 +177,7 @@ async function updateGoogleSheet(accessToken: string, range: string, values: any
 async function findPatientRow(accessToken: string, email: string): Promise<number | null> {
   logStep('Searching for existing patient', { email });
   
-  const range = `Pacientes!B:B`;
+  const range = `Patients!C:C`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`;
   
   const response = await fetch(url, {
@@ -192,7 +191,7 @@ async function findPatientRow(accessToken: string, email: string): Promise<numbe
   const data = await response.json();
   const values = data.values || [];
   
-  for (let i = 0; i < values.length; i++) {
+  for (let i = 1; i < values.length; i++) { // Skip header row
     if (values[i][0] === email) {
       logStep('Found existing patient at row', { row: i + 1 });
       return i + 1;
@@ -230,29 +229,27 @@ async function upsertPatient(data: PatientData, supabase: any, accessToken: stri
   try {
     const existingRow = await findPatientRow(accessToken, data.email);
     const now = new Date().toISOString();
+    const fullName = data.name || `${firstName || ''} ${lastName || ''}`.trim();
     
+    // Patients: patient_id | name | email | phone_e164 | stripe_customer_id | plan_code | plan_expires_at | status
     const rowData = [
-      tempId,                     // temp_id (will be replaced with real user_id later)
-      data.email,                 // email  
-      firstName || '',            // first_name
-      lastName || '',             // last_name
+      tempId,                     // patient_id (will be replaced with real user_id later)
+      fullName,                   // name  
+      data.email,                 // email
       data.phone || '',           // phone_e164
-      '',                         // cpf
-      '',                         // birth_date
-      '',                         // address_line
-      existingRow ? '' : now,     // created_at (only set if new)
-      now,                        // updated_at
-      'false',                    // profile_complete (will be true after signup)
-      'false'                     // intake_complete
+      '',                         // stripe_customer_id (preenchido após integração com Stripe)
+      '',                         // plan_code (ex: BASIC, PREMIUM)
+      '',                         // plan_expires_at
+      'pending'                   // status (pending, active, inactive)
     ];
 
     if (existingRow) {
       // Update existing row
-      await updateGoogleSheet(accessToken, `Pacientes!A${existingRow}:L${existingRow}`, [rowData]);
+      await updateGoogleSheet(accessToken, `Patients!A${existingRow}:H${existingRow}`, [rowData]);
       logStep('Updated existing patient in Google Sheets');
     } else {
       // Append new row
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Pacientes!A:L:append?valueInputOption=RAW`;
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Patients!A:H:append?valueInputOption=RAW`;
       
       const response = await fetch(url, {
         method: 'POST',
