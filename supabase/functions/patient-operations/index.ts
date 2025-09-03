@@ -92,10 +92,22 @@ async function createJWT(): Promise<string> {
   
   const message = `${headerB64}.${payloadB64}`;
   
-  // Import private key for signing
+  // Properly decode PEM private key
+  const pemHeader = "-----BEGIN PRIVATE KEY-----";
+  const pemFooter = "-----END PRIVATE KEY-----";
+  const pemContents = privateKey
+    .replace(pemHeader, "")
+    .replace(pemFooter, "")
+    .replace(/\s/g, "");
+  
+  logStep('Importing private key for signing...');
+  
+  // Convert base64 to ArrayBuffer
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+  
   const keyData = await crypto.subtle.importKey(
     'pkcs8',
-    new TextEncoder().encode(privateKey),
+    binaryDer.buffer,
     {
       name: 'RSASSA-PKCS1-v1_5',
       hash: 'SHA-256',
