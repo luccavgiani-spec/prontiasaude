@@ -12,7 +12,7 @@ export function HeroSection() {
   };
 
   const scrollToComoFunciona = () => {
-    const element = document.querySelector('section[class*="py-20"][class*="bg-gradient-to-br"]');
+    const element = document.querySelector('section[class*="py-10"][class*="bg-gradient-to-br"]');
     if (element) {
       element.scrollIntoView({
         behavior: 'smooth'
@@ -27,7 +27,7 @@ export function HeroSection() {
       animationDelay: '2s'
     }} />
       
-      <div className="container mx-auto px-4 py-20 relative z-10">
+      <div className="container mx-auto px-4 py-10 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center min-h-[600px]">
           {/* Content Column */}
           <div className="space-y-10">
@@ -40,13 +40,14 @@ export function HeroSection() {
             {/* Modern headline */}
             <div className="space-y-6">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
-                <span className="text-foreground">Saúde digital</span>
+                <span className="text-foreground">Controle sua </span>
+                <span className="medical-gradient-text">saúde digital</span>
                 <br />
-                <span className="medical-gradient-text">Consultas</span>
+                <span className="text-foreground">com </span>
+                <span className="medical-gradient-text">consultas</span>
                 <br />
-                <span className="text-foreground">clínicas</span>
-                <br />
-                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 49</span>
+                <span className="text-foreground">a partir de </span>
+                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 24,15!</span>
               </h1>
               
               <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
