@@ -15,23 +15,20 @@ const QuemSomos = () => {
         </div>
 
         {/* Nossa Missão */}
-        <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
-          <div>
-            <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
-            <p className="text-muted-foreground mb-4">
-              Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
-              Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
-              mas um direito fundamental.
-            </p>
-            <p className="text-muted-foreground mb-6">
-              Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
-              através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
-            </p>
-            <Button variant="medical" size="lg" asChild>
-              <a href="/#servicos">Conheça Nossos Serviços</a>
-            </Button>
-          </div>
-          
+        <div className="mb-16 text-center">
+          <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
+          <p className="text-muted-foreground mb-4 max-w-3xl mx-auto">
+            Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
+            Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
+            mas um direito fundamental.
+          </p>
+          <p className="text-muted-foreground mb-6 max-w-3xl mx-auto">
+            Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
+            através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
+          </p>
+          <Button variant="medical" size="lg" asChild>
+            <a href="/#servicos">Conheça Nossos Serviços</a>
+          </Button>
         </div>
 
         {/* Nossos Valores */}
