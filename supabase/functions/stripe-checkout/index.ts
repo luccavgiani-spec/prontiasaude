@@ -82,20 +82,21 @@ serve(async (req) => {
 
     // Create line items based on mode
     let lineItems;
-    if (checkoutData.mode === 'subscription' && checkoutData.price_id) {
+    if (checkoutData.price_id) {
+      // Use Price ID for both payments and subscriptions
       lineItems = [{
         price: checkoutData.price_id,
         quantity: 1,
       }];
     } else {
-      // Dynamic pricing for one-time payments
+      // Fallback with price_data for cases without price_id
       lineItems = [{
         price_data: {
           currency: 'brl',
           product_data: { 
             name: checkoutData.product_name || 'Produto',
           },
-          unit_amount: 1000, // Default R$ 10,00 - should be dynamic
+          unit_amount: 1000, // Fallback value - should use price_id instead
         },
         quantity: 1,
       }];
