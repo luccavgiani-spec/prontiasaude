@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import heroImage from "@/assets/hero-doctor-real.jpg";
-import heroImageScroll from "@/assets/doctor-prescription-real.jpg";
+import heroImage from "@/assets/hero-doctor-modern.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
   const scrollToServicos = () => {
@@ -32,18 +31,19 @@ export function HeroSection() {
             {/* Modern headline */}
             <div className="space-y-6">
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
-                <span className="text-foreground">Consulta</span>
+                <span className="text-foreground">Saúde digital</span>
                 <br />
-                <span className="medical-gradient-text">clínica</span>
+                <span className="medical-gradient-text">Consultas</span>
                 <br />
-                <span className="text-foreground">a partir de</span>
+                <span className="text-foreground">clínicas</span>
                 <br />
-                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 24,15</span>
+                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 49</span>
               </h1>
               
               <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
                 Conecte-se com médicos especialistas para consultas online
-                <span className="font-medium text-primary"> seguras, rápidas e acessíveis</span>.
+                <span className="font-medium text-primary">Conecte-se com médicos especialistas para consultas online seguras, rápidas e acessíveis.
+Cuide da sua saúde com a tecnologia mais avançada e sem burocracia.</span>.
                 <br />Cuide da sua saúde com a tecnologia mais avançada.
               </p>
             </div>
