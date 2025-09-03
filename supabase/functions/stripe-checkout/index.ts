@@ -35,6 +35,34 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-CHECKOUT] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
 };
 
+// Function to check if user has an active subscription
+async function checkActiveSubscription(email: string, stripe: Stripe): Promise<boolean> {
+  try {
+    logStep('Checking active subscription for user', { email });
+    
+    const customers = await stripe.customers.list({ email, limit: 1 });
+    if (customers.data.length === 0) {
+      logStep('No Stripe customer found');
+      return false;
+    }
+    
+    const customerId = customers.data[0].id;
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "active",
+      limit: 1,
+    });
+    
+    const hasActiveSub = subscriptions.data.length > 0;
+    logStep('Subscription check result', { hasActiveSub, customerId });
+    
+    return hasActiveSub;
+  } catch (error) {
+    logStep('Error checking subscription', { error: error.message });
+    return false;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -80,10 +108,41 @@ serve(async (req) => {
       logStep('Found existing customer', { customerId });
     }
 
-    // Create line items based on mode
+    // Check if user has active subscription for discount calculation
+    let hasActiveSubscription = false;
+    if (user && checkoutData.mode === 'payment' && checkoutData.price_id) {
+      hasActiveSubscription = await checkActiveSubscription(checkoutData.email, stripe);
+    }
+
+    // Create line items based on mode and subscription status
     let lineItems;
-    if (checkoutData.price_id) {
-      // Use Price ID for both payments and subscriptions
+    if (checkoutData.price_id && checkoutData.mode === 'payment' && hasActiveSubscription) {
+      // Apply 45% discount for active subscribers on services
+      logStep('Applying 45% discount for active subscriber');
+      
+      // Get original price from Stripe
+      const price = await stripe.prices.retrieve(checkoutData.price_id);
+      const originalAmount = price.unit_amount || 0;
+      const discountedAmount = Math.round(originalAmount * 0.55); // 45% discount = pay 55%
+      
+      logStep('Discount calculation', { 
+        originalAmount, 
+        discountedAmount,
+        discountPercent: 45
+      });
+      
+      lineItems = [{
+        price_data: {
+          currency: 'brl',
+          product_data: { 
+            name: `${checkoutData.product_name || 'Serviço'} (45% desconto)`,
+          },
+          unit_amount: discountedAmount,
+        },
+        quantity: 1,
+      }];
+    } else if (checkoutData.price_id) {
+      // Use Price ID for regular payments and subscriptions
       lineItems = [{
         price: checkoutData.price_id,
         quantity: 1,
