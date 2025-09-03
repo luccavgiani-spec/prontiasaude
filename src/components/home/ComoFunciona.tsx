@@ -12,7 +12,7 @@ const passos = [
   {
     icon: Calendar,
     titulo: "Agende",
-    descricao: "Escolha o especialista ideal e agende sua consulta para o horário que preferir.",
+    descricao: "Escolha o serviço de sua necessidade e passe pela consulta 30 minutos após aprovação do pagamento.",
     numero: "02"
   },
   {
