@@ -1,5 +1,6 @@
 import { UserCheck, Calendar, Video, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import consultaImage from "@/assets/telemedicine-consultation.jpg";
 
 const passos = [
@@ -79,11 +80,13 @@ export function ComoFunciona() {
             })}
             
             {/* CTA Button */}
-            <div className="pt-8">
-              <Button size="xl" className="medical-button-primary text-lg px-10 py-6 rounded-2xl group">
-                Começar Agora
-                <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Button>
+            <div className="pt-8 flex justify-center">
+              <Link to="/servicos">
+                <Button size="xl" className="medical-button-primary text-lg px-10 py-6 rounded-2xl group">
+                  Começar Agora
+                  <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </Link>
             </div>
           </div>
 
