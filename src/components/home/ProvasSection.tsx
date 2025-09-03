@@ -45,8 +45,7 @@ export function ProvasSection() {
 
         {/* Carrossel de Depoimentos */}
         <div className="max-w-2xl mx-auto">
-          <h3 className="text-2xl font-bold text-center text-foreground mb-8">"Atendimento excelente! Consegui minha consulta rapidamente e o médico foi muito atencioso."
-Mariana Pedrosa, 54.</h3>
+          <h3 className="text-2xl font-bold text-center text-foreground mb-8">O que nossos pacientes dizem</h3>
           
           <div className="relative">
             <div className="medical-card p-8 text-center">

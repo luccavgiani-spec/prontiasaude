@@ -164,19 +164,24 @@ export const DESCONTOS_PLANO_VISUAL = {
 // Depoimentos para prova social
 export const DEPOIMENTOS = [
   {
-    nome: "Maria Silva",
+    nome: "Tatiana Peixes, 54.",
     avaliacao: 5,
     texto: "Atendimento excelente! Consegui minha consulta rapidamente e o médico foi muito atencioso."
   },
   {
-    nome: "João Santos", 
+    nome: "Ricardo de Paula, 46.", 
     avaliacao: 5,
     texto: "Plataforma muito fácil de usar. Renovei minha receita sem sair de casa."
   },
   {
-    nome: "Ana Oliveira",
+    nome: "Mario Goji, 32.",
     avaliacao: 5, 
     texto: "Profissionais qualificados e preço justo. Recomendo para toda família."
+  },
+  {
+    nome: "Teo Gonçalves, 27.",
+    avaliacao: 5,
+    texto: "Nunca passei por uma consulta tão rápido. Comprei uma consulta, recebi o link da videochamada na mesma hora e em 30min fui atendido. Assinei um plano depois dessa, recomendo demais!"
   }
 ];
 
