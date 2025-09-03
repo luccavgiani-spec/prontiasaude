@@ -46,7 +46,8 @@ export function HeroSection() {
                 <span className="text-foreground">com </span>
                 <span className="medical-gradient-text">consultas</span>
                 <br />
-                <span className="text-foreground">a partir de </span>
+                <span className="text-foreground">a partir de</span>
+                <br />
                 <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 24,15!</span>
               </h1>
               
