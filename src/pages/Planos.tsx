@@ -208,9 +208,8 @@ const Planos = () => {
                   {/* CTA */}
                   <Button
                     onClick={() => handleAssinar(plano.code)}
-                    variant={plano.popular ? "medical" : "outline"}
                     size="lg"
-                    className="w-full group"
+                    className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 transition-all"
                     disabled={isLoading}
                   >
                     {plano.code === "EMPRESARIAL" 

@@ -21,13 +21,16 @@ const QuemSomos = () => {
           <div>
             <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
             <p className="text-muted-foreground mb-4">
-              Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
-              Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
-              mas um direito fundamental.
+              Democratizar o atendimento médico no Brasil, levando cuidado de qualidade a qualquer 
+              lugar do país, de forma simples, acessível e a baixo custo. Acreditamos que a tecnologia 
+              pode aproximar médico e paciente, sem barreiras geográficas, sem esperas intermináveis, 
+              sem exclusão.
             </p>
             <p className="text-muted-foreground mb-6">
-              Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
-              através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
+              Nosso sonho é que cada pessoa, esteja onde estiver, possa sentir que tem um médico de 
+              confiança ao seu lado. A Médicos do Bem é mais do que uma clínica de telemedicina: 
+              é um compromisso com a dignidade, com a equidade e com o cuidado humano. É saúde sem 
+              fronteiras, feita para todos.
             </p>
             <Button variant="medical" size="lg" asChild>
               <a href="/#servicos">Conheça Nossos Serviços</a>
@@ -40,6 +43,55 @@ const QuemSomos = () => {
               Cada consulta é uma oportunidade de fazer a diferença na vida de alguém. 
               Tratamos cada paciente com o carinho e atenção que merece.
             </p>
+          </div>
+        </div>
+
+        {/* Nossa História */}
+        <div className="mb-16">
+          <h2 className="text-3xl font-bold text-foreground mb-6">Nossa História</h2>
+          <div className="bg-muted/30 rounded-2xl p-8 md:p-12">
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              Viemos de uma tradição familiar sempre envolvida em causas sociais — desde a infância 
+              acompanhávamos ações de apoio a comunidades, onde vimos de perto a importância de 
+              estender a mão a quem mais precisa. Esse olhar nos guiou também na medicina e nos 
+              fez querer ser médicos.
+            </p>
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              Desde nossa formação tivemos a oportunidade de trabalhar no SUS. Foi uma experiência 
+              transformadora que trouxe uma vontade de mudança. Vimos de perto o quanto o sistema, 
+              apesar de essencial e grandioso, ainda deixa tantas lacunas: filas intermináveis, 
+              dificuldades de acesso e pessoas que, por viverem longe dos grandes centros, acabam 
+              sem o cuidado de que precisam no tempo certo.
+            </p>
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              Aos poucos, percebemos que, se por um lado não poderíamos mudar todo o sistema, por 
+              outro, poderíamos buscar soluções reais para tornar o acesso à saúde mais justo e humano. 
+              Foi assim que nasceu a Médicos do Bem: com o propósito de democratizar o atendimento 
+              médico no Brasil.
+            </p>
+            <div className="text-center pt-6">
+              <p className="text-lg font-semibold text-primary mb-4">
+                "Saúde sem fronteiras, feita para todos"
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
+                <div>
+                  <div className="text-3xl font-bold text-primary mb-2">2K+</div>
+                  <div className="text-sm text-muted-foreground">Atendimentos</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-primary mb-2">4.9★</div>
+                  <div className="text-sm text-muted-foreground">Avaliação</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-primary mb-2">50+</div>
+                  <div className="text-sm text-muted-foreground">Especialistas</div>
+                </div>
+                <div>
+                  <div className="text-3xl font-bold text-primary mb-2">24/7</div>
+                  <div className="text-sm text-muted-foreground">Disponibilidade</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -76,37 +128,6 @@ const QuemSomos = () => {
           </div>
         </div>
 
-        {/* Nossa História */}
-        <div className="bg-muted/30 rounded-2xl p-8 md:p-12 text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-6">Nossa História</h2>
-          <p className="text-muted-foreground max-w-3xl mx-auto mb-8">
-            Fundada com o propósito de democratizar o acesso à saúde de qualidade, 
-            a Médicos do Bem nasceu da necessidade de conectar profissionais qualificados 
-            a pacientes que buscam cuidado médico conveniente e acessível.
-          </p>
-          <p className="text-muted-foreground max-w-3xl mx-auto mb-8">
-            Desde nossa fundação, já realizamos mais de 2.000 atendimentos, 
-            mantendo uma avaliação média de 4.9 estrelas de nossos pacientes satisfeitos.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">2K+</div>
-              <div className="text-sm text-muted-foreground">Atendimentos</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">4.9★</div>
-              <div className="text-sm text-muted-foreground">Avaliação</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">50+</div>
-              <div className="text-sm text-muted-foreground">Especialistas</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">24/7</div>
-              <div className="text-sm text-muted-foreground">Disponibilidade</div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

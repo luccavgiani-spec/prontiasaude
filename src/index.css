@@ -192,6 +192,31 @@
     transform: translateY(-2px) scale(1.02);
   }
 
+  /* Mobile optimizations */
+  @media (max-width: 768px) {
+    body {
+      font-size: 14px;
+    }
+    
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      line-height: 1.1;
+    }
+    
+    h2 {
+      font-size: 1.5rem;
+    }
+    
+    .medical-card {
+      padding: 1rem;
+    }
+  }
+
   .hero-gradient {
     background: var(--gradient-hero);
   }
