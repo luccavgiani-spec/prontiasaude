@@ -1,5 +1,6 @@
-import { UserCheck, Calendar, Video, ArrowRight, Check } from "lucide-react";
+import { UserCheck, Calendar, Video, ArrowRight, Check, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import consultaImage from "@/assets/telemedicine-consultation.jpg";
 
@@ -105,14 +106,25 @@ export function ComoFunciona() {
         </div>
         
         {/* Segunda seção para renovação de receita */}
-        <div className="bg-gradient-to-r from-secondary/10 via-background to-accent/10 rounded-3xl p-12 text-center">
+        <div className="relative medical-card p-12 text-center ring-2 ring-primary shadow-[var(--shadow-medical)]">
+          {/* Badge Popular */}
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <Badge className="bg-primary text-primary-foreground px-3 py-1">
+              <Star className="h-3 w-3 mr-1" />
+              Popular
+            </Badge>
+          </div>
+          
           <h3 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
             Quer renovar sua receita?
           </h3>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            A partir de <span className="font-bold text-primary text-2xl">R$ 19,20</span> você tem sua receita renovada sem burocracia
+          <p className="text-xl text-muted-foreground mb-4 max-w-2xl mx-auto">
+            A partir de <span className="font-bold text-primary text-2xl">R$ 19,20*</span> você tem sua receita renovada sem burocracia
           </p>
-          <Button size="xl" className="medical-button-secondary text-lg px-12 py-6 rounded-2xl group">
+          <p className="text-sm text-muted-foreground italic mb-8">
+            *valor com plano ativo
+          </p>
+          <Button size="xl" className="bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 transition-all text-lg px-12 py-6 rounded-2xl group">
             Renovar Receita
             <ArrowRight className="ml-3 w-5 h-5 group-hover:translate-x-1 transition-transform" />
           </Button>
