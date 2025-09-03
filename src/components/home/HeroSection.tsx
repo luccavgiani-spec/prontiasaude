@@ -10,6 +10,15 @@ export function HeroSection() {
       });
     }
   };
+
+  const scrollToComoFunciona = () => {
+    const element = document.querySelector('section[class*="py-20"][class*="bg-gradient-to-br"]');
+    if (element) {
+      element.scrollIntoView({
+        behavior: 'smooth'
+      });
+    }
+  };
   return <section className="relative min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
@@ -50,11 +59,11 @@ Cuide da sua saúde com a tecnologia mais avançada e sem burocracia.</span>.
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-6 pt-4">
-              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-xl px-12 py-8 rounded-2xl shadow-2xl group">
+              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-lg px-12 py-8 rounded-2xl shadow-2xl group">
                 Agendar Consulta
                 <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="outline" size="xl" className="text-xl px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300">
+              <Button onClick={scrollToComoFunciona} variant="outline" size="xl" className="text-lg px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300">
                 Saiba Como Funciona
               </Button>
             </div>
