@@ -83,7 +83,7 @@ const Servicos = () => {
           <p className="text-muted-foreground mb-6">
             Escolha o serviço que precisa e agende sua consulta agora mesmo.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mx-auto">
             <Button variant="medical" size="lg" asChild>
               <a href="/#servicos">Agendar Consulta</a>
             </Button>
