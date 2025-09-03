@@ -52,6 +52,9 @@ export function HeroSection() {
               <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
                 Conecte-se com médicos especialistas e realize consultas online.
               </p>
+              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed font-light mt-4">
+                Evite filas e burocracia, cuide da sua saúde de maneira segura e prática!
+              </p>
             </div>
             
             {/* Modern CTAs */}
