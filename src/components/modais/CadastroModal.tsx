@@ -141,8 +141,7 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
           
           <Button 
             type="submit" 
-            className="w-full" 
-            variant="medical"
+            className="w-full bg-gradient-to-r from-primary to-primary-glow text-white hover:from-primary-glow hover:to-primary shadow-elegant transition-all duration-300 hover:shadow-primary-glow" 
             size="lg"
             disabled={isLoading}
           >
