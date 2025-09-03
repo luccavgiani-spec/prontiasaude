@@ -23,12 +23,14 @@ import {
 } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
+import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
 import { formatCPF } from "@/lib/validations";
 
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [patientPlan, setPatientPlan] = useState<PatientPlan | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -65,6 +67,15 @@ const AreaDoPaciente = () => {
       }
       
       setPatient(data as Patient);
+      
+      // Load patient plan
+      try {
+        const planData = await getPatientPlan(session.user.email);
+        setPatientPlan(planData);
+      } catch (error) {
+        console.error('Erro ao carregar plano do paciente:', error);
+      }
+      
       setIsLoading(false);
     };
 
@@ -184,6 +195,20 @@ const AreaDoPaciente = () => {
                   <MapPin className="h-3 w-3" /> Endereço
                 </Label>
                 <p className="text-foreground">{patient?.address_line || 'Não informado'}</p>
+              </div>
+              
+              <div>
+                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                  <Shield className="h-3 w-3" /> Plano
+                </Label>
+                <p className="text-foreground">
+                  {formatPlanName(patientPlan?.plan_code)}
+                  {patientPlan?.plan_expires_at && (
+                    <span className="text-xs ml-2 text-muted-foreground">
+                      (válido até {formatPlanExpiry(patientPlan.plan_expires_at)})
+                    </span>
+                  )}
+                </p>
               </div>
               
               <div>

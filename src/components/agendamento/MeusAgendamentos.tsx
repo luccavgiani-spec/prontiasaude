@@ -28,16 +28,22 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({ userEmail }) => {
       const result = await getAppointments(userEmail);
       
       if (!result.success) {
-        throw new Error(result.error || 'Erro ao buscar consultas');
+        console.error('Failed to load appointments:', result.error);
+        toast({
+          title: "Erro",
+          description: result.error || "Erro ao buscar consultas. Verifique sua conexão e tente novamente.",
+          variant: "destructive",
+        });
+        return;
       }
 
       setAppointments(result.appointments || []);
 
     } catch (error) {
-      console.error('Erro ao buscar consultas:', error);
+      console.error('Exception loading appointments:', error);
       toast({
-        title: "Erro",
-        description: "Erro ao buscar consultas. Tente novamente.",
+        title: "Erro de Conexão",
+        description: "Não foi possível conectar ao servidor. Tente novamente em alguns instantes.",
         variant: "destructive",
       });
     } finally {

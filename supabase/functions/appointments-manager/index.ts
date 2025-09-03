@@ -53,14 +53,38 @@ serve(async (req) => {
         return await getAppointments(appointmentData.email, accessToken);
       case 'get_appointment':
         return await getAppointment(appointmentData.appointment_id, accessToken);
+      case 'get_patient_plan':
+        return await getPatientPlan(appointmentData.email, accessToken);
       default:
         throw new Error(`Unknown operation: ${operation}`);
     }
 
   } catch (error) {
-    logStep('ERROR', { message: error.message });
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+    logStep('ERROR', { 
+      message: error.message,
+      stack: error.stack,
+      details: error
+    });
+    
+    // More specific error messages
+    let errorMessage = 'Internal server error';
+    let statusCode = 500;
+    
+    if (error.message.includes('JSON')) {
+      errorMessage = 'Invalid Google Service Account configuration';
+    } else if (error.message.includes('access') || error.message.includes('403')) {
+      errorMessage = 'Google Sheets access denied - check Service Account permissions';
+    } else if (error.message.includes('OAuth2')) {
+      errorMessage = 'Authentication with Google failed - check Service Account credentials';
+    } else if (error.message.includes('Unknown operation')) {
+      errorMessage = error.message;
+      statusCode = 400;
+    } else {
+      errorMessage = error.message || 'Internal server error';
+    }
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: statusCode,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
@@ -69,7 +93,23 @@ serve(async (req) => {
 async function createJWT(): Promise<string> {
   logStep('Creating JWT for Google Sheets API');
   
-  const serviceAccount = JSON.parse(Deno.env.get('GOOGLE_SERVICE_ACCOUNT') || '{}');
+  const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT');
+  if (!serviceAccountJson) {
+    throw new Error('GOOGLE_SERVICE_ACCOUNT environment variable not set');
+  }
+  
+  let serviceAccount;
+  try {
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } catch (error) {
+    logStep('Failed to parse GOOGLE_SERVICE_ACCOUNT JSON', { error: error.message });
+    throw new Error('Invalid GOOGLE_SERVICE_ACCOUNT JSON format');
+  }
+  
+  if (!serviceAccount.private_key || !serviceAccount.client_email) {
+    throw new Error('Invalid service account: missing private_key or client_email');
+  }
+  
   const privateKey = serviceAccount.private_key?.replace(/\\n/g, '\n');
   
   if (!privateKey) throw new Error('Google service account private key not found');
@@ -420,4 +460,74 @@ async function getAppointment(appointment_id: string, accessToken: string) {
   return new Response(JSON.stringify({ appointment }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+async function getPatientPlan(email: string, accessToken: string) {
+  logStep('Getting patient plan for email', { email });
+  
+  try {
+    const range = `Patients!A:H`; // patient_id | name | email | phone_e164 | stripe_customer_id | plan_code | plan_expires_at | status
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Google Sheets API error: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    const rows = data.values || [];
+    
+    if (rows.length <= 1) {
+      return new Response(JSON.stringify({ plan: null }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    // Find header row and get column indices
+    const headers = rows[0];
+    const emailCol = headers.indexOf('email');
+    const planCodeCol = headers.indexOf('plan_code');
+    const planExpiresCol = headers.indexOf('plan_expires_at');
+    const statusCol = headers.indexOf('status');
+    
+    if (emailCol === -1) {
+      throw new Error('Email column not found in Patients sheet');
+    }
+    
+    // Find patient row
+    const patientRow = rows.slice(1).find(row => 
+      row[emailCol] && row[emailCol].toLowerCase().trim() === email.toLowerCase().trim()
+    );
+    
+    if (!patientRow) {
+      logStep('Patient not found in Patients sheet', { email });
+      return new Response(JSON.stringify({ plan: null }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    const plan = {
+      plan_code: planCodeCol >= 0 && patientRow[planCodeCol] ? patientRow[planCodeCol] : undefined,
+      plan_expires_at: planExpiresCol >= 0 && patientRow[planExpiresCol] ? patientRow[planExpiresCol] : undefined,
+      status: statusCol >= 0 && patientRow[statusCol] ? patientRow[statusCol] : undefined,
+    };
+    
+    logStep('Patient plan found', { email, plan });
+    
+    return new Response(JSON.stringify({ plan }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+    
+  } catch (error) {
+    logStep('Error getting patient plan', { email, error: error.message });
+    return new Response(JSON.stringify({ error: 'Failed to get patient plan' }), {
+      status: 500, 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
 }
