@@ -1,21 +1,22 @@
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-doctor-modern.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
-
 export function HeroSection() {
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth' });
+      element.scrollIntoView({
+        behavior: 'smooth'
+      });
     }
   };
-
-  return (
-    <section className="relative min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
+  return <section className="relative min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
-      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl floating-animation" style={{ animationDelay: '2s' }} />
+      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl floating-animation" style={{
+      animationDelay: '2s'
+    }} />
       
       <div className="container mx-auto px-4 py-20 relative z-10">
         <div className="grid lg:grid-cols-2 gap-16 items-center min-h-[600px]">
@@ -48,19 +49,11 @@ export function HeroSection() {
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-6 pt-4">
-              <Button
-                onClick={scrollToServicos}
-                size="xl"
-                className="medical-button-primary text-xl px-12 py-8 rounded-2xl shadow-2xl group"
-              >
+              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-xl px-12 py-8 rounded-2xl shadow-2xl group">
                 Agendar Consulta
                 <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button
-                variant="outline"
-                size="xl"
-                className="text-xl px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300"
-              >
+              <Button variant="outline" size="xl" className="text-xl px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300">
                 Saiba Como Funciona
               </Button>
             </div>
@@ -91,35 +84,18 @@ export function HeroSection() {
               {/* Modern doctor image container */}
               <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1">
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10" />
-                <img
-                  src={heroImage}
-                  alt="Médico especialista em consulta online"
-                  className="w-full max-w-lg h-auto object-cover"
-                />
+                <img src={heroImage} alt="Médico especialista em consulta online" className="w-full max-w-lg h-auto object-cover" />
               </div>
               
               {/* Modern floating badges */}
-              <div className="absolute -top-6 -right-6 glass-effect text-white px-6 py-4 rounded-2xl text-lg font-bold shadow-2xl animate-bounce backdrop-blur-md">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                  Online 24/7
-                </div>
-              </div>
               
-              <div className="absolute -bottom-6 -left-6 bg-gradient-to-r from-secondary to-secondary-glow text-white px-6 py-4 rounded-2xl text-lg font-bold shadow-2xl animate-pulse">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5" />
-                  Certificado
-                </div>
-              </div>
               
-              <div className="absolute top-1/2 -left-8 bg-gradient-to-r from-accent to-accent-light text-accent-foreground px-4 py-3 rounded-xl font-bold shadow-xl floating-animation" style={{ animationDelay: '1s' }}>
-                Consulta Rápida
-              </div>
+              
+              
+              
             </div>
           </div>
         </div>
       </div>
-    </section>
-  );
+    </section>;
 }
