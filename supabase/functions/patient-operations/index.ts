@@ -38,27 +38,16 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("Authentication required");
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated");
-
     const { operation, ...patientData } = await req.json();
-    logStep('Operation requested', { operation, user: user.email });
+    logStep('Operation requested', { operation, email: patientData.email });
 
     const accessToken = await getAccessToken();
     
     switch (operation) {
       case 'upsert_patient':
-        return await upsertPatient(patientData, user, supabaseClient, accessToken);
+        return await upsertPatient(patientData, supabaseClient, accessToken);
       case 'get_patient':
-        return await getPatient(user, supabaseClient, accessToken);
+        return await getPatient(patientData.email, supabaseClient, accessToken);
       default:
         throw new Error(`Unknown operation: ${operation}`);
     }
@@ -174,10 +163,10 @@ async function updateGoogleSheet(accessToken: string, range: string, values: any
   return await response.json();
 }
 
-async function findPatientRow(accessToken: string, userId: string): Promise<number | null> {
-  logStep('Searching for existing patient', { userId });
+async function findPatientRow(accessToken: string, email: string): Promise<number | null> {
+  logStep('Searching for existing patient', { email });
   
-  const range = `Pacientes!A:A`;
+  const range = `Pacientes!B:B`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${range}`;
   
   const response = await fetch(url, {
@@ -192,7 +181,7 @@ async function findPatientRow(accessToken: string, userId: string): Promise<numb
   const values = data.values || [];
   
   for (let i = 0; i < values.length; i++) {
-    if (values[i][0] === userId) {
+    if (values[i][0] === email) {
       logStep('Found existing patient at row', { row: i + 1 });
       return i + 1;
     }
@@ -202,7 +191,7 @@ async function findPatientRow(accessToken: string, userId: string): Promise<numb
   return null;
 }
 
-async function upsertPatient(data: PatientData, user: any, supabase: any, accessToken: string) {
+async function upsertPatient(data: PatientData, supabase: any, accessToken: string) {
   logStep('Upserting patient', { 
     name: data.name || `${data.first_name} ${data.last_name}`, 
     email: data.email 
@@ -218,32 +207,20 @@ async function upsertPatient(data: PatientData, user: any, supabase: any, access
     lastName = nameParts.slice(1).join(' ');
   }
 
-  const patientRecord = {
-    user_id: user.id,
-    email: data.email,
-    first_name: firstName,
-    last_name: lastName,
-    phone_e164: data.phone,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    profile_complete: true,
-    intake_complete: false
-  };
+  // Generate a temporary ID based on email for Google Sheets
+  const tempId = `temp_${data.email.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
-  // Update Supabase
-  const { error } = await supabase
-    .from('patients')
-    .upsert(patientRecord, { onConflict: 'id' });
-
-  if (error) throw new Error(`Supabase error: ${error.message}`);
+  // For now, we'll save to Google Sheets only since we don't have user authentication
+  // The patient record will be properly created when they sign up
+  logStep('Saving patient to Google Sheets only (no authentication)');
 
   // Update Google Sheets
   try {
-    const existingRow = await findPatientRow(accessToken, user.id);
+    const existingRow = await findPatientRow(accessToken, data.email);
     const now = new Date().toISOString();
     
     const rowData = [
-      user.id,                    // user_id
+      tempId,                     // temp_id (will be replaced with real user_id later)
       data.email,                 // email  
       firstName || '',            // first_name
       lastName || '',             // last_name
@@ -253,13 +230,14 @@ async function upsertPatient(data: PatientData, user: any, supabase: any, access
       '',                         // address_line
       existingRow ? '' : now,     // created_at (only set if new)
       now,                        // updated_at
-      'true',                     // profile_complete
+      'false',                    // profile_complete (will be true after signup)
       'false'                     // intake_complete
     ];
 
     if (existingRow) {
       // Update existing row
       await updateGoogleSheet(accessToken, `Pacientes!A${existingRow}:L${existingRow}`, [rowData]);
+      logStep('Updated existing patient in Google Sheets');
     } else {
       // Append new row
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Pacientes!A:L:append?valueInputOption=RAW`;
@@ -278,31 +256,33 @@ async function upsertPatient(data: PatientData, user: any, supabase: any, access
       if (!response.ok) {
         const error = await response.text();
         logStep('Google Sheets append failed', { error });
+        throw new Error(`Google Sheets error: ${error}`);
       } else {
-        logStep('Patient added to Google Sheets');
+        logStep('Patient added to Google Sheets successfully');
       }
     }
   } catch (sheetsError) {
-    logStep('Google Sheets update failed, but Supabase succeeded', { error: sheetsError.message });
+    logStep('Google Sheets update failed', { error: sheetsError.message });
+    throw sheetsError;
   }
 
-  logStep('Patient upserted successfully');
+  logStep('Patient upserted successfully in Google Sheets');
 
   return new Response(JSON.stringify({ 
     success: true, 
-    patient: patientRecord 
+    message: 'Patient data saved to Google Sheets successfully'
   }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
 
-async function getPatient(user: any, supabase: any, accessToken: string) {
-  logStep('Getting patient', { userId: user.id });
+async function getPatient(email: string, supabase: any, accessToken: string) {
+  logStep('Getting patient', { email });
 
   const { data, error } = await supabase
     .from('patients')
     .select('*')
-    .eq('id', user.id)
+    .eq('email', email)
     .single();
 
   if (error) {
