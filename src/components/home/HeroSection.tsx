@@ -50,10 +50,7 @@ export function HeroSection() {
               </h1>
               
               <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
-                Conecte-se com médicos especialistas para consultas online
-                <span className="font-medium text-primary">Conecte-se com médicos especialistas para consultas online seguras, rápidas e acessíveis.
-Cuide da sua saúde com a tecnologia mais avançada e sem burocracia.</span>.
-                <br />Cuide da sua saúde com a tecnologia mais avançada.
+                Conecte-se com médicos especialistas e realize consultas online.
               </p>
             </div>
             
