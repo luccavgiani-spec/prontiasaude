@@ -77,7 +77,7 @@ const Confirmacao = () => {
   };
 
   const handleGoToConsultas = () => {
-    navigate('/agendamento');
+    navigate('/area-do-paciente#consultas');
   };
 
   const formatDateTime = (dateTimeStr: string) => {
@@ -218,7 +218,7 @@ const Confirmacao = () => {
               <Link to="/">Voltar ao Início</Link>
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/servicos">Agendar Nova Consulta</Link>
+              <Link to="/servicos">Nova Consulta</Link>
             </Button>
           </div>
 

@@ -21,6 +21,7 @@ import {
   Calendar,
   Shield
 } from "lucide-react";
+import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { formatCPF } from "@/lib/validations";
 
@@ -280,16 +281,42 @@ const AreaDoPaciente = () => {
           </Card>
         </div>
 
+        {/* Minhas Consultas */}
+        <div className="mt-8" id="consultas">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                Minhas Consultas
+              </CardTitle>
+              <CardDescription>
+                Suas consultas são agendadas automaticamente 30 minutos após a confirmação do pagamento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {canScheduleAppointments && currentUser?.email ? (
+                <MeusAgendamentos userEmail={currentUser.email} />
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground mb-4">
+                    Complete seu perfil e antecedentes médicos para ver suas consultas.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Actions */}
         <div className="mt-8 text-center">
           {canScheduleAppointments ? (
             <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-foreground">Pronto para agendar?</h2>
+              <h2 className="text-xl font-semibold text-foreground">Pronto para nova consulta?</h2>
               <p className="text-muted-foreground">
-                Seu perfil está completo. Agora você pode agendar consultas.
+                Escolha o serviço desejado e realize o agendamento automático.
               </p>
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-                <Link to="/#servicos">Agendar consulta</Link>
+                <Link to="/servicos">Nova Consulta</Link>
               </Button>
             </div>
           ) : (

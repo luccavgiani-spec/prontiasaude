@@ -234,6 +234,25 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({ userEmail }) => {
                   </div>
                 )}
 
+                {appointment.status === 'confirmed' && !appointment.teams_join_url && (
+                  <div className="pt-2 border-t">
+                    <div className="bg-muted/20 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-muted-foreground">
+                          ⏱️ Gerando link da reunião...
+                        </p>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={refreshAppointments}
+                        >
+                          Atualizar
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {appointment.status === 'scheduled' && !appointment.teams_join_url && (
                   <div className="pt-2 border-t">
                     <div className="bg-accent/10 rounded-lg p-3">
