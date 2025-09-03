@@ -87,9 +87,16 @@ export function ServicoCard({
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {servico.nome}
             </h3>
-            <p className="text-sm text-muted-foreground mb-3">
-              {servico.descricao}
-            </p>
+            <div className="mb-3">
+              <p className="text-sm text-muted-foreground">
+                {servico.descricao}
+              </p>
+              {(servico.slug === "laudo_bariatrica" || servico.slug === "laudo_laq_vas") && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  * Este é apenas o valor do laudo. É necessária uma consulta psicológica antes.
+                </p>
+              )}
+            </div>
           </div>
           {showDesconto && planoSelecionado && <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">
               45% OFF para assinantes
