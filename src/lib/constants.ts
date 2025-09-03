@@ -73,21 +73,70 @@ export const PLANOS = [
     code: "INDIVIDUAL", 
     nome: "Plano Individual", 
     precoMensal: 19.90,
-    beneficios: ["Descontos em consultas", "Atendimento prioritário", "Receitas digitais"],
+    beneficios: [
+      "Descontos em consultas", 
+      "Atendimento prioritário", 
+      "Receitas digitais",
+      "Atendimento 24h",
+      "Atendimentos aos finais de semana"
+    ],
     popular: false
   },
   { 
     code: "FAMILIAR", 
     nome: "Plano Familiar", 
     precoMensal: 34.90,
-    beneficios: ["Para até 4 pessoas", "Descontos maiores", "Atendimento prioritário", "Histórico compartilhado"],
+    beneficios: [
+      "Para até 4 pessoas", 
+      "Descontos maiores", 
+      "Atendimento prioritário", 
+      "Histórico compartilhado",
+      "Especialidades exclusivas:",
+      "• Cardiologia",
+      "• Dermatologia", 
+      "• Endocrinologia",
+      "• Gastroenterologia",
+      "• Geriatria",
+      "• Ginecologia",
+      "• Médico da Família",
+      "• Oftalmologia",
+      "• Ortopedia",
+      "• Otorrinolaringologia",
+      "• Pediatria",
+      "Nutrição (1x ao mês)",
+      "Personal trainer (1x ao mês)",
+      "Atendimento 24h",
+      "Atendimentos aos finais de semana"
+    ],
     popular: true
   },
   { 
     code: "EMPRESARIAL", 
     nome: "Empresarial", 
     precoMensal: null,
-    beneficios: ["Planos corporativos", "Gestão de funcionários", "Relatórios personalizados", "Suporte dedicado"],
+    beneficios: [
+      "Planos corporativos", 
+      "Gestão de funcionários", 
+      "Relatórios personalizados", 
+      "Suporte dedicado",
+      "Para funcionários ilimitados",
+      "Especialidades exclusivas:",
+      "• Cardiologia",
+      "• Dermatologia", 
+      "• Endocrinologia",
+      "• Gastroenterologia",
+      "• Geriatria",
+      "• Ginecologia",
+      "• Médico da Família",
+      "• Oftalmologia",
+      "• Ortopedia",
+      "• Otorrinolaringologia",
+      "• Pediatria",
+      "Nutrição (1x ao mês)",
+      "Personal trainer (1x ao mês)",
+      "Atendimento 24h",
+      "Atendimentos aos finais de semana"
+    ],
     popular: false
   }
 ];
