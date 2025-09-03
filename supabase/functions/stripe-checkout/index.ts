@@ -16,6 +16,7 @@ interface CheckoutRequest {
   product_sku?: string;
   plan_name?: string;
   plan_code?: string;
+  plan_duration_months?: number;
   success_url?: string;
   cancel_url?: string;
   // Novos campos para agendamentos
@@ -114,8 +115,19 @@ serve(async (req) => {
       hasActiveSubscription = await checkActiveSubscription(checkoutData.email, stripe);
     }
 
+    // Function to calculate subscription discount based on duration
+    const getSubscriptionDiscount = (durationMonths?: number): { percentage: number; multiplier: number } => {
+      switch (durationMonths) {
+        case 3:  return { percentage: 10, multiplier: 0.90 }; // 10% desconto
+        case 6:  return { percentage: 20, multiplier: 0.80 }; // 20% desconto  
+        case 12: return { percentage: 40, multiplier: 0.60 }; // 40% desconto
+        default: return { percentage: 0, multiplier: 1.00 };   // Sem desconto
+      }
+    };
+
     // Create line items based on mode and subscription status
     let lineItems;
+    
     if (checkoutData.price_id && checkoutData.mode === 'payment' && hasActiveSubscription) {
       // Apply 45% discount for active subscribers on services
       logStep('Applying 45% discount for active subscriber');
@@ -141,8 +153,51 @@ serve(async (req) => {
         },
         quantity: 1,
       }];
+    } else if (checkoutData.price_id && checkoutData.mode === 'subscription' && checkoutData.plan_duration_months) {
+      // Apply duration-based discount for subscription plans
+      const discount = getSubscriptionDiscount(checkoutData.plan_duration_months);
+      
+      if (discount.percentage > 0) {
+        logStep('Applying subscription duration discount', { 
+          duration: checkoutData.plan_duration_months,
+          discountPercent: discount.percentage 
+        });
+        
+        // Get original price from Stripe
+        const price = await stripe.prices.retrieve(checkoutData.price_id);
+        const originalAmount = price.unit_amount || 0;
+        const discountedAmount = Math.round(originalAmount * discount.multiplier);
+        
+        logStep('Subscription discount calculation', { 
+          originalAmount, 
+          discountedAmount,
+          discountPercent: discount.percentage,
+          duration: checkoutData.plan_duration_months
+        });
+        
+        lineItems = [{
+          price_data: {
+            currency: 'brl',
+            product_data: { 
+              name: `${checkoutData.plan_name || checkoutData.product_name || 'Plano'} (${discount.percentage}% desconto)`,
+            },
+            unit_amount: discountedAmount,
+            recurring: {
+              interval: 'month',
+              interval_count: 1,
+            },
+          },
+          quantity: 1,
+        }];
+      } else {
+        // No discount, use original price_id
+        lineItems = [{
+          price: checkoutData.price_id,
+          quantity: 1,
+        }];
+      }
     } else if (checkoutData.price_id) {
-      // Use Price ID for regular payments and subscriptions
+      // Use Price ID for regular payments and subscriptions without discount
       lineItems = [{
         price: checkoutData.price_id,
         quantity: 1,
