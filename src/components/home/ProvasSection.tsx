@@ -2,20 +2,15 @@ import { Star, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DEPOIMENTOS, CONTADORES } from "@/lib/constants";
 import { useState } from "react";
-
 export function ProvasSection() {
   const [depoimentoAtivo, setDepoimentoAtivo] = useState(0);
-
   const proximoDepoimento = () => {
-    setDepoimentoAtivo((prev) => (prev + 1) % DEPOIMENTOS.length);
+    setDepoimentoAtivo(prev => (prev + 1) % DEPOIMENTOS.length);
   };
-
   const depoimentoAnterior = () => {
-    setDepoimentoAtivo((prev) => (prev - 1 + DEPOIMENTOS.length) % DEPOIMENTOS.length);
+    setDepoimentoAtivo(prev => (prev - 1 + DEPOIMENTOS.length) % DEPOIMENTOS.length);
   };
-
-  return (
-    <section className="py-16 bg-background">
+  return <section className="bg-background my-0 py-0">
       <div className="container mx-auto px-4">
         {/* Contadores */}
         <div className="text-center mb-16">
@@ -58,12 +53,7 @@ export function ProvasSection() {
             <div className="medical-card p-8 text-center">
               {/* Estrelas */}
               <div className="flex justify-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star 
-                    key={i} 
-                    className="h-5 w-5 text-accent fill-current" 
-                  />
-                ))}
+                {[...Array(5)].map((_, i) => <Star key={i} className="h-5 w-5 text-accent fill-current" />)}
               </div>
               
               {/* Depoimento */}
@@ -79,34 +69,16 @@ export function ProvasSection() {
 
             {/* Controles do carrossel */}
             <div className="flex justify-center items-center gap-4 mt-6">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={depoimentoAnterior}
-              >
+              <Button variant="outline" size="icon" onClick={depoimentoAnterior}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               
               {/* Indicadores */}
               <div className="flex gap-2">
-                {DEPOIMENTOS.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setDepoimentoAtivo(index)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      index === depoimentoAtivo 
-                        ? 'bg-primary' 
-                        : 'bg-muted-foreground/30'
-                    }`}
-                  />
-                ))}
+                {DEPOIMENTOS.map((_, index) => <button key={index} onClick={() => setDepoimentoAtivo(index)} className={`w-2 h-2 rounded-full transition-colors ${index === depoimentoAtivo ? 'bg-primary' : 'bg-muted-foreground/30'}`} />)}
               </div>
               
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={proximoDepoimento}
-              >
+              <Button variant="outline" size="icon" onClick={proximoDepoimento}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -129,6 +101,5 @@ export function ProvasSection() {
           </div>
         </div>
       </div>
-    </section>
-  );
+    </section>;
 }
