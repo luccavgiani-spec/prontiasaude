@@ -13,6 +13,25 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
+// Normalizar telefone para E.164 (assume BR se sem "+")
+const normalizePhoneE164 = (raw?: string) => {
+  const s = (raw || '').replace(/[^\d+]/g, '');
+  if (!s) return '';
+  if (s.startsWith('+')) return s;
+  const n = s.replace(/^0+/, '');
+  return n.length >= 10 ? `+55${n}` : '';
+};
+
+// Verificar se plano está ativo
+const isPlanActive = (p?: { status?: string; plan_expires_at?: string | Date }) =>
+  p?.status === 'active' && p?.plan_expires_at && new Date(p.plan_expires_at).getTime() > Date.now();
+
+// Detectar SKU PSICO
+const isPsicoSku = (sku?: string) => (sku || '').toLowerCase().match(/psico|psicolog|psiqui/);
+
+// Processed payment intents para idempotência
+const processedPaymentIntents = new Set<string>();
+
 // Google Sheets Auth
 async function createJWT(): Promise<string> {
   const serviceAccountJson = Deno.env.get("GOOGLE_SERVICE_ACCOUNT");
@@ -115,234 +134,457 @@ async function appendToGoogleSheet(accessToken: string, range: string, values: a
   }
 }
 
-// Verificar se usuário tem plano ativo
-async function hasActivePlan(email: string): Promise<boolean> {
+// Buscar dados clínicos do perfil no Supabase
+async function getPatientData(email: string): Promise<{
+  allergies?: string;
+  pregnancy_status?: string;
+  comorbidities?: string;
+  chronic_meds?: string;
+  status?: string;
+  plan_expires_at?: string;
+} | null> {
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
     
+    // Primeiro tentar buscar por email na tabela patients
     const { data, error } = await supabase
       .from('patients')
-      .select('plan_expires_at')
-      .eq('id', email) // Assumindo que o email é usado como ID ou existe um campo email
-      .single();
+      .select('allergies, pregnancy_status, comorbidities, chronic_meds')
+      .eq('email', email) // Assumindo campo email
+      .maybeSingle();
       
     if (error) {
-      logStep('Error checking active plan', { error: error.message });
-      return false;
+      logStep('Error fetching patient data', { error: error.message, email });
+      return null;
     }
     
-    if (data?.plan_expires_at) {
-      const expirationDate = new Date(data.plan_expires_at);
-      const now = new Date();
-      return expirationDate > now;
-    }
-    
-    return false;
+    return data;
   } catch (error) {
-    logStep('Exception checking active plan', { error: error.message });
-    return false;
+    logStep('Exception fetching patient data', { error: error.message, email });
+    return null;
   }
 }
 
-// Determinar funil baseado no SKU
-function determineKommoFunnel(sku: string): 'PSICO' | 'PRONTO' {
-  const lowerSku = sku.toLowerCase();
-  if (lowerSku.includes('psico') || lowerSku.includes('psicologa') || lowerSku.includes('psiqui')) {
-    return 'PSICO';
+// Upsert paciente no Supabase (pagamento avulso vs assinatura)
+async function upsertPatientInSupabase(
+  email: string, 
+  phone_e164: string, 
+  isSubscription: boolean = false,
+  subscriptionData?: { status: string; current_period_end?: number }
+): Promise<void> {
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+    
+    const updateData: any = {
+      email,
+      phone_e164,
+      updated_at: new Date().toISOString()
+    };
+    
+    if (isSubscription && subscriptionData?.status === 'active' && subscriptionData.current_period_end) {
+      updateData.status = 'active';
+      updateData.plan_expires_at = new Date(subscriptionData.current_period_end * 1000).toISOString();
+    } else {
+      updateData.status = 'inactive';
+      // Não preencher plan_expires_at para pagamentos avulsos
+    }
+    
+    const { error } = await supabase
+      .from('patients')
+      .upsert(updateData, { onConflict: 'email' });
+      
+    if (error) {
+      logStep('Error upserting patient in Supabase', { error: error.message, email });
+    } else {
+      logStep('Patient upserted in Supabase', { email, status: updateData.status, isSubscription });
+    }
+  } catch (error) {
+    logStep('Exception upserting patient', { error: error.message, email });
   }
-  return 'PRONTO';
 }
 
-// Enviar para Kommo
-async function sendToKommo(data: any, funnel: 'PSICO' | 'PRONTO'): Promise<void> {
-  const webhookUrl = funnel === 'PSICO' 
+// Buscar linha no Google Sheets por chave
+async function findSheetRowByKey(
+  accessToken: string, 
+  sheetName: string, 
+  keyColumn: number, 
+  keyValue: string
+): Promise<number> {
+  const range = `${sheetName}!A:Z`;
+  const spreadsheetId = Deno.env.get("SPREADSHEET_ID");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`;
+  
+  const response = await fetch(`${url}?majorDimension=ROWS`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  
+  if (!response.ok) return -1;
+  
+  const data = await response.json();
+  const rows = data.values || [];
+  
+  for (let i = 1; i < rows.length; i++) { // Skip header row
+    if (rows[i][keyColumn] === keyValue) {
+      return i + 1; // 1-based index
+    }
+  }
+  
+  return -1;
+}
+
+// Upsert na aba "Controle Geral Kommo" usando telefone como chave
+async function upsertControleGeralKommo(
+  accessToken: string,
+  data: {
+    nome?: string;
+    sobrenome?: string;
+    telefone: string;
+    plano: string;
+    alergias?: string;
+    statusGestacao?: string;
+    comorbidades?: string;
+    medicamentosContinuos?: string;
+    encaminhamento?: string;
+  }
+): Promise<void> {
+  const sheetName = 'Controle Geral Kommo';
+  
+  // Cabeçalhos exatos: Nome | sobrenome | telefone | Plano | alergias | status gestação | comobidades | medicamentos continuos | encaminhamento
+  const valores = [
+    data.nome || '',                      // Nome
+    data.sobrenome || '',                 // sobrenome
+    data.telefone,                        // telefone
+    data.plano,                           // Plano
+    data.alergias || '',                  // alergias
+    data.statusGestacao || '',            // status gestação
+    data.comorbidades || '',              // comobidades
+    data.medicamentosContinuos || '',     // medicamentos continuos
+    data.encaminhamento || ''             // encaminhamento
+  ];
+  
+  // Buscar linha existente por telefone (coluna 2, índice 2)
+  const rowIndex = await findSheetRowByKey(accessToken, sheetName, 2, data.telefone);
+  
+  if (rowIndex > 0) {
+    // Update existing - mas não sobrescrever encaminhamento se já estiver preenchido
+    const currentRange = `${sheetName}!A${rowIndex}:I${rowIndex}`;
+    const spreadsheetId = Deno.env.get("SPREADSHEET_ID");
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${currentRange}`;
+    
+    const currentResponse = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (currentResponse.ok) {
+      const currentData = await currentResponse.json();
+      const currentRow = currentData.values?.[0] || [];
+      
+      // Se já tem encaminhamento e não estamos setando um novo, preservar o atual
+      if (currentRow[8] && !data.encaminhamento) {
+        valores[8] = currentRow[8];
+      }
+    }
+    
+    await updateGoogleSheet(accessToken, `${sheetName}!A${rowIndex}:I${rowIndex}`, valores);
+    logStep('Updated Controle Geral Kommo', { telefone: data.telefone, rowIndex });
+  } else {
+    // Append new
+    await appendToGoogleSheet(accessToken, `${sheetName}!A:I`, valores);
+    logStep('Created new Controle Geral Kommo entry', { telefone: data.telefone });
+  }
+}
+
+// Enviar para Kommo com payload correto
+async function sendToKommoNew(
+  data: {
+    name: string;
+    phone: string;
+    email: string;
+    plano: string;
+    alergias?: string;
+    pregnancy_status?: string;
+    comorbidades?: string;
+    meds_continuous?: string;
+  },
+  pipeline: 'psico' | 'pronto'
+): Promise<{ success: boolean; httpCode?: number; bodyExcerpt?: string }> {
+  const webhookUrl = pipeline === 'psico' 
     ? Deno.env.get("KOMMO_WEBHOOK_PSICO") 
     : Deno.env.get("KOMMO_WEBHOOK_PRONTO");
     
   if (!webhookUrl) {
-    logStep('Kommo webhook URL not configured', { funnel });
-    return;
+    logStep('Kommo webhook URL not configured', { pipeline });
+    return { success: false };
   }
   
   const payload = {
-    ...data,
-    source: "Stripe→Edge→Sheets",
-    funnel: funnel
+    name: data.name,
+    phone: data.phone,
+    email: data.email,
+    plano: data.plano,
+    alergias: data.alergias || '',
+    pregnancy_status: data.pregnancy_status || '',
+    comorbidades: data.comorbidades || '',
+    meds_continuous: data.meds_continuous || '',
+    source: "Stripe→Edge→Sheets"
   };
   
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Kommo webhook failed: ${response.status}`);
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const responseText = await response.text();
+    const bodyExcerpt = responseText.length > 100 ? responseText.substring(0, 100) + '...' : responseText;
+    
+    logStep('Kommo webhook response', { 
+      pipeline, 
+      httpCode: response.status, 
+      success: response.ok,
+      bodyExcerpt 
+    });
+    
+    return { 
+      success: response.ok, 
+      httpCode: response.status, 
+      bodyExcerpt 
+    };
+  } catch (error) {
+    logStep('Kommo webhook error', { pipeline, error: error.message });
+    return { success: false };
   }
-  
-  logStep('Successfully sent to Kommo', { funnel, status: response.status });
 }
 
-// Processar pagamento aprovado
+// Processar pagamento aprovado - NOVA IMPLEMENTAÇÃO
 async function processPaymentSuccess(session: any): Promise<void> {
-  logStep('Processing payment success', { sessionId: session.id });
-  
-  const accessToken = await getAccessToken();
-  const now = new Date().toISOString();
-  
-  // Extrair dados do metadata
-  const email = session.metadata?.email || session.customer_details?.email;
-  const phone = session.customer_details?.phone || '';
-  const sku = session.metadata?.product_sku || session.metadata?.service_code || '';
   const paymentIntentId = session.payment_intent;
+  
+  // Idempotência - não reprocessar o mesmo payment_intent
+  if (paymentIntentId && processedPaymentIntents.has(paymentIntentId)) {
+    logStep('Payment already processed - skipping', { paymentIntentId });
+    return;
+  }
+  
+  logStep('Processing payment success', { sessionId: session.id, paymentIntentId });
+  
+  // 1. Obter telefone com prioridade correta e normalizar
+  const rawPhone = session.customer_details?.phone || 
+                  session.metadata?.phone_e164 || 
+                  session.metadata?.phone || '';
+  const phone_e164 = normalizePhoneE164(rawPhone);
+  
+  // 2. Extrair dados básicos
+  const email = session.customer_details?.email || session.metadata?.email;
+  const productSku = session.metadata?.product_sku || session.metadata?.service_code || '';
   
   if (!email) {
     throw new Error('Email not found in session');
   }
   
-  logStep('Extracted session data', { email, phone, sku, paymentIntentId });
-  
-  // 1. Verificar se usuário tem plano ativo
-  const hasActive = await hasActivePlan(email);
-  logStep('Active plan check', { email, hasActivePlan: hasActive });
-  
-  // 2. Determinar funil
-  const funnel = determineKommoFunnel(sku);
-  logStep('Determined funnel', { sku, funnel });
-  
-  // 3. Atualizar Patients no Google Sheets
-  // Primeiro, buscar se já existe
-  const patientsRange = 'Patients!A:Z';
-  const patientsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${Deno.env.get("SPREADSHEET_ID")}/values/${patientsRange}`;
-  const patientsResponse = await fetch(`${patientsUrl}?majorDimension=ROWS`, {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
+  logStep('Extracted session data', { 
+    email, 
+    phone_e164, 
+    product_sku: productSku, 
+    paymentIntentId 
   });
   
-  let patientRowIndex = -1;
-  if (patientsResponse.ok) {
-    const patientsData = await patientsResponse.json();
-    const rows = patientsData.values || [];
-    
-    for (let i = 1; i < rows.length; i++) { // Skip header row
-      if (rows[i][0] === email) { // Assumindo email na coluna A
-        patientRowIndex = i + 1;
-        break;
-      }
-    }
-  }
+  // 3. Upsert paciente no Supabase (pagamento avulso - status sempre 'inactive')
+  await upsertPatientInSupabase(email, phone_e164, false);
   
-  // Preparar dados do paciente (ajustar colunas conforme necessário)
-  const patientData = [
-    email,           // A - Email
-    phone,           // B - Phone
-    '',              // C - Outros campos conforme estrutura da planilha
-    '',              // D - ...
-    '',              // E - Status do plano
-    '',              // F - Data de expiração
-    now              // G - Updated at
-  ];
+  // 4. Buscar dados clínicos do perfil no banco (com fallback para metadata)
+  const patientData = await getPatientData(email);
+  const clinicalData = {
+    allergies: patientData?.allergies || session.metadata?.allergies || '',
+    pregnancy_status: patientData?.pregnancy_status || session.metadata?.pregnancy_status || '',
+    comorbidities: patientData?.comorbidities || session.metadata?.comorb || '',
+    chronic_meds: patientData?.chronic_meds || session.metadata?.meds || ''
+  };
   
-  if (patientRowIndex > 0) {
-    // Update existing
-    await updateGoogleSheet(accessToken, `Patients!A${patientRowIndex}:G${patientRowIndex}`, patientData);
-    logStep('Updated existing patient', { email, rowIndex: patientRowIndex });
-  } else {
-    // Append new
-    await appendToGoogleSheet(accessToken, 'Patients!A:G', patientData);
-    logStep('Created new patient', { email });
-  }
+  logStep('Clinical data gathered', clinicalData);
   
-  // 4. Atualizar Controle Geral Kommo
-  const controleRange = 'Controle Geral Kommo!A:Z';
-  const controleUrl = `https://sheets.googleapis.com/v4/spreadsheets/${Deno.env.get("SPREADSHEET_ID")}/values/${controleRange}`;
-  const controleResponse = await fetch(`${controleUrl}?majorDimension=ROWS`, {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
+  // 5. Verificar se tem plano ativo usando helper correto
+  const patient = { status: 'inactive', plan_expires_at: null }; // Pagamento avulso sempre inactive
+  const planActive = isPlanActive(patient);
+  
+  // 6. Determinar pipeline
+  const pipeline = isPsicoSku(productSku) ? 'psico' : 'pronto';
+  
+  logStep('Processing details', { 
+    email, 
+    phone_e164, 
+    product_sku: productSku, 
+    pipeline, 
+    planActive 
   });
   
-  let controleRowIndex = -1;
-  if (controleResponse.ok) {
-    const controleData = await controleResponse.json();
-    const rows = controleData.values || [];
+  // 7. Obter access token para Google Sheets
+  const accessToken = await getAccessToken();
+  
+  // 8. Extrair nome e sobrenome se disponíveis
+  const fullName = session.customer_details?.name || '';
+  const nameParts = fullName.split(' ');
+  const nome = nameParts[0] || '';
+  const sobrenome = nameParts.slice(1).join(' ') || '';
+  
+  // 9. Upsert na aba "Controle Geral Kommo" usando telefone como chave
+  await upsertControleGeralKommo(accessToken, {
+    nome,
+    sobrenome,
+    telefone: phone_e164,
+    plano: planActive ? 'ATIVO' : '', // 'ATIVO' quando isPlanActive === true, senão vazio
+    alergias: clinicalData.allergies,
+    statusGestacao: clinicalData.pregnancy_status,
+    comorbidades: clinicalData.comorbidities,
+    medicamentosContinuos: clinicalData.chronic_meds,
+    encaminhamento: '' // Vazio por padrão, será setado para "Kommo" após push
+  });
+  
+  // 10. Roteamento e push para Kommo (apenas se !isPlanActive)
+  let kommoResult = { success: false, httpCode: 0, bodyExcerpt: '' };
+  if (!planActive) {
+    const kommoData = {
+      name: fullName || 'Nome Sobrenome',
+      phone: phone_e164 || email, // Se não houver telefone, usar email
+      email: email,
+      plano: '',
+      alergias: clinicalData.allergies,
+      pregnancy_status: clinicalData.pregnancy_status,
+      comorbidades: clinicalData.comorbidities,
+      meds_continuous: clinicalData.chronic_meds
+    };
     
-    for (let i = 1; i < rows.length; i++) { // Skip header row
-      if (rows[i][1] === phone) { // Assumindo phone na coluna B
-        controleRowIndex = i + 1;
-        break;
-      }
+    kommoResult = await sendToKommoNew(kommoData, pipeline);
+    
+    // Se POST para Kommo retornar 2xx, atualizar coluna encaminhamento para "Kommo"
+    if (kommoResult.success && phone_e164) {
+      await upsertControleGeralKommo(accessToken, {
+        nome,
+        sobrenome,
+        telefone: phone_e164,
+        plano: '',
+        alergias: clinicalData.allergies,
+        statusGestacao: clinicalData.pregnancy_status,
+        comorbidades: clinicalData.comorbidities,
+        medicamentosContinuos: clinicalData.chronic_meds,
+        encaminhamento: 'Kommo'
+      });
     }
-  }
-  
-  // Determinar encaminhamento
-  const encaminhamento = hasActive ? "ClickLife" : "Kommo";
-  
-  const controleData = [
-    email,           // A - Email
-    phone,           // B - Phone
-    encaminhamento,  // C - Encaminhamento
-    funnel,          // D - Funil
-    sku,             // E - SKU do serviço
-    now              // F - Timestamp
-  ];
-  
-  if (controleRowIndex > 0) {
-    // Update existing
-    await updateGoogleSheet(accessToken, `Controle Geral Kommo!A${controleRowIndex}:F${controleRowIndex}`, controleData);
-    logStep('Updated controle geral', { phone, encaminhamento, rowIndex: controleRowIndex });
   } else {
-    // Append new
-    await appendToGoogleSheet(accessToken, 'Controle Geral Kommo!A:F', controleData);
-    logStep('Created controle geral entry', { phone, encaminhamento });
+    logStep('Skipping Kommo - user has active plan', { email, planActive });
   }
   
-  // 5. Atualizar Orders
+  // 11. Registrar Orders
   const orderData = [
-    session.id,                    // A - Order ID (usando session ID)
-    paymentIntentId,              // B - Payment Intent
-    sku,                          // C - SKU
-    session.amount_total || 0,    // D - Amount
-    'paid',                       // E - Status
-    email,                        // F - Email
-    now,                          // G - Timestamp
-    JSON.stringify(session)       // H - Raw JSON
+    session.id,                    // Order ID
+    paymentIntentId,              // Payment Intent ID
+    productSku,                   // SKU
+    session.amount_total || 0,    // Amount
+    'paid',                       // Status
+    email,                        // Email
+    new Date().toISOString(),     // Timestamp
+    JSON.stringify({ session_id: session.id, payment_intent: paymentIntentId }) // Details
   ];
   
   await appendToGoogleSheet(accessToken, 'Orders!A:H', orderData);
-  logStep('Created order entry', { orderId: session.id, amount: session.amount_total });
   
-  // 6. Enviar para Kommo (somente se não tiver plano ativo)
-  if (!hasActive) {
-    const kommoData = {
-      email,
-      phone,
-      sku,
-      service_name: session.metadata?.product_name || sku,
-      amount: session.amount_total,
-      payment_intent_id: paymentIntentId
-    };
-    
-    await sendToKommo(kommoData, funnel);
-  } else {
-    logStep('Skipping Kommo - user has active plan', { email, funnel });
-  }
-  
-  // 7. Log de sucesso
+  // 12. Log detalhado com campos solicitados
   const logData = [
-    now,                          // A - Timestamp
-    'SUCCESS',                    // B - Status
-    session.id,                   // C - Session ID
-    email,                        // D - Email
-    sku,                          // E - SKU
-    funnel,                       // F - Funil
-    encaminhamento,               // G - Encaminhamento
-    hasActive ? 'YES' : 'NO',     // H - Plano Ativo
-    JSON.stringify({ session_id: session.id, payment_intent: paymentIntentId }) // I - Details
+    new Date().toISOString(),         // Timestamp
+    'SUCCESS',                        // Status
+    session.id,                       // Session ID
+    email,                            // Email
+    phone_e164,                       // Phone E164
+    productSku,                       // Product SKU
+    pipeline,                         // Pipeline
+    planActive ? 'YES' : 'NO',        // Plan Active
+    kommoResult.httpCode || 0,        // Kommo HTTP Code
+    kommoResult.bodyExcerpt || '',    // Kommo Body Excerpt
+    JSON.stringify({ 
+      session_id: session.id, 
+      payment_intent: paymentIntentId,
+      clinical_data: clinicalData
+    }) // Details
   ];
   
-  await appendToGoogleSheet(accessToken, 'Logs!A:I', logData);
-  logStep('Payment processing completed successfully');
+  await appendToGoogleSheet(accessToken, 'Logs!A:K', logData);
+  
+  // Marcar como processado para idempotência
+  if (paymentIntentId) {
+    processedPaymentIntents.add(paymentIntentId);
+  }
+  
+  logStep('Payment processing completed successfully', { 
+    email, 
+    phone_e164, 
+    product_sku: productSku, 
+    pipeline, 
+    planActive,
+    kommo_http_code: kommoResult.httpCode 
+  });
+}
+
+// Processar criação/atualização de assinatura
+async function processSubscriptionChange(subscription: any): Promise<void> {
+  logStep('Processing subscription change', { 
+    subscriptionId: subscription.id, 
+    status: subscription.status 
+  });
+  
+  // Buscar customer details
+  const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+    apiVersion: '2023-10-16',
+  });
+  
+  const customer = await stripe.customers.retrieve(subscription.customer);
+  const email = (customer as any).email;
+  
+  if (!email) {
+    logStep('No email found for customer', { customerId: subscription.customer });
+    return;
+  }
+  
+  // Upsert paciente no Supabase com dados de assinatura
+  const subscriptionData = {
+    status: subscription.status,
+    current_period_end: subscription.current_period_end
+  };
+  
+  await upsertPatientInSupabase(email, '', true, subscriptionData);
+  
+  // Logs
+  const accessToken = await getAccessToken();
+  const logData = [
+    new Date().toISOString(),
+    'SUBSCRIPTION_CHANGE',
+    subscription.id,
+    email,
+    '',
+    '',
+    'subscription',
+    subscription.status === 'active' ? 'YES' : 'NO',
+    0,
+    '',
+    JSON.stringify({ 
+      subscription_id: subscription.id, 
+      status: subscription.status,
+      current_period_end: subscription.current_period_end
+    })
+  ];
+  
+  await appendToGoogleSheet(accessToken, 'Logs!A:K', logData);
+  
+  logStep('Subscription processing completed', { 
+    email, 
+    status: subscription.status 
+  });
 }
 
 serve(async (req) => {
@@ -413,6 +655,20 @@ serve(async (req) => {
         ];
         
         await appendToGoogleSheet(accessToken, 'Logs!A:H', logData);
+        break;
+      }
+      
+      case 'customer.subscription.created': {
+        const subscription = event.data.object as Stripe.Subscription;
+        logStep('Processing customer.subscription.created', { subscriptionId: subscription.id });
+        await processSubscriptionChange(subscription);
+        break;
+      }
+      
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        logStep('Processing customer.subscription.updated', { subscriptionId: subscription.id });
+        await processSubscriptionChange(subscription);
         break;
       }
       
