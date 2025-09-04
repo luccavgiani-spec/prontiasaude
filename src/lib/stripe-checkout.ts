@@ -1,9 +1,6 @@
-// Stripe Checkout via Apps Script
-import { getEmailAtual, getPhone } from "@/lib/utils";
+// Stripe Checkout via Supabase Edge Function
+import { getPhone } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-
-// ==== CONFIG ====
-const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzrbxFWk0fVpza0ZgFLWvS4cUghpGpCOyWb_VQAmvEtKSDbrptVg5K_M3QJ-m5rZ_ZRrw/exec?route=checkout';
 
 // Catálogo usando os dados reais do sistema
 export const CATALOG = {
@@ -44,12 +41,6 @@ function _resolveProductInput_(args: any) {
   return null;
 }
 
-async function _currentUserEmail_() {
-  try {
-    return await getEmailAtual() || '';
-  } catch (_) { return ''; }
-}
-
 async function _currentUserPhone_() {
   try {
     return await getPhone() || '';
@@ -85,35 +76,48 @@ export async function startCheckout(args: any = {}) {
   }
 
   const payload = {
-    mode: 'payment',
+    mode: 'payment' as const,
     email,
     price_id: item.priceId,
-    quantity: item.qty || 1,
     product_sku: item.sku,
-    phone_e164: phoneE164 || '' // opcional; checkout coleta também
+    service_code: item.sku, // Para compatibilidade com webhook
+    product_name: _getProductName(item.sku), // Nome do produto para exibição
+    phone_e164: phoneE164 || '' 
   };
 
-  try { document.body.classList.add('is-loading'); } catch(_) {}
+  try { 
+    document.body.classList.add('is-loading'); 
+  } catch(_) {}
 
   try {
-    const res = await fetch(APPS_SCRIPT_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    console.log('Iniciando checkout via Supabase:', payload);
     
-    const json = await res.json().catch(() => ({}));
+    const { data, error } = await supabase.functions.invoke('stripe-checkout', {
+      body: payload,
+    });
 
-    try { document.body.classList.remove('is-loading'); } catch(_) {}
+    try { 
+      document.body.classList.remove('is-loading'); 
+    } catch(_) {}
 
-    if (!json?.ok || !json?.url) {
-      console.error('Falha ao criar checkout:', json);
+    if (error) {
+      console.error('Erro na edge function:', error);
       alert('Não foi possível iniciar o pagamento. Tente novamente.');
       return;
     }
-    window.location.href = json.url;
+
+    if (!data?.url) {
+      console.error('URL de checkout não recebida:', data);
+      alert('Não foi possível iniciar o pagamento. Tente novamente.');
+      return;
+    }
+
+    // Abrir checkout em nova aba
+    window.open(data.url, '_blank');
   } catch (error) {
-    try { document.body.classList.remove('is-loading'); } catch(_) {}
+    try { 
+      document.body.classList.remove('is-loading'); 
+    } catch(_) {}
     console.error('Erro ao criar checkout:', error);
     alert('Não foi possível iniciar o pagamento. Tente novamente.');
   }
@@ -137,4 +141,17 @@ export function getProductKeyFromSlug(slug: string): ProductKey | null {
 // Função para obter informações do produto
 export function getProductInfo(productKey: ProductKey) {
   return CATALOG[productKey];
+}
+
+// Função auxiliar para obter nome do produto baseado no SKU
+function _getProductName(sku: string): string {
+  const nomes: Record<string, string> = {
+    'CONSULTA_CLINICA': 'Consulta Clínica Geral',
+    'RENOVACAO_RECEITA': 'Renovação de Receita',
+    'PSICOLOGA': 'Consulta com Psicóloga',
+    'PSIQUIATRIA': 'Consulta com Psiquiatra',
+    'LAUDO_BARIATRICA': 'Laudo para Cirurgia Bariátrica',
+    'LAUDO_LAQ_VAS': 'Laudo para Laqueadura/Vasectomia',
+  };
+  return nomes[sku] || 'Serviço Médico';
 }
