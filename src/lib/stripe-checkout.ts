@@ -1,5 +1,6 @@
 // Stripe Checkout via Apps Script
 import { getEmailAtual, getPhone } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 // ==== CONFIG ====
 const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzrbxFWk0fVpza0ZgFLWvS4cUghpGpCOyWb_VQAmvEtKSDbrptVg5K_M3QJ-m5rZ_ZRrw/exec?route=checkout';
@@ -57,21 +58,21 @@ async function _currentUserPhone_() {
 
 // ==== API PRINCIPAL ====
 export async function startCheckout(args: any = {}) {
-  // Não force login: use email/phone do usuário logado apenas se existir
-  let email = (args.email || await _currentUserEmail_() || '').trim();
+  // Verificar se o usuário está logado (OBRIGATÓRIO)
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session?.user) {
+    // Se não estiver logado, redirecionar para área do paciente
+    window.location.href = '/area-do-paciente';
+    return;
+  }
+
+  // Usuário logado: usar dados do perfil
+  let email = session.user.email || '';
   let phoneE164 = (args.phoneE164 || await _currentUserPhone_() || '').trim();
 
-  // Se o componente tiver um form com email/telefone, busque também:
-  if (!email && args.formSelector) {
-    const f = document.querySelector(args.formSelector);
-    if (f) {
-      email = (f.querySelector('input[type="email"]')?.value || '').trim() || email;
-      const p = (f.querySelector('input[name="phone"], input[type="tel"]')?.value || '').trim();
-      if (p) phoneE164 = p;
-    }
-  }
   if (!email) {
-    alert('Informe seu e-mail para prosseguir.');
+    alert('Erro: email do usuário não encontrado. Faça login novamente.');
     return;
   }
 

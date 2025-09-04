@@ -30,19 +30,23 @@ const ServicoDetalhe = () => {
     );
   }
 
-  const handleAgendar = async (email?: string) => {
+  const handleAgendar = async () => {
     setIsLoading(true);
     
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
       
       await startCheckout({
-        email, // pode ser undefined, a função resolve automaticamente  
         productKey,
         quantity: 1
       });
     } catch (error) {
       console.error('Erro no checkout:', error);
+      toast({
+        title: "Erro no checkout",
+        description: "Não foi possível iniciar o pagamento. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
