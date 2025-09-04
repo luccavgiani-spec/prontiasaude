@@ -225,6 +225,9 @@ serve(async (req) => {
       mode: checkoutData.mode,
       success_url: checkoutData.success_url || `${SITE_BASE_URL}/confirmacao?session_id={CHECKOUT_SESSION_ID}&email=${encodeURIComponent(checkoutData.email)}`,
       cancel_url: checkoutData.cancel_url || `${SITE_BASE_URL}/servicos?cancel=1`,
+      phone_number_collection: {
+        enabled: true,
+      },
       metadata: {
         user_id: user?.id || '',
         product_sku: checkoutData.product_sku || '',
