@@ -1,6 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Loading styles */
+.is-loading {
+  cursor: wait;
+  opacity: 0.8;
+}
+
+.is-loading * {
+  pointer-events: none;
+}
+
+/* ... keep existing code */
 
 /* Médicos do Bem Design System - Modern Medical Interface */
 

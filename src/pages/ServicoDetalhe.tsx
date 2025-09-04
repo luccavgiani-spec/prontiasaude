@@ -2,9 +2,9 @@ import { useParams, Link } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
-import { CATALOGO_SERVICOS, PRICE_MAP } from "@/lib/constants";
-import { formataPreco, getEmailAtual } from "@/lib/utils";
-import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
+import { CATALOGO_SERVICOS } from "@/lib/constants";
+import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
+import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 
@@ -42,44 +42,31 @@ const ServicoDetalhe = () => {
   };
 
   const processarCheckout = async (email: string) => {
-    setIsLoading(true);
-    
     try {
-      const priceId = PRICE_MAP[servico.slug as keyof typeof PRICE_MAP];
+      setIsLoading(true);
       
-      if (!priceId || priceId === "price_xxx") {
+      const productKey = getProductKeyFromSlug(servico.slug);
+      if (!productKey) {
         toast({
-          title: "Serviço em configuração",
-          description: "Este serviço ainda está sendo configurado. Tente novamente mais tarde.",
+          title: "Erro no produto",
+          description: "Produto não encontrado no catálogo",
           variant: "destructive",
         });
         return;
       }
 
-      const checkoutData = await criarCheckout({
-        mode: "payment",
-        price_id: priceId,
-        product_sku: servico.sku,
-        email: email
+      const phone = await getPhone();
+      
+      await startCheckout({
+        email,
+        productKey,
+        quantity: 1,
+        phoneE164: phone || ''
       });
-
-      if (checkoutData.error) {
-        toast({
-          title: "Erro no checkout",
-          description: checkoutData.error,
-          variant: "destructive",
-        });
-        return;
-      }
-
-      redirecionarParaCheckout(checkoutData);
       
     } catch (error) {
-      toast({
-        title: "Erro inesperado",
-        description: "Não foi possível processar o agendamento. Tente novamente.",
-        variant: "destructive",
-      });
+      console.error('Erro no checkout:', error);
+      // O toast de erro já é mostrado pela função startCheckout
     } finally {
       setIsLoading(false);
     }
