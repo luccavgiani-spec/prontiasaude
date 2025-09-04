@@ -4,17 +4,14 @@ import { getEmailAtual, getPhone } from "@/lib/utils";
 // ==== CONFIG ====
 const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzrbxFWk0fVpza0ZgFLWvS4cUghpGpCOyWb_VQAmvEtKSDbrptVg5K_M3QJ-m5rZ_ZRrw/exec?route=checkout';
 
-// Catálogo opcional (pode manter vazio se usar data-attrs/override)
+// Catálogo usando os dados reais do sistema
 export const CATALOG = {
-  // Exemplo (trocar price_ids reais se for usar catálogo):
-  consulta_clinica: { priceId: 'price_XXXXXXXX1', sku: 'consulta_clinica' },
-  renovacao_receita: { priceId: 'price_XXXXXXXX2', sku: 'renovacao_receita' },
-  laudo_bariatrica: { priceId: 'price_XXXXXXXX3', sku: 'laudo_bariatrica' },
-  laudo_laqueadura: { priceId: 'price_XXXXXXXX4', sku: 'laudo_laqueadura' },
-  psicologa: { priceId: 'price_XXXXXXXX5', sku: 'psicologa' },
-  psiquiatria: { priceId: 'price_XXXXXXXX6', sku: 'psiquiatria' },
-  consulta_nutricional: { priceId: 'price_XXXXXXXX7', sku: 'consulta_nutricional' },
-  consulta_pediatrica: { priceId: 'price_XXXXXXXX8', sku: 'consulta_pediatrica' },
+  consulta: { priceId: 'price_1S0SpxENBHjf6SQJYKfzA6xs', sku: 'CONSULTA_CLINICA' },
+  renovacao: { priceId: 'price_1S0T9pENBHjf6SQJIQjyGiaG', sku: 'RENOVACAO_RECEITA' },
+  psicologa: { priceId: 'price_1S0TAbENBHjf6SQJXFN80i1D', sku: 'PSICOLOGA' },
+  psiquiatria: { priceId: 'price_1S0TAzENBHjf6SQJRC8ZpnT5', sku: 'PSIQUIATRIA' },
+  laudo_bariatrica: { priceId: 'price_1S0TCsENBHjf6SQJpeAo8Nvr', sku: 'LAUDO_BARIATRICA' },
+  laudo_laq_vas: { priceId: 'price_1S0TCNENBHjf6SQJIRlNoofO', sku: 'LAUDO_LAQ_VAS' },
 };
 
 export type ProductKey = keyof typeof CATALOG;
@@ -123,15 +120,14 @@ export async function startCheckout(args: any = {}) {
 
 // Função auxiliar para mapear slugs de serviços para chaves do catálogo
 export function getProductKeyFromSlug(slug: string): ProductKey | null {
+  // Mapeia diretamente os slugs do CATALOGO_SERVICOS para as chaves do CATALOG
   const mapping: Record<string, ProductKey> = {
-    'consulta-clinica-geral': 'consulta_clinica',
-    'renovacao-receita-medica': 'renovacao_receita',
-    'laudo-medico-bariatrica': 'laudo_bariatrica',
-    'laudo-medico-laqueadura': 'laudo_laqueadura',
-    'consulta-psicologa': 'psicologa',
-    'consulta-psiquiatra': 'psiquiatria',
-    'consulta-nutricional': 'consulta_nutricional',
-    'consulta-pediatrica': 'consulta_pediatrica',
+    'consulta': 'consulta',
+    'renovacao': 'renovacao', 
+    'psicologa': 'psicologa',
+    'psiquiatria': 'psiquiatria',
+    'laudo_bariatrica': 'laudo_bariatrica',
+    'laudo_laq_vas': 'laudo_laq_vas',
   };
 
   return mapping[slug] || null;
