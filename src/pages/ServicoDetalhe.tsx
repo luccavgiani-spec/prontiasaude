@@ -31,42 +31,18 @@ const ServicoDetalhe = () => {
   }
 
   const handleAgendar = async (email?: string) => {
-    const emailParaUsar = email || await getEmailAtual();
+    setIsLoading(true);
     
-    if (!emailParaUsar) {
-      setIsModalOpen(true);
-      return;
-    }
-
-    await processarCheckout(emailParaUsar);
-  };
-
-  const processarCheckout = async (email: string) => {
     try {
-      setIsLoading(true);
-      
       const productKey = getProductKeyFromSlug(servico.slug);
-      if (!productKey) {
-        toast({
-          title: "Erro no produto",
-          description: "Produto não encontrado no catálogo",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const phone = await getPhone();
       
       await startCheckout({
-        email,
+        email, // pode ser undefined, a função resolve automaticamente  
         productKey,
-        quantity: 1,
-        phoneE164: phone || ''
+        quantity: 1
       });
-      
     } catch (error) {
       console.error('Erro no checkout:', error);
-      // O toast de erro já é mostrado pela função startCheckout
     } finally {
       setIsLoading(false);
     }
