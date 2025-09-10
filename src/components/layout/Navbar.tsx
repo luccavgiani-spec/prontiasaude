@@ -21,8 +21,8 @@ export function Navbar() {
   }];
   const isActive = (href: string) => location.pathname === href;
   return <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
-      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[27px]">
-        <div className="flex justify-between items-center h-20">
+      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[14px]">
+        <div className="flex justify-between items-center h-10">
           {/* Modern Logo */}
           <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-primary group">
             <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
@@ -50,7 +50,7 @@ export function Navbar() {
             </Link>
             <Link to="/#servicos">
               <Button size="lg" className="medical-button-primary text-lg px-8 py-6 rounded-xl">
-                Agendar Consulta
+                Consulte Agora
               </Button>
             </Link>
           </div>
@@ -75,7 +75,7 @@ export function Navbar() {
                 </Link>
                 <Link to="/#servicos" onClick={() => setIsOpen(false)}>
                   <Button size="lg" className="medical-button-primary w-full text-lg py-6 rounded-xl">
-                    Agendar Consulta
+                    Consulte Agora
                   </Button>
                 </Link>
               </div>

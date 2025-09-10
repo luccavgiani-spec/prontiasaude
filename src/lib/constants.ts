@@ -23,9 +23,9 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "renovacao", 
     nome: "Renovação de receita", 
-    precoBase: 34.90, 
+    precoBase: 29.90, 
     sku: "RENOVACAO_RECEITA",
-    descricao: "Renovação rápida de receitas médicas",
+    descricao: "Por R$ 29,90 você renova agora sua receita válida em todo o Brasil.",
     tempo: "15-20 minutos", 
     inclui: ["Avaliação do histórico", "Nova receita digital", "Orientações de uso"]
   },
@@ -39,13 +39,27 @@ export const CATALOGO_SERVICOS = [
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"]
   },
   { 
-    slug: "psiquiatria", 
-    nome: "Psiquiatria", 
+    slug: "medicos_especialistas", 
+    nome: "Médicos Especialistas", 
     precoBase: 79.90, 
-    sku: "PSIQUIATRIA",
-    descricao: "Consulta psiquiátrica especializada",
+    sku: "MEDICOS_ESPECIALISTAS",
+    descricao: "Consultas com especialistas em diversas áreas médicas",
     tempo: "45-60 minutos",
-    inclui: ["Avaliação psiquiátrica", "Prescrição de medicamentos", "Acompanhamento clínico"]
+    inclui: [
+      "Cardiologista", "Dermatologista", "Endocrinologista", 
+      "Gastroenterologista", "Ginecologista", "Oftalmologista", 
+      "Ortopedista", "Otorrinolaringologista", "Pediatria", 
+      "Psiquiatria", "Urologista", "Fisioterapia"
+    ]
+  },
+  { 
+    slug: "laudos_psicologicos", 
+    nome: "Laudos Psicológicos", 
+    precoBase: 99.90, 
+    sku: "LAUDOS_PSICOLOGICOS",
+    descricao: "Laudos assinados digitalmente",
+    tempo: "60-90 minutos",
+    inclui: ["Laudo para bariátrica", "Laudo para laqueadura/vasectomia", "Avaliação completa"]
   },
   { 
     slug: "laudo_bariatrica", 
@@ -77,8 +91,7 @@ export const PLANOS = [
       "Descontos em consultas", 
       "Atendimento prioritário", 
       "Receitas digitais",
-      "Atendimento 24h",
-      "Atendimentos aos finais de semana"
+      "Atendimento 24h"
     ],
     popular: false
   },
@@ -105,8 +118,7 @@ export const PLANOS = [
       "• Pediatria",
       "Nutrição (1x ao mês)",
       "Personal trainer (1x ao mês)",
-      "Atendimento 24h",
-      "Atendimentos aos finais de semana"
+      "Atendimento 24h"
     ],
     popular: true
   },
@@ -134,8 +146,7 @@ export const PLANOS = [
       "• Pediatria",
       "Nutrição (1x ao mês)",
       "Personal trainer (1x ao mês)",
-      "Atendimento 24h",
-      "Atendimentos aos finais de semana"
+      "Atendimento 24h"
     ],
     popular: false
   }

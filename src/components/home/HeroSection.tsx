@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import heroImage from "@/assets/hero-doctor-modern.jpg";
+import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
   const scrollToServicos = () => {
@@ -62,12 +62,12 @@ export function HeroSection() {
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-6 pt-4">
               <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-lg px-12 py-8 rounded-2xl shadow-2xl group">
-                Agendar Consulta
+                Consulte Agora
                 <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button onClick={scrollToComoFunciona} variant="outline" size="xl" className="text-lg px-12 py-8 rounded-2xl border-2 hover:bg-primary/5 hover:border-primary/30 transition-all duration-300">
-                Saiba Como Funciona
-              </Button>
+              <p className="text-lg text-center text-muted-foreground max-w-2xl">
+                Agende sua consulta agora e cuide da sua saúde de forma prática e acessível.
+              </p>
             </div>
             
             {/* Enhanced social proof */}

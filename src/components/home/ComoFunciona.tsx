@@ -2,7 +2,7 @@ import { UserCheck, Calendar, Video, ArrowRight, Check, Star } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
-import consultaImage from "@/assets/telemedicine-consultation.jpg";
+import consultaImage from "@/assets/medical-team-realistic.jpg";
 
 const passos = [
   {
@@ -118,11 +118,8 @@ export function ComoFunciona() {
           <h3 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
             Quer renovar sua receita?
           </h3>
-          <p className="text-xl text-muted-foreground mb-4 max-w-2xl mx-auto">
-            A partir de <span className="font-bold text-primary text-2xl">R$ 19,20*</span> você tem sua receita renovada sem burocracia
-          </p>
-          <p className="text-sm text-muted-foreground italic mb-8">
-            *valor com plano ativo
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            Por <span className="font-bold text-primary text-2xl">R$ 29,90</span> você renova agora sua receita válida em todo o Brasil.
           </p>
           <Button size="xl" className="bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 transition-all text-lg px-12 py-6 rounded-2xl group">
             Renovar Receita

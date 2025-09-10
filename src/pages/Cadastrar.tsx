@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
 import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
+import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 
 const Cadastrar = () => {
   const [formData, setFormData] = useState({
@@ -83,8 +84,8 @@ const Cadastrar = () => {
       return;
     }
 
-    if (formData.password.length < 6) {
-      toast({ title: "Erro", description: "Senha deve ter pelo menos 6 caracteres.", variant: "destructive" });
+    if (!isPasswordValid(formData.password)) {
+      toast({ title: "Erro", description: "Senha deve atender todos os requisitos.", variant: "destructive" });
       return;
     }
 
@@ -247,12 +248,13 @@ const Cadastrar = () => {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Digite sua senha"
                   value={formData.password}
                   onChange={(e) => handleInputChange('password', e.target.value)}
                   className="pl-10"
                 />
               </div>
+              {formData.password && <PasswordChecklist password={formData.password} />}
             </div>
             
             <div className="space-y-2">
@@ -339,7 +341,11 @@ const Cadastrar = () => {
             </div>
             
             <div className="flex flex-col gap-2">
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+              <Button 
+                type="submit" 
+                className="w-full bg-primary hover:bg-primary/90" 
+                disabled={isLoading || (formData.password && !isPasswordValid(formData.password))}
+              >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar conta com senha
               </Button>

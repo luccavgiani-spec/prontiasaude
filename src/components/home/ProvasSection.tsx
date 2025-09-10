@@ -13,7 +13,7 @@ export function ProvasSection() {
   return <section className="bg-background my-0 py-0">
       <div className="container mx-auto px-4">
         {/* Contadores */}
-        <div className="text-center mb-16">
+        <div className="text-center mb-16 max-w-4xl mx-auto">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-8">
             Confiança Comprovada
           </h2>

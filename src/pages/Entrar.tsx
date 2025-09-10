@@ -49,13 +49,23 @@ const Entrar = () => {
     });
 
     if (error) {
-      toast({
-        title: "Erro no login",
-        description: error.message === "Invalid login credentials" 
-          ? "Email ou senha incorretos." 
-          : error.message,
-        variant: "destructive",
-      });
+      // Log error but only show user-friendly messages
+      console.error('Login error:', error);
+      
+      if (error.message === "Invalid login credentials") {
+        toast({
+          title: "Erro no login",
+          description: "Email ou senha incorretos.",
+          variant: "destructive",
+        });
+      } else if (error.message.includes("Email not confirmed")) {
+        toast({
+          title: "Email não confirmado",
+          description: "Verifique sua caixa de entrada para confirmar seu email.",
+          variant: "destructive",
+        });
+      }
+      // Don't show generic errors to users
     } else {
       navigate('/auth/callback');
     }
@@ -74,9 +84,10 @@ const Entrar = () => {
     });
 
     if (error) {
+      console.error('Google login error:', error);
       toast({
         title: "Erro no login",
-        description: error.message,
+        description: "Não foi possível fazer login com Google. Tente novamente.",
         variant: "destructive",
       });
     }
