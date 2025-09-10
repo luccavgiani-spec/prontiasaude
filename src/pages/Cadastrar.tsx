@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
-import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
+import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, formatPhoneMask, validateCEP, formatCEP } from "@/lib/validations";
 import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 
 const Cadastrar = () => {
@@ -17,20 +17,80 @@ const Cadastrar = () => {
     last_name: "",
     email: "",
     password: "",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    uf: "",
     address_line: "",
     cpf: "",
+    phone_display: "",
     phone_e164: "",
     birth_date: "",
     terms_accepted: false,
     marketing_opt_in: false
   });
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepError, setCepError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  const fetchAddressByCEP = async (cep: string) => {
+    if (!validateCEP(cep)) return;
+    
+    setCepLoading(true);
+    setCepError("");
+    
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep.replace(/\D/g, '')}/json/`);
+      const data = await response.json();
+      
+      if (data.erro) {
+        setCepError("CEP não encontrado");
+        return;
+      }
+      
+      setFormData(prev => ({
+        ...prev,
+        logradouro: data.logradouro || "",
+        bairro: data.bairro || "",
+        cidade: data.localidade || "",
+        uf: data.uf || "",
+        address_line: `${data.logradouro || ""}, ${data.bairro || ""}, ${data.localidade || ""} - ${data.uf || ""}`
+      }));
+    } catch (error) {
+      setCepError("CEP não encontrado");
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
   const handleInputChange = (field: string, value: string | boolean) => {
-    if (field === 'phone_e164' && typeof value === 'string') {
-      value = formatPhoneE164(value);
+    if (field === 'phone_display' && typeof value === 'string') {
+      const masked = formatPhoneMask(value);
+      const e164 = formatPhoneE164(value);
+      setFormData(prev => ({ 
+        ...prev, 
+        phone_display: masked,
+        phone_e164: e164
+      }));
+      return;
+    }
+    if (field === 'cep' && typeof value === 'string') {
+      const formatted = formatCEP(value);
+      setFormData(prev => ({ ...prev, cep: formatted }));
+      
+      // Debounce CEP lookup
+      const cleanCEP = value.replace(/\D/g, '');
+      if (cleanCEP.length === 8) {
+        setTimeout(() => fetchAddressByCEP(cleanCEP), 400);
+      } else {
+        setCepError("");
+      }
+      return;
     }
     if (field === 'cpf' && typeof value === 'string') {
       value = value.replace(/\D/g, '');
@@ -51,8 +111,20 @@ const Cadastrar = () => {
       toast({ title: "Erro", description: "Email inválido.", variant: "destructive" });
       return false;
     }
-    if (!formData.address_line.trim()) {
-      toast({ title: "Erro", description: "Endereço é obrigatório.", variant: "destructive" });
+    if (!formData.cep.trim()) {
+      toast({ title: "Erro", description: "CEP é obrigatório.", variant: "destructive" });
+      return false;
+    }
+    if (!validateCEP(formData.cep)) {
+      toast({ title: "Erro", description: "CEP deve ter 8 dígitos.", variant: "destructive" });
+      return false;
+    }
+    if (!formData.logradouro.trim()) {
+      toast({ title: "Erro", description: "Logradouro é obrigatório.", variant: "destructive" });
+      return false;
+    }
+    if (!formData.numero.trim()) {
+      toast({ title: "Erro", description: "Número é obrigatório.", variant: "destructive" });
       return false;
     }
     if (!validateCPF(formData.cpf)) {
@@ -100,6 +172,13 @@ const Cadastrar = () => {
           first_name: formData.first_name,
           last_name: formData.last_name,
           address_line: formData.address_line,
+          cep: formData.cep,
+          logradouro: formData.logradouro,
+          numero: formData.numero,
+          complemento: formData.complemento,
+          bairro: formData.bairro,
+          cidade: formData.cidade,
+          uf: formData.uf,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
@@ -141,6 +220,13 @@ const Cadastrar = () => {
           first_name: formData.first_name,
           last_name: formData.last_name,
           address_line: formData.address_line,
+          cep: formData.cep,
+          logradouro: formData.logradouro,
+          numero: formData.numero,
+          complemento: formData.complemento,
+          bairro: formData.bairro,
+          cidade: formData.cidade,
+          uf: formData.uf,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
@@ -257,17 +343,95 @@ const Cadastrar = () => {
               {formData.password && <PasswordChecklist password={formData.password} />}
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="address_line">Endereço *</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="cep">CEP *</Label>
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="cep"
+                    placeholder="00000-000"
+                    value={formData.cep}
+                    onChange={(e) => handleInputChange('cep', e.target.value)}
+                    className="pl-10"
+                    maxLength={9}
+                    required
+                  />
+                  {cepLoading && (
+                    <div className="absolute right-3 top-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                {cepError && (
+                  <p className="text-sm text-destructive">{cepError}</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="logradouro">Logradouro *</Label>
+                  <Input
+                    id="logradouro"
+                    placeholder="Rua, Avenida, etc."
+                    value={formData.logradouro}
+                    onChange={(e) => handleInputChange('logradouro', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="numero">Número *</Label>
+                  <Input
+                    id="numero"
+                    placeholder="123"
+                    value={formData.numero}
+                    onChange={(e) => handleInputChange('numero', e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="complemento">Complemento</Label>
+                  <Input
+                    id="complemento"
+                    placeholder="Apto, Bloco, etc."
+                    value={formData.complemento}
+                    onChange={(e) => handleInputChange('complemento', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bairro">Bairro</Label>
+                  <Input
+                    id="bairro"
+                    placeholder="Seu bairro"
+                    value={formData.bairro}
+                    onChange={(e) => handleInputChange('bairro', e.target.value)}
+                    readOnly
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cidade">Cidade</Label>
+                  <Input
+                    id="cidade"
+                    placeholder="Sua cidade"
+                    value={formData.cidade}
+                    onChange={(e) => handleInputChange('cidade', e.target.value)}
+                    readOnly
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="uf">Estado (UF)</Label>
                 <Input
-                  id="address_line"
-                  placeholder="Rua, número, bairro, cidade"
-                  value={formData.address_line}
-                  onChange={(e) => handleInputChange('address_line', e.target.value)}
-                  className="pl-10"
-                  required
+                  id="uf"
+                  placeholder="SP"
+                  value={formData.uf}
+                  onChange={(e) => handleInputChange('uf', e.target.value)}
+                  maxLength={2}
+                  readOnly
                 />
               </div>
             </div>
@@ -285,14 +449,14 @@ const Cadastrar = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone_e164">Telefone *</Label>
+                <Label htmlFor="phone_display">Telefone *</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="phone_e164"
-                    placeholder="+5511999999999"
-                    value={formData.phone_e164}
-                    onChange={(e) => handleInputChange('phone_e164', e.target.value)}
+                    id="phone_display"
+                    placeholder="(11) 91234-5678"
+                    value={formData.phone_display}
+                    onChange={(e) => handleInputChange('phone_display', e.target.value)}
                     className="pl-10"
                     required
                   />

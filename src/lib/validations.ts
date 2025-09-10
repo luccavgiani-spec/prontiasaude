@@ -14,17 +14,49 @@ export const validatePhoneE164 = (phone: string): boolean => {
 };
 
 export const formatPhoneE164 = (phone: string): string => {
-  const cleanPhone = phone.replace(/\D/g, '');
-  if (cleanPhone.length === 11) {
-    return `+55${cleanPhone}`;
-  }
-  if (cleanPhone.length === 10) {
-    return `+55${cleanPhone}`;
-  }
+  // Se já tem +55, retorna como está
   if (phone.startsWith('+55')) {
     return phone;
   }
-  return `+55${cleanPhone}`;
+  
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Se já começa com 55, não adiciona novamente
+  if (cleanPhone.startsWith('55') && (cleanPhone.length === 12 || cleanPhone.length === 13)) {
+    return `+${cleanPhone}`;
+  }
+  
+  // Adiciona +55 apenas se não estiver presente
+  if (cleanPhone.length === 11 || cleanPhone.length === 10) {
+    return `+55${cleanPhone}`;
+  }
+  
+  return phone; // Retorna como está se não conseguir processar
+};
+
+export const formatPhoneMask = (phone: string): string => {
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  if (cleanPhone.length <= 10) {
+    // Telefone fixo: (11) 1234-5678
+    return cleanPhone.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+  } else {
+    // Celular: (11) 91234-5678
+    return cleanPhone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  }
+};
+
+export const validateCEP = (cep: string): boolean => {
+  const cleanCEP = cep.replace(/\D/g, '');
+  return cleanCEP.length === 8 && /^\d{8}$/.test(cleanCEP);
+};
+
+export const formatCEP = (cep: string): string => {
+  const cleanCEP = cep.replace(/\D/g, '');
+  if (cleanCEP.length <= 5) {
+    return cleanCEP;
+  }
+  return cleanCEP.replace(/(\d{5})(\d{3})/, '$1-$2');
 };
 
 export const validateEmail = (email: string): boolean => {
