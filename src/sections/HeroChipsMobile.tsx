@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Clock, FileText, Headphones, ShieldCheck, Users, FileSignature } from "lucide-react";
 import LogoLoop from "@/components/bits/LogoLoop";
 
@@ -15,36 +15,54 @@ const features = [
 ];
 
 export default function HeroChipsMobile() {
-  const [logoHeight, setLogoHeight] = useState<number>(18); // mobile costuma ter fonte menor
+  const [logoHeight, setLogoHeight] = useState<number>(50); // altura inicial estimada para mobile
+  const probeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const el = document.querySelector(HERO_SUBTITLE_SELECTOR) as HTMLElement | null;
-    if (el) setLogoHeight(Math.round(parseFloat(getComputedStyle(el).fontSize || "18")));
+    // Medir a altura real do chip
+    if (probeRef.current) {
+      const chipHeight = probeRef.current.offsetHeight;
+      setLogoHeight(chipHeight);
+    }
   }, []);
 
   const logos = features.map(({ icon: Icon, label }) => ({
     title: label,
     node: (
       <div className="inline-flex items-center gap-2 bg-white text-neutral-700 rounded-2xl border-2 border-emerald-500 shadow-sm px-4 py-3 ring-0">
-        <Icon aria-hidden className="h-6 w-6 text-emerald-600" />
+        <Icon aria-hidden className="h-7 w-7 text-emerald-600" />
         <span className="font-medium leading-none text-neutral-800">{label}</span>
       </div>
     ),
   }));
 
   return (
-    <div className="md:hidden relative z-20" style={{ minHeight: Math.ceil(logoHeight * 2) }}>
-      <LogoLoop
-        logos={logos}
-        speed={120}            // 1,5x (igual ao desktop)
-        direction="left"
-        logoHeight={logoHeight} // segue o font-size do subtítulo
-        gap={24}               // espaçamento confortável no mobile
-        pauseOnHover={false}   // mobile não usa hover
-        scaleOnHover={false}
-        fadeOut={false}        // evita o "apagão" por máscara
-        ariaLabel="Diferenciais do serviço (mobile)"
-      />
+    <div className="md:hidden relative z-20">
+      {/* Elemento probe invisível para medir altura real do chip */}
+      <div 
+        ref={probeRef}
+        className="absolute -top-[1000px] left-0 pointer-events-none"
+        style={{ visibility: 'hidden' }}
+      >
+        <div className="inline-flex items-center gap-2 bg-white text-neutral-700 rounded-2xl border-2 border-emerald-500 shadow-sm px-4 py-3 ring-0">
+          <Clock aria-hidden className="h-7 w-7 text-emerald-600" />
+          <span className="font-medium leading-none text-neutral-800">Teste</span>
+        </div>
+      </div>
+      
+      <div style={{ minHeight: logoHeight }}>
+        <LogoLoop
+          logos={logos}
+          speed={120}            // 1,5x (igual ao desktop)
+          direction="left"
+          logoHeight={logoHeight} // altura real medida do chip
+          gap={24}               // espaçamento confortável no mobile
+          pauseOnHover={false}   // mobile não usa hover
+          scaleOnHover={false}
+          fadeOut={false}        // evita o "apagão" por máscara
+          ariaLabel="Diferenciais do serviço (mobile)"
+        />
+      </div>
     </div>
   );
 }
