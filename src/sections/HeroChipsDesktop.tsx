@@ -35,7 +35,7 @@ export default function HeroChipsDesktop() {
     <div className="hidden md:block">
       <LogoLoop
         logos={logos}
-        speed={80}
+        speed={120}
         direction="left"
         logoHeight={logoHeight}   // segue o font-size do subtítulo
         gap={32}
