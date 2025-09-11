@@ -39,7 +39,11 @@ export function ServicosSection() {
 
         {/* Grid de serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} planoSelecionado={planoSelecionado !== "SEM_PLANO" ? planoSelecionado : undefined} showDesconto={planoSelecionado !== "SEM_PLANO"} />)}
+          {CATALOGO_SERVICOS.map(servico => (
+            <div key={servico.slug} className="h-full">
+              <ServicoCard servico={servico} planoSelecionado={planoSelecionado !== "SEM_PLANO" ? planoSelecionado : undefined} showDesconto={planoSelecionado !== "SEM_PLANO"} />
+            </div>
+          ))}
         </div>
 
         {/* CTA para planos */}

@@ -87,7 +87,7 @@ export function ServicoCard({
     }
   };
   return <>
-      <div className="bg-card/50 border border-border/50 rounded-xl p-6 hover:shadow-lg transition-all duration-300 group hover:border-primary/20">
+      <div className="bg-card/50 border border-border/50 rounded-xl p-6 hover:shadow-lg transition-all duration-300 group hover:border-primary/20 h-full flex flex-col">
         {/* Ícone do Serviço */}
         <div className="text-center mb-4">
           {getServicoIcon(servico.slug)}
@@ -110,7 +110,7 @@ export function ServicoCard({
 
         {/* Seção especial para Laudos Psicológicos */}
         {servico.slug === "laudos_psicologicos" && (
-          <div className="mb-6 space-y-4">
+          <div className="mb-6 space-y-4 flex-grow">
             <div>
               <h4 className="text-sm font-medium text-foreground mb-2">Inclui:</h4>
               <ul className="space-y-1">
@@ -138,8 +138,11 @@ export function ServicoCard({
           </div>
         )}
 
+        {/* Spacer para empurrar o preço e botão para baixo */}
+        <div className="flex-grow"></div>
+
         {/* Preço e CTA */}
-        <div className="text-center pt-4 border-t border-border">
+        <div className="text-center pt-4 border-t border-border mt-auto">
           <div className="mb-4">
             {showDesconto && planoSelecionado ? (
               <div>
