@@ -9,8 +9,8 @@ export function ServicosSection() {
     code: "SEM_PLANO",
     nome: "Sem plano"
   }, ...PLANOS.filter(p => p.precoMensal !== null)];
-  return <section id="servicos" className="bg-background py-[23px]">
-      <div className="container mx-auto px-4">
+  return <section id="servicos" className="py-16 bg-background">
+      <div className="container mx-auto px-[25px]">
         {/* Header da seção */}
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -51,7 +51,7 @@ export function ServicosSection() {
               Assine um plano e tenha acesso a descontos exclusivos em todos os serviços
             </p>
             <Button variant="medical" size="lg" asChild>
-              
+              <a href="/planos">Ver Planos Disponíveis</a>
             </Button>
           </div>}
       </div>
