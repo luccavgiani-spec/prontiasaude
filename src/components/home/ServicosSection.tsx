@@ -9,14 +9,14 @@ export function ServicosSection() {
     code: "SEM_PLANO",
     nome: "Sem plano"
   }, ...PLANOS.filter(p => p.precoMensal !== null)];
-  return <section id="servicos" className="py-16 bg-background">
+  return <section id="servicos" className="bg-background py-[23px]">
       <div className="container mx-auto px-4">
         {/* Header da seção */}
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Nossos Serviços
           </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">Consulta médica online na hora com atestado médico com CID e validade em todo país; atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina, laudos psicológicos e muito mais.</p>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">Escolha o serviço que precisa e conecte-se com nossos profissionais qualificados</p>
 
           {/* Simulador de plano */}
           <div className="inline-block">
@@ -39,11 +39,7 @@ export function ServicosSection() {
 
         {/* Grid de serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATALOGO_SERVICOS.map(servico => (
-            <div key={servico.slug} className="h-full">
-              <ServicoCard servico={servico} planoSelecionado={planoSelecionado !== "SEM_PLANO" ? planoSelecionado : undefined} showDesconto={planoSelecionado !== "SEM_PLANO"} />
-            </div>
-          ))}
+          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} planoSelecionado={planoSelecionado !== "SEM_PLANO" ? planoSelecionado : undefined} showDesconto={planoSelecionado !== "SEM_PLANO"} />)}
         </div>
 
         {/* CTA para planos */}
