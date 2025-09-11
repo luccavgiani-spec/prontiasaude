@@ -43,7 +43,7 @@ export function HeroSection() {
                 <span className="medical-gradient-text">Seu Médico Online a qualquer hora!</span>
               </h1>
               
-              <p className="text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
+              <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
                 Cuidado imediato para quem precisa
               </p>
             </div>

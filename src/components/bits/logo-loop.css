@@ -1,0 +1,78 @@
+:root {
+  --logo-height: 20px;
+  --gap: 16px;
+  --speed: 50s;
+  --direction: normal;
+  --fade-color: #ffffff;
+}
+
+.logo-loop {
+  position: relative;
+  width: 100%;
+  height: var(--logo-height);
+  overflow: hidden;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+}
+
+.logo-loop.fade-out {
+  mask-image: linear-gradient(
+    to right,
+    var(--fade-color) 0%,
+    transparent 10%,
+    transparent 90%,
+    var(--fade-color) 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    var(--fade-color) 0%,
+    transparent 10%,
+    transparent 90%,
+    var(--fade-color) 100%
+  );
+}
+
+.logo-track {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  width: max-content;
+  animation: scroll var(--speed) linear infinite var(--direction);
+}
+
+.logo-item {
+  flex-shrink: 0;
+  height: var(--logo-height);
+  display: flex;
+  align-items: center;
+  transition: transform 0.3s ease;
+}
+
+.logo-loop.pause-on-hover:hover .logo-track {
+  animation-play-state: paused;
+}
+
+.logo-loop.scale-on-hover .logo-item:hover {
+  transform: scale(1.1);
+}
+
+@keyframes scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
