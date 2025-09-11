@@ -10,6 +10,7 @@ import QuemSomos from "./pages/QuemSomos";
 import Servicos from "./pages/Servicos";
 import ServicoDetalhe from "./pages/ServicoDetalhe";
 import Planos from "./pages/Planos";
+import BlogsArtigos from "./pages/BlogsArtigos";
 import Paciente from "./pages/Paciente";
 import Confirmacao from "./pages/Confirmacao";
 import NotFound from "./pages/NotFound";
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/servicos" element={<Servicos />} />
               <Route path="/servicos/:slug" element={<ServicoDetalhe />} />
               <Route path="/planos" element={<Planos />} />
+              <Route path="/blogs-artigos" element={<BlogsArtigos />} />
               <Route path="/paciente" element={<Paciente />} />
               <Route path="/confirmacao" element={<Confirmacao />} />
               {/* Auth routes */}

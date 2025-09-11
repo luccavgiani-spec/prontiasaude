@@ -8,21 +8,24 @@ export function Navbar() {
   const location = useLocation();
   const navItems = [{
     href: "/",
-    label: "Home"
-  }, {
-    href: "/quem-somos",
-    label: "Quem somos"
+    label: "Início"
   }, {
     href: "/servicos",
     label: "Serviços"
   }, {
     href: "/planos",
     label: "Planos"
+  }, {
+    href: "/blogs-artigos",
+    label: "Blogs & Artigos"
+  }, {
+    href: "/quem-somos",
+    label: "Quem somos"
   }];
   const isActive = (href: string) => location.pathname === href;
   return <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
-      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[14px]">
-        <div className="flex justify-between items-center h-10">
+      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
+        <div className="flex justify-between items-center h-8">
           {/* Modern Logo */}
           <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-primary group">
             <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
@@ -62,19 +65,19 @@ export function Navbar() {
         </div>
 
         {/* Enhanced Mobile Navigation */}
-        {isOpen && <div className="md:hidden py-8 border-t border-border/50 bg-gradient-to-b from-background to-muted/30 rounded-b-2xl">
-            <div className="flex flex-col gap-6">
-              {navItems.map(item => <Link key={item.href} to={item.href} onClick={() => setIsOpen(false)} className={cn("text-lg font-medium transition-all duration-300 px-4 py-3 rounded-xl", isActive(item.href) ? "text-primary bg-primary/10 border border-primary/20" : "text-muted-foreground hover:text-primary hover:bg-primary/5")}>
+        {isOpen && <div className="md:hidden py-4 border-t border-border/50 bg-gradient-to-b from-background to-muted/30 rounded-b-2xl">
+            <div className="flex flex-col gap-3">
+              {navItems.map(item => <Link key={item.href} to={item.href} onClick={() => setIsOpen(false)} className={cn("text-sm font-medium transition-all duration-300 px-4 py-2 rounded-xl", isActive(item.href) ? "text-primary bg-primary/10 border border-primary/20" : "text-muted-foreground hover:text-primary hover:bg-primary/5")}>
                   {item.label}
                 </Link>)}
-              <div className="flex flex-col gap-4 pt-6 border-t border-border/50">
+              <div className="flex flex-col gap-2 pt-3 border-t border-border/50">
                 <Link to="/area-do-paciente" onClick={() => setIsOpen(false)}>
-                  <Button variant="outline" size="lg" className="w-full text-lg py-6 rounded-xl">
+                  <Button variant="outline" size="sm" className="w-full text-sm py-3 rounded-xl">
                     Área do Paciente
                   </Button>
                 </Link>
                 <Link to="/#servicos" onClick={() => setIsOpen(false)}>
-                  <Button size="lg" className="medical-button-primary w-full text-lg py-6 rounded-xl">
+                  <Button size="sm" className="medical-button-primary w-full text-sm py-3 rounded-xl">
                     Consulte Agora
                   </Button>
                 </Link>

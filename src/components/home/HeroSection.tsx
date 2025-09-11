@@ -39,56 +39,28 @@ export function HeroSection() {
             
             {/* Modern headline */}
             <div className="space-y-6">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
-                <span className="text-foreground">Controle sua </span>
-                <span className="medical-gradient-text">saúde digital</span>
-                <br />
-                <span className="text-foreground">com </span>
-                <span className="medical-gradient-text">consultas</span>
-                <br />
-                <span className="text-foreground">a partir de</span>
-                <br />
-                <span className="text-primary text-6xl md:text-7xl lg:text-8xl">R$ 24,15!</span>
+              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight animate-fade-in">
+                <span className="medical-gradient-text">Seu Médico Online a qualquer hora!</span>
               </h1>
               
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
-                Conecte-se com médicos especialistas e realize consultas online.
-              </p>
-              <p className="text-lg md:text-xl text-muted-foreground max-w-2xl leading-relaxed font-light mt-4">
-                Evite filas e burocracia, cuide da sua saúde de maneira segura e prática!
+              <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
+                Cuidado imediato para quem precisa
               </p>
             </div>
             
             {/* Modern CTAs */}
-            <div className="flex flex-col sm:flex-row gap-6 pt-4">
+            <div className="flex flex-col sm:flex-row gap-6 pt-4 animate-fade-in delay-400">
               <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-lg px-12 py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
                 <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <p className="text-lg text-center text-muted-foreground max-w-2xl">
-                Agende sua consulta agora e cuide da sua saúde de forma prática e acessível.
-              </p>
             </div>
             
-            {/* Enhanced social proof */}
-            <div className="grid grid-cols-3 gap-8 pt-12 border-t border-border/50">
-              <div className="text-center group">
-                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">15k+</div>
-                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Atendimentos</div>
-              </div>
-              <div className="text-center group">
-                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">4.9★</div>
-                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Avaliação</div>
-              </div>
-              <div className="text-center group">
-                <div className="text-4xl font-bold medical-gradient-text mb-2 group-hover:scale-110 transition-transform">200+</div>
-                <div className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Especialistas</div>
-              </div>
-            </div>
+            {/* Social proof removed */}
           </div>
           
           {/* Modern Image Column */}
-          <div className="relative flex justify-center lg:justify-end">
+          <div className="relative flex justify-center lg:justify-end animate-fade-in delay-600">
             <div className="relative">
               {/* Enhanced background effects */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />

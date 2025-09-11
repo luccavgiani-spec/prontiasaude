@@ -1,9 +1,10 @@
-import { Clock, FileCheck, Headphones, Shield, Users } from "lucide-react";
+import { Clock, FileCheck, Headphones, Shield, Users, Award } from "lucide-react";
 
 const benefits = [
   { icon: Clock, text: "Médico 24h" },
   { icon: FileCheck, text: "Atestado e Receitas Digitais" },
   { icon: Headphones, text: "Suporte Rápido" },
+  { icon: Award, text: "Emissão de Laudos" },
   { icon: Shield, text: "Pagamento Seguro" },
   { icon: Users, text: "Para Todas as Idades" }
 ];
@@ -18,7 +19,7 @@ export function BenefitsBar() {
             return (
               <div key={index} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                 <div className="p-2 bg-primary/10 rounded-full">
-                  <Icon className="h-4 w-4 text-primary" />
+                  <Icon className="h-5 w-5 text-primary" />
                 </div>
                 <span className="whitespace-nowrap">{benefit.text}</span>
               </div>

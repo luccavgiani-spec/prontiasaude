@@ -14,7 +14,7 @@ const passos = [
   {
     icon: Calendar,
     titulo: "Agende",
-    descricao: "Escolha o serviço de sua necessidade e passe pela consulta 30 minutos após aprovação do pagamento.",
+    descricao: "Escolha o serviço de sua necessidade e passe pela consulta na hora após aprovação do pagamento.",
     numero: "02"
   },
   {
