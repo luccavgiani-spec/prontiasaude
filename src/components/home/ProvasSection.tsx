@@ -13,35 +13,7 @@ export function ProvasSection() {
   return <section className="bg-background my-0 py-0">
       <div className="container mx-auto px-4">
         {/* Contadores */}
-        <div className="text-center mb-16 max-w-4xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-8">
-            Confiança Comprovada
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-2xl mx-auto mb-12">
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-primary mb-2">
-                {CONTADORES.atendimentos}
-              </div>
-              <div className="text-muted-foreground">Atendimentos realizados</div>
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-2">
-                <span className="text-3xl md:text-4xl font-bold text-primary">
-                  {CONTADORES.avaliacao}
-                </span>
-                <Star className="h-6 w-6 text-accent fill-current" />
-              </div>
-              <div className="text-muted-foreground">Avaliação dos pacientes</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl md:text-4xl font-bold text-primary mb-2">
-                {CONTADORES.medicos}
-              </div>
-              <div className="text-muted-foreground">Especialistas qualificados</div>
-            </div>
-          </div>
-        </div>
+        
 
         {/* Carrossel de Depoimentos */}
         <div className="max-w-2xl mx-auto">
