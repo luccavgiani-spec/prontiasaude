@@ -43,7 +43,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Médicos Especialistas", 
     precoBase: 79.90, 
     sku: "MEDICOS_ESPECIALISTAS",
-    descricao: "Consultas com especialistas em diversas áreas médicas",
+    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia",
     tempo: "45-60 minutos",
     inclui: [
       "Cardiologista", "Dermatologista", "Endocrinologista", 
@@ -55,29 +55,12 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "laudos_psicologicos", 
     nome: "Laudos Psicológicos", 
-    precoBase: 99.90, 
+    precoBase: 119.90, 
     sku: "LAUDOS_PSICOLOGICOS",
     descricao: "Laudos assinados digitalmente",
     tempo: "60-90 minutos",
-    inclui: ["Laudo para bariátrica", "Laudo para laqueadura/vasectomia", "Avaliação completa"]
-  },
-  { 
-    slug: "laudo_bariatrica", 
-    nome: "Laudo psicológico bariátrica", 
-    precoBase: 99.90, 
-    sku: "LAUDO_BARIATRICA",
-    descricao: "Avaliação psicológica para cirurgia bariátrica",
-    tempo: "60-90 minutos",
-    inclui: ["Avaliação completa", "Laudo técnico", "Entrevistas estruturadas"]
-  },
-  { 
-    slug: "laudo_laq_vas", 
-    nome: "Laudo psicológico laqueadura/vasectomia", 
-    precoBase: 99.90, 
-    sku: "LAUDO_LAQ_VAS",
-    descricao: "Avaliação psicológica para procedimentos contraceptivos",
-    tempo: "60-90 minutos",
-    inclui: ["Avaliação psicológica", "Laudo técnico especializado", "Orientações pré-procedimento"]
+    inclui: ["Laudo para bariátrica", "Laudo para laqueadura/vasectomia", "Avaliação completa"],
+    naoInclui: ["Consulta psicológica prévia"]
   }
 ];
 

@@ -12,8 +12,8 @@ const Index = () => {
       <BenefitsBar />
       <ServicosSection />
       <ComoFunciona />
-      <ProvasSection />
       <PlanosSection />
+      <ProvasSection />
     </>
   );
 };

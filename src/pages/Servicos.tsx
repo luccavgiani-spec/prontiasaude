@@ -18,8 +18,7 @@ const Servicos = () => {
             Nossos Serviços
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl">
-            Oferecemos uma ampla gama de serviços médicos online com profissionais qualificados 
-            e certificados pelos órgãos competentes.
+            Consulta médica online na hora com atestado médico com CID e validade em todo país; atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina, laudos psicológicos e muito mais.
           </p>
         </div>
 
