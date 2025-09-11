@@ -1,4 +1,5 @@
 import { Clock, FileCheck, Headphones, Shield, Users, Award } from "lucide-react";
+import SpotlightCard from "@/components/bits/SpotlightCard";
 
 const benefits = [
   { icon: Clock, text: "Médico 24h" },
@@ -17,12 +18,14 @@ export function BenefitsBar() {
           {benefits.map((benefit, index) => {
             const Icon = benefit.icon;
             return (
-              <div key={index} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                <div className="p-2 bg-primary/10 rounded-full">
-                  <Icon className="h-5 w-5 text-primary" />
+              <SpotlightCard key={index} className="rounded-full" spotlightColor="rgba(22, 163, 74, 0.18)">
+                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <div className="p-2 bg-primary/10 rounded-full">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="whitespace-nowrap">{benefit.text}</span>
                 </div>
-                <span className="whitespace-nowrap">{benefit.text}</span>
-              </div>
+              </SpotlightCard>
             );
           })}
         </div>
