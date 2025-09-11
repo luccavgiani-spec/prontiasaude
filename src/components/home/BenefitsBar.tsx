@@ -14,16 +14,16 @@ export function BenefitsBar() {
   return (
     <div className="bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 py-6 border-t border-border/50">
       <div className="container mx-auto px-4">
-        <div className="flex flex-wrap justify-center items-center gap-6 md:gap-8">
+        <div className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:justify-center md:items-center md:gap-6 lg:gap-8">
           {benefits.map((benefit, index) => {
             const Icon = benefit.icon;
             return (
               <SpotlightCard key={index} className="rounded-full" spotlightColor="rgba(22, 163, 74, 0.18)">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <div className="p-2 bg-primary/10 rounded-full">
-                    <Icon className="h-5 w-5 text-primary" />
+                <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 text-xs md:text-sm font-medium text-muted-foreground p-1 md:p-0">
+                  <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
+                    <Icon className="h-3 w-3 md:h-5 md:w-5 text-primary" />
                   </div>
-                  <span className="whitespace-nowrap">{benefit.text}</span>
+                  <span className="text-center md:whitespace-nowrap text-xs md:text-sm">{benefit.text}</span>
                 </div>
               </SpotlightCard>
             );

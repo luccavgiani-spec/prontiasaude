@@ -5,7 +5,7 @@ export default function ComoFuncionaStepper() {
   return (
     <section className="relative py-12 md:py-16">
       <div className="mx-auto grid max-w-6xl grid-cols-1 gap-8 px-4 md:grid-cols-2 md:items-center">
-        <div>
+        <div className="text-center md:text-left">
           <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-neutral-900">Como Funciona</h2>
           <p className="mt-2 text-neutral-600">Três passos simples para revolucionar o cuidado com sua saúde</p>
 
