@@ -88,7 +88,7 @@ const Servicos = () => {
             <Button variant="medical" size="lg" asChild>
               <a href="/#servicos">Agendar Consulta</a>
             </Button>
-            <Button variant="outline" size="lg" asChild>
+            <Button variant="outline" size="lg" asChild className="mx-auto">
               <Link to="/planos">Ver Planos</Link>
             </Button>
           </div>
