@@ -3,37 +3,12 @@ import { ServicoCard } from "./ServicoCard";
 import { Button } from "@/components/ui/button";
 import { CATALOGO_SERVICOS, PLANOS } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Users, Crown, Star, Check } from "lucide-react";
-
 export function ServicosSection() {
-  const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
-  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
-  const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [formData, setFormData] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    descricao: ""
-  });
-
-  const duracoes = [
-    { meses: "1", label: "Mensal" },
-    { meses: "6", label: "Semestral", desconto: "20%" },
-    { meses: "12", label: "Anual", desconto: "40%" }
-  ];
-
-  const handleFormSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setShowEmpresarialForm(false);
-    setShowConfirmModal(true);
-    setFormData({ nome: "", email: "", telefone: "", descricao: "" });
-  };
-
+  const [planoSelecionado, setPlanoSelecionado] = useState<string>("SEM_PLANO");
+  const opcoes = [{
+    code: "SEM_PLANO",
+    nome: "Sem plano"
+  }, ...PLANOS.filter(p => p.precoMensal !== null)];
   return <section id="servicos" className="py-16 bg-background">
       <div className="container mx-auto px-4">
         {/* Header da seção */}
@@ -41,172 +16,44 @@ export function ServicosSection() {
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
             Nossos Serviços
           </h2>
-          <p className="text-lg text-muted-foreground max-w-4xl mx-auto mb-4">
-            Consulta médica online na hora com atestado médico com CID e validade em todo país; atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina, laudos psicológicos e muito mais.
-          </p>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">Escolha o serviço que precisa e conecte-se com nossos profissionais qualificados</p>
 
-          {/* Seletor de duração */}
-          <div className="flex justify-center mb-8">
-            <div className="inline-block bg-muted/50 rounded-2xl p-1.5">
-              <div className="flex gap-1">
-                {duracoes.map((duracao) => (
-                  <button
-                    key={duracao.meses}
-                    onClick={() => setDuracaoSelecionada(duracao.meses)}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                      duracaoSelecionada === duracao.meses
-                        ? "bg-green-600 text-white"
-                        : "bg-white text-green-700 border border-green-600 hover:bg-green-50"
-                    }`}
-                  >
-                    {duracao.label}
-                    {duracao.desconto && (
-                      <Badge 
-                        variant="secondary" 
-                        className="absolute -top-1.5 -right-1.5 bg-accent text-accent-foreground text-xs px-1 py-0"
-                      >
-                        -{duracao.desconto}
-                      </Badge>
-                    )}
-                  </button>
-                ))}
-              </div>
+          {/* Simulador de plano */}
+          <div className="inline-block">
+            <h3 className="text-sm font-medium text-foreground mb-3">
+              Simular com plano:
+            </h3>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {opcoes.map(opcao => <Button key={opcao.code} variant="outline" size="sm" onClick={() => setPlanoSelecionado(opcao.code)} className={`relative ${planoSelecionado === opcao.code ? "bg-green-600 text-white border-green-600 hover:bg-green-700" : "bg-white text-green-700 border-green-600 hover:bg-green-50"}`}>
+                  {opcao.nome}
+                  {opcao.code === "FAMILIAR" && <Badge variant="secondary" className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-xs px-1">
+                      Popular
+                    </Badge>}
+                </Button>)}
             </div>
+            {planoSelecionado !== "SEM_PLANO" && <p className="text-xs text-muted-foreground mt-2">
+                * Simulação visual. Descontos aplicados na assinatura do plano.
+              </p>}
           </div>
-        </div>
-
-        {/* Grid de planos por duração */}
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
-          {PLANOS.map((plano) => (
-            <Card
-              key={plano.code}
-              className={`medical-card p-6 relative ${
-                plano.popular ? "ring-2 ring-primary shadow-[var(--shadow-medical)]" : ""
-              } bg-muted/20 hover:bg-muted/30 transition-all duration-300`}
-            >
-              {plano.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-primary text-primary-foreground px-3 py-1">
-                    <Star className="h-3 w-3 mr-1" />
-                    Mais Popular
-                  </Badge>
-                </div>
-              )}
-
-              <CardHeader className="text-center pb-4">
-                <div className="mb-4">
-                  {plano.code === "INDIVIDUAL" && <Users className="h-12 w-12 text-primary mx-auto" />}
-                  {plano.code === "FAMILIAR" && <Crown className="h-12 w-12 text-primary mx-auto" />}
-                  {plano.code === "EMPRESARIAL" && <Star className="h-12 w-12 text-primary mx-auto" />}
-                </div>
-                <CardTitle className="text-2xl text-foreground">
-                  {plano.nome}
-                </CardTitle>
-                <div className="text-center">
-                  {plano.precoMensal ? (
-                    <>
-                      <div className="text-2xl font-bold text-primary">
-                        R$ {plano.precoMensal.toFixed(2).replace(".", ",")}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        por mês
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-xl font-bold text-primary">
-                      Sob Consulta
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                <ul className="space-y-2">
-                  {plano.beneficios.slice(0, 4).map((beneficio, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm">
-                      <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                      <span className="text-muted-foreground">{beneficio}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Button
-                  onClick={() => {
-                    if (plano.code === "EMPRESARIAL") {
-                      setShowEmpresarialForm(true);
-                    } else {
-                      window.location.href = "/planos";
-                    }
-                  }}
-                  size="lg"
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {plano.code === "EMPRESARIAL" ? "Solicitar Proposta" : "Assinar Plano"}
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
         </div>
 
         {/* Grid de serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} />)}
+          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} planoSelecionado={planoSelecionado !== "SEM_PLANO" ? planoSelecionado : undefined} showDesconto={planoSelecionado !== "SEM_PLANO"} />)}
         </div>
 
-        {/* Modal do formulário empresarial */}
-        <Dialog open={showEmpresarialForm} onOpenChange={setShowEmpresarialForm}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Plano Empresarial</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              <Input
-                placeholder="Nome"
-                value={formData.nome}
-                onChange={(e) => setFormData({...formData, nome: e.target.value})}
-                required
-              />
-              <Input
-                type="email"
-                placeholder="E-mail"
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                required
-              />
-              <Input
-                placeholder="Telefone"
-                value={formData.telefone}
-                onChange={(e) => setFormData({...formData, telefone: e.target.value})}
-                required
-              />
-              <Textarea
-                placeholder="Breve descrição do negócio"
-                value={formData.descricao}
-                onChange={(e) => setFormData({...formData, descricao: e.target.value})}
-                required
-              />
-              <Button type="submit" className="w-full bg-green-600 hover:bg-green-700">
-                Enviar Formulário
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal de confirmação */}
-        <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-          <DialogContent className="sm:max-w-md text-center">
-            <DialogHeader>
-              <DialogTitle>Formulário Enviado!</DialogTitle>
-            </DialogHeader>
-            <p className="text-muted-foreground">
-              Formulário preenchido. Em breve alguém entrará em contato.
+        {/* CTA para planos */}
+        {planoSelecionado !== "SEM_PLANO" && <div className="text-center mt-12 p-6 bg-primary/5 border border-primary/20 rounded-xl">
+            <h3 className="text-xl font-semibold text-foreground mb-2">
+              Gostou dos descontos?
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              Assine um plano e tenha acesso a descontos exclusivos em todos os serviços
             </p>
-            <Button onClick={() => setShowConfirmModal(false)} className="w-full">
-              OK
+            <Button variant="medical" size="lg" asChild>
+              
             </Button>
-          </DialogContent>
-        </Dialog>
+          </div>}
       </div>
     </section>;
 }
