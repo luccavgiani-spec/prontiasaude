@@ -25,9 +25,9 @@ export default function HeroChipsMobile() {
   const logos = features.map(({ icon: Icon, label }) => ({
     title: label,
     node: (
-      <div className="inline-flex items-center gap-2 bg-white text-neutral-700 rounded-2xl border-2 border-emerald-500 shadow-sm px-4 py-3">
+      <div className="inline-flex items-center gap-2 bg-white text-neutral-700 rounded-2xl border-2 border-emerald-500 shadow-sm px-4 py-3 ring-0">
         <Icon aria-hidden className="h-6 w-6 text-emerald-600" />
-        <span className="font-medium leading-none">{label}</span>
+        <span className="font-medium leading-none text-neutral-800">{label}</span>
       </div>
     ),
   }));
