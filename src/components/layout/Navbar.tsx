@@ -25,7 +25,7 @@ export function Navbar() {
   const isActive = (href: string) => location.pathname === href;
   return <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
-        <div className="flex justify-between items-center h-8">
+        <div className="flex justify-between items-center h-10">
           {/* Modern Logo */}
           <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-primary group">
             <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
@@ -38,7 +38,7 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-10">
-            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-lg font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
+            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-base font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                 {item.label}
                 <span className={cn("absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300", isActive(item.href) ? "w-full" : "w-0 group-hover:w-full")} />
               </Link>)}
@@ -47,12 +47,12 @@ export function Navbar() {
           {/* Modern Desktop CTAs */}
           <div className="hidden md:flex items-center gap-4">
             <Link to="/area-do-paciente">
-              <Button variant="outline" size="lg" className="text-lg px-8 py-6 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
+              <Button variant="outline" size="lg" className="text-base px-6 py-4 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
                 Área do Paciente
               </Button>
             </Link>
             <Link to="/#servicos">
-              <Button size="lg" className="medical-button-primary text-lg px-8 py-6 rounded-xl">
+              <Button size="lg" className="medical-button-primary text-base px-6 py-4 rounded-xl">
                 Consulte Agora
               </Button>
             </Link>

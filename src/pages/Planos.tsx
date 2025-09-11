@@ -17,7 +17,6 @@ const Planos = () => {
 
   const duracoes = [
     { meses: "1", label: "Mensal" },
-    { meses: "3", label: "Trimestral", desconto: "10%" },
     { meses: "6", label: "Semestral", desconto: "20%" },
     { meses: "12", label: "Anual", desconto: "40%" }
   ];

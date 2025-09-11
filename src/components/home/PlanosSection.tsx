@@ -1,17 +1,15 @@
 import { useState } from "react";
-import { ServicoCard } from "./ServicoCard";
 import { Button } from "@/components/ui/button";
-import { CATALOGO_SERVICOS, PLANOS } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PLANOS } from "@/lib/constants";
 import { Users, Crown, Star, Check } from "lucide-react";
 
-export function ServicosSection() {
+export function PlanosSection() {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
-  const [planoSelecionado, setPlanoSelecionado] = useState<string | null>(null);
   const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -34,17 +32,16 @@ export function ServicosSection() {
     setFormData({ nome: "", email: "", telefone: "", descricao: "" });
   };
 
-  return <section id="servicos" className="py-16 bg-background">
+  return (
+    <section className="py-16 bg-muted/30">
       <div className="container mx-auto px-4">
-        {/* Header da seção */}
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Nossos Serviços
+            Nossos Planos
           </h2>
-          <p className="text-lg text-muted-foreground max-w-4xl mx-auto mb-4">
-            Consulta médica online na hora com atestado médico com CID e validade em todo país; atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina, laudos psicológicos e muito mais.
+          <p className="text-lg text-muted-foreground max-w-3xl mx-auto mb-8">
+            Descontos exclusivos em consultas e atendimento prioritário para sua família
           </p>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">Escolha o serviço que precisa e conecte-se com nossos profissionais qualificados</p>
 
           {/* Seletor de duração */}
           <div className="flex justify-center mb-8">
@@ -76,14 +73,14 @@ export function ServicosSection() {
           </div>
         </div>
 
-        {/* Grid de planos por duração */}
-        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
+        {/* Grid de planos */}
+        <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-12">
           {PLANOS.map((plano) => (
             <Card
               key={plano.code}
               className={`medical-card p-6 relative ${
                 plano.popular ? "ring-2 ring-primary shadow-[var(--shadow-medical)]" : ""
-              } bg-muted/20 hover:bg-muted/30 transition-all duration-300`}
+              } bg-background hover:bg-muted/20 transition-all duration-300`}
             >
               {plano.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -123,7 +120,7 @@ export function ServicosSection() {
 
               <CardContent className="space-y-4">
                 <ul className="space-y-2">
-                  {plano.beneficios.slice(0, 4).map((beneficio, index) => (
+                  {plano.beneficios.slice(0, 5).map((beneficio, index) => (
                     <li key={index} className="flex items-center gap-2 text-sm">
                       <Check className="h-4 w-4 text-primary flex-shrink-0" />
                       <span className="text-muted-foreground">{beneficio}</span>
@@ -147,11 +144,6 @@ export function ServicosSection() {
               </CardContent>
             </Card>
           ))}
-        </div>
-
-        {/* Grid de serviços */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} />)}
         </div>
 
         {/* Modal do formulário empresarial */}
@@ -208,5 +200,6 @@ export function ServicosSection() {
           </DialogContent>
         </Dialog>
       </div>
-    </section>;
+    </section>
+  );
 }
