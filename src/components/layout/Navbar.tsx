@@ -37,22 +37,22 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-10">
-            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-base font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
+          <div className="hidden md:flex items-center gap-6 lg:gap-10">
+            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-sm lg:text-base font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                 {item.label}
                 <span className={cn("absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300", isActive(item.href) ? "w-full" : "w-0 group-hover:w-full")} />
               </Link>)}
           </div>
 
           {/* Modern Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-3 lg:gap-4">
             <Link to="/area-do-paciente">
-              <Button variant="outline" size="lg" className="text-base px-6 py-4 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
+              <Button variant="outline" size="lg" className="text-sm lg:text-base px-4 lg:px-6 py-3 lg:py-4 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
                 Área do Paciente
               </Button>
             </Link>
             <Link to="/#servicos">
-              <Button size="lg" className="medical-button-primary text-base px-6 py-4 rounded-xl">
+              <Button size="lg" className="medical-button-primary text-sm lg:text-base px-4 lg:px-6 py-3 lg:py-4 rounded-xl">
                 Consulte Agora
               </Button>
             </Link>
