@@ -53,7 +53,7 @@ export default function HeroChipsMobile() {
       <div style={{ minHeight: logoHeight }}>
         <LogoLoop
           logos={logos}
-          speed={120}            // 1,5x (igual ao desktop)
+          speed={48}             // 2,5x velocidade no mobile
           direction="left"
           logoHeight={logoHeight} // altura real medida do chip
           gap={24}               // espaçamento confortável no mobile
