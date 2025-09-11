@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
+import HeroChipsDesktop from "@/sections/HeroChipsDesktop";
 export function HeroSection() {
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
@@ -54,6 +55,11 @@ export function HeroSection() {
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
+            </div>
+
+            {/* Chips desktop: only LogoLoop */}
+            <div className="hidden md:block mt-8">
+              <HeroChipsDesktop />
             </div>
             
             {/* Social proof removed */}

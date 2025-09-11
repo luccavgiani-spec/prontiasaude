@@ -8,39 +8,37 @@
 
 .logo-loop {
   position: relative;
+  isolation: isolate;
   width: 100%;
   height: var(--logo-height);
   overflow: hidden;
-  mask-image: linear-gradient(
+}
+
+.logo-loop.fade-out::before,
+.logo-loop.fade-out::after {
+  content: "";
+  position: absolute;
+  inset-block: 0; /* top: 0; bottom: 0; */
+  z-index: 1;
+  width: clamp(24px, 8%, 120px);
+  pointer-events: none;
+}
+
+.logo-loop.fade-out::before {
+  left: 0;
+  background: linear-gradient(
     to right,
-    transparent 0%,
-    black 10%,
-    black 90%,
-    transparent 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    black 10%,
-    black 90%,
-    transparent 100%
+    var(--fade-color, #ffffff) 0%,
+    rgba(255, 255, 255, 0) 100%
   );
 }
 
-.logo-loop.fade-out {
-  mask-image: linear-gradient(
-    to right,
-    var(--fade-color) 0%,
-    transparent 10%,
-    transparent 90%,
-    var(--fade-color) 100%
-  );
-  -webkit-mask-image: linear-gradient(
-    to right,
-    var(--fade-color) 0%,
-    transparent 10%,
-    transparent 90%,
-    var(--fade-color) 100%
+.logo-loop.fade-out::after {
+  right: 0;
+  background: linear-gradient(
+    to left,
+    var(--fade-color, #ffffff) 0%,
+    rgba(255, 255, 255, 0) 100%
   );
 }
 
@@ -49,6 +47,8 @@
   align-items: center;
   gap: var(--gap);
   width: max-content;
+  position: relative;
+  z-index: 2;
   animation: scroll var(--speed) linear infinite var(--direction);
 }
 
