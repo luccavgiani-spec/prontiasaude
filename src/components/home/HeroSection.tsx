@@ -19,7 +19,7 @@ export function HeroSection() {
       });
     }
   };
-  return <section className="relative min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
+  return <section className="relative min-h-[500px] md:min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
@@ -27,32 +27,32 @@ export function HeroSection() {
       animationDelay: '2s'
     }} />
       
-      <div className="container mx-auto px-4 py-10 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center min-h-[600px]">
+      <div className="container mx-auto px-4 py-6 md:py-10 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-8 md:gap-16 items-center min-h-[500px] md:min-h-[600px]">
           {/* Content Column */}
-          <div className="space-y-10">
+          <div className="space-y-6 md:space-y-10">
             {/* Modern badge */}
-            <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg">
-              <CheckCircle className="w-5 h-5" />
+            <div className="inline-flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg text-sm md:text-base">
+              <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
               Plataforma Médica Certificada
             </div>
             
             {/* Modern headline */}
-            <div className="space-y-6">
-              <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-tight animate-fade-in">
+            <div className="space-y-3 md:space-y-6">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight animate-fade-in">
                 <span className="medical-gradient-text">Seu Médico Online a qualquer hora!</span>
               </h1>
               
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
+              <p className="text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
                 Cuidado imediato para quem precisa
               </p>
             </div>
             
             {/* Modern CTAs */}
-            <div className="flex flex-col sm:flex-row gap-6 pt-4 animate-fade-in delay-400">
-              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-lg px-12 py-8 rounded-2xl shadow-2xl group">
+            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
+              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
-                <ArrowRight className="ml-3 w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
             </div>
             
