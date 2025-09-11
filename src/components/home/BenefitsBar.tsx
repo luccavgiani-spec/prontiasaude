@@ -19,11 +19,11 @@ export function BenefitsBar() {
             const Icon = benefit.icon;
             return (
               <SpotlightCard key={index} className="rounded-full" spotlightColor="rgba(22, 163, 74, 0.18)">
-                <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 text-xs md:text-sm font-medium text-muted-foreground p-1 md:p-0">
+                <div className="flex flex-col md:flex-row items-center gap-1 md:gap-2 text-sm md:text-sm font-medium text-muted-foreground p-1 md:p-0">
                   <div className="p-1.5 md:p-2 bg-primary/10 rounded-full">
                     <Icon className="h-3 w-3 md:h-5 md:w-5 text-primary" />
                   </div>
-                  <span className="text-center md:whitespace-nowrap text-xs md:text-sm">{benefit.text}</span>
+                  <span className="text-center md:whitespace-nowrap text-sm md:text-sm">{benefit.text}</span>
                 </div>
               </SpotlightCard>
             );
