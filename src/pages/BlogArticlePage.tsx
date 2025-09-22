@@ -16,7 +16,7 @@ export default function BlogArticlePage() {
         <div className="text-center mt-4">
           <Link to={basePath} className="text-primary hover:underline inline-flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
-            Voltar para Blogs & Artigos
+            Voltar para Blogs
           </Link>
         </div>
       </section>
@@ -28,7 +28,7 @@ export default function BlogArticlePage() {
       <header className="mb-8">
         <Link to={basePath} className="text-primary hover:underline inline-flex items-center gap-2 mb-6">
           <ArrowLeft className="w-4 h-4" />
-          Voltar para Blogs & Artigos
+          Voltar para Blogs
         </Link>
         
         <h1 className="text-3xl md:text-4xl font-semibold text-neutral-900 mb-4">{post.title}</h1>
@@ -62,7 +62,7 @@ export default function BlogArticlePage() {
       <footer className="mt-12 pt-8 border-t border-neutral-200">
         <Link to={basePath} className="text-primary hover:underline inline-flex items-center gap-2">
           <ArrowLeft className="w-4 h-4" />
-          Voltar para Blogs & Artigos
+          Voltar para Blogs
         </Link>
       </footer>
     </article>

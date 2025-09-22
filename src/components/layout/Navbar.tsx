@@ -17,7 +17,7 @@ export function Navbar() {
     label: "Planos"
   }, {
     href: "/blogs-artigos",
-    label: "Blogs & Artigos"
+    label: "Blogs"
   }, {
     href: "/quem-somos",
     label: "Quem somos"
