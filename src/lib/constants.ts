@@ -74,6 +74,7 @@ export const PLANOS = [
       "Descontos em consultas", 
       "Atendimento prioritário", 
       "Receitas digitais",
+      "Acesso à consultas com especialistas",
       "Atendimento 24h"
     ],
     popular: false
