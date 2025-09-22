@@ -217,7 +217,7 @@ const Paciente = () => {
                   <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                   <p className="text-muted-foreground mb-4">Nenhuma consulta agendada</p>
                   <Button variant="outline" size="sm" asChild>
-                    <a href="/#servicos">Agendar Consulta</a>
+                    <a href="/#servicos">Agendar agora</a>
                   </Button>
                 </div>
               )}
@@ -301,7 +301,7 @@ const Paciente = () => {
               Não encontramos informações para este email. Que tal agendar sua primeira consulta?
             </p>
             <Button variant="medical" size="lg" asChild>
-              <a href="/#servicos">Agendar Primeira Consulta</a>
+              <a href="/#servicos">Agendar agora</a>
             </Button>
           </div>
         )}
@@ -316,7 +316,7 @@ const Paciente = () => {
               Agende facilmente através da nossa plataforma
             </p>
             <Button variant="medical" size="lg" asChild>
-              <a href="/#servicos">Agendar Nova Consulta</a>
+              <a href="/#servicos">Agendar agora</a>
             </Button>
           </div>
         )}

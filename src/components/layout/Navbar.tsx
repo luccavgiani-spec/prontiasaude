@@ -51,7 +51,7 @@ export function Navbar() {
                 Área do Paciente
               </Button>
             </Link>
-            <Link to="/#servicos">
+            <Link to="/servicos">
               <Button size="lg" className="medical-button-primary text-sm lg:text-base px-4 lg:px-6 py-3 lg:py-4 rounded-xl">
                 Consulte Agora
               </Button>
@@ -76,7 +76,7 @@ export function Navbar() {
                     Área do Paciente
                   </Button>
                 </Link>
-                <Link to="/#servicos" onClick={() => setIsOpen(false)}>
+                <Link to="/servicos" onClick={() => setIsOpen(false)}>
                   <Button size="sm" className="medical-button-primary w-full text-sm py-3 rounded-xl">
                     Consulte Agora
                   </Button>

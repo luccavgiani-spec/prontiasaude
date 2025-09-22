@@ -44,7 +44,8 @@ export function HeroSection() {
               </h1>
               
               <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
-                Cuidado imediato para quem precisa
+                Cuidado imediato para quem precisa.<br />
+                Evite filas, cuide da sua saúde de maneira segura, prática, com cuidado que vai além das telas!
               </p>
             </div>
             

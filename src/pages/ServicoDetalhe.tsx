@@ -177,7 +177,7 @@ const ServicoDetalhe = () => {
                   className="w-full mb-4"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Processando..." : "Agendar Agora"}
+                  {isLoading ? "Processando..." : "Agendar agora"}
                 </Button>
 
                 <div className="text-center">

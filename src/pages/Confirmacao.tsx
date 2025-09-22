@@ -180,7 +180,7 @@ const Confirmacao = () => {
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">2</div>
-                <span className="text-muted-foreground">Consulta agendada para 30 minutos após pagamento</span>
+                <span className="text-muted-foreground">Te enviaremos o link da sua consulta no WhatsApp</span>
               </div>
               <div className="flex items-center gap-3">
                 <div className="w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">3</div>

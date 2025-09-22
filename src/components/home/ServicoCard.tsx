@@ -61,7 +61,7 @@ export function ServicoCard({
       case "renovacao":
         return "Renovar agora";
       default:
-        return "Agendar";
+        return "Agendar agora";
     }
   };
   
@@ -124,15 +124,11 @@ export function ServicoCard({
             </div>
             {servico.naoInclui && (
               <div>
-                <h4 className="text-sm font-medium text-foreground mb-2">Não inclui:</h4>
-                <ul className="space-y-1">
-                  {servico.naoInclui.map((item, index) => (
-                    <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <X className="h-3 w-3 text-destructive flex-shrink-0" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <p className="text-sm font-bold text-amber-800">
+                    Necessário consulta psicológica prévia
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -160,12 +156,12 @@ export function ServicoCard({
               </div>
             ) : (
               <div>
+                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos") && (
+                  <p className="text-sm text-muted-foreground mb-1">a partir de</p>
+                )}
                 <span className="text-2xl font-bold text-foreground">
                   {formataPreco(servico.precoBase)}
                 </span>
-                <p className="text-xs text-muted-foreground">
-                  Sem desconto do plano
-                </p>
               </div>
             )}
           </div>
