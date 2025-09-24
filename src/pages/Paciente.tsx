@@ -79,7 +79,7 @@ const Paciente = () => {
     setIsLoggedIn(false);
     setEmail("");
     setDadosPaciente(null);
-    localStorage.removeItem('medicosDoBem_email');
+    localStorage.removeItem('prontiaSaude_email');
     toast({
       title: "Logout realizado",
       description: "Você foi desconectado com sucesso.",

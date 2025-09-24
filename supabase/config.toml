@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.subscription-manager]
 verify_jwt = false
+
+[functions.send-form-emails]
+verify_jwt = false

@@ -30,7 +30,7 @@ interface CheckoutRequest {
 // Google Sheets configuration - NOVO SPREADSHEET
 const SHEET_ID = '1w9DkrKnwvfCiVvGVFUzu272by0khGy5qx4Voh43H56I';
 const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-const SITE_BASE_URL = 'https://medicosdobem.com';
+const SITE_BASE_URL = 'https://prontiasaude.com.br';
 
 const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-CHECKOUT] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
@@ -216,7 +216,7 @@ serve(async (req) => {
       }];
     }
 
-    const origin = req.headers.get("origin") || "https://ploqujuhpwutpcibedbr.supabase.co";
+    const origin = req.headers.get("origin") || SITE_BASE_URL;
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

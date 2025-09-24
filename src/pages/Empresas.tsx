@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LogoLoop from "@/components/bits/LogoLoop";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Shield, 
   Users, 
@@ -28,19 +29,33 @@ const Empresas = () => {
     email: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const message = `Olá! Gostaria de receber uma proposta personalizada para minha empresa:
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-form-emails', {
+        body: {
+          type: 'empresa',
+          ...formData
+        }
+      });
 
-Nome: ${formData.nome}
-Empresa: ${formData.empresa}
-Número de colaboradores: ${formData.colaboradores}
-CNPJ: ${formData.cnpj}
-Telefone: ${formData.telefone}
-Email: ${formData.email}`;
+      if (error) throw error;
 
-    const whatsappUrl = `https://wa.me/5511999999999?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+      alert('Solicitação enviada com sucesso! Nossa equipe entrará em contato em breve.');
+      setFormData({
+        nome: "",
+        empresa: "",
+        colaboradores: "",
+        cnpj: "",
+        telefone: "",
+        email: ""
+      });
+      setShowForm(false);
+    } catch (error) {
+      console.error('Erro ao enviar formulário:', error);
+      alert('Erro ao enviar solicitação. Tente novamente.');
+    }
   };
 
   const benefitCards = [

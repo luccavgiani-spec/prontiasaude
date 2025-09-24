@@ -49,25 +49,25 @@ export async function getEmailAtual(): Promise<string | null> {
   }
   
   // Fallback to localStorage
-  const localEmail = localStorage.getItem('medicosDoBem_email');
+  const localEmail = localStorage.getItem('prontiaSaude_email');
   console.log('Email from localStorage:', localEmail);
   return localEmail;
 }
 
 export function setEmailAtual(email: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('medicosDoBem_email', email);
+  localStorage.setItem('prontiaSaude_email', email);
 }
 
 // Gerenciamento de telefone no localStorage  
 export function getPhone(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('medicosDoBem_phone');
+  return localStorage.getItem('prontiaSaude_phone');
 }
 
 export function setPhone(phone: string): void {
   if (typeof window === 'undefined') return;
-  localStorage.setItem('medicosDoBem_phone', phone);
+  localStorage.setItem('prontiaSaude_phone', phone);
 }
 
 // Validação de email

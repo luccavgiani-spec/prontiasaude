@@ -12,7 +12,7 @@ export function Footer() {
               <div className="p-2 bg-[var(--gradient-primary)] rounded-lg">
                 <Heart className="h-5 w-5 text-white" />
               </div>
-              Médicos do Bem
+              Prontia Saúde
             </Link>
             <p className="text-muted-foreground mb-4 max-w-md">
               Conectamos você aos melhores profissionais de saúde através de consultas online seguras e acessíveis.
@@ -20,7 +20,7 @@ export function Footer() {
             <div className="flex flex-col gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4" />
-                <span>contato@medicosdobem.com.br</span>
+                <span>suporte@prontiasaude.com.br</span>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4" />
@@ -91,7 +91,7 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-border mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 text-sm text-muted-foreground">
-            <span>© 2024 Médicos do Bem. Todos os direitos reservados.</span>
+            <span>© 2024 Prontia Saúde. Todos os direitos reservados.</span>
           </div>
           <div className="flex items-center gap-6 text-sm">
             <Link to="/termos" className="text-muted-foreground hover:text-primary transition-colors">

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import CircularGallery from "@/components/bits/CircularGallery";
+import { supabase } from "@/integrations/supabase/client";
 import { Heart, Globe, Handshake, Users } from "lucide-react";
 
 const EmpresasDoBem = () => {
@@ -15,17 +16,30 @@ const EmpresasDoBem = () => {
     descricao: ""
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const message = `Olá! Gostaria de cadastrar uma ONG no programa Empresas do Bem:
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('send-form-emails', {
+        body: {
+          type: 'ong',
+          ...formData
+        }
+      });
 
-Nome da ONG: ${formData.nomeOng}
-Site/Redes Sociais: ${formData.siteRedes}
-Contato: ${formData.contato}
-Descrição: ${formData.descricao}`;
+      if (error) throw error;
 
-    const whatsappUrl = `https://wa.me/5511999999999?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+      alert('ONG cadastrada com sucesso! Obrigado por participar do programa.');
+      setFormData({
+        nomeOng: "",
+        siteRedes: "",
+        contato: "",
+        descricao: ""
+      });
+    } catch (error) {
+      console.error('Erro ao enviar formulário:', error);
+      alert('Erro ao cadastrar ONG. Tente novamente.');
+    }
   };
 
   return (

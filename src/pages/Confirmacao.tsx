@@ -226,8 +226,8 @@ const Confirmacao = () => {
           <div className="mt-8 pt-6 border-t border-border">
             <p className="text-sm text-muted-foreground">
               Dúvidas ou problemas? Entre em contato pelo email{" "}
-              <a href="mailto:contato@medicosdobem.com.br" className="text-primary hover:underline">
-                contato@medicosdobem.com.br
+              <a href="mailto:suporte@prontiasaude.com.br" className="text-primary hover:underline">
+                suporte@prontiasaude.com.br
               </a>
             </p>
           </div>
