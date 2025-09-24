@@ -163,7 +163,7 @@ export async function getAppointment(appointment_id: string): Promise<{
 
 /**
  * Cria checkout com agendamento (fluxo completo)
- * 1. Cria o agendamento na Google Sheets
+ * 1. Cria o agendamento no sistema
  * 2. Cria a sessão de checkout no Stripe com metadata
  */
 export async function createCheckoutWithAppointment(data: CheckoutWithAppointmentRequest): Promise<{ 

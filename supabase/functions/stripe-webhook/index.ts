@@ -238,7 +238,7 @@ async function processPaymentSuccess(session: any): Promise<void> {
   
   // Google Sheets logging removed
   
-  let kommoResult = { success: false, httpCode: 0, bodyExcerpt: '' };
+  let kommoResult: { success: boolean; httpCode?: number; bodyExcerpt?: string } = { success: false, httpCode: 0, bodyExcerpt: '' };
   if (!planActive) {
     const fullName = session.customer_details?.name || '';
     const kommoData = {

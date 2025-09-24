@@ -7,7 +7,7 @@ export const ENV = {
 };
 
 // Checkout Configuration
-export const CHECKOUT_MODE = "apps_script";
+export const CHECKOUT_MODE = "stripe";
 
 // Catálogo de Serviços
 export const CATALOGO_SERVICOS = [
