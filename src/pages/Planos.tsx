@@ -166,14 +166,17 @@ const Planos = () => {
                     <div className="text-center">
                       {plano.precoMensal ? (
                         <>
-                          <div className="text-3xl font-bold text-primary">
-                            {formataPreco(precoCalculado! / meses)}
+                          <div className="text-sm font-medium text-primary mb-1">
+                            APENAS 12x
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            por mês
+                          <div className="text-3xl font-bold text-primary">
+                            {formataPreco(precoCalculado! / meses)}/mês
+                          </div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Equivale a {formataPreco((precoCalculado! / meses) / 30)}/dia
                           </div>
                           {desconto > 0 && (
-                            <div className="text-sm text-muted-foreground mt-1">
+                            <div className="text-sm text-muted-foreground mt-2">
                               <span className="line-through">
                                 {formataPreco(plano.precoMensal)}
                               </span>
@@ -182,9 +185,6 @@ const Planos = () => {
                               </span>
                             </div>
                           )}
-                          <div className="text-xs text-muted-foreground mt-2">
-                            Total: {formataPreco(precoCalculado!)} por {meses} {meses === 1 ? "mês" : "meses"}
-                          </div>
                         </>
                       ) : (
                         <div className="text-2xl font-bold text-primary">
