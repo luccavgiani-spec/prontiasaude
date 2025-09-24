@@ -133,36 +133,28 @@ Email: ${formData.email}`;
           <h2 className="text-3xl font-bold text-center mb-12">
             Benefícios Exclusivos
           </h2>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {benefitCards.slice(0, 6).map((benefit, index) => (
-              <Card key={index} className="h-full">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    {benefit.icon}
-                    <CardTitle className="text-lg">{benefit.title}</CardTitle>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">{benefit.description}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          
-          {/* Card centralizado - Imagem de empresa moderna e inovadora */}
-          <div className="flex justify-center mt-6">
-            <Card className="h-full max-w-md">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  {benefitCards[6].icon}
-                  <CardTitle className="text-lg">{benefitCards[6].title}</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">{benefitCards[6].description}</p>
-              </CardContent>
-            </Card>
-          </div>
+          <LogoLoop 
+            logos={benefitCards.map(card => ({
+              title: card.title,
+              node: (
+                <Card className="w-80 h-48">
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      {card.icon}
+                      <CardTitle className="text-lg">{card.title}</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground text-sm">{card.description}</p>
+                  </CardContent>
+                </Card>
+              )
+            }))}
+            speed={40}
+            logoHeight={192}
+            gap={20}
+            pauseOnHover={true}
+          />
         </div>
       </section>
 
