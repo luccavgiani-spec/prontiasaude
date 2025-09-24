@@ -31,7 +31,7 @@ export const CATALOGO_SERVICOS = [
   },
   { 
     slug: "psicologa", 
-    nome: "Psicóloga", 
+    nome: "Psicólogo", 
     precoBase: 39.90, 
     sku: "PSICOLOGA",
     descricao: "Sessão de psicologia online",

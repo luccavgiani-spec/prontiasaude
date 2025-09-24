@@ -148,7 +148,7 @@ function _getProductName(sku: string): string {
   const nomes: Record<string, string> = {
     'CONSULTA_CLINICA': 'Consulta Clínica Geral',
     'RENOVACAO_RECEITA': 'Renovação de Receita',
-    'PSICOLOGA': 'Consulta com Psicóloga',
+    'PSICOLOGA': 'Consulta com Psicólogo',
     'PSIQUIATRIA': 'Consulta com Psiquiatra',
     'LAUDO_BARIATRICA': 'Laudo para Cirurgia Bariátrica',
     'LAUDO_LAQ_VAS': 'Laudo para Laqueadura/Vasectomia',
