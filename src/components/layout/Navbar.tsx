@@ -43,15 +43,15 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center justify-center gap-4 lg:gap-6 flex-1">
+          <div className="hidden lg:flex items-center justify-center gap-4 lg:gap-6 flex-1">
             {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-xs lg:text-sm font-medium transition-all duration-300 relative group text-center whitespace-nowrap px-2", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                 {item.label}
                 <span className={cn("absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300", isActive(item.href) ? "w-full" : "w-0 group-hover:w-full")} />
               </Link>)}
           </div>
 
-          {/* Modern Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-2 lg:gap-3">
+          {/* Desktop CTAs */}
+          <div className="hidden lg:flex items-center gap-2 lg:gap-3">
             <Link to="/area-do-paciente">
               <Button variant="outline" size="sm" className="text-xs lg:text-sm px-3 lg:px-4 py-2 lg:py-3 rounded-lg hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
                 Área do Paciente
@@ -64,19 +64,34 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* Modern Mobile Menu Button */}
-          <button onClick={() => setIsOpen(!isOpen)} className="md:hidden p-3 rounded-xl hover:bg-primary/10 transition-colors duration-300">
+          {/* Tablet CTAs */}
+          <div className="hidden md:flex lg:hidden items-center gap-2">
+            <Link to="/area-do-paciente">
+              <Button variant="outline" size="sm" className="text-xs px-3 py-2 rounded-lg hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
+                Área do Paciente
+              </Button>
+            </Link>
+            <Link to="/servicos">
+              <Button size="sm" className="medical-button-primary text-xs px-3 py-2 rounded-lg">
+                Consulte Agora
+              </Button>
+            </Link>
+          </div>
+
+          {/* Mobile & Tablet Menu Button */}
+          <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden p-3 rounded-xl hover:bg-primary/10 transition-colors duration-300">
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
 
-        {/* Enhanced Mobile Navigation */}
-        {isOpen && <div className="md:hidden py-4 border-t border-border/50 bg-gradient-to-b from-background to-muted/30 rounded-b-2xl">
+        {/* Enhanced Mobile & Tablet Navigation */}
+        {isOpen && <div className="lg:hidden py-4 border-t border-border/50 bg-gradient-to-b from-background to-muted/30 rounded-b-2xl">
             <div className="flex flex-col gap-3">
               {navItems.map(item => <Link key={item.href} to={item.href} onClick={() => setIsOpen(false)} className={cn("text-sm font-medium transition-all duration-300 px-4 py-2 rounded-xl", isActive(item.href) ? "text-primary bg-primary/10 border border-primary/20" : "text-muted-foreground hover:text-primary hover:bg-primary/5")}>
                   {item.label}
                 </Link>)}
-              <div className="flex flex-col gap-2 pt-3 border-t border-border/50">
+              {/* Mobile-only CTAs in dropdown */}
+              <div className="md:hidden flex flex-col gap-2 pt-3 border-t border-border/50">
                 <Link to="/area-do-paciente" onClick={() => setIsOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full text-sm py-3 rounded-xl">
                     Área do Paciente
