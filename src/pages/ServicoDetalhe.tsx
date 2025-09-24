@@ -77,10 +77,6 @@ const ServicoDetalhe = () => {
               {/* Informações básicas */}
               <div className="flex items-center gap-6 mb-8 text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  <span className="font-medium">{servico.tempo}</span>
-                </div>
-                <div className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   <span className="font-medium">Consulta Online</span>
                 </div>
