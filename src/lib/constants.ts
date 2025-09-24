@@ -25,7 +25,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Renovação de receita", 
     precoBase: 29.90, 
     sku: "RENOVACAO_RECEITA",
-    descricao: "Por R$ 29,90 você renova agora sua receita válida em todo o Brasil.",
+    descricao: "Renove sua receita agora, válida em todo o Brasil e com assinatura digital.",
     tempo: "15-20 minutos", 
     inclui: ["Avaliação do histórico", "Nova receita digital", "Orientações de uso"]
   },
