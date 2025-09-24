@@ -43,7 +43,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-6 lg:gap-10">
+          <div className="hidden md:flex items-center justify-center gap-6 lg:gap-10 flex-1">
             {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-sm lg:text-base font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                 {item.label}
                 <span className={cn("absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300", isActive(item.href) ? "w-full" : "w-0 group-hover:w-full")} />
