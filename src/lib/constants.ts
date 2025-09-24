@@ -87,7 +87,6 @@ export const PLANOS = [
       "Para até 4 pessoas", 
       "Descontos maiores", 
       "Atendimento prioritário", 
-      "Histórico compartilhado",
       "Especialidades exclusivas:",
       "• Cardiologia",
       "• Dermatologia", 
