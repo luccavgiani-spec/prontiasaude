@@ -109,7 +109,7 @@ const Entrar = () => {
     setIsLoading(true);
     
     const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/auth/reset`
+      redirectTo: `${window.location.origin}/nova-senha`
     });
 
     if (error) {

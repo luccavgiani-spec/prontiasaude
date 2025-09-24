@@ -23,6 +23,7 @@ import Entrar from "./pages/Entrar";
 import Cadastrar from "./pages/Cadastrar";
 import AuthCallback from "./pages/auth/Callback";
 import ResetPassword from "./pages/auth/Reset";
+import NovaSenha from "./pages/NovaSenha";
 import CompletarPerfil from "./pages/CompletarPerfil";
 import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
@@ -68,6 +69,7 @@ const App = () => (
               <Route path="/cadastrar" element={<Cadastrar />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/reset" element={<ResetPassword />} />
+              <Route path="/nova-senha" element={<NovaSenha />} />
               <Route path="/completar-perfil" element={<CompletarPerfil />} />
               <Route path="/intake/antecedentes" element={<Antecedentes />} />
               <Route path="/agendamento" element={<Agendamento />} />
