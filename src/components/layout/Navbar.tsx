@@ -16,6 +16,12 @@ export function Navbar() {
     href: "/planos",
     label: "Planos"
   }, {
+    href: "/empresas",
+    label: "Para Empresas"
+  }, {
+    href: "/empresasdobem",
+    label: "Empresas do Bem"
+  }, {
     href: "/blogs-artigos",
     label: "Blog"
   }, {
@@ -32,7 +38,7 @@ export function Navbar() {
               <Heart className="h-6 w-6 text-white" />
             </div>
             <span className="hidden sm:inline bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Médicos do Bem
+              PRONTIA SAÚDE
             </span>
           </Link>
 

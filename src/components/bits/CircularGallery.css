@@ -1,0 +1,139 @@
+.circular-gallery-container {
+  --bend: 3;
+  --text-color: #ffffff;
+  --border-radius: 0.05;
+  --scroll-ease: 0.02;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.circular-gallery {
+  width: 100%;
+  height: 100%;
+  perspective: 1200px;
+  overflow: hidden;
+}
+
+.gallery-track {
+  display: flex;
+  width: max-content;
+  height: 100%;
+  animation: scroll-circular 30s linear infinite;
+  transform-style: preserve-3d;
+}
+
+.gallery-item {
+  width: 300px;
+  height: 400px;
+  margin: 0 20px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: calc(var(--border-radius) * 100px);
+  overflow: hidden;
+  transform: rotateY(calc(var(--bend) * 1deg));
+  transition: transform 0.3s ease;
+  position: relative;
+}
+
+.gallery-item:hover {
+  transform: rotateY(0deg) scale(1.05);
+}
+
+.item-image {
+  width: 100%;
+  height: 60%;
+  overflow: hidden;
+}
+
+.item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.gallery-item:hover .item-image img {
+  transform: scale(1.1);
+}
+
+.item-content {
+  padding: 20px;
+  height: 40%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--text-color);
+  text-align: center;
+}
+
+.item-content h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+
+.item-content p {
+  font-size: 0.9rem;
+  opacity: 0.8;
+  line-height: 1.4;
+}
+
+@keyframes scroll-circular {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-300px * 6 - 120px));
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gallery-item {
+    width: 250px;
+    height: 320px;
+    margin: 0 15px;
+  }
+  
+  .item-content {
+    padding: 15px;
+  }
+  
+  .item-content h3 {
+    font-size: 1rem;
+  }
+  
+  .item-content p {
+    font-size: 0.8rem;
+  }
+  
+  @keyframes scroll-circular {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(calc(-250px * 6 - 90px));
+    }
+  }
+}
+
+/* Pause on hover */
+.circular-gallery:hover .gallery-track {
+  animation-play-state: paused;
+}
+
+/* Fallback for browsers without 3D support */
+@supports not (transform-style: preserve-3d) {
+  .gallery-item {
+    transform: none;
+  }
+  
+  .gallery-item:hover {
+    transform: scale(1.05);
+  }
+}

@@ -1,4 +1,4 @@
-// Médicos do Bem - Constantes e Configurações
+// PRONTIA SAÚDE - Constantes e Configurações
 
 // Environment Variables
 export const ENV = {
@@ -68,68 +68,52 @@ export const CATALOGO_SERVICOS = [
 export const PLANOS = [
   { 
     code: "INDIVIDUAL", 
-    nome: "Plano Individual", 
-    precoMensal: 19.90,
+    nome: "Individual", 
+    precoMensal: 187,
     beneficios: [
-      "Descontos em consultas", 
-      "Atendimento prioritário", 
-      "Receitas digitais",
-      "Acesso à consultas com especialistas",
-      "Atendimento 24h"
+      "Atendimento para 1 pessoa",
+      "Atendimento prioritário",
+      "Receitas Digitais e Atestados Médicos",
+      "Atendimento ilimitado",
+      "Atendimento 24h/dia",
+      "Todas as especialidades",
+      "Sem coparticipação e sem carência"
     ],
     popular: false
   },
   { 
     code: "FAMILIAR", 
-    nome: "Plano Familiar", 
-    precoMensal: 34.90,
+    nome: "Familiar", 
+    precoMensal: 250,
     beneficios: [
-      "Para até 4 pessoas", 
-      "Descontos maiores", 
-      "Atendimento prioritário", 
-      "Especialidades exclusivas:",
-      "• Cardiologia",
-      "• Dermatologia", 
-      "• Endocrinologia",
-      "• Gastroenterologia",
-      "• Geriatria",
-      "• Ginecologia",
-      "• Médico da Família",
-      "• Oftalmologia",
-      "• Ortopedia",
-      "• Otorrinolaringologia",
-      "• Pediatria",
-      "Nutrição (1x ao mês)",
-      "Personal trainer (1x ao mês)",
-      "Atendimento 24h"
+      "Atendimento para até 4 pessoas",
+      "Atendimento prioritário",
+      "Receitas Digitais e Atestados Médicos",
+      "Atendimento ilimitado",
+      "Atendimento 24h/dia",
+      "Todas as especialidades",
+      "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
+      "• Nutrição (2x no mês)",
+      "• Personal Trainer (2x no mês)",
+      "• Psicólogo (2x no mês)"
     ],
     popular: true
   },
   { 
     code: "EMPRESARIAL", 
     nome: "Empresarial", 
-    precoMensal: null,
+    precoMensal: 0,
     beneficios: [
-      "Planos corporativos", 
-      "Gestão de funcionários", 
-      "Relatórios personalizados", 
-      "Suporte dedicado",
-      "Para funcionários ilimitados",
-      "Especialidades exclusivas:",
-      "• Cardiologia",
-      "• Dermatologia", 
-      "• Endocrinologia",
-      "• Gastroenterologia",
-      "• Geriatria",
-      "• Ginecologia",
-      "• Médico da Família",
-      "• Oftalmologia",
-      "• Ortopedia",
-      "• Otorrinolaringologia",
-      "• Pediatria",
-      "Nutrição (1x ao mês)",
-      "Personal trainer (1x ao mês)",
-      "Atendimento 24h"
+      "Plano personalizado",
+      "Atendimento prioritário",
+      "Receitas Digitais e Atestados Médicos",
+      "Atendimento ilimitado",
+      "Atendimento 24h/dia",
+      "Todas as especialidades",
+      "• Nutrição (2x no mês)",
+      "• Personal Trainer (2x no mês)",
+      "• Psicólogo (2x no mês)",
+      "Suporte dedicado"
     ],
     popular: false
   }
