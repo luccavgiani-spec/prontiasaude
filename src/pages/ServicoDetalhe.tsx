@@ -122,7 +122,7 @@ const ServicoDetalhe = () => {
                     </div>
                     <div>
                       <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
-                      <p className="text-muted-foreground">Receba o link da videochamada por email</p>
+                      <p className="text-muted-foreground">Receba o link da videochamada no seu WhatsApp</p>
                     </div>
                   </div>
                   <div className="flex gap-4">
