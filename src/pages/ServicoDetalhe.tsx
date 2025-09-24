@@ -74,6 +74,20 @@ const ServicoDetalhe = () => {
                 {servico.descricao}
               </p>
 
+              {/* Informações básicas */}
+              <div className="flex items-center gap-6 mb-8 text-muted-foreground">
+                {servico.slug === "psicologa" && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    <span className="font-medium">30 minutos</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  <span className="font-medium">Consulta Online</span>
+                </div>
+              </div>
+
               {/* O que inclui */}
               <div className="mb-8">
                 <h2 className="text-2xl font-bold text-foreground mb-4">
