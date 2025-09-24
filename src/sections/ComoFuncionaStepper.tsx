@@ -13,7 +13,7 @@ export default function ComoFuncionaStepper() {
             <Stepper initialStep={1} showFooter={false}>
               <Step>
                 <h3 className="text-xl font-semibold text-neutral-900">01 — Cadastre-se</h3>
-                <p className="mt-1 mb-4 text-neutral-600">Crie sua conta em poucos minutos e tenha acesso a centenas de especialistas qualificados.</p>
+                <p className="mt-1 mb-4 text-neutral-600">Crie sua conta em poucos minutos.</p>
               </Step>
               <Step>
                 <h3 className="text-xl font-semibold text-neutral-900">02 — Agende</h3>
