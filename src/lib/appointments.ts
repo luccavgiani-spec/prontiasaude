@@ -41,7 +41,7 @@ export interface CheckoutWithAppointmentRequest {
 }
 
 /**
- * Cria um novo agendamento na Google Sheets
+ // Google Sheets integration removed
  */
 export async function createAppointment(data: CreateAppointmentRequest): Promise<{ 
   success: boolean; 

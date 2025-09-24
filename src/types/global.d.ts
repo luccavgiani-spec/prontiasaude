@@ -6,7 +6,7 @@ interface Window {
   };
 }
 
-// Tipos para o Apps Script API
+// Google Sheets integration removed
 export interface UpsertPatientResponse {
   success: boolean;
   error?: string;

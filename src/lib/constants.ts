@@ -2,7 +2,7 @@
 
 // Environment Variables
 export const ENV = {
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbx45643KLIb-YT0zy4o6nuBlk_nx0hXJjWxLjPyrgbbVBPn-Jq6NpXGOsJ4WBHnh3h5jw/exec",
+  // Google Sheets integration removed
   STRIPE_PK: "pk_live_51Ry1CkENBHjf6SQJhXbLXOo4Ia72RcHaMFvMk3SKK9FYPeyqkCxA16Sriz5A82UYlpia7sgrEEjFgg5A5nK2qpPE00t2iroVX4"
 };
 

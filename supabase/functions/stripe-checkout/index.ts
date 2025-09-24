@@ -27,9 +27,7 @@ interface CheckoutRequest {
   order_id?: string;
 }
 
-// Google Sheets configuration - NOVO SPREADSHEET
-const SHEET_ID = '1w9DkrKnwvfCiVvGVFUzu272by0khGy5qx4Voh43H56I';
-const GOOGLE_SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+// Google Sheets integration removed
 const SITE_BASE_URL = 'https://prontiasaude.com.br';
 
 const logStep = (step: string, details?: any) => {
@@ -58,7 +56,7 @@ async function checkActiveSubscription(email: string, stripe: Stripe): Promise<b
     logStep('Subscription check result', { hasActiveSub, customerId });
     
     return hasActiveSub;
-  } catch (error) {
+  } catch (error: any) {
     logStep('Error checking subscription', { error: error.message });
     return false;
   }
@@ -239,14 +237,6 @@ serve(async (req) => {
       },
     });
 
-    // Record order in Google Sheets for tracking
-    try {
-      const accessToken = await getAccessToken();
-      await recordOrderInSheet(accessToken, session, checkoutData, user);
-    } catch (sheetsError) {
-      logStep('Google Sheets recording failed', { error: sheetsError.message });
-    }
-
     logStep('Checkout session created', { sessionId: session.id, url: session.url });
 
     return new Response(JSON.stringify({ 
@@ -257,7 +247,7 @@ serve(async (req) => {
       status: 200,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     logStep('ERROR', { message: error.message });
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
@@ -266,131 +256,4 @@ serve(async (req) => {
   }
 });
 
-async function createJWT(): Promise<string> {
-  logStep('Creating JWT for Google Sheets API');
-  
-  const serviceAccount = JSON.parse(Deno.env.get('GOOGLE_SERVICE_ACCOUNT') || '{}');
-  const privateKey = serviceAccount.private_key?.replace(/\\n/g, '\n');
-  
-  if (!privateKey) throw new Error('Google service account private key not found');
-
-  const header = {
-    alg: 'RS256',
-    typ: 'JWT'
-  };
-
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    iss: serviceAccount.client_email,
-    scope: GOOGLE_SHEETS_SCOPE,
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now
-  };
-
-  const encoder = new TextEncoder();
-  const headerBytes = encoder.encode(JSON.stringify(header));
-  const payloadBytes = encoder.encode(JSON.stringify(payload));
-  
-  const headerB64 = btoa(String.fromCharCode(...headerBytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  const payloadB64 = btoa(String.fromCharCode(...payloadBytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  
-  const message = `${headerB64}.${payloadB64}`;
-  
-  // Import private key for signing
-  const pemHeader = "-----BEGIN PRIVATE KEY-----";
-  const pemFooter = "-----END PRIVATE KEY-----";
-  const pemContents = privateKey
-    .replace(pemHeader, "")
-    .replace(pemFooter, "")
-    .replace(/\s/g, "");
-  
-  logStep('Importing private key for signing...');
-  
-  // Convert base64 to ArrayBuffer
-  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
-  
-  const keyData = await crypto.subtle.importKey(
-    'pkcs8',
-    binaryDer.buffer,
-    {
-      name: 'RSASSA-PKCS1-v1_5',
-      hash: 'SHA-256',
-    },
-    false,
-    ['sign']
-  );
-  
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    keyData,
-    encoder.encode(message)
-  );
-  
-  const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-  
-  return `${message}.${signatureB64}`;
-}
-
-async function getAccessToken(): Promise<string> {
-  logStep('Getting access token from Google OAuth2');
-  
-  const jwt = await createJWT();
-  
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-  });
-
-  if (!response.ok) {
-    throw new Error(`OAuth2 token request failed: ${response.status}`);
-  }
-
-  const data = await response.json();
-  logStep('Access token obtained successfully');
-  return data.access_token;
-}
-
-async function recordOrderInSheet(accessToken: string, session: any, checkoutData: CheckoutRequest, user: any) {
-  logStep('Recording order in Google Sheets', { sessionId: session.id });
-  
-  const now = new Date().toISOString();
-  const orderId = checkoutData.order_id || crypto.randomUUID();
-  
-  // Orders: order_id | customer_id | payment_intent | product_sku | amount_cents | status | email | created_at | raw_json
-  const rowData = [
-    orderId,                              // order_id
-    user?.id || '',                       // customer_id
-    '',                                   // payment_intent (preenchido pelo webhook)
-    checkoutData.product_sku || checkoutData.service_code || '', // product_sku
-    (session.amount_total || 0),          // amount_cents
-    'pending',                            // status
-    checkoutData.email,                   // email
-    now,                                  // created_at
-    JSON.stringify(session)               // raw_json
-  ];
-
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/Orders!A:I:append?valueInputOption=RAW`;
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      values: [rowData]
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Google Sheets append failed: ${response.status} - ${error}`);
-  }
-
-  logStep('Order recorded in Google Sheets successfully');
-}
+// Google Sheets integration removed
