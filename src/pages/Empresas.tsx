@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LogoLoop from "@/components/bits/LogoLoop";
+
+const DarkVeil = lazy(() => import("@/components/DarkVeil"));
 import { 
   Shield, 
   Users, 
@@ -112,8 +114,19 @@ Email: ${formData.email}`;
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
-      <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5">
-        <div className="container mx-auto max-w-4xl text-center">
+      <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5 relative overflow-hidden">
+        <Suspense fallback={null}>
+          <DarkVeil
+            hueShift={10}
+            noiseIntensity={0.06}
+            scanlineIntensity={0.1}
+            scanlineFrequency={120.0}
+            warpAmount={0.02}
+            speed={0.5}
+            resolutionScale={0.9}
+          />
+        </Suspense>
+        <div className="container mx-auto max-w-4xl text-center relative z-10">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
             Para Empresas
           </h1>
