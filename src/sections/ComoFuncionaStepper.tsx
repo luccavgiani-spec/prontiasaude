@@ -21,7 +21,7 @@ export default function ComoFuncionaStepper() {
               </Step>
               <Step>
                 <h3 className="text-xl font-semibold text-neutral-900">03 — Consulte</h3>
-                <p className="mt-1 text-neutral-600">Realize sua consulta online de forma segura e receba prescrições digitais válidas.</p>
+                <p className="mt-1 text-neutral-600">Realize sua consulta online de forma segura e receba prescrições e atestados digitais válidos.</p>
               </Step>
             </Stepper>
           </div>
