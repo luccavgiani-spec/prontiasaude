@@ -38,8 +38,13 @@ export function Footer() {
             <h3 className="font-semibold text-foreground mb-4">Links Rápidos</h3>
             <ul className="space-y-2 text-sm">
               <li>
+                <Link to="/" className="text-muted-foreground hover:text-primary transition-colors">
+                  Início
+                </Link>
+              </li>
+              <li>
                 <Link to="/servicos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Nossos Serviços
+                  Serviços
                 </Link>
               </li>
               <li>
@@ -48,13 +53,23 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/quem-somos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Quem Somos
+                <Link to="/empresas" className="text-muted-foreground hover:text-primary transition-colors">
+                  Para Empresas
                 </Link>
               </li>
               <li>
-                <Link to="/paciente" className="text-muted-foreground hover:text-primary transition-colors">
-                  Área do Paciente
+                <Link to="/empresasdobem" className="text-muted-foreground hover:text-primary transition-colors">
+                  Empresas do Bem
+                </Link>
+              </li>
+              <li>
+                <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
+                  Blog
+                </Link>
+              </li>
+              <li>
+                <Link to="/quem-somos" className="text-muted-foreground hover:text-primary transition-colors">
+                  Quem Somos
                 </Link>
               </li>
             </ul>
