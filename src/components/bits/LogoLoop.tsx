@@ -40,7 +40,7 @@ export default function LogoLoop({
     // Set CSS variables
     container.style.setProperty("--logo-height", `${logoHeight}px`);
     container.style.setProperty("--gap", `${gap}px`);
-    container.style.setProperty("--speed", `${speed}s`);
+    container.style.setProperty("--speed", `${speed * 2}s`);
     container.style.setProperty("--direction", direction === "left" ? "normal" : "reverse");
     
     if (fadeOut) {
