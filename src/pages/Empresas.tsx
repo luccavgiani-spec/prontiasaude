@@ -133,28 +133,49 @@ Email: ${formData.email}`;
           <h2 className="text-3xl font-bold text-center mb-12">
             Benefícios Exclusivos
           </h2>
-          <LogoLoop 
-            logos={benefitCards.map(card => ({
-              title: card.title,
-              node: (
-                <Card className="w-80 h-48">
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      {card.icon}
-                      <CardTitle className="text-lg">{card.title}</CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground text-sm">{card.description}</p>
-                  </CardContent>
-                </Card>
-              )
-            }))}
-            speed={40}
-            logoHeight={192}
-            gap={20}
-            pauseOnHover={true}
-          />
+          
+          {/* Mobile version - Original grid */}
+          <div className="md:hidden grid gap-6">
+            {benefitCards.map((benefit, index) => (
+              <Card key={index} className="h-full">
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    {benefit.icon}
+                    <CardTitle className="text-lg">{benefit.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground">{benefit.description}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          
+          {/* Desktop version - LogoLoop */}
+          <div className="hidden md:block">
+            <LogoLoop 
+              logos={benefitCards.map(card => ({
+                title: card.title,
+                node: (
+                  <Card className="w-80 h-48">
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        {card.icon}
+                        <CardTitle className="text-lg">{card.title}</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-muted-foreground text-sm">{card.description}</p>
+                    </CardContent>
+                  </Card>
+                )
+              }))}
+              speed={40}
+              logoHeight={192}
+              gap={20}
+              pauseOnHover={true}
+            />
+          </div>
         </div>
       </section>
 
