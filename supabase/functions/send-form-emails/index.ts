@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { Resend } from "npm:resend@2.0.0";
+import { Resend } from "https://esm.sh/resend@3.2.0";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -39,7 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
     const formData: FormRequest = await req.json();
     console.log("Received form submission:", { type: formData.type });
 
-    const recipients = ["sandra_toledo@prontiasaude.com.br", "victoria_toledo@prontiasaude.com.br"];
+    const recipients = ["sandra_toledo@prontiasaude.com.br", "victoria_toledo@prontiasaude.com.br", "suporte@prontiasaude.com.br"];
 
     if (formData.type === "empresa") {
       // Handle empresa form
