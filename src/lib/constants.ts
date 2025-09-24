@@ -76,7 +76,6 @@ export const PLANOS = [
       "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
-      "Todas as especialidades",
       "Sem coparticipação e sem carência"
     ],
     popular: false
@@ -91,7 +90,6 @@ export const PLANOS = [
       "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
-      "Todas as especialidades",
       "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
       "• Nutrição (2x no mês)",
       "• Personal Trainer (2x no mês)",
@@ -109,7 +107,6 @@ export const PLANOS = [
       "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
-      "Todas as especialidades",
       "• Nutrição (2x no mês)",
       "• Personal Trainer (2x no mês)",
       "• Psicólogo (2x no mês)",
