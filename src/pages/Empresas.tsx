@@ -116,8 +116,15 @@ Email: ${formData.email}`;
       {/* Hero Section */}
       <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5 relative overflow-hidden">
         <Suspense fallback={null}>
-          <Squares />
+          <Squares 
+            direction="diagonal"
+            speed={0.5}
+            borderColor="hsl(142, 69%, 35%)"
+            squareSize={30}
+            hoverFillColor="hsl(142, 69%, 35%)"
+          />
         </Suspense>
+        <div className="absolute inset-0 bg-background/50 z-5"></div>
         <div className="container mx-auto max-w-4xl text-center relative z-10">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
             Para Empresas
