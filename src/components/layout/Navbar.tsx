@@ -31,11 +31,11 @@ export function Navbar() {
   const isActive = (href: string) => location.pathname === href;
   return <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
-        <div className="flex justify-between items-center h-10">
+        <div className="flex justify-between items-center h-12 lg:h-14">
           {/* Modern Logo */}
-          <Link to="/" className="flex items-center gap-3 text-2xl font-bold text-primary group">
-            <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-              <Heart className="h-6 w-6 text-white" />
+          <Link to="/" className="flex items-center gap-2 text-lg lg:text-xl font-bold text-primary group">
+            <div className="p-2 bg-gradient-to-br from-primary to-primary-glow rounded-lg shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+              <Heart className="h-4 w-4 text-white" />
             </div>
             <span className="hidden sm:inline bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               PRONTIA SAÚDE
@@ -43,22 +43,22 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center justify-center gap-6 lg:gap-10 flex-1">
-            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-sm lg:text-base font-medium transition-all duration-300 relative group", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
+          <div className="hidden md:flex items-center justify-center gap-4 lg:gap-6 flex-1">
+            {navItems.map(item => <Link key={item.href} to={item.href} className={cn("text-xs lg:text-sm font-medium transition-all duration-300 relative group text-center whitespace-nowrap px-2", isActive(item.href) ? "text-primary" : "text-muted-foreground hover:text-primary")}>
                 {item.label}
                 <span className={cn("absolute -bottom-1 left-0 h-0.5 bg-gradient-to-r from-primary to-secondary transition-all duration-300", isActive(item.href) ? "w-full" : "w-0 group-hover:w-full")} />
               </Link>)}
           </div>
 
           {/* Modern Desktop CTAs */}
-          <div className="hidden md:flex items-center gap-3 lg:gap-4">
+          <div className="hidden md:flex items-center gap-2 lg:gap-3">
             <Link to="/area-do-paciente">
-              <Button variant="outline" size="lg" className="text-sm lg:text-base px-4 lg:px-6 py-3 lg:py-4 rounded-xl hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
+              <Button variant="outline" size="sm" className="text-xs lg:text-sm px-3 lg:px-4 py-2 lg:py-3 rounded-lg hover:bg-primary/10 hover:border-primary/50 transition-all duration-300">
                 Área do Paciente
               </Button>
             </Link>
             <Link to="/servicos">
-              <Button size="lg" className="medical-button-primary text-sm lg:text-base px-4 lg:px-6 py-3 lg:py-4 rounded-xl">
+              <Button size="sm" className="medical-button-primary text-xs lg:text-sm px-3 lg:px-4 py-2 lg:py-3 rounded-lg">
                 Consulte Agora
               </Button>
             </Link>
