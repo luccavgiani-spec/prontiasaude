@@ -35,7 +35,7 @@ export const CATALOGO_SERVICOS = [
     precoBase: 39.90, 
     sku: "PSICOLOGA",
     descricao: "Sessão de psicologia online",
-    tempo: "50 minutos",
+    tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"]
   },
   { 
