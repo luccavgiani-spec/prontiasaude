@@ -100,7 +100,6 @@ const Empresas = () => {
     { title: "Pagamento Seguro", node: <Shield className="h-6 w-6" /> },
     { title: "Para Todas as Idades", node: <Users className="h-6 w-6" /> },
     { title: "Médico 24h", node: <Clock className="h-6 w-6" /> },
-    { title: "Atestado e Receitas Digitais", node: <FileText className="h-6 w-6" /> },
     { title: "Suporte Rápido", node: <Heart className="h-6 w-6" /> },
     { title: "Emissão de Laudos", node: <CheckCircle className="h-6 w-6" /> }
   ];

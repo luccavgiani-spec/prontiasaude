@@ -1,12 +1,11 @@
 import { useEffect, useState, useRef } from "react";
-import { Clock, FileText, Headphones, ShieldCheck, Users, FileSignature } from "lucide-react";
+import { Clock, Headphones, ShieldCheck, Users, FileSignature } from "lucide-react";
 import LogoLoop from "@/components/bits/LogoLoop";
 
 const HERO_SUBTITLE_SELECTOR = ".hero-subtitle";
 
 const features = [
   { icon: Clock, label: "Médico 24h" },
-  { icon: FileText, label: "Atestado e Receitas Digitais" },
   { icon: Headphones, label: "Suporte Rápido" },
   { icon: FileSignature, label: "Emissão de Laudos" },
   { icon: ShieldCheck, label: "Pagamento Seguro" },

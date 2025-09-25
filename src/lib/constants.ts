@@ -73,7 +73,6 @@ export const PLANOS = [
     beneficios: [
       "Atendimento para 1 pessoa",
       "Atendimento prioritário",
-      "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
       "Sem coparticipação e sem carência"
@@ -87,7 +86,6 @@ export const PLANOS = [
     beneficios: [
       "Atendimento para até 4 pessoas",
       "Atendimento prioritário",
-      "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
       "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
@@ -104,7 +102,6 @@ export const PLANOS = [
     beneficios: [
       "Plano personalizado",
       "Atendimento prioritário",
-      "Receitas Digitais e Atestados Médicos",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
       "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
