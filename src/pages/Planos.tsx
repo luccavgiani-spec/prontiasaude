@@ -1,53 +1,161 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { PLANOS, DESCONTOS_PLANO_VISUAL, PRICE_MAP } from "@/lib/constants";
 import { formataPreco, calcularDescontoPlano, getEmailAtual } from "@/lib/utils";
 import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Star, ArrowRight, Users, Crown } from "lucide-react";
+import { 
+  Check, 
+  Star, 
+  ArrowRight, 
+  Users, 
+  Crown, 
+  Heart,
+  Stethoscope,
+  Phone,
+  Shield,
+  Pill,
+  Activity,
+  Brain,
+  Apple,
+  Dumbbell,
+  Percent,
+  X,
+  Calendar,
+  Clock
+} from "lucide-react";
+
 const Planos = () => {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [planoSelecionado, setPlanoSelecionado] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const {
-    toast
-  } = useToast();
-  const duracoes = [{
-    meses: "1",
-    label: "Mensal"
-  }, {
-    meses: "6",
-    label: "Semestral",
-    desconto: "20%"
-  }, {
-    meses: "12",
-    label: "Anual",
-    desconto: "40%"
-  }];
-  const handleAssinar = async (planoCode: string, email?: string) => {
-    if (planoCode === "EMPRESARIAL") {
-      // Para plano empresarial, apenas mostrar modal de lead
-      toast({
-        title: "Plano Empresarial",
-        description: "Entre em contato conosco para um plano personalizado."
-      });
-      return;
+  const { toast } = useToast();
+
+  // Definição dos períodos de pagamento
+  const periodos = [
+    { meses: "1", label: "Mensal", desconto: 0 },
+    { meses: "6", label: "Semestral", desconto: 20 },
+    { meses: "12", label: "Anual", desconto: 40 }
+  ];
+
+  // Preços base para os novos planos (em centavos)
+  const precosPlanosBase = {
+    individual_com_especialistas: 14900, // R$ 149,00
+    familiar_com_especialistas: 29900,   // R$ 299,00
+    individual_sem_especialistas: 9900,  // R$ 99,00
+    familiar_sem_especialistas: 19900    // R$ 199,00
+  };
+
+  // Função para calcular preço com desconto
+  const calcularPreco = (precoBase: number, meses: number) => {
+    const periodo = periodos.find(p => p.meses === meses.toString());
+    if (!periodo) return precoBase;
+    
+    const desconto = periodo.desconto / 100;
+    const precoComDesconto = precoBase * (1 - desconto);
+    return precoComDesconto;
+  };
+
+  // Definição dos novos planos
+  const novosPlanosData = [
+    {
+      id: "individual_com_especialistas",
+      nome: "Individual com Especialistas",
+      icone: <Users className="h-12 w-12 text-primary" />,
+      popular: true,
+      precoBase: precosPlanosBase.individual_com_especialistas,
+      beneficios: [
+        { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
+        { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
+        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia" },
+        { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
+        { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
+        { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
+        { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
+      ]
+    },
+    {
+      id: "familiar_com_especialistas",
+      nome: "Familiar com Especialistas",
+      icone: <Crown className="h-12 w-12 text-primary" />,
+      popular: false,
+      precoBase: precosPlanosBase.familiar_com_especialistas,
+      beneficios: [
+        { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
+        { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
+        { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
+        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia" },
+        { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
+        { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
+        { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
+        { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
+      ]
+    },
+    {
+      id: "individual_sem_especialistas",
+      nome: "Individual sem Especialistas",
+      icone: <Activity className="h-12 w-12 text-primary" />,
+      popular: false,
+      precoBase: precosPlanosBase.individual_sem_especialistas,
+      beneficios: [
+        { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
+        { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
+        { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
+        { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
+      ]
+    },
+    {
+      id: "familiar_sem_especialistas",
+      nome: "Familiar sem Especialistas",
+      icone: <Users className="h-12 w-12 text-primary" />,
+      popular: false,
+      precoBase: precosPlanosBase.familiar_sem_especialistas,
+      beneficios: [
+        { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
+        { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
+        { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
+        { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
+        { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
+      ]
     }
+  ];
+
+  const handleAssinar = async (planoId: string, email?: string) => {
     const emailParaUsar = email || (await getEmailAtual());
     if (!emailParaUsar) {
-      setPlanoSelecionado(planoCode);
+      setPlanoSelecionado(planoId);
       setIsModalOpen(true);
       return;
     }
-    await processarCheckoutPlano(planoCode, emailParaUsar);
+    await processarCheckoutPlano(planoId, emailParaUsar);
   };
-  const processarCheckoutPlano = async (planoCode: string, email: string) => {
+
+  const processarCheckoutPlano = async (planoId: string, email: string) => {
     setIsLoading(true);
     try {
+      // Mapear plano ID para código do sistema existente
+      const planoCodeMap: { [key: string]: string } = {
+        individual_com_especialistas: "INDIVIDUAL",
+        familiar_com_especialistas: "FAMILIAR",
+        individual_sem_especialistas: "INDIVIDUAL",
+        familiar_sem_especialistas: "FAMILIAR"
+      };
+
+      const planoCode = planoCodeMap[planoId];
       const priceId = PRICE_MAP[`plano_${planoCode.toLowerCase()}` as keyof typeof PRICE_MAP];
+      
       if (!priceId || priceId === "price_xxx") {
         toast({
           title: "Plano em configuração",
@@ -56,6 +164,7 @@ const Planos = () => {
         });
         return;
       }
+
       const checkoutData = await criarCheckout({
         mode: "subscription",
         price_id: priceId,
@@ -63,6 +172,7 @@ const Planos = () => {
         plan_duration_months: parseInt(duracaoSelecionada),
         email: email
       });
+
       if (checkoutData.error) {
         toast({
           title: "Erro no checkout",
@@ -71,6 +181,7 @@ const Planos = () => {
         });
         return;
       }
+
       redirecionarParaCheckout(checkoutData);
     } catch (error) {
       toast({
@@ -82,133 +193,217 @@ const Planos = () => {
       setIsLoading(false);
     }
   };
-  return <>
-      <div className="py-16">
-        <div className="container mx-auto px-4">
-          {/* Header */}
-          <div className="text-center mb-16">
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-              Escolha Seu Plano
+
+  return (
+    <>
+      <div className="min-h-screen bg-background">
+        {/* Hero Section */}
+        <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5">
+          <div className="container mx-auto max-w-6xl text-center">
+            <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+              Escolha o plano perfeito para você
             </h1>
-            
+            <p className="text-xl text-muted-foreground mb-12 max-w-3xl mx-auto">
+              Atendimento ilimitado, especialistas e benefícios exclusivos para você e sua família
+            </p>
 
-            {/* Seletor de duração */}
+            {/* Simulador de preços dinâmico */}
             <div className="flex justify-center mb-8">
-              <div className="inline-block bg-muted/50 rounded-2xl p-1.5">
-                <div className="flex gap-1">
-                  {duracoes.map(duracao => <button key={duracao.meses} onClick={() => setDuracaoSelecionada(duracao.meses)} className={`relative px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${duracaoSelecionada === duracao.meses ? "bg-green-600 text-white border-green-600" : "bg-white text-green-700 border border-green-600 hover:bg-green-50"}`}>
-                      {duracao.label}
-                      {duracao.desconto && <Badge variant="secondary" className="absolute -top-1.5 -right-1.5 bg-accent text-accent-foreground text-xs px-1 py-0">
-                          -{duracao.desconto}
-                        </Badge>}
-                    </button>)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Grid de planos */}
-          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-16">
-            {PLANOS.map(plano => {
-            const meses = parseInt(duracaoSelecionada);
-            const desconto = DESCONTOS_PLANO_VISUAL[duracaoSelecionada as keyof typeof DESCONTOS_PLANO_VISUAL] || 0;
-            const precoCalculado = plano.precoMensal ? calcularDescontoPlano(plano.precoMensal, meses, desconto) : null;
-            return <div key={plano.code} className={`medical-card p-8 relative ${plano.popular ? "ring-2 ring-primary shadow-[var(--shadow-medical)]" : ""}`}>
-                  {plano.popular && <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground px-3 py-1">
-                        <Star className="h-3 w-3 mr-1" />
-                        Mais Popular
+              <div className="inline-flex bg-muted/50 rounded-2xl p-1.5">
+                {periodos.map((periodo) => (
+                  <button
+                    key={periodo.meses}
+                    onClick={() => setDuracaoSelecionada(periodo.meses)}
+                    className={`relative px-6 py-3 rounded-xl text-sm font-medium transition-all ${
+                      duracaoSelecionada === periodo.meses
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {periodo.label}
+                    {periodo.desconto > 0 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-xs px-2 py-1"
+                      >
+                        -{periodo.desconto}%
                       </Badge>
-                    </div>}
-
-                  {/* Header do plano */}
-                  <div className="text-center mb-6">
-                    <div className="mb-4">
-                      {plano.code === "INDIVIDUAL" && <Users className="h-12 w-12 text-primary mx-auto" />}
-                      {plano.code === "FAMILIAR" && <Crown className="h-12 w-12 text-primary mx-auto" />}
-                      {plano.code === "EMPRESARIAL" && <Star className="h-12 w-12 text-primary mx-auto" />}
-                    </div>
-                    <h3 className="text-2xl font-bold text-foreground mb-2">
-                      {plano.nome}
-                    </h3>
-                    <div className="text-center">
-                      {plano.precoMensal ? <>
-                          <div className="text-sm font-medium text-primary mb-1">
-                            APENAS 12x
-                          </div>
-                          <div className="text-3xl font-bold text-primary">
-                            {formataPreco(precoCalculado! / meses)}/mês
-                          </div>
-                          <div className="text-sm text-muted-foreground mt-1">
-                            Equivale a {formataPreco(precoCalculado! / meses / 30)}/dia
-                          </div>
-                          {desconto > 0 && <div className="text-sm text-muted-foreground mt-2">
-                              <span className="line-through">
-                                {formataPreco(plano.precoMensal)}
-                              </span>
-                              <span className="text-accent font-medium ml-2">
-                                Economize {Math.round(desconto * 100)}%
-                              </span>
-                            </div>}
-                        </> : <div className="text-2xl font-bold text-primary">
-                          Sob Consulta
-                        </div>}
-                    </div>
-                  </div>
-
-                  {/* Benefícios */}
-                  <ul className="space-y-3 mb-8">
-                    {plano.beneficios.map((beneficio, index) => <li key={index} className="flex items-center gap-3">
-                        <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                        <span className="text-muted-foreground">{beneficio}</span>
-                      </li>)}
-                  </ul>
-
-                  {/* CTA */}
-                  <Button onClick={() => handleAssinar(plano.code)} size="lg" className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700 transition-all" disabled={isLoading}>
-                    {plano.code === "EMPRESARIAL" ? "Solicitar Proposta" : isLoading ? "Processando..." : "Assinar Plano"}
-                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </Button>
-                </div>;
-          })}
-          </div>
-
-          {/* FAQ ou benefícios gerais */}
-          <div className="bg-muted/30 rounded-2xl p-8 md:p-12 text-center">
-            <h2 className="text-3xl font-bold text-foreground mb-6">
-              Por que assinar um plano?
-            </h2>
-            <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-8">
-              <div>
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Check className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Descontos Exclusivos</h3>
-                <p className="text-muted-foreground">Economize em todas as consultas com descontos progressivos</p>
-              </div>
-              <div>
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Star className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Atendimento Prioritário</h3>
-                <p className="text-muted-foreground">Agende suas consultas com prioridade e flexibilidade</p>
-              </div>
-              <div>
-                <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Crown className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">Benefícios Exclusivos</h3>
-                <p className="text-muted-foreground">Acesso a recursos especiais e suporte dedicado</p>
+                    )}
+                  </button>
+                ))}
               </div>
             </div>
-            <p className="text-muted-foreground">
-              Todos os planos incluem consultas ilimitadas, suporte técnico e garantia de qualidade.
+          </div>
+        </section>
+
+        {/* Planos Section */}
+        <section className="py-16 px-4">
+          <div className="container mx-auto max-w-7xl">
+            <div className="grid md:grid-cols-2 gap-8">
+              {novosPlanosData.map((plano) => {
+                const meses = parseInt(duracaoSelecionada);
+                const precoComDesconto = calcularPreco(plano.precoBase, meses);
+                const precoMensal = precoComDesconto / meses;
+                const precoDiario = precoMensal / 30;
+                const periodo = periodos.find(p => p.meses === duracaoSelecionada);
+                
+                return (
+                  <Card 
+                    key={plano.id} 
+                    className={`relative transition-all duration-300 hover:shadow-lg ${
+                      plano.popular 
+                        ? "ring-2 ring-primary shadow-lg border-primary/20" 
+                        : "hover:border-primary/30"
+                    }`}
+                  >
+                    {plano.popular && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                        <Badge className="bg-primary text-primary-foreground px-4 py-1">
+                          <Star className="h-3 w-3 mr-1" />
+                          Mais Popular
+                        </Badge>
+                      </div>
+                    )}
+
+                    <CardHeader className="text-center pb-4">
+                      <div className="flex justify-center mb-4">
+                        {plano.icone}
+                      </div>
+                      <CardTitle className="text-2xl font-bold text-foreground">
+                        {plano.nome}
+                      </CardTitle>
+                      <div className="text-center">
+                        <div className="text-4xl font-bold text-primary mb-2">
+                          {formataPreco(precoMensal / 100)}
+                          <span className="text-lg font-normal text-muted-foreground">/mês</span>
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          Equivale a {formataPreco(precoDiario / 100)}/dia
+                        </div>
+                        {periodo && periodo.desconto > 0 && (
+                          <div className="text-sm text-muted-foreground mt-2">
+                            <span className="line-through">
+                              {formataPreco(plano.precoBase / 100)}
+                            </span>
+                            <span className="text-accent font-medium ml-2">
+                              Economize {periodo.desconto}%
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-6">
+                      {/* Benefícios */}
+                      <ul className="space-y-3">
+                        {plano.beneficios.map((beneficio, index) => (
+                          <li key={index} className="flex items-start gap-3">
+                            <div className="text-primary mt-0.5 flex-shrink-0">
+                              {beneficio.icone}
+                            </div>
+                            <span className="text-sm text-muted-foreground leading-relaxed">
+                              {beneficio.texto}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      {/* Botões de ação */}
+                      <div className="space-y-3 pt-4">
+                        <Button
+                          onClick={() => handleAssinar(plano.id)}
+                          size="lg"
+                          className="w-full group"
+                          variant={plano.popular ? "default" : "outline"}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? "Processando..." : "Assinar Plano"}
+                          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                        </Button>
+                        
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button variant="outline" size="sm" className="w-full">
+                            Saiba Mais
+                          </Button>
+                          <Button variant="outline" size="sm" className="w-full">
+                            Solicitar Proposta
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Seção de benefícios adicionais */}
+        <section className="py-16 px-4 bg-gradient-to-br from-secondary/5 to-primary/5">
+          <div className="container mx-auto max-w-6xl text-center">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
+              Por que escolher nossos planos?
+            </h2>
+            <p className="text-lg text-muted-foreground mb-12 max-w-3xl mx-auto">
+              Oferecemos atendimento médico de qualidade com tecnologia avançada, 
+              especialistas qualificados e benefícios exclusivos para cuidar da sua saúde.
+            </p>
+            
+            <div className="grid md:grid-cols-3 gap-8 mb-12">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Phone className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-3">
+                  Atendimento 24h
+                </h3>
+                <p className="text-muted-foreground">
+                  Consultas médicas disponíveis a qualquer hora do dia, 
+                  todos os dias da semana.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Shield className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-3">
+                  Sem Carência
+                </h3>
+                <p className="text-muted-foreground">
+                  Comece a usar seu plano imediatamente após a contratação, 
+                  sem períodos de espera.
+                </p>
+              </div>
+              
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Star className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground mb-3">
+                  Especialistas
+                </h3>
+                <p className="text-muted-foreground">
+                  Acesso a mais de 10 especialidades médicas com profissionais 
+                  altamente qualificados.
+                </p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              * Nutrição e personal trainer disponíveis mediante agendamento e sujeitos à disponibilidade.
             </p>
           </div>
-        </div>
+        </section>
       </div>
 
-      <CadastroModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={email => processarCheckoutPlano(planoSelecionado, email)} />
-    </>;
+      <CadastroModal 
+        open={isModalOpen} 
+        onOpenChange={setIsModalOpen} 
+        onSuccess={(email) => processarCheckoutPlano(planoSelecionado, email)} 
+      />
+    </>
+  );
 };
+
 export default Planos;
