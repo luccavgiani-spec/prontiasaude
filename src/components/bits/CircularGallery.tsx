@@ -29,6 +29,9 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
     }
   ];
 
+  // Cria múltiplas cópias para loop infinito fluido
+  const repeatedItems = [...items, ...items, ...items, ...items];
+
   React.useEffect(() => {
     const container = document.querySelector('.circular-gallery-container') as HTMLElement;
     if (!container) return;
@@ -43,7 +46,7 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
     <div className="circular-gallery-container">
       <div className="circular-gallery">
         <div className="gallery-track">
-          {items.concat(items).map((item, index) => (
+          {repeatedItems.map((item, index) => (
             <div key={index} className="gallery-item">
               <div className="item-image">
                 <img src={item.image} alt={item.title} loading="lazy" />
