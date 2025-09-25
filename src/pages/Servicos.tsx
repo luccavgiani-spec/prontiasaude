@@ -63,9 +63,7 @@ const Servicos = () => {
               <h3 className="text-xl font-semibold text-foreground mb-3">
                 Qualidade
               </h3>
-              <p className="text-muted-foreground">
-                Profissionais certificados e experientes, com a mesma qualidade do atendimento presencial.
-              </p>
+              <p className="text-muted-foreground">Profissionais qualificados e experientes, com a mesma qualidade do atendimento presencial.</p>
             </div>
           </div>
         </div>
