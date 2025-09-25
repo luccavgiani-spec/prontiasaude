@@ -117,7 +117,7 @@ const CompletarPerfil = () => {
         description: "Suas informações foram salvas com sucesso.",
       });
       
-      window.location.replace('/intake/antecedentes');
+      window.location.replace('/servicos');
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",

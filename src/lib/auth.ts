@@ -76,9 +76,5 @@ export const checkAuthFlow = async (userId: string): Promise<string> => {
     return '/completar-perfil';
   }
   
-  if (!patient.intake_complete) {
-    return '/intake/antecedentes';
-  }
-  
   return '/area-do-paciente';
 };

@@ -152,7 +152,7 @@ const Antecedentes = () => {
       });
       
       // Pequeno delay antes da navegação para garantir que o toast seja visto
-      setTimeout(() => navigate('/area-do-paciente'), 1000);
+      setTimeout(() => navigate('/confirmacao'), 1000);
       
     } catch (error) {
       console.error('Erro ao completar antecedentes:', error);

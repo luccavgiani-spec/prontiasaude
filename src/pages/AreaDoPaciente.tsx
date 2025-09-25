@@ -61,10 +61,6 @@ const AreaDoPaciente = () => {
         return;
       }
       
-      if (!data?.intake_complete) {
-        window.location.replace('/intake/antecedentes'); 
-        return;
-      }
       
       setPatient(data as Patient);
       
@@ -111,7 +107,7 @@ const AreaDoPaciente = () => {
     );
   }
 
-  const canScheduleAppointments = patient?.profile_complete && patient?.intake_complete;
+  const canScheduleAppointments = patient?.profile_complete;
 
   return (
     <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -133,11 +129,11 @@ const AreaDoPaciente = () => {
         </div>
 
         {/* Status Alert */}
-        {!canScheduleAppointments && (
-          <Alert className="mb-8 border-yellow-200 bg-yellow-50">
-            <AlertCircle className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800">
-              Complete seu perfil e antecedentes médicos para poder agendar consultas.
+        {!patient?.intake_complete && (
+          <Alert className="mb-8 border-blue-200 bg-blue-50">
+            <AlertCircle className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              Complete seus antecedentes médicos para melhorar a qualidade do seu atendimento.
             </AlertDescription>
           </Alert>
         )}
@@ -319,14 +315,8 @@ const AreaDoPaciente = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {canScheduleAppointments && currentUser?.email ? (
+              {currentUser?.email && (
                 <MeusAgendamentos userEmail={currentUser.email} />
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground mb-4">
-                    Complete seu perfil e antecedentes médicos para ver suas consultas.
-                  </p>
-                </div>
               )}
             </CardContent>
           </Card>
@@ -343,6 +333,11 @@ const AreaDoPaciente = () => {
               <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
                 <Link to="/servicos">Nova Consulta</Link>
               </Button>
+              {!patient?.intake_complete && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Recomendamos completar seus <Link to="/intake/antecedentes" className="text-primary hover:underline">antecedentes médicos</Link> para melhor atendimento.
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -351,16 +346,9 @@ const AreaDoPaciente = () => {
                 Finalize o preenchimento dos seus dados para poder agendar consultas.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                {!patient?.profile_complete && (
-                  <Button asChild variant="outline">
-                    <Link to="/completar-perfil">Completar perfil</Link>
-                  </Button>
-                )}
-                {!patient?.intake_complete && (
-                  <Button asChild className="bg-primary hover:bg-primary/90">
-                    <Link to="/intake/antecedentes">Preencher antecedentes</Link>
-                  </Button>
-                )}
+                <Button asChild variant="outline">
+                  <Link to="/completar-perfil">Completar perfil</Link>
+                </Button>
               </div>
             </div>
           )}

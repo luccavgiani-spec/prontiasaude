@@ -32,8 +32,6 @@ const AuthCallback = () => {
 
       if (!data?.profile_complete) {
         window.location.replace('/completar-perfil');
-      } else if (!data?.intake_complete) {
-        window.location.replace('/intake/antecedentes');
       } else {
         window.location.replace('/area-do-paciente');
       }

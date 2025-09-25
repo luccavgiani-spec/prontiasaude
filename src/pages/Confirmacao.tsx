@@ -202,7 +202,7 @@ const Confirmacao = () => {
           </div>
 
           {/* Ações */}
-          <div className="mb-6">
+          <div className="mb-6 space-y-3">
             <Button 
               onClick={handleGoToConsultas}
               size="lg"
@@ -210,6 +210,16 @@ const Confirmacao = () => {
             >
               Ver Minhas Consultas
             </Button>
+            
+            {/* Botão para antecedentes médicos se ainda não preenchido */}
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-2">
+                Para um atendimento ainda melhor, complete seus antecedentes médicos
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/intake/antecedentes">Completar Antecedentes Médicos</Link>
+              </Button>
+            </div>
           </div>
 
           {/* Links adicionais */}
