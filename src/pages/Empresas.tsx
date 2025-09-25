@@ -72,7 +72,7 @@ const Empresas = () => {
     description: "Check-ups regulares e acompanhamento de doenças crônicas, levando à redução de faltas e afastamentos."
   }, {
     icon: <Building2 className="h-8 w-8 text-primary" />,
-    title: "Imagem de empresa moderna e inovadora",
+    title: "Bem estar corporativo",
     description: "Fortalece engajamento e lealdade dos funcionários. Reduz turnover e custos com novas contratações e treinamentos."
   }];
   const logoItems = [{
