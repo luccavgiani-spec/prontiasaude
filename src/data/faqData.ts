@@ -30,7 +30,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "Existe coparticipação ou carência no plano?",
-    answer: "Não há coparticipação. O pagamento é apenas pelo serviço contratado. Não existe carência para consultas de telemedicina: você pode usar imediatamente após contratar."
+    answer: "Não há coparticipação nas consultas onlines."
   },
   {
     question: "Existe diferença entre psicoterapia online e presencial?",
