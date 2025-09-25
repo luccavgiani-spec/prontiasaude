@@ -71,7 +71,7 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.descricao}
+                {servico.descricao}.
               </p>
 
               {/* Informações básicas */}
