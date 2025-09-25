@@ -9,6 +9,20 @@ export const formatCPF = (cpf: string): string => {
   return `***.***.***-${cleanCPF.slice(-2)}`;
 };
 
+export const validateCNPJ = (cnpj: string): boolean => {
+  const cleanCNPJ = cnpj.replace(/\D/g, '');
+  return cleanCNPJ.length === 14 && /^\d{14}$/.test(cleanCNPJ);
+};
+
+export const formatCNPJ = (cnpj: string): string => {
+  const cleanCNPJ = cnpj.replace(/\D/g, '');
+  if (cleanCNPJ.length <= 2) return cleanCNPJ;
+  if (cleanCNPJ.length <= 5) return cleanCNPJ.replace(/(\d{2})(\d{0,3})/, '$1.$2');
+  if (cleanCNPJ.length <= 8) return cleanCNPJ.replace(/(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  if (cleanCNPJ.length <= 12) return cleanCNPJ.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+  return cleanCNPJ.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+};
+
 export const validatePhoneE164 = (phone: string): boolean => {
   return /^\+55\d{10,11}$/.test(phone);
 };
