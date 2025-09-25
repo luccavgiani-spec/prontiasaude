@@ -49,7 +49,7 @@ const Empresas = () => {
   const benefitCards = [{
     icon: <Clock className="h-8 w-8 text-primary" />,
     title: "Atendimento rápido e remoto",
-    description: "Consultas online sem deslocamento. Reduz faltas e previne piora do quadro de saúde dos colaboradores."
+    description: "Consultas online e sem deslocamento. Reduz piora do quadro de saúde dos colaboradores, reduzindo as faltas e aumentando a produtividade."
   }, {
     icon: <Heart className="h-8 w-8 text-primary" />,
     title: "Apoio contínuo à saúde mental",
@@ -57,7 +57,7 @@ const Empresas = () => {
   }, {
     icon: <FileText className="h-8 w-8 text-primary" />,
     title: "Conteúdos exclusivos",
-    description: "Vídeos, palestras com psicólogos, métodos de respiração, receitas alimentares e sons para dormir."
+    description: "Vídeos, palestras com psicólogos, métodos de respiração, receitas alimentares e músicas relaxantes."
   }, {
     icon: <Shield className="h-8 w-8 text-primary" />,
     title: "Formulários de diagnóstico e intervenção",
@@ -69,11 +69,11 @@ const Empresas = () => {
   }, {
     icon: <TrendingUp className="h-8 w-8 text-primary" />,
     title: "Saúde preventiva e economia",
-    description: "Check-ups regulares, acompanhamento de crônicos, redução de faltas e afastamentos."
+    description: "Músicas relaxantes."
   }, {
     icon: <Building2 className="h-8 w-8 text-primary" />,
     title: "Imagem de empresa moderna e inovadora",
-    description: "Fortalece engajamento e lealdade dos funcionários. Reduz turnover e custos com reposição."
+    description: "Fortalece engajamento e lealdade dos funcionários. Reduz turnover e custos com novas contratações e treinamentos."
   }];
   const logoItems = [{
     title: "Pagamento Seguro",
@@ -107,6 +107,41 @@ const Empresas = () => {
             Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
             Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
+        </div>
+      </section>
+
+      {/* Advantages Section */}
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="grid md:grid-cols-2 gap-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-2xl">Vantagens para sua empresa</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  {empresaAdvantages.map((advantage, index) => <li key={index} className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">{advantage}</span>
+                    </li>)}
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-2xl">Vantagens para os colaboradores</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  {colaboradorAdvantages.map((advantage, index) => <li key={index} className="flex items-start gap-2">
+                      <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">{advantage}</span>
+                    </li>)}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 
@@ -146,42 +181,6 @@ const Empresas = () => {
                     </CardContent>
                   </Card>
           }))} speed={40} logoHeight={192} gap={20} pauseOnHover={true} />
-          </div>
-        </div>
-      </section>
-
-
-      {/* Advantages Section */}
-      <section className="py-16 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="grid md:grid-cols-2 gap-8">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">Vantagens para sua empresa</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {empresaAdvantages.map((advantage, index) => <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <span className="text-muted-foreground">{advantage}</span>
-                    </li>)}
-                </ul>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-2xl">Vantagens para os colaboradores</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {colaboradorAdvantages.map((advantage, index) => <li key={index} className="flex items-start gap-2">
-                      <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <span className="text-muted-foreground">{advantage}</span>
-                    </li>)}
-                </ul>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </section>
