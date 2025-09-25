@@ -43,19 +43,20 @@ export function HeroSection() {
                 <span className="medical-gradient-text">Seu Médico Online a qualquer hora!</span>
               </h1>
               
+              {/* Button between title and subtitle */}
+              <div className="flex justify-center pt-4 md:pt-6 animate-fade-in delay-300">
+                <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
+                  Consulte Agora
+                  <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
+                </Button>
+              </div>
+              
               <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light animate-fade-in delay-200">
                 Cuidado imediato para quem precisa.<br />
                 Evite filas, cuide da sua saúde de maneira segura, prática, com cuidado que vai além das telas!
               </p>
             </div>
             
-            {/* Modern CTAs */}
-            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={scrollToServicos} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
-                Consulte Agora
-                <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </div>
             
             {/* Social proof removed */}
           </div>
