@@ -3,10 +3,8 @@ import { ServicoCard } from "@/components/home/ServicoCard";
 import { Button } from "@/components/ui/button";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { ArrowLeft, Clock, Users, CheckCircle } from "lucide-react";
-
 const Servicos = () => {
-  return (
-    <div className="py-16">
+  return <div className="py-16">
       <div className="container mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
@@ -17,15 +15,12 @@ const Servicos = () => {
           <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Nossos Serviços
           </h1>
-          <p className="text-xl text-muted-foreground max-w-3xl">
-            Consulta médica online na hora com atestado médico com CID, atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina e laudos psicológicos válidos em todo país
-          </p>
+          <p className="text-xl text-muted-foreground max-w-3xl">Consulta médica online na hora com atestado médico, atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina e laudos psicológicos válidos em todo país.</p>
         </div>
 
         {/* Grid de serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
-          {CATALOGO_SERVICOS.map((servico) => (
-            <div key={servico.slug} className="group h-full flex flex-col">
+          {CATALOGO_SERVICOS.map(servico => <div key={servico.slug} className="group h-full flex flex-col">
               <div className="flex-grow">
                 <ServicoCard servico={servico} />
               </div>
@@ -36,8 +31,7 @@ const Servicos = () => {
                   </Button>
                 </Link>
               </div>
-            </div>
-          ))}
+            </div>)}
         </div>
 
         {/* Vantagens dos serviços online */}
@@ -94,8 +88,6 @@ const Servicos = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Servicos;
