@@ -16,7 +16,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Consulta clínica", 
     precoBase: 43.90, 
     sku: "CONSULTA_CLINICA",
-    descricao: "Consulta médica online com profissionais qualificados",
+    descricao: "Consulta médica online 24h por dia.",
     tempo: "30-45 minutos",
     inclui: ["Consulta por videochamada", "Receituário digital", "Orientações médicas"]
   },
