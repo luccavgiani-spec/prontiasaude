@@ -127,7 +127,37 @@ const ServicoDetalhe = () => {
                   Como funciona:
                 </h2>
                 <div className="space-y-4">
-                  {servico.slug === "renovacao" ? (
+                  {servico.slug === "laudos_psicologicos" ? (
+                    <>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          1
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Avaliação online</h3>
+                          <p className="text-muted-foreground">Primeiro, o paciente realiza uma avaliação online com um de nossos psicólogos credenciados</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          2
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Análise e aprovação</h3>
+                          <p className="text-muted-foreground">O profissional avalia a necessidade e, se estiver tudo de acordo, autoriza a emissão do laudo</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          3
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Emissão do laudo</h3>
+                          <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, vasectomia</p>
+                        </div>
+                      </div>
+                    </>
+                  ) : servico.slug === "renovacao" ? (
                     <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
