@@ -49,8 +49,7 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
                 <img src={item.image} alt={item.title} loading="lazy" />
               </div>
               <div className="item-content">
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
+                <p className="text-sm leading-relaxed">{item.description}</p>
               </div>
             </div>
           ))}
