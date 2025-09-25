@@ -178,9 +178,7 @@ const EmpresasDoBem = () => {
               <CardTitle className="text-2xl md:text-3xl mb-4">
                 Cadastre sua ONG
               </CardTitle>
-              <CardDescription className="text-lg">
-                Faça parte da nossa rede de solidariedade. Juntos, podemos fazer mais.
-              </CardDescription>
+              
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto">
