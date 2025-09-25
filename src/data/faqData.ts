@@ -21,7 +21,7 @@ export const faqData: FAQ[] = [
     answer: "Oferecemos cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia, médico da família, oftalmologia, ortopedia, pediatria, psiquiatria, otorrinolaringologia, psicologia, nutrição e personal trainer."
   },
   {
-    question: "Nossa plataforma é regulada e segura?",
+    question: "As consultas são confidenciais?",
     answer: "Sim. Seguimos todas as normas e leis brasileiras: • CFM – Resolução 2.314/2022 (consultas e acompanhamento remoto, com registro em prontuário) • LGPD – Lei 13.709/2018 (proteção de dados pessoais e de saúde) • Código de Ética Médica (sigilo, responsabilidade e ética)"
   },
   {
