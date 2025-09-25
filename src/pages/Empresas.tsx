@@ -103,10 +103,17 @@ const Empresas = () => {
           <h2 className="text-xl md:text-2xl text-primary font-semibold mb-6">
             Quem cuida da sua equipe, cuida do futuro da sua empresa
           </h2>
-          <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed mb-8">
             Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
             Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
+          <Button 
+            size="lg" 
+            onClick={() => setShowForm(true)} 
+            className="medical-button-primary text-lg px-8 py-4"
+          >
+            Solicitar Contato
+          </Button>
         </div>
       </section>
 
