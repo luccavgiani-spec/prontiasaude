@@ -18,12 +18,14 @@ interface Servico {
 }
 interface ServicoCardProps {
   servico: Servico;
-  planoSelecionado?: string;
+  tipoContratacao?: string;
+  descontoContratacao?: number;
   showDesconto?: boolean;
 }
 export function ServicoCard({
   servico,
-  planoSelecionado,
+  tipoContratacao,
+  descontoContratacao = 0,
   showDesconto = false
 }: ServicoCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,8 +34,10 @@ export function ServicoCard({
     toast
   } = useToast();
 
-  // Cálculo do desconto visual de 45% para assinantes de plano
-  const precoComDesconto = showDesconto && planoSelecionado ? servico.precoBase * 0.55 : servico.precoBase;
+  // Cálculo do desconto baseado no tipo de contratação
+  const precoComDesconto = showDesconto && descontoContratacao > 0 ? 
+    servico.precoBase * (1 - descontoContratacao / 100) : 
+    servico.precoBase;
   
   // Função para obter ícone do serviço
   const getServicoIcon = (slug: string) => {
@@ -101,9 +105,9 @@ export function ServicoCard({
           <p className="text-sm text-muted-foreground">
             {servico.descricao}
           </p>
-          {showDesconto && planoSelecionado && (
+          {showDesconto && descontoContratacao > 0 && (
             <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mt-2">
-              45% OFF para assinantes
+              {descontoContratacao}% OFF na contratação {tipoContratacao?.toLowerCase()}
             </Badge>
           )}
         </div>
@@ -140,7 +144,7 @@ export function ServicoCard({
         {/* Preço e CTA */}
         <div className="text-center pt-4 border-t border-border mt-auto">
           <div className="mb-4">
-            {showDesconto && planoSelecionado ? (
+            {showDesconto && descontoContratacao > 0 ? (
               <div>
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-lg font-medium text-muted-foreground line-through">
@@ -151,7 +155,7 @@ export function ServicoCard({
                   </span>
                 </div>
                 <p className="text-xs text-green-600 font-medium">
-                  Economize 45% com o plano
+                  Economize {descontoContratacao}% na contratação {tipoContratacao?.toLowerCase()}
                 </p>
               </div>
             ) : (
