@@ -253,7 +253,7 @@ const Planos = () => {
                   return (
                     <Card 
                       key={plano.id} 
-                      className={`relative transition-all duration-300 hover:shadow-lg ${
+                      className={`relative transition-all duration-300 hover:shadow-lg flex flex-col h-full ${
                         plano.popular 
                           ? "ring-2 ring-primary shadow-lg border-primary/20" 
                           : "hover:border-primary/30"
@@ -296,8 +296,8 @@ const Planos = () => {
                         </div>
                       </CardHeader>
 
-                      <CardContent className="space-y-4">
-                        <ul className="space-y-2">
+                      <CardContent className="flex flex-col flex-grow">
+                        <ul className="space-y-2 flex-grow">
                           {plano.beneficios.map((beneficio, index) => (
                             <li key={index} className="flex items-start gap-2">
                               <div className="text-primary mt-0.5 flex-shrink-0">
@@ -310,12 +310,11 @@ const Planos = () => {
                           ))}
                         </ul>
 
-                        <div className="pt-2">
+                        <div className="pt-4 mt-auto">
                           <Button
                             onClick={() => handleAssinar(plano.id)}
                             size="sm"
-                            className="w-full group"
-                            variant={plano.popular ? "default" : "outline"}
+                            className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                             disabled={isLoading}
                           >
                             {isLoading ? "Processando..." : "Assinar Plano"}
