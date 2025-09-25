@@ -283,6 +283,28 @@ const Empresas = () => {
         </div>
       </section>
 
+      {/* Why Choose Section */}
+      <section className="py-16 px-4 bg-gradient-to-br from-primary/10 to-secondary/10">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
+            Por que escolher a Prontia Saúde?
+          </h2>
+          <div className="space-y-4 text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            <p>
+              Na Prontia Saúde, cuidamos da saúde do seu time como se fossem parte da nossa família. 
+              Mais do que telemedicina, oferecemos um cuidado completo, com foco em prevenção e bem-estar contínuo – tudo em um só lugar.
+            </p>
+            <p>
+              Com acesso rápido a médicos, sua equipe consegue tratar antes de agravar qualquer problema, 
+              reduzindo afastamentos prolongados e garantindo mais saúde e produtividade no dia a dia.
+            </p>
+            <p className="font-medium text-primary">
+              Estamos sempre pensando no melhor para o funcionário e para a empresa.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Fixed Mobile CTA */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
         <Button onClick={() => setShowForm(true)} className="w-full medical-button-primary py-3">
