@@ -71,7 +71,10 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.descricao}.
+                {servico.slug === "renovacao" 
+                  ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança."
+                  : `${servico.descricao}.`
+                }
               </p>
 
               {/* Informações básicas */}
@@ -109,33 +112,67 @@ const ServicoDetalhe = () => {
                   Como funciona:
                 </h2>
                 <div className="space-y-4">
-                  <div className="flex gap-4">
-                    <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                      1
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                      <p className="text-muted-foreground">Realize o pagamento e agende sua consulta</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                      2
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
-                      <p className="text-muted-foreground">Receba o link da videochamada no seu WhatsApp</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-4">
-                    <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                      3
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                      <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional</p>
-                    </div>
-                  </div>
+                  {servico.slug === "renovacao" ? (
+                    <>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          1
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Envio da receita</h3>
+                          <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses) após o pagamento</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          2
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Avaliação médica</h3>
+                          <p className="text-muted-foreground">Nosso médico avalia sua receita e histórico médico</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          3
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Nova receita</h3>
+                          <p className="text-muted-foreground">Receba sua nova receita digital com assinatura médica</p>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          1
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
+                          <p className="text-muted-foreground">Realize o pagamento e agende sua consulta</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          2
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
+                          <p className="text-muted-foreground">Receba o link da videochamada no seu WhatsApp</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          3
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
+                          <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
