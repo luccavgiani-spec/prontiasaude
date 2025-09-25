@@ -57,7 +57,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Laudos Psicológicos", 
     precoBase: 119.90, 
     sku: "LAUDOS_PSICOLOGICOS",
-    descricao: "Laudos assinados digitalmente",
+    descricao: "",
     tempo: "60-90 minutos",
     inclui: ["Laudo para bariátrica", "Laudo para laqueadura/vasectomia", "Avaliação completa"],
     naoInclui: ["Consulta psicológica prévia"]
