@@ -201,7 +201,7 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 <div className="text-center mb-6">
-                  {servico.slug === "psicologa" && (
+                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && (
                     <p className="text-muted-foreground mb-2">À partir de</p>
                   )}
                   <div className="text-3xl font-bold text-foreground mb-2">
