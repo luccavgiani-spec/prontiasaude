@@ -122,7 +122,49 @@ const EmpresasDoBem = () => {
       </section>
 
       {/* Our Approach */}
-      
+      <section className="py-16 px-4">
+        <div className="container mx-auto max-w-4xl">
+          
+          
+          <div className="grid md:grid-cols-3 gap-8">
+            <Card className="text-center">
+              <CardHeader>
+                <Heart className="h-12 w-12 text-primary mx-auto mb-4" />
+                <CardTitle>Doações Mensais</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Contribuições regulares para garantir sustentabilidade às ONGs parceiras
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardHeader>
+                <Handshake className="h-12 w-12 text-primary mx-auto mb-4" />
+                <CardTitle>Parcerias Estratégicas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Relacionamentos de longo prazo para maximizar o impacto social
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="text-center">
+              <CardHeader>
+                <Globe className="h-12 w-12 text-primary mx-auto mb-4" />
+                <CardTitle>Transparência Total</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground">
+                  Relatórios regulares sobre o uso dos recursos e resultados alcançados
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </section>
 
       {/* CTA Section */}
       <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5">
