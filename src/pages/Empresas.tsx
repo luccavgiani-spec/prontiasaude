@@ -69,7 +69,7 @@ const Empresas = () => {
   }, {
     icon: <TrendingUp className="h-8 w-8 text-primary" />,
     title: "Saúde preventiva e economia",
-    description: "Músicas relaxantes."
+    description: "Check-ups regulares e acompanhamento de doenças crônicas, levando à redução de faltas e afastamentos."
   }, {
     icon: <Building2 className="h-8 w-8 text-primary" />,
     title: "Imagem de empresa moderna e inovadora",
