@@ -1,5 +1,7 @@
 import React from 'react';
 import './CircularGallery.css';
+import samaLogo from '@/assets/sama-logo.png';
+import institutoCaminhosLogo from '@/assets/instituto-caminhos-da-luz-logo.png';
 
 interface CircularGalleryProps {
   bend?: number;
@@ -16,34 +18,14 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
 }) => {
   const items = [
     {
-      title: "Instituto Viva a Vida",
-      description: "Apoio a pacientes com câncer e suas famílias",
-      image: "/api/placeholder/300/200"
+      title: "SAMA",
+      description: "No coração de Bragança Paulista, o SAMA é um refúgio onde crianças e adolescentes encontram amor, cuidado e uma segunda chance. Em situações de risco ou negligência, oferecemos um abrigo temporário, acompanhamento emocional e cuidados médicos, garantindo um desenvolvimento saudável.",
+      image: samaLogo
     },
     {
-      title: "ONG Amigos do Bem",
-      description: "Combate à fome e à miséria no sertão nordestino",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      title: "Fundação Abrinq",
-      description: "Proteção e promoção dos direitos das crianças",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      title: "Instituto Ronald McDonald",
-      description: "Apoio a adolescentes e jovens com câncer",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      title: "APAE Brasil",
-      description: "Atendimento a pessoas com deficiência intelectual",
-      image: "/api/placeholder/300/200"
-    },
-    {
-      title: "Casa Hope",
-      description: "Acolhimento para crianças em tratamento médico",
-      image: "/api/placeholder/300/200"
+      title: "Instituto Caminhos da Luz",
+      description: "Localizado em São Paulo, o Instituto Caminhos da Luz é um porto seguro para crianças e adolescentes em vulnerabilidade social. Oferecemos acolhimento especializado, apoio psicológico e cuidados integrais, criando um ambiente de proteção e desenvolvimento. Nossa missão é reconstruir esperanças e abrir caminhos para um futuro digno e promissor.",
+      image: institutoCaminhosLogo
     }
   ];
 
