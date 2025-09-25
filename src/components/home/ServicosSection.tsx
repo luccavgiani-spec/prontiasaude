@@ -43,17 +43,7 @@ export function ServicosSection() {
         </div>
 
         {/* CTA para planos */}
-        {planoSelecionado !== "SEM_PLANO" && <div className="text-center mt-12 p-6 bg-primary/5 border border-primary/20 rounded-xl">
-            <h3 className="text-xl font-semibold text-foreground mb-2">
-              Gostou dos descontos?
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              Assine um plano e tenha acesso a descontos exclusivos em todos os serviços
-            </p>
-            <Button variant="medical" size="lg" asChild>
-              <a href="/planos">Ver Planos Disponíveis</a>
-            </Button>
-          </div>}
+        {planoSelecionado !== "SEM_PLANO"}
       </div>
     </section>;
 }
