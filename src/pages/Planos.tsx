@@ -239,101 +239,262 @@ const Planos = () => {
         {/* Planos Section */}
         <section className="py-16 px-4">
           <div className="container mx-auto max-w-7xl">
-            <div className="grid md:grid-cols-2 gap-8">
-              {novosPlanosData.map((plano) => {
-                const meses = parseInt(duracaoSelecionada);
-                const precoComDesconto = calcularPreco(plano.precoBase, meses);
-                const precoMensal = precoComDesconto / meses;
-                const precoDiario = precoMensal / 30;
-                const periodo = periodos.find(p => p.meses === duracaoSelecionada);
-                
-                return (
-                  <Card 
-                    key={plano.id} 
-                    className={`relative transition-all duration-300 hover:shadow-lg ${
-                      plano.popular 
-                        ? "ring-2 ring-primary shadow-lg border-primary/20" 
-                        : "hover:border-primary/30"
-                    }`}
-                  >
-                    {plano.popular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <Badge className="bg-primary text-primary-foreground px-4 py-1">
-                          <Star className="h-3 w-3 mr-1" />
-                          Mais Popular
-                        </Badge>
-                      </div>
-                    )}
-
-                    <CardHeader className="text-center pb-4">
-                      <div className="flex justify-center mb-4">
-                        {plano.icone}
-                      </div>
-                      <CardTitle className="text-2xl font-bold text-foreground">
-                        {plano.nome}
-                      </CardTitle>
-                      <div className="text-center">
-                        <div className="text-4xl font-bold text-primary mb-2">
-                          {formataPreco(precoMensal / 100)}
-                          <span className="text-lg font-normal text-muted-foreground">/mês</span>
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          Equivale a {formataPreco(precoDiario / 100)}/dia
-                        </div>
-                        {periodo && periodo.desconto > 0 && (
-                          <div className="text-sm text-muted-foreground mt-2">
-                            <span className="line-through">
-                              {formataPreco(plano.precoBase / 100)}
-                            </span>
-                            <span className="text-accent font-medium ml-2">
-                              Economize {periodo.desconto}%
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </CardHeader>
-
-                    <CardContent className="space-y-6">
-                      {/* Benefícios */}
-                      <ul className="space-y-3">
-                        {plano.beneficios.map((beneficio, index) => (
-                          <li key={index} className="flex items-start gap-3">
-                            <div className="text-primary mt-0.5 flex-shrink-0">
-                              {beneficio.icone}
-                            </div>
-                            <span className="text-sm text-muted-foreground leading-relaxed">
-                              {beneficio.texto}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-
-                      {/* Botões de ação */}
-                      <div className="space-y-3 pt-4">
-                        <Button
-                          onClick={() => handleAssinar(plano.id)}
-                          size="lg"
-                          className="w-full group"
-                          variant={plano.popular ? "default" : "outline"}
-                          disabled={isLoading}
+            {/* Planos Individuais e Familiares */}
+            <div className="space-y-12">
+              {/* Grupo: Sem especialistas */}
+              <div>
+                <h3 className="text-2xl font-bold text-center text-foreground mb-8">
+                  Sem Especialistas
+                </h3>
+                <div className="grid md:grid-cols-2 gap-8">
+                  {novosPlanosData
+                    .filter(plano => plano.id.includes("sem_especialistas"))
+                    .map((plano) => {
+                      const meses = parseInt(duracaoSelecionada);
+                      const precoComDesconto = calcularPreco(plano.precoBase, meses);
+                      const precoMensal = precoComDesconto / meses;
+                      const precoDiario = precoMensal / 30;
+                      const periodo = periodos.find(p => p.meses === duracaoSelecionada);
+                      
+                      return (
+                        <Card 
+                          key={plano.id} 
+                          className="relative transition-all duration-300 hover:shadow-lg hover:border-primary/30"
                         >
-                          {isLoading ? "Processando..." : "Assinar Plano"}
-                          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                        </Button>
-                        
-                        <div className="grid grid-cols-2 gap-2">
-                          <Button variant="outline" size="sm" className="w-full">
-                            Saiba Mais
-                          </Button>
-                          <Button variant="outline" size="sm" className="w-full">
-                            Solicitar Proposta
-                          </Button>
+                          <CardHeader className="text-center pb-4">
+                            <div className="flex justify-center mb-4">
+                              {plano.icone}
+                            </div>
+                            <CardTitle className="text-xl font-bold text-foreground">
+                              {plano.nome}
+                            </CardTitle>
+                            <div className="text-center">
+                              <div className="text-3xl font-bold text-primary mb-2">
+                                {formataPreco(precoMensal / 100)}
+                                <span className="text-lg font-normal text-muted-foreground">/mês</span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Equivale a {formataPreco(precoDiario / 100)}/dia
+                              </div>
+                              {periodo && periodo.desconto > 0 && (
+                                <div className="text-sm text-muted-foreground mt-2">
+                                  <span className="line-through">
+                                    {formataPreco(plano.precoBase / 100)}
+                                  </span>
+                                  <span className="text-accent font-medium ml-2">
+                                    Economize {periodo.desconto}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-6">
+                            <ul className="space-y-3">
+                              {plano.beneficios.map((beneficio, index) => (
+                                <li key={index} className="flex items-start gap-3">
+                                  <div className="text-primary mt-0.5 flex-shrink-0">
+                                    {beneficio.icone}
+                                  </div>
+                                  <span className="text-sm text-muted-foreground leading-relaxed">
+                                    {beneficio.texto}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="pt-4">
+                              <Button
+                                onClick={() => handleAssinar(plano.id)}
+                                size="lg"
+                                className="w-full group"
+                                disabled={isLoading}
+                              >
+                                {isLoading ? "Processando..." : "Assinar Plano"}
+                                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Grupo: Com especialistas */}
+              <div>
+                <h3 className="text-2xl font-bold text-center text-foreground mb-8">
+                  Com Especialistas
+                </h3>
+                <div className="grid md:grid-cols-2 gap-8">
+                  {novosPlanosData
+                    .filter(plano => plano.id.includes("com_especialistas"))
+                    .map((plano) => {
+                      const meses = parseInt(duracaoSelecionada);
+                      const precoComDesconto = calcularPreco(plano.precoBase, meses);
+                      const precoMensal = precoComDesconto / meses;
+                      const precoDiario = precoMensal / 30;
+                      const periodo = periodos.find(p => p.meses === duracaoSelecionada);
+                      
+                      return (
+                        <Card 
+                          key={plano.id} 
+                          className={`relative transition-all duration-300 hover:shadow-lg ${
+                            plano.popular 
+                              ? "ring-2 ring-primary shadow-lg border-primary/20" 
+                              : "hover:border-primary/30"
+                          }`}
+                        >
+                          {plano.popular && (
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                              <Badge className="bg-primary text-primary-foreground px-4 py-1">
+                                <Star className="h-3 w-3 mr-1" />
+                                Mais Popular
+                              </Badge>
+                            </div>
+                          )}
+
+                          <CardHeader className="text-center pb-4">
+                            <div className="flex justify-center mb-4">
+                              {plano.icone}
+                            </div>
+                            <CardTitle className="text-xl font-bold text-foreground">
+                              {plano.nome}
+                            </CardTitle>
+                            <div className="text-center">
+                              <div className="text-3xl font-bold text-primary mb-2">
+                                {formataPreco(precoMensal / 100)}
+                                <span className="text-lg font-normal text-muted-foreground">/mês</span>
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                Equivale a {formataPreco(precoDiario / 100)}/dia
+                              </div>
+                              {periodo && periodo.desconto > 0 && (
+                                <div className="text-sm text-muted-foreground mt-2">
+                                  <span className="line-through">
+                                    {formataPreco(plano.precoBase / 100)}
+                                  </span>
+                                  <span className="text-accent font-medium ml-2">
+                                    Economize {periodo.desconto}%
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-6">
+                            <ul className="space-y-3">
+                              {plano.beneficios.map((beneficio, index) => (
+                                <li key={index} className="flex items-start gap-3">
+                                  <div className="text-primary mt-0.5 flex-shrink-0">
+                                    {beneficio.icone}
+                                  </div>
+                                  <span className="text-sm text-muted-foreground leading-relaxed">
+                                    {beneficio.texto}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+
+                            <div className="pt-4">
+                              <Button
+                                onClick={() => handleAssinar(plano.id)}
+                                size="lg"
+                                className="w-full group"
+                                variant={plano.popular ? "default" : "outline"}
+                                disabled={isLoading}
+                              >
+                                {isLoading ? "Processando..." : "Assinar Plano"}
+                                <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Plano Empresarial */}
+              <div>
+                <h3 className="text-2xl font-bold text-center text-foreground mb-8">
+                  Plano Empresarial
+                </h3>
+                <Card className="mx-auto max-w-4xl bg-gradient-to-br from-primary/5 to-secondary/10 border-primary/20">
+                  <CardHeader className="text-center pb-6">
+                    <div className="flex justify-center mb-4">
+                      <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
+                        <Crown className="h-10 w-10 text-primary" />
+                      </div>
+                    </div>
+                    <CardTitle className="text-3xl font-bold text-foreground mb-4">
+                      Plano Empresarial
+                    </CardTitle>
+                    <CardDescription className="text-lg text-muted-foreground">
+                      Cuidado médico ágil a um clique da sua equipe
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="space-y-8">
+                    {/* Benefícios do plano empresarial */}
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Plano personalizado</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Reduza as faltas na sua empresa</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Em conformidade com a nova NR1, diminuindo processos trabalhistas</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Atendimento humanizado e rápido</span>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Plataforma simples, segura e intuitiva</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Conteúdos exclusivos de saúde e prevenção</span>
+                        </div>
+                        <div className="flex items-start gap-3">
+                          <Check className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-muted-foreground">Disque denúncia e acompanhamento de riscos</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botões do plano empresarial */}
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
+                      <Button 
+                        asChild
+                        variant="outline" 
+                        size="lg" 
+                        className="px-8"
+                      >
+                        <a href="/empresas">
+                          Saiba Mais
+                        </a>
+                      </Button>
+                      <Button 
+                        onClick={() => setIsModalOpen(true)}
+                        size="lg" 
+                        className="px-8"
+                      >
+                        Solicitar Proposta
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </div>
         </section>
