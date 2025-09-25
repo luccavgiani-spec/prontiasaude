@@ -138,6 +138,34 @@ const AreaDoPaciente = () => {
           </Alert>
         )}
 
+        {/* Quick Actions Section */}
+        <div className="mb-8">
+          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <h2 className="text-2xl font-semibold text-foreground">Nossos Serviços</h2>
+                <p className="text-muted-foreground">
+                  Escolha o atendimento que você precisa
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
+                  <Button asChild size="lg" className="flex-1">
+                    <Link to="/servicos">
+                      <Stethoscope className="h-5 w-5 mr-2" />
+                      Ver Todos os Serviços
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="lg" className="flex-1">
+                    <Link to="/servicos/renovacao-receitas">
+                      <Pill className="h-5 w-5 mr-2" />
+                      Renovar Receitas
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Dados Pessoais */}
           <Card>
@@ -320,38 +348,6 @@ const AreaDoPaciente = () => {
               )}
             </CardContent>
           </Card>
-        </div>
-
-        {/* Actions */}
-        <div className="mt-8 text-center">
-          {canScheduleAppointments ? (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-foreground">Pronto para nova consulta?</h2>
-              <p className="text-muted-foreground">
-                Escolha o serviço desejado e realize o agendamento automático.
-              </p>
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
-                <Link to="/servicos">Nova Consulta</Link>
-              </Button>
-              {!patient?.intake_complete && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Recomendamos completar seus <Link to="/intake/antecedentes" className="text-primary hover:underline">antecedentes médicos</Link> para melhor atendimento.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold text-foreground">Complete seu cadastro</h2>
-              <p className="text-muted-foreground">
-                Finalize o preenchimento dos seus dados para poder agendar consultas.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button asChild variant="outline">
-                  <Link to="/completar-perfil">Completar perfil</Link>
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
