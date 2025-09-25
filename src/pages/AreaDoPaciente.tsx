@@ -151,7 +151,7 @@ const AreaDoPaciente = () => {
                   <Button asChild size="lg" className="flex-1">
                     <Link to="/servicos">
                       <Stethoscope className="h-5 w-5 mr-2" />
-                      Ver Todos os Serviços
+                      Nova consulta
                     </Link>
                   </Button>
                   <Button asChild variant="outline" size="lg" className="flex-1">
