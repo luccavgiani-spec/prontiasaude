@@ -73,6 +73,8 @@ const ServicoDetalhe = () => {
               <p className="text-xl text-muted-foreground mb-8">
                 {servico.slug === "renovacao" 
                   ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança."
+                  : servico.slug === "laudos_psicologicos"
+                  ? "Necessário consulta prévia com psicólogo."
                   : `${servico.descricao}.`
                 }
               </p>
