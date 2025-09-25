@@ -89,8 +89,8 @@ export const PLANOS = [
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
       "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
-      "• Nutrição (2x no mês)",
-      "• Personal Trainer (2x no mês)",
+      "• Nutrição",
+      "• Personal Trainer",
       "• Psicólogo (2x no mês)"
     ],
     popular: true
@@ -105,8 +105,8 @@ export const PLANOS = [
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
       "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
-      "• Nutrição (2x no mês)",
-      "• Personal Trainer (2x no mês)",
+      "• Nutrição",
+      "• Personal Trainer",
       "• Psicólogo (2x no mês)",
       "Suporte dedicado"
     ],
