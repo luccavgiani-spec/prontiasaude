@@ -27,7 +27,7 @@
 
 .gallery-item {
   width: 300px;
-  height: 450px;
+  height: 500px;
   margin: 0 20px;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.1);
@@ -69,7 +69,6 @@
   justify-content: flex-start;
   color: var(--text-color);
   text-align: center;
-  overflow-y: auto;
 }
 
 .item-content h3 {
@@ -98,7 +97,7 @@
 @media (max-width: 768px) {
   .gallery-item {
     width: 250px;
-    height: 320px;
+    height: 400px;
     margin: 0 15px;
   }
   
