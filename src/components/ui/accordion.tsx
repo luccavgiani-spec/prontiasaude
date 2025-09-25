@@ -41,15 +41,57 @@ AccordionTrigger.displayName = AccordionPrimitive.Trigger.displayName
 const AccordionContent = React.forwardRef<
   React.ElementRef<typeof AccordionPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <AccordionPrimitive.Content
-    ref={ref}
-    className="overflow-hidden text-sm transition-all data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
-    {...props}
-  >
-    <div className={cn("pb-4 pt-0", className)}>{children}</div>
-  </AccordionPrimitive.Content>
-))
+>(({ className, children, ...props }, ref) => {
+  const formatContent = (content: React.ReactNode) => {
+    if (typeof content === 'string') {
+      // Split by bullet points and format as paragraphs
+      const parts = content.split('•').filter(part => part.trim());
+      
+      if (parts.length > 1) {
+        return (
+          <div className="space-y-2">
+            <p>{parts[0].trim()}</p>
+            <ul className="space-y-1 ml-4">
+              {parts.slice(1).map((part, index) => (
+                <li key={index} className="list-disc">
+                  {part.trim()}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      }
+      
+      // Handle regular paragraphs by splitting on double line breaks
+      const paragraphs = content.split('\n\n').filter(p => p.trim());
+      if (paragraphs.length > 1) {
+        return (
+          <div className="space-y-3">
+            {paragraphs.map((paragraph, index) => (
+              <p key={index}>{paragraph.trim()}</p>
+            ))}
+          </div>
+        );
+      }
+      
+      return <p>{content}</p>;
+    }
+    
+    return children;
+  };
+
+  return (
+    <AccordionPrimitive.Content
+      ref={ref}
+      className="overflow-hidden text-sm transition-all data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down"
+      {...props}
+    >
+      <div className={cn("pb-4 pt-0", className)}>
+        {formatContent(children)}
+      </div>
+    </AccordionPrimitive.Content>
+  );
+})
 
 AccordionContent.displayName = AccordionPrimitive.Content.displayName
 
