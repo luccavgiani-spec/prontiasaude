@@ -201,6 +201,9 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 <div className="text-center mb-6">
+                  {servico.slug === "psicologa" && (
+                    <p className="text-muted-foreground mb-2">À partir de</p>
+                  )}
                   <div className="text-3xl font-bold text-foreground mb-2">
                     {formataPreco(servico.precoBase)}
                   </div>
@@ -208,7 +211,13 @@ const ServicoDetalhe = () => {
                 </div>
 
                 <Button 
-                  onClick={() => handleAgendar()}
+                  onClick={() => {
+                    if (servico.slug === "psicologa") {
+                      window.location.href = "/psicologo";
+                    } else {
+                      handleAgendar();
+                    }
+                  }}
                   variant="medical"
                   size="lg"
                   className="w-full mb-4"
