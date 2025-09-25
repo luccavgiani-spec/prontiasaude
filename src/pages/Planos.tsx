@@ -208,23 +208,23 @@ const Planos = () => {
             </p>
 
             {/* Simulador de preços dinâmico */}
-            <div className="flex justify-center mb-8">
-              <div className="inline-flex bg-muted/50 rounded-2xl p-1.5">
+            <div className="flex justify-center mb-12">
+              <div className="inline-flex bg-white rounded-2xl p-2 shadow-lg border-2 border-primary/20">
                 {periodos.map((periodo) => (
                   <button
                     key={periodo.meses}
                     onClick={() => setDuracaoSelecionada(periodo.meses)}
-                    className={`relative px-6 py-3 rounded-xl text-sm font-medium transition-all ${
+                    className={`relative px-8 py-4 rounded-xl text-base font-semibold transition-all duration-300 ${
                       duracaoSelecionada === periodo.meses
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "text-muted-foreground hover:text-foreground"
+                        ? "bg-primary text-primary-foreground shadow-lg scale-105 z-10"
+                        : "text-muted-foreground hover:text-foreground hover:bg-primary/5"
                     }`}
                   >
                     {periodo.label}
                     {periodo.desconto > 0 && (
                       <Badge 
                         variant="secondary" 
-                        className="absolute -top-2 -right-2 bg-accent text-accent-foreground text-xs px-2 py-1"
+                        className="absolute -top-3 -right-3 bg-green-500 text-white text-xs px-3 py-1 font-bold shadow-md"
                       >
                         -{periodo.desconto}%
                       </Badge>
