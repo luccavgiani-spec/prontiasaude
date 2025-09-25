@@ -128,15 +128,15 @@ const Empresas = () => {
       {/* Hero Section */}
       <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5">
         <div className="container mx-auto max-w-4xl text-center">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
             Para Empresas
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            Na Prontia Saúde, cuidamos da saúde do seu time como se fossem parte da nossa família. 
-            Mais do que telemedicina, oferecemos um cuidado completo, com foco em prevenção e bem-estar 
-            contínuo — tudo em um só lugar. Com acesso rápido a médicos, sua equipe trata antes de agravar, 
-            reduzindo afastamentos e aumentando a produtividade. Estamos sempre pensando no melhor para o 
-            funcionário e para a empresa.
+          <h2 className="text-xl md:text-2xl text-primary font-semibold mb-6">
+            Quem cuida da sua equipe, cuida do futuro da sua empresa
+          </h2>
+          <p className="text-base md:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
+            Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
+            Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
         </div>
       </section>
