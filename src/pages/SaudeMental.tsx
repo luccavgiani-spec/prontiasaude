@@ -9,9 +9,11 @@ interface ContentItem {
   id: string;
   title: string;
   description: string;
-  type: 'video' | 'pdf' | 'link' | 'post';
+  type: 'video' | 'pdf' | 'link' | 'post' | 'image';
   url?: string;
   content?: string;
+  file?: File;
+  fileUrl?: string;
 }
 
 const SaudeMental = () => {
@@ -74,6 +76,7 @@ const SaudeMental = () => {
                     {item.type === 'pdf' && '📄'}
                     {item.type === 'link' && '🔗'}
                     {item.type === 'post' && '📝'}
+                    {item.type === 'image' && '🖼️'}
                     {item.title}
                   </CardTitle>
                   <CardDescription>{item.description}</CardDescription>
@@ -86,12 +89,21 @@ const SaudeMental = () => {
                       </a>
                     </Button>
                   )}
-                  {item.type === 'pdf' && item.url && (
+                  {item.type === 'pdf' && item.fileUrl && (
                     <Button asChild className="w-full">
-                      <a href={item.url} target="_blank" rel="noopener noreferrer">
+                      <a href={item.fileUrl} download={item.file?.name || item.title + '.pdf'}>
                         Baixar PDF
                       </a>
                     </Button>
+                  )}
+                  {item.type === 'image' && item.fileUrl && (
+                    <div className="w-full">
+                      <img 
+                        src={item.fileUrl} 
+                        alt={item.title}
+                        className="w-full rounded-lg object-cover max-h-64"
+                      />
+                    </div>
                   )}
                   {item.type === 'video' && item.url && (
                     <div className="aspect-video">

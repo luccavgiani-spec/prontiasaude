@@ -81,8 +81,13 @@ const AdminDashboard = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const fileUrl = URL.createObjectURL(file);
-      setContentForm(prev => ({ ...prev, file, fileUrl }));
+      // Convert file to base64 for permanent storage
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        setContentForm(prev => ({ ...prev, file, fileUrl: base64 }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -138,7 +143,15 @@ const AdminDashboard = () => {
 
     const newContent: ContentItem = {
       id: Date.now().toString(),
-      ...contentForm,
+      title: contentForm.title,
+      description: contentForm.description,
+      type: contentForm.type,
+      url: contentForm.url,
+      content: contentForm.content,
+      file: contentForm.file,
+      fileUrl: contentForm.fileUrl,
+      destination: contentForm.destination,
+      blogCategory: contentForm.blogCategory,
       createdAt: new Date()
     };
 
@@ -154,11 +167,11 @@ const AdminDashboard = () => {
       case 'playlists':
         storageKey = 'playlists-content';
         break;
-      case 'receitas':
-        storageKey = 'receitas-content';
+      case 'receitas-saudaveis':
+        storageKey = 'receitas-saudaveis-content';
         break;
       case 'blog':
-        storageKey = `blog-${contentForm.blogCategory}-content`;
+        storageKey = 'blog-content';
         break;
     }
 
@@ -365,11 +378,10 @@ const AdminDashboard = () => {
                     <SelectValue placeholder="Escolha onde publicar" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="saude-mental">🌱 Saúde Mental</SelectItem>
-                    <SelectItem value="livros">📚 Livros</SelectItem>
-                    <SelectItem value="playlists">🎧 Playlists</SelectItem>
-                    <SelectItem value="receitas">🥗 Receitas Saudáveis</SelectItem>
-                    <SelectItem value="blog">📝 Blog</SelectItem>
+                  <SelectItem value="receitas-saudaveis">Receitas Saudáveis</SelectItem>
+                  <SelectItem value="playlists">Playlists</SelectItem>
+                  <SelectItem value="livros">Livros</SelectItem>
+                  <SelectItem value="blog">Blog</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -382,10 +394,18 @@ const AdminDashboard = () => {
                       <SelectValue placeholder="Escolha a categoria" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="saude-mental">Saúde Mental</SelectItem>
-                      <SelectItem value="nutricao">Nutrição</SelectItem>
-                      <SelectItem value="medicina">Medicina</SelectItem>
-                      <SelectItem value="bem-estar">Bem-estar</SelectItem>
+                      <SelectItem value="Telemedicina">Telemedicina</SelectItem>
+                      <SelectItem value="Cuidados">Cuidados</SelectItem>
+                      <SelectItem value="Receitas">Receitas</SelectItem>
+                      <SelectItem value="Digital">Digital</SelectItem>
+                      <SelectItem value="Atestados">Atestados</SelectItem>
+                      <SelectItem value="Trabalho">Trabalho</SelectItem>
+                      <SelectItem value="Prevenção">Prevenção</SelectItem>
+                      <SelectItem value="Saúde">Saúde</SelectItem>
+                      <SelectItem value="Emergência">Emergência</SelectItem>
+                      <SelectItem value="Urgência">Urgência</SelectItem>
+                      <SelectItem value="Saúde Mental">Saúde Mental</SelectItem>
+                      <SelectItem value="Bem-estar">Bem-estar</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -422,9 +442,38 @@ const AdminDashboard = () => {
                         </Button>
                       </div>
                       <p className="text-sm text-muted-foreground mb-2">{item.description}</p>
-                      <div className="flex gap-2">
-                        <Badge variant="secondary">{item.type}</Badge>
-                        <Badge variant="outline">{item.destination}</Badge>
+                      
+                      {/* Preview do conteúdo */}
+                      {item.type === 'image' && item.fileUrl && (
+                        <div className="mt-2">
+                          <img src={item.fileUrl} alt={item.title} className="w-full h-32 object-cover rounded" />
+                        </div>
+                      )}
+                      {item.type === 'video' && item.url && (
+                        <div className="mt-2 aspect-video bg-muted rounded flex items-center justify-center">
+                          <span className="text-sm">🎥 Vídeo: {item.url}</span>
+                        </div>
+                      )}
+                      {item.type === 'pdf' && item.fileUrl && (
+                        <div className="mt-2 p-2 bg-muted rounded">
+                          <span className="text-sm">📄 PDF: {item.file?.name || 'Arquivo'}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-between items-center mt-2">
+                        <div className="flex gap-2">
+                          <Badge variant="secondary">
+                            {item.type === 'video' && '🎥 Vídeo'}
+                            {item.type === 'pdf' && '📄 PDF'}
+                            {item.type === 'link' && '🔗 Link'}
+                            {item.type === 'post' && '📝 Post'}
+                            {item.type === 'image' && '🖼️ Imagem'}
+                          </Badge>
+                          <Badge variant="outline">{item.destination}</Badge>
+                          {item.blogCategory && (
+                            <Badge variant="outline">{item.blogCategory}</Badge>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))

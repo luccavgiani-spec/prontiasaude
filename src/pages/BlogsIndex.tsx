@@ -1,16 +1,64 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { blogPosts } from "@/data/blogPosts";
 const basePath = "/blogs-artigos"; // ajuste se sua rota atual for outra
 
+interface DynamicBlogPost {
+  id: string;
+  title: string;
+  description: string;
+  type: 'video' | 'pdf' | 'link' | 'post' | 'image';
+  url?: string;
+  content?: string;
+  file?: File;
+  fileUrl?: string;
+  destination: string;
+  blogCategory?: string;
+  createdAt: Date;
+}
+
 export default function BlogsIndex() {
+  const [dynamicPosts, setDynamicPosts] = useState<DynamicBlogPost[]>([]);
+
+  useEffect(() => {
+    // Load dynamic blog posts from localStorage
+    const savedContent = localStorage.getItem('blog-content');
+    if (savedContent) {
+      setDynamicPosts(JSON.parse(savedContent));
+    }
+  }, []);
   const allTags = useMemo(() => {
     const s = new Set<string>();
     blogPosts.forEach(p => p.tags.forEach(t => s.add(t)));
+    // Add dynamic posts categories
+    dynamicPosts.forEach(p => {
+      if (p.blogCategory) s.add(p.blogCategory);
+    });
     return ["Todos", ...Array.from(s)];
-  }, []);
+  }, [dynamicPosts]);
+  
   const [active, setActive] = useState<string>("Todos");
-  const filtered = useMemo(() => active === "Todos" ? blogPosts : blogPosts.filter(p => p.tags.includes(active)), [active]);
+  
+  // Combine static and dynamic posts
+  const allPosts = useMemo(() => {
+    const staticPosts = blogPosts;
+    const dynamicPostsFormatted = dynamicPosts.map(post => ({
+      slug: `dynamic-${post.id}`,
+      title: post.title,
+      subtitle: post.description,
+      imageUrl: post.fileUrl || '/placeholder.svg',
+      imageAlt: post.title,
+      tags: post.blogCategory ? [post.blogCategory] : [],
+      date: new Date(post.createdAt).toISOString(),
+      content: post.content ? [post.content] : []
+    }));
+    return [...staticPosts, ...dynamicPostsFormatted];
+  }, [dynamicPosts]);
+  
+  const filtered = useMemo(() => 
+    active === "Todos" ? allPosts : allPosts.filter(p => p.tags.includes(active)), 
+    [active, allPosts]
+  );
   return <section className="mx-auto max-w-6xl px-4 py-10">
       <header className="mb-6 text-center">
         <h1 className="text-3xl md:text-4xl font-semibold text-neutral-900">Blog</h1>
