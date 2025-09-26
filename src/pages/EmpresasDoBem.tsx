@@ -10,6 +10,7 @@ import { Heart, Globe, Handshake, Users } from "lucide-react";
 const EmpresasDoBem = () => {
   const [formData, setFormData] = useState({
     nomeOng: "",
+    cnpj: "",
     siteRedes: "",
     contato: "",
     descricao: ""
@@ -30,6 +31,7 @@ const EmpresasDoBem = () => {
       alert('ONG cadastrada com sucesso! Obrigado por participar do programa.');
       setFormData({
         nomeOng: "",
+        cnpj: "",
         siteRedes: "",
         contato: "",
         descricao: ""
@@ -142,6 +144,14 @@ const EmpresasDoBem = () => {
                   ...prev,
                   nomeOng: e.target.value
                 }))} placeholder="Ex: Instituto Esperança" required className="mt-2" />
+                </div>
+
+                <div>
+                  <Label htmlFor="cnpj" className="text-base">CNPJ</Label>
+                  <Input id="cnpj" value={formData.cnpj} onChange={e => setFormData(prev => ({
+                  ...prev,
+                  cnpj: e.target.value
+                }))} placeholder="00.000.000/0000-00" className="mt-2" />
                 </div>
 
                 <div>
