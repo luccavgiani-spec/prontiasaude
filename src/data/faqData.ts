@@ -30,7 +30,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "Existe coparticipação ou carência no plano?",
-    answer: "Não há coparticipação nas consultas onlines."
+    answer: "Não há coparticipação nas consultas online. O pagamento é apenas pelo serviço contratado. Não existe carência para consultas de telemedicina – você pode agendar e realizar sua consulta imediatamente após a contratação do plano. • Sem taxas extras ou valores adicionais por consulta • Acesso imediato a todos os especialistas disponíveis • Flexibilidade total para agendar conforme sua necessidade • Pagamento único mensal com consultas ilimitadas incluídas"
   },
   {
     question: "Existe diferença entre psicoterapia online e presencial?",
