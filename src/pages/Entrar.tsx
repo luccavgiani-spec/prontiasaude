@@ -42,6 +42,21 @@ const Entrar = () => {
       return;
     }
 
+    // Check for admin credentials
+    if (email === "admin@admin.com" && password === "adminprontia123") {
+      setIsLoading(true);
+      localStorage.setItem('admin-logged-in', 'true');
+      toast({
+        title: "Boas vindas, Victória!",
+        description: "Redirecionando para o painel administrativo...",
+      });
+      setTimeout(() => {
+        navigate('/admin/dashboard');
+        setIsLoading(false);
+      }, 1000);
+      return;
+    }
+
     setIsLoading(true);
     
     const { error } = await supabase.auth.signInWithPassword({
