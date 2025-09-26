@@ -62,7 +62,12 @@ serve(async (req) => {
       case 'upsert_patient': {
         const { name, email, phone_e164 } = body as UpsertPatientRequest;
         
-        // Save to Supabase (assuming we have a patients table or auth.users)
+        console.log('=== PATIENT REGISTRATION START ===');
+        console.log('Received data:', { name, email, phone_e164 });
+        console.log('GAS_BASE URL:', gasBase);
+        
+        // Save to Supabase auth.users
+        console.log('Creating user in Supabase auth...');
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
           email_confirm: true,
@@ -78,9 +83,9 @@ serve(async (req) => {
           throw authError;
         }
 
-        console.log('User created/exists in Supabase:', authData);
+        console.log('Supabase auth result:', authData ? 'Success' : 'User already exists');
 
-        // Call GAS API
+        // Prepare GAS API payload
         const gasPayload = {
           first_name: name.split(' ')[0] || '',
           last_name: name.split(' ').slice(1).join(' ') || '',
@@ -88,17 +93,31 @@ serve(async (req) => {
           phone: phone_e164
         };
 
+        console.log('Calling GAS API with payload:', gasPayload);
+        console.log('Full GAS URL:', `${gasBase}?path=site-register`);
+
+        // Call GAS API
         const gasResponse = await fetch(`${gasBase}?path=site-register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(gasPayload)
         });
 
+        console.log('GAS response status:', gasResponse.status);
+        console.log('GAS response ok:', gasResponse.ok);
+        
         const gasResult = await gasResponse.text();
-        console.log('GAS register response:', gasResult);
+        console.log('GAS response body:', gasResult);
+        
+        console.log('=== PATIENT REGISTRATION END ===');
 
         return new Response(
-          JSON.stringify({ success: true, supabase: authData, gas: gasResult }),
+          JSON.stringify({ 
+            success: true, 
+            supabase: authData ? 'created' : 'exists', 
+            gas: gasResult,
+            gasStatus: gasResponse.status
+          }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }

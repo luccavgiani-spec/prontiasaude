@@ -1,5 +1,4 @@
 import { supabase } from '@/integrations/supabase/client';
-import { gasRegisterPatient } from './gas-api';
 
 // Tipos para as respostas da API
 export interface UpsertPatientRequest {
@@ -48,13 +47,15 @@ export interface PatientSummaryResponse {
 // Cadastro/atualização de paciente
 export async function upsertPatient(data: UpsertPatientRequest): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log('Upserting patient via Supabase Edge Function:', data);
+    console.log('Registering patient via Edge Function:', data);
     
-    // First call Supabase
+    // Call the patient-operations edge function that handles both Supabase and GAS
     const { data: result, error } = await supabase.functions.invoke('patient-operations', {
       body: {
         operation: 'upsert_patient',
-        ...data
+        name: data.name,
+        email: data.email,
+        phone_e164: data.phone_e164
       }
     });
 
@@ -63,22 +64,7 @@ export async function upsertPatient(data: UpsertPatientRequest): Promise<{ succe
       throw new Error(error.message);
     }
 
-    console.log('Patient upserted successfully in Supabase:', result);
-
-    // Then call GAS API in parallel (don't block if it fails)
-    const nameParts = data.name.split(' ');
-    const gasData = {
-      first_name: nameParts[0] || '',
-      last_name: nameParts.slice(1).join(' ') || '',
-      email: data.email,
-      phone: data.phone_e164
-    };
-
-    // Call GAS API but don't fail the main operation if it errors
-    gasRegisterPatient(gasData).catch(error => {
-      console.warn('GAS registration failed (non-blocking):', error);
-    });
-
+    console.log('Patient registration completed:', result);
     return { success: true };
   } catch (error) {
     console.error('Erro ao cadastrar paciente:', error);
