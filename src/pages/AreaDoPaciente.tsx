@@ -6,64 +6,47 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { 
-  User, 
-  Heart, 
-  Baby, 
-  Pill, 
-  Stethoscope, 
-  CheckCircle, 
-  AlertCircle, 
-  Edit,
-  LogOut,
-  Phone,
-  MapPin,
-  Calendar,
-  Shield
-} from "lucide-react";
+import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
 import { formatCPF } from "@/lib/validations";
-
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [patientPlan, setPatientPlan] = useState<PatientPlan | null>(null);
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
   const navigate = useNavigate();
-
   useEffect(() => {
     const loadPatientData = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session?.user?.id) {
         window.location.replace('/entrar');
         return;
       }
-      
       setCurrentUser(session.user);
-      
-      const { data, error } = await supabase
-        .from('patients')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-
-      if (error) { 
+      const {
+        data,
+        error
+      } = await supabase.from('patients').select('*').eq('id', session.user.id).maybeSingle();
+      if (error) {
         console.error('Fetch patient error:', error);
-        window.location.replace('/completar-perfil'); 
-        return; 
-      }
-
-      if (!data?.profile_complete) {
-        window.location.replace('/completar-perfil'); 
+        window.location.replace('/completar-perfil');
         return;
       }
-      
-      
+      if (!data?.profile_complete) {
+        window.location.replace('/completar-perfil');
+        return;
+      }
       setPatient(data as Patient);
-      
+
       // Load patient plan
       try {
         const planData = await getPatientPlan(session.user.email);
@@ -71,46 +54,40 @@ const AreaDoPaciente = () => {
       } catch (error) {
         console.error('Erro ao carregar plano do paciente:', error);
       }
-      
       setIsLoading(false);
     };
-
     loadPatientData();
   }, []);
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast({
       title: "Logout realizado",
-      description: "Você foi desconectado com sucesso.",
+      description: "Você foi desconectado com sucesso."
     });
     navigate('/entrar');
   };
-
   const getPregnancyStatusText = (status?: string) => {
     switch (status) {
-      case 'never': return 'Nunca esteve grávida';
-      case 'pregnant_now': return 'Gestante atualmente';
-      case 'pregnant_past': return 'Gestação anterior';
-      default: return 'Não informado';
+      case 'never':
+        return 'Nunca esteve grávida';
+      case 'pregnant_now':
+        return 'Gestante atualmente';
+      case 'pregnant_past':
+        return 'Gestação anterior';
+      default:
+        return 'Não informado';
     }
   };
-
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
+    return <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <User className="h-8 w-8 animate-pulse mx-auto mb-4 text-primary" />
           <p className="text-muted-foreground">Carregando seus dados...</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   const canScheduleAppointments = patient?.profile_complete;
-
-  return (
-    <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
+  return <div className="min-h-screen py-12 px-4 sm:px-6 lg:px-8 bg-background">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-start mb-8">
@@ -129,14 +106,12 @@ const AreaDoPaciente = () => {
         </div>
 
         {/* Status Alert */}
-        {!patient?.intake_complete && (
-          <Alert className="mb-8 border-blue-200 bg-blue-50">
+        {!patient?.intake_complete && <Alert className="mb-8 border-blue-200 bg-blue-50">
             <AlertCircle className="h-4 w-4 text-blue-600" />
             <AlertDescription className="text-blue-800">
               Complete seus antecedentes médicos para melhorar a qualidade do seu atendimento.
             </AlertDescription>
-          </Alert>
-        )}
+          </Alert>}
 
         {/* Quick Actions Section */}
         <div className="mb-8">
@@ -174,11 +149,7 @@ const AreaDoPaciente = () => {
                 <User className="h-5 w-5 text-primary" />
                 Dados Pessoais
                 <Badge variant={patient?.profile_complete ? "default" : "secondary"}>
-                  {patient?.profile_complete ? (
-                    <><CheckCircle className="h-3 w-3 mr-1" /> Completo</>
-                  ) : (
-                    <><AlertCircle className="h-3 w-3 mr-1" /> Pendente</>
-                  )}
+                  {patient?.profile_complete ? <><CheckCircle className="h-3 w-3 mr-1" /> Completo</> : <><AlertCircle className="h-3 w-3 mr-1" /> Pendente</>}
                 </Badge>
               </CardTitle>
               <CardDescription>
@@ -227,11 +198,9 @@ const AreaDoPaciente = () => {
                 </Label>
                 <p className="text-foreground">
                   {formatPlanName(patientPlan?.plan_code)}
-                  {patientPlan?.plan_expires_at && (
-                    <span className="text-xs ml-2 text-muted-foreground">
+                  {patientPlan?.plan_expires_at && <span className="text-xs ml-2 text-muted-foreground">
                       (válido até {formatPlanExpiry(patientPlan.plan_expires_at)})
-                    </span>
-                  )}
+                    </span>}
                 </p>
               </div>
               
@@ -240,10 +209,7 @@ const AreaDoPaciente = () => {
                   <Shield className="h-3 w-3" /> Termos aceitos em
                 </Label>
                 <p className="text-foreground">
-                  {patient?.terms_accepted_at 
-                    ? new Date(patient.terms_accepted_at).toLocaleDateString('pt-BR')
-                    : 'Não aceito'
-                  }
+                  {patient?.terms_accepted_at ? new Date(patient.terms_accepted_at).toLocaleDateString('pt-BR') : 'Não aceito'}
                 </p>
               </div>
               
@@ -263,11 +229,7 @@ const AreaDoPaciente = () => {
                 <Heart className="h-5 w-5 text-destructive" />
                 Antecedentes Médicos
                 <Badge variant={patient?.intake_complete ? "default" : "secondary"}>
-                  {patient?.intake_complete ? (
-                    <><CheckCircle className="h-3 w-3 mr-1" /> Completo</>
-                  ) : (
-                    <><AlertCircle className="h-3 w-3 mr-1" /> Pendente</>
-                  )}
+                  {patient?.intake_complete ? <><CheckCircle className="h-3 w-3 mr-1" /> Completo</> : <><AlertCircle className="h-3 w-3 mr-1" /> Pendente</>}
                 </Badge>
               </CardTitle>
               <CardDescription>
@@ -280,10 +242,7 @@ const AreaDoPaciente = () => {
                   <Heart className="h-3 w-3" /> Alergias
                 </Label>
                 <p className="text-foreground">
-                  {patient?.has_allergies 
-                    ? patient.allergies || 'Sim, mas não especificado'
-                    : 'Não possui alergias'
-                  }
+                  {patient?.has_allergies ? patient.allergies || 'Sim, mas não especificado' : 'Não possui alergias'}
                 </p>
               </div>
               
@@ -301,10 +260,7 @@ const AreaDoPaciente = () => {
                   <Stethoscope className="h-3 w-3" /> Comorbidades
                 </Label>
                 <p className="text-foreground">
-                  {patient?.has_comorbidities 
-                    ? patient.comorbidities || 'Sim, mas não especificado'
-                    : 'Não possui comorbidades'
-                  }
+                  {patient?.has_comorbidities ? patient.comorbidities || 'Sim, mas não especificado' : 'Não possui comorbidades'}
                 </p>
               </div>
               
@@ -313,10 +269,7 @@ const AreaDoPaciente = () => {
                   <Pill className="h-3 w-3" /> Medicamentos contínuos
                 </Label>
                 <p className="text-foreground">
-                  {patient?.has_chronic_meds 
-                    ? patient.chronic_meds || 'Sim, mas não especificado'
-                    : 'Não usa medicamentos contínuos'
-                  }
+                  {patient?.has_chronic_meds ? patient.chronic_meds || 'Sim, mas não especificado' : 'Não usa medicamentos contínuos'}
                 </p>
               </div>
               
@@ -338,25 +291,23 @@ const AreaDoPaciente = () => {
                 <Calendar className="h-5 w-5 text-primary" />
                 Minhas Consultas
               </CardTitle>
-              <CardDescription>
-                Suas consultas são agendadas automaticamente 30 minutos após a confirmação do pagamento.
-              </CardDescription>
+              
             </CardHeader>
             <CardContent>
-              {currentUser?.email && (
-                <MeusAgendamentos userEmail={currentUser.email} />
-              )}
+              {currentUser?.email && <MeusAgendamentos userEmail={currentUser.email} />}
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
 
 // Helper Label component
-const Label = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
-  <span className={`block ${className}`}>{children}</span>
-);
-
+const Label = ({
+  children,
+  className = ""
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) => <span className={`block ${className}`}>{children}</span>;
 export default AreaDoPaciente;
