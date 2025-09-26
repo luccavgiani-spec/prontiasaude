@@ -299,56 +299,45 @@ const AreaDoPaciente = () => {
           </Card>
         </div>
 
-        {/* Recursos de Bem-Estar */}
+        {/* Rótulos de Bem-Estar */}
         <div className="mt-8">
-          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-            <CardContent className="p-6">
-              <div className="text-center space-y-4 mb-8">
-                <h2 className="text-2xl font-semibold text-foreground">Recursos de Bem-Estar</h2>
-                <p className="text-muted-foreground">
-                  Explore nossos recursos exclusivos para cuidar da sua saúde física e mental
-                </p>
+          <div className="flex flex-wrap gap-3 justify-center">
+            <Link to="/saude-mental" className="group">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-green-500/10 to-teal-500/10 border border-green-200 rounded-full hover:from-green-500/20 hover:to-teal-500/20 hover:border-green-300 transition-all duration-200 hover:shadow-md">
+                <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center">
+                  <Leaf className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-medium text-foreground group-hover:text-green-700">Saúde Mental</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Button asChild size="lg" className="h-auto flex-col gap-3 py-6">
-                  <Link to="/saude-mental">
-                    <Leaf className="h-8 w-8" />
-                    <div className="text-center">
-                      <div className="font-semibold">Saúde Mental</div>
-                      <div className="text-xs opacity-90">Equilíbrio e autocuidado</div>
-                    </div>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
-                  <Link to="/livros">
-                    <BookOpen className="h-8 w-8" />
-                    <div className="text-center">
-                      <div className="font-semibold">Livros</div>
-                      <div className="text-xs opacity-90">Conhecimento e inspiração</div>
-                    </div>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
-                  <Link to="/playlists">
-                    <Headphones className="h-8 w-8" />
-                    <div className="text-center">
-                      <div className="font-semibold">Playlists</div>
-                      <div className="text-xs opacity-90">Relaxamento e meditação</div>
-                    </div>
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
-                  <Link to="/receitas-saudaveis">
-                    <UtensilsCrossed className="h-8 w-8" />
-                    <div className="text-center">
-                      <div className="font-semibold">Receitas</div>
-                      <div className="text-xs opacity-90">Alimentação saudável</div>
-                    </div>
-                  </Link>
-                </Button>
+            </Link>
+            
+            <Link to="/livros" className="group">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-200 rounded-full hover:from-blue-500/20 hover:to-indigo-500/20 hover:border-blue-300 transition-all duration-200 hover:shadow-md">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                  <BookOpen className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-medium text-foreground group-hover:text-blue-700">Livros</span>
+              </div>  
+            </Link>
+            
+            <Link to="/playlists" className="group">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-200 rounded-full hover:from-purple-500/20 hover:to-pink-500/20 hover:border-purple-300 transition-all duration-200 hover:shadow-md">
+                <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
+                  <Headphones className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-medium text-foreground group-hover:text-purple-700">Playlists</span>
               </div>
-            </CardContent>
-          </Card>
+            </Link>
+            
+            <Link to="/receitas-saudaveis" className="group">
+              <div className="flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-orange-500/10 to-red-500/10 border border-orange-200 rounded-full hover:from-orange-500/20 hover:to-red-500/20 hover:border-orange-300 transition-all duration-200 hover:shadow-md">
+                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center">
+                  <UtensilsCrossed className="h-4 w-4 text-white" />
+                </div>
+                <span className="font-medium text-foreground group-hover:text-orange-700">Receitas Saudáveis</span>
+              </div>
+            </Link>
+          </div>
         </div>
       </div>
     </div>;
