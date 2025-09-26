@@ -81,28 +81,6 @@ const EmpresasDoBem = () => {
         </div>
       </section>
 
-      {/* Impact Stats */}
-      <section className="py-16 px-4 bg-muted/30">
-        <div className="container mx-auto">
-          <div className="grid md:grid-cols-3 gap-8 text-center">
-            <div className="space-y-2">
-              <Users className="h-12 w-12 text-primary mx-auto" />
-              <h3 className="text-3xl font-bold text-foreground">12+</h3>
-              <p className="text-muted-foreground">ONGs Apoiadas</p>
-            </div>
-            <div className="space-y-2">
-              <Heart className="h-12 w-12 text-primary mx-auto" />
-              <h3 className="text-3xl font-bold text-foreground">R$ 50k+</h3>
-              <p className="text-muted-foreground">Doações Realizadas</p>
-            </div>
-            <div className="space-y-2">
-              <Globe className="h-12 w-12 text-primary mx-auto" />
-              <h3 className="text-3xl font-bold text-foreground">1000+</h3>
-              <p className="text-muted-foreground">Vidas Impactadas</p>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Circular Gallery */}
       <section className="py-16 bg-gradient-to-b from-primary/5 to-transparent">
