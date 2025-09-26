@@ -15,9 +15,11 @@ interface ContentItem {
   id: string;
   title: string;
   description: string;
-  type: 'video' | 'pdf' | 'link' | 'post';
+  type: 'video' | 'pdf' | 'link' | 'post' | 'image';
   url?: string;
   content?: string;
+  file?: File;
+  fileUrl?: string;
   destination: string;
   blogCategory?: string;
   createdAt: Date;
@@ -28,9 +30,11 @@ const AdminDashboard = () => {
   const [contentForm, setContentForm] = useState({
     title: '',
     description: '',
-    type: 'post' as 'video' | 'pdf' | 'link' | 'post',
+    type: 'post' as 'video' | 'pdf' | 'link' | 'post' | 'image',
     url: '',
     content: '',
+    file: null as File | null,
+    fileUrl: '',
     destination: '',
     blogCategory: ''
   });
@@ -74,6 +78,14 @@ const AdminDashboard = () => {
     setContentForm(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const fileUrl = URL.createObjectURL(file);
+      setContentForm(prev => ({ ...prev, file, fileUrl }));
+    }
+  };
+
   const handleSelectChange = (name: string, value: string) => {
     setContentForm(prev => ({ ...prev, [name]: value }));
   };
@@ -92,6 +104,24 @@ const AdminDashboard = () => {
       toast({
         title: "URL obrigatória",
         description: "Para conteúdo tipo link, a URL é obrigatória.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (contentForm.type === 'video' && !contentForm.url) {
+      toast({
+        title: "URL obrigatória",
+        description: "Para vídeos, a URL é obrigatória.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if ((contentForm.type === 'pdf' || contentForm.type === 'image') && !contentForm.file) {
+      toast({
+        title: "Arquivo obrigatório",
+        description: "Para PDFs e imagens, é necessário fazer upload do arquivo.",
         variant: "destructive"
       });
       return;
@@ -150,6 +180,8 @@ const AdminDashboard = () => {
         type: 'post',
         url: '',
         content: '',
+        file: null,
+        fileUrl: '',
         destination: '',
         blogCategory: ''
       });
@@ -259,6 +291,12 @@ const AdminDashboard = () => {
                         Vídeo
                       </div>
                     </SelectItem>
+                    <SelectItem value="image">
+                      <div className="flex items-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Imagem
+                      </div>
+                    </SelectItem>
                     <SelectItem value="pdf">
                       <div className="flex items-center gap-2">
                         <FileText className="h-4 w-4" />
@@ -275,9 +313,9 @@ const AdminDashboard = () => {
                 </Select>
               </div>
 
-              {(contentForm.type === 'video' || contentForm.type === 'pdf' || contentForm.type === 'link') && (
+              {(contentForm.type === 'video' || contentForm.type === 'link') && (
                 <div>
-                  <Label htmlFor="url">URL *</Label>
+                  <Label htmlFor="url">{contentForm.type === 'link' ? 'URL Externa *' : 'URL do Vídeo *'}</Label>
                   <Input
                     id="url"
                     name="url"
@@ -285,6 +323,24 @@ const AdminDashboard = () => {
                     onChange={handleInputChange}
                     placeholder="https://..."
                   />
+                </div>
+              )}
+
+              {(contentForm.type === 'pdf' || contentForm.type === 'image') && (
+                <div>
+                  <Label htmlFor="file">{contentForm.type === 'pdf' ? 'Arquivo PDF *' : 'Arquivo de Imagem *'}</Label>
+                  <Input
+                    id="file"
+                    type="file"
+                    accept={contentForm.type === 'pdf' ? '.pdf' : 'image/*'}
+                    onChange={handleFileChange}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/80"
+                  />
+                  {contentForm.fileUrl && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Arquivo selecionado: {contentForm.file?.name}
+                    </p>
+                  )}
                 </div>
               )}
 
