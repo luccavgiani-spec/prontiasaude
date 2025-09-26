@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { gasScheduleAppointment, gasGetAppointments } from './gas-api';
+import { getPatientPlan } from './patient-plan';
 
 export interface AppointmentData {
   appointment_id?: string;
@@ -49,6 +51,7 @@ export async function createAppointment(data: CreateAppointmentRequest): Promise
   error?: string; 
 }> {
   try {
+    // First create in Supabase
     const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
       body: {
         operation: 'create_appointment',
@@ -58,9 +61,34 @@ export async function createAppointment(data: CreateAppointmentRequest): Promise
 
     if (error) throw error;
     
+    const appointmentId = result?.appointment_id;
+
+    // Then create in GAS (parallel, non-blocking)
+    try {
+      const patientPlan = await getPatientPlan(data.email);
+      const hasActivePlan = patientPlan?.plan_code !== 'NENHUM';
+      
+      const gasData = {
+        user_id: appointmentId || `supabase-${Date.now()}`,
+        email: data.email,
+        nome: data.email, // We don't have patient name in this context
+        especialidade: data.service_code || 'CONSULTA_CLINICA',
+        horario_iso: data.start_at_local,
+        plano_ativo: hasActivePlan,
+        servico: data.service_code || 'CONSULTA_CLINICA'
+      };
+
+      // Call GAS API but don't fail the main operation if it errors
+      gasScheduleAppointment(gasData).catch(error => {
+        console.warn('GAS scheduling failed (non-blocking):', error);
+      });
+    } catch (gasError) {
+      console.warn('Error preparing GAS data (non-blocking):', gasError);
+    }
+    
     return {
       success: true,
-      appointment_id: result.appointment_id
+      appointment_id: appointmentId
     };
   } catch (error) {
     console.error('Error creating appointment:', error);
@@ -108,18 +136,58 @@ export async function getAppointments(email: string): Promise<{
   error?: string; 
 }> {
   try {
-    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
-      body: {
-        operation: 'get_appointments',
-        email
-      }
-    });
+    // Get appointments from both Supabase and GAS
+    const [supabaseResult, gasResult] = await Promise.allSettled([
+      supabase.functions.invoke('appointments-manager', {
+        body: {
+          operation: 'get_appointments',
+          email: email
+        }
+      }),
+      gasGetAppointments(email)
+    ]);
 
-    if (error) throw error;
-    
+    let allAppointments: AppointmentData[] = [];
+
+    // Process Supabase results
+    if (supabaseResult.status === 'fulfilled' && !supabaseResult.value.error) {
+      const result = supabaseResult.value.data;
+      if (result?.appointments) {
+        allAppointments = [...allAppointments, ...result.appointments];
+        console.log('Supabase appointments retrieved:', result.appointments.length);
+      }
+    } else {
+      console.warn('Supabase appointments failed:', supabaseResult);
+    }
+
+    // Process GAS results
+    if (gasResult.status === 'fulfilled' && gasResult.value.success) {
+      const gasAppointments = gasResult.value.appointments || [];
+      // Convert GAS format to our AppointmentData format
+      const convertedGAS = gasAppointments.map(gas => ({
+        appointment_id: gas.id,
+        email: email,
+        service_code: gas.service_name,
+        start_at_local: gas.scheduled_date,
+        duration_min: 30, // Default duration
+        status: gas.status || 'scheduled',
+        teams_join_url: gas.join_url,
+        teams_meeting_id: gas.external_appointment_id,
+        created_at: gas.scheduled_date
+      }));
+      allAppointments = [...allAppointments, ...convertedGAS];
+      console.log('GAS appointments retrieved:', gasAppointments.length);
+    } else {
+      console.warn('GAS appointments failed:', gasResult);
+    }
+
+    // Sort by scheduled date (most recent first)
+    allAppointments.sort((a, b) => new Date(b.start_at_local).getTime() - new Date(a.start_at_local).getTime());
+
+    console.log('Total appointments retrieved:', allAppointments.length);
     return {
       success: true,
-      appointments: result.appointments || []
+      appointments: allAppointments
     };
   } catch (error) {
     console.error('Error getting appointments:', error);

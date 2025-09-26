@@ -182,6 +182,15 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                       {appointment.duration_min} minutos
                     </span>
                   </div>
+
+                  {/* Show provider if available from GAS */}
+                  {appointment.teams_meeting_id && (
+                    <div className="flex items-center gap-2 md:col-span-2">
+                      <Badge variant="outline" className="text-xs">
+                        Provedor: {appointment.teams_meeting_id.includes('communicare') ? 'Communicare' : 'Clicklife'}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
                 {appointment.teams_join_url && <div className="pt-2 border-t">
@@ -257,6 +266,15 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                     {appointment.duration_min} minutos
                   </span>
                 </div>
+
+                {/* Show provider if available from GAS */}
+                {appointment.teams_meeting_id && (
+                  <div className="flex items-center gap-2 md:col-span-2">
+                    <Badge variant="outline" className="text-xs">
+                      Provedor: {appointment.teams_meeting_id.includes('communicare') ? 'Communicare' : 'Clicklife'}
+                    </Badge>
+                  </div>
+                )}
               </div>
 
               {appointment.created_at && <div className="text-xs text-muted-foreground">
