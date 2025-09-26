@@ -40,15 +40,12 @@ export function HeroSection() {
             {/* Modern headline */}
             <div className="space-y-3 md:space-y-6">
               <h1 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight animate-fade-in">
-                <span className="medical-gradient-text">Médico 24 horas por dia,</span>
+                <span className="text-foreground">Médico 24 horas por dia,</span>
                 <br />
-                <span className="medical-gradient-text">consulta imediata por apenas</span>
+                <span className="text-foreground">consulta imediata por apenas</span>
                 <br />
-                <span className="relative inline-block">
-                  <span className="absolute -inset-2 bg-gradient-to-r from-accent via-primary to-secondary rounded-xl blur-sm animate-pulse opacity-75"></span>
-                  <span className="relative bg-gradient-to-r from-accent to-primary bg-clip-text text-transparent font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl animate-bounce">
-                    R$43,90!
-                  </span>
+                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-primary">
+                  R$13,99!
                 </span>
               </h1>
               
