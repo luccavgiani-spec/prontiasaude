@@ -71,7 +71,7 @@ const Planos = () => {
       beneficios: [
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
         { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
-        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia" },
+        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia" },
         { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
         { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
         { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
@@ -90,7 +90,7 @@ const Planos = () => {
         { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
         { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
-        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia" },
+        { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia" },
         { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
         { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
         { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
