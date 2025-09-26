@@ -59,11 +59,7 @@ const EmpresasDoBem = () => {
             
             <p className="animate-fade-in" style={{
             animationDelay: '0.4s'
-          }}>
-              Destinamos uma porcentagem dos lucros a ONGs que fazem a diferença. Também 
-              realizamos doações mensais fixas e buscamos novas organizações para conhecer, 
-              apoiar e caminhar juntas.
-            </p>
+          }}>Por isso, a cada consulta e a cada serviço prestado, parte do nosso trabalho se transforma em esperança para quem mais precisa. Iremos destinar uma porcentagem dos lucros em apoio a ONGs que fazem a diferença de verdade na vida de pessoas e comunidades. E não paramos por aí: realizamos doações mensais fixas para nossas parceiras e estamos sempre em busca de novas organizações para conhecer, apoiar e caminhar juntas nessa missão.</p>
             
             <p className="animate-fade-in" style={{
             animationDelay: '0.6s'
