@@ -63,11 +63,7 @@ const EmpresasDoBem = () => {
             
             <p className="animate-fade-in" style={{
             animationDelay: '0.6s'
-          }}>
-              Cada gesto conta. Se você representa uma ONG ou conhece alguma instituição que 
-              precisa de apoio, registre-a conosco. Cuidar de você também é cuidar do mundo 
-              ao seu redor.
-            </p>
+          }}>Acreditamos que cada gesto conta. Cada doação, cada iniciativa apoiada e cada ONG fortalecida é uma oportunidade de espalhar cuidado, amor e esperança. E queremos que você também faça parte disso! Se você representa uma ONG ou conhece alguma instituição que necessita de ajuda, preencha o formulário abaixo!</p>
           </div>
         </div>
       </section>
