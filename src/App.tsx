@@ -28,6 +28,17 @@ import CompletarPerfil from "./pages/CompletarPerfil";
 import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
 import Agendamento from "./pages/Agendamento";
+// New wellness pages
+import SaudeMental from "./pages/SaudeMental";
+import Livros from "./pages/Livros";
+import Playlists from "./pages/Playlists";
+import ReceitasSaudaveis from "./pages/ReceitasSaudaveis";
+// Footer pages
+import TrabalheConosco from "./pages/TrabalheConosco";
+import SejaNossParceiro from "./pages/SejaNossParceiro";
+// Admin pages
+import AdminLogin from "./pages/AdminLogin";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -74,6 +85,17 @@ const App = () => (
               <Route path="/intake/antecedentes" element={<Antecedentes />} />
               <Route path="/agendamento" element={<Agendamento />} />
               <Route path="/area-do-paciente" element={<AreaDoPaciente />} />
+              {/* Wellness pages */}
+              <Route path="/saude-mental" element={<SaudeMental />} />
+              <Route path="/livros" element={<Livros />} />
+              <Route path="/playlists" element={<Playlists />} />
+              <Route path="/receitas-saudaveis" element={<ReceitasSaudaveis />} />
+              {/* Footer pages */}
+              <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
+              <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
+              {/* Admin routes */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

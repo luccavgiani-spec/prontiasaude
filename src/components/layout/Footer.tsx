@@ -72,6 +72,16 @@ export function Footer() {
                   Quem Somos
                 </Link>
               </li>
+              <li>
+                <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
+                  Trabalhe Conosco
+                </Link>
+              </li>
+              <li>
+                <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
+                  Seja nosso parceiro
+                </Link>
+              </li>
             </ul>
           </div>
 

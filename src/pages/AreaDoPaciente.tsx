@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield } from "lucide-react";
+import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
@@ -295,6 +295,58 @@ const AreaDoPaciente = () => {
             </CardHeader>
             <CardContent>
               {currentUser?.email && <MeusAgendamentos userEmail={currentUser.email} />}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recursos de Bem-Estar */}
+        <div className="mt-8">
+          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+            <CardContent className="p-6">
+              <div className="text-center space-y-4 mb-8">
+                <h2 className="text-2xl font-semibold text-foreground">Recursos de Bem-Estar</h2>
+                <p className="text-muted-foreground">
+                  Explore nossos recursos exclusivos para cuidar da sua saúde física e mental
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Button asChild size="lg" className="h-auto flex-col gap-3 py-6">
+                  <Link to="/saude-mental">
+                    <Leaf className="h-8 w-8" />
+                    <div className="text-center">
+                      <div className="font-semibold">Saúde Mental</div>
+                      <div className="text-xs opacity-90">Equilíbrio e autocuidado</div>
+                    </div>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
+                  <Link to="/livros">
+                    <BookOpen className="h-8 w-8" />
+                    <div className="text-center">
+                      <div className="font-semibold">Livros</div>
+                      <div className="text-xs opacity-90">Conhecimento e inspiração</div>
+                    </div>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
+                  <Link to="/playlists">
+                    <Headphones className="h-8 w-8" />
+                    <div className="text-center">
+                      <div className="font-semibold">Playlists</div>
+                      <div className="text-xs opacity-90">Relaxamento e meditação</div>
+                    </div>
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="h-auto flex-col gap-3 py-6">
+                  <Link to="/receitas-saudaveis">
+                    <UtensilsCrossed className="h-8 w-8" />
+                    <div className="text-center">
+                      <div className="font-semibold">Receitas</div>
+                      <div className="text-xs opacity-90">Alimentação saudável</div>
+                    </div>
+                  </Link>
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>

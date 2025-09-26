@@ -27,7 +27,30 @@ interface ONGFormRequest {
   descricao: string;
 }
 
-type FormRequest = EmpresaFormRequest | ONGFormRequest;
+interface TrabalheConoscoRequest {
+  type: "trabalhe-conosco";
+  data: {
+    nome: string;
+    crm: string;
+    contato: string;
+    cpfCnpj: string;
+  };
+  recipients: string[];
+}
+
+interface SejaParceiroRequest {
+  type: "seja-parceiro";
+  data: {
+    nome: string;
+    empresa?: string;
+    contato: string;
+    cpfCnpj: string;
+    descricao?: string;
+  };
+  recipients: string[];
+}
+
+type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest;
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
@@ -113,6 +136,58 @@ const handler = async (req: Request): Promise<Response> => {
           "Content-Type": "application/json",
           ...corsHeaders,
         },
+      });
+
+    } else if (formData.type === "trabalhe-conosco") {
+      const emailResponse = await resend.emails.send({
+        from: "Formulários <onboarding@resend.dev>",
+        to: formData.recipients,
+        subject: `Nova candidatura: ${formData.data.nome}`,
+        html: `
+          <h1>Nova Candidatura Recebida</h1>
+          <h2>Trabalhe Conosco</h2>
+          
+          <p><strong>Nome:</strong> ${formData.data.nome}</p>
+          <p><strong>CRM:</strong> ${formData.data.crm}</p>
+          <p><strong>Contato:</strong> ${formData.data.contato}</p>
+          <p><strong>CPF/CNPJ:</strong> ${formData.data.cpfCnpj}</p>
+          
+          <hr>
+          <p><em>Candidatura recebida em ${new Date().toLocaleString('pt-BR')}</em></p>
+        `,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+
+    } else if (formData.type === "seja-parceiro") {
+      const emailResponse = await resend.emails.send({
+        from: "Formulários <onboarding@resend.dev>",
+        to: formData.recipients,
+        subject: `Nova proposta de parceria: ${formData.data.nome}`,
+        html: `
+          <h1>Nova Proposta de Parceria</h1>
+          
+          <p><strong>Responsável:</strong> ${formData.data.nome}</p>
+          <p><strong>Empresa:</strong> ${formData.data.empresa || 'Não informado'}</p>
+          <p><strong>Contato:</strong> ${formData.data.contato}</p>
+          <p><strong>CPF/CNPJ:</strong> ${formData.data.cpfCnpj}</p>
+          
+          ${formData.data.descricao ? `
+          <h3>Descrição da Proposta:</h3>
+          <p>${formData.data.descricao}</p>
+          ` : ''}
+          
+          <hr>
+          <p><em>Proposta recebida em ${new Date().toLocaleString('pt-BR')}</em></p>
+        `,
+      });
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 
