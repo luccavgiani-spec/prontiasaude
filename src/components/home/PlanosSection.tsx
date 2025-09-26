@@ -86,7 +86,7 @@ export function PlanosSection() {
         { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia" },
         { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
         { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
-        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e carência na telemedicina" },
         { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
         { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
         { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
@@ -105,7 +105,7 @@ export function PlanosSection() {
         { icone: <Heart className="h-5 w-5" />, texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia" },
         { icone: <Apple className="h-5 w-5" />, texto: "Nutrição e personal trainer*" },
         { icone: <Brain className="h-5 w-5" />, texto: "Psicólogo quinzenal" },
-        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e carência na telemedicina" },
         { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
         { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
         { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
@@ -120,7 +120,7 @@ export function PlanosSection() {
       beneficios: [
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
         { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
-        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e carência na telemedicina" },
         { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
         { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
         { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
@@ -136,7 +136,7 @@ export function PlanosSection() {
         { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
         { icone: <Clock className="h-5 w-5" />, texto: "Consultas com clínico geral 24h/dia" },
-        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e sem carência" },
+        { icone: <Shield className="h-5 w-5" />, texto: "Sem coparticipação e carência na telemedicina" },
         { icone: <Percent className="h-5 w-5" />, texto: "Descontos em farmácias e exames médicos" },
         { icone: <Star className="h-5 w-5" />, texto: "Benefícios exclusivos" },
         { icone: <X className="h-5 w-5" />, texto: "Cancele a hora que quiser, sem multa (apenas no mensal)" }
