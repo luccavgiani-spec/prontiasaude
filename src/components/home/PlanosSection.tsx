@@ -318,18 +318,28 @@ export function PlanosSection() {
                 </CardHeader>
 
                 <CardContent className="flex flex-col flex-grow">
-                  <ul className="space-y-2 flex-grow">
-                    {plano.beneficios.map((beneficio, index) => (
-                      <li key={index} className="flex items-start gap-2">
-                        <div className="text-primary mt-0.5 flex-shrink-0">
-                          {beneficio.icone}
-                        </div>
-                        <span className="text-xs text-muted-foreground leading-relaxed">
-                          {beneficio.texto}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                        <ul className="space-y-2 flex-grow">
+                          {plano.beneficios
+                            .filter(beneficio => {
+                              // Se não for plano mensal, remove o benefício de cancelamento
+                              if (duracaoSelecionada !== "1" && beneficio.texto.includes("Cancele a hora que quiser")) {
+                                return false;
+                              }
+                              return true;
+                            })
+                            .map((beneficio, index) => (
+                            <li key={index} className="flex items-start gap-2">
+                              <div className="text-primary mt-0.5 flex-shrink-0">
+                                {beneficio.icone}
+                              </div>
+                              <span className="text-xs text-muted-foreground leading-relaxed">
+                                {beneficio.texto.includes("Cancele a hora que quiser") && duracaoSelecionada === "1" 
+                                  ? "Cancele a hora que quiser, sem multa" 
+                                  : beneficio.texto}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
 
                   <div className="pt-4 mt-auto">
                     <Button
