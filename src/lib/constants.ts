@@ -27,7 +27,7 @@ export const CATALOGO_SERVICOS = [
     sku: "RENOVACAO_RECEITA",
     descricao: "Renove sua receita agora, válida em todo o Brasil e com assinatura digital.",
     tempo: "15-20 minutos", 
-    inclui: ["Avaliação do histórico", "Nova receita digital", "Orientações de uso"]
+    inclui: ["Nova receita digital", "Orientações de uso"]
   },
   { 
     slug: "psicologa", 

@@ -174,7 +174,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Avaliação médica</h3>
-                          <p className="text-muted-foreground">Nosso médico avalia sua receita e histórico médico</p>
+                          <p className="text-muted-foreground">Nosso médico avalia sua receita</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
