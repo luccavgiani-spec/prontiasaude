@@ -59,7 +59,7 @@ export const CATALOGO_SERVICOS = [
     sku: "LAUDOS_PSICOLOGICOS",
     descricao: "",
     tempo: "60-90 minutos",
-    inclui: ["Laudo para bariátrica", "Laudo para laqueadura/vasectomia", "Avaliação completa"],
+    inclui: ["Laudo para bariátrica, laqueadura e vasectomia", "Avaliação completa"],
     naoInclui: ["Consulta psicológica prévia"]
   }
 ];
