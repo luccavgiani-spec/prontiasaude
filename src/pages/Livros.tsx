@@ -12,8 +12,9 @@ interface ContentItem {
   type: 'video' | 'pdf' | 'link' | 'post' | 'image';
   url?: string;
   content?: string;
-  file?: File;
   fileUrl?: string;
+  externalLink?: string;
+  createdAt: Date;
 }
 
 const Livros = () => {
@@ -91,7 +92,7 @@ const Livros = () => {
                   )}
                   {item.type === 'pdf' && item.fileUrl && (
                     <Button asChild className="w-full">
-                      <a href={item.fileUrl} download={item.file?.name || item.title + '.pdf'}>
+                      <a href={item.fileUrl} download={item.title + '.pdf'}>
                         Baixar PDF
                       </a>
                     </Button>

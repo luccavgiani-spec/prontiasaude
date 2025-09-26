@@ -22,6 +22,7 @@ interface ContentItem {
   fileUrl?: string;
   destination: string;
   blogCategory?: string;
+  externalLink?: string;
   createdAt: Date;
 }
 
@@ -36,7 +37,8 @@ const AdminDashboard = () => {
     file: null as File | null,
     fileUrl: '',
     destination: '',
-    blogCategory: ''
+    blogCategory: '',
+    externalLink: ''
   });
   const [publishedContent, setPublishedContent] = useState<ContentItem[]>([]);
   const navigate = useNavigate();
@@ -152,6 +154,7 @@ const AdminDashboard = () => {
       fileUrl: contentForm.fileUrl,
       destination: contentForm.destination,
       blogCategory: contentForm.blogCategory,
+      externalLink: contentForm.externalLink,
       createdAt: new Date()
     };
 
@@ -196,7 +199,8 @@ const AdminDashboard = () => {
         file: null,
         fileUrl: '',
         destination: '',
-        blogCategory: ''
+        blogCategory: '',
+        externalLink: ''
       });
 
       // Reload content
@@ -370,6 +374,22 @@ const AdminDashboard = () => {
                   />
                 </div>
               )}
+
+              {/* Link Externo - para todos os tipos */}
+              <div>
+                <Label htmlFor="externalLink">Link Externo (opcional)</Label>
+                <Input
+                  id="externalLink"
+                  name="externalLink"
+                  type="url"
+                  value={contentForm.externalLink}
+                  onChange={handleInputChange}
+                  placeholder="https://exemplo.com"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Link para redirecionamento externo quando o usuário clicar no conteúdo
+                </p>
+              </div>
 
               <div>
                 <Label>Destino *</Label>
