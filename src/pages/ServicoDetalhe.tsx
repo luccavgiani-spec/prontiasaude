@@ -7,18 +7,20 @@ import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
 import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
-
 const ServicoDetalhe = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const {
+    slug
+  } = useParams<{
+    slug: string;
+  }>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
-
+  const {
+    toast
+  } = useToast();
   const servico = CATALOGO_SERVICOS.find(s => s.slug === slug);
-
   if (!servico) {
-    return (
-      <div className="py-16">
+    return <div className="py-16">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-4">Serviço não encontrado</h1>
           <p className="text-muted-foreground mb-6">O serviço solicitado não existe.</p>
@@ -26,16 +28,12 @@ const ServicoDetalhe = () => {
             <Link to="/servicos">Ver Todos os Serviços</Link>
           </Button>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   const handleAgendar = async () => {
     setIsLoading(true);
-    
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
-      
       await startCheckout({
         productKey,
         quantity: 1
@@ -45,15 +43,13 @@ const ServicoDetalhe = () => {
       toast({
         title: "Erro no checkout",
         description: "Não foi possível iniciar o pagamento. Tente novamente.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
     }
   };
-
-  return (
-    <>
+  return <>
       <div className="py-16">
         <div className="container mx-auto px-4">
           {/* Navegação */}
@@ -71,22 +67,15 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.slug === "renovacao" 
-                  ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança."
-                  : servico.slug === "laudos_psicologicos"
-                  ? "Necessário consulta prévia com psicólogo."
-                  : `${servico.descricao}.`
-                }
+                {servico.slug === "renovacao" ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança." : servico.slug === "laudos_psicologicos" ? "Necessário consulta prévia com psicólogo." : `${servico.descricao}.`}
               </p>
 
               {/* Informações básicas */}
               <div className="flex items-center gap-6 mb-8 text-muted-foreground">
-                {servico.slug === "psicologa" && (
-                  <div className="flex items-center gap-2">
+                {servico.slug === "psicologa" && <div className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
                     <span className="font-medium">30 minutos</span>
-                  </div>
-                )}
+                  </div>}
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   <span className="font-medium">Consulta Online</span>
@@ -99,25 +88,15 @@ const ServicoDetalhe = () => {
                   O que está incluso:
                 </h2>
                 <ul className="space-y-3">
-                  {servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "renovacao"
-                    ? servico.inclui.map((item, index) => (
-                        <li key={index} className="flex items-center gap-3">
+                  {servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "renovacao" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">{item}</span>
-                        </li>
-                      ))
-                    : (
-                        <li className="flex items-center gap-3">
+                        </li>) : <li className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">
-                            {servico.slug === "medicos_especialistas" 
-                              ? "Uma consulta agendada com o médico especialista de sua escolha"
-                              : servico.inclui[0]
-                            }
+                            {servico.slug === "medicos_especialistas" ? "Uma consulta agendada com o médico especialista de sua escolha" : servico.inclui[0]}
                           </span>
-                        </li>
-                      )
-                  }
+                        </li>}
                 </ul>
               </div>
 
@@ -127,8 +106,7 @@ const ServicoDetalhe = () => {
                   Como funciona:
                 </h2>
                 <div className="space-y-4">
-                  {servico.slug === "laudos_psicologicos" ? (
-                    <>
+                  {servico.slug === "laudos_psicologicos" ? <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
@@ -156,16 +134,14 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, vasectomia</p>
                         </div>
                       </div>
-                    </>
-                  ) : servico.slug === "renovacao" ? (
-                    <>
+                    </> : servico.slug === "renovacao" ? <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Envio da receita</h3>
-                          <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses) após o pagamento</p>
+                          <p className="text-muted-foreground">Após o pagamento, envie sua receita anterior (máximo 3 meses) </p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -186,9 +162,7 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Receba sua nova receita digital com assinatura médica</p>
                         </div>
                       </div>
-                    </>
-                  ) : (
-                    <>
+                    </> : <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
@@ -216,8 +190,7 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional</p>
                         </div>
                       </div>
-                    </>
-                  )}
+                    </>}
                 </div>
               </div>
 
@@ -248,28 +221,20 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 <div className="text-center mb-6">
-                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && (
-                    <p className="text-muted-foreground mb-2">À partir de</p>
-                  )}
+                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
                     {formataPreco(servico.precoBase)}
                   </div>
                   <p className="text-muted-foreground">Pagamento único</p>
                 </div>
 
-                <Button 
-                  onClick={() => {
-                    if (servico.slug === "psicologa") {
-                      window.location.href = "/psicologo";
-                    } else {
-                      handleAgendar();
-                    }
-                  }}
-                  variant="medical"
-                  size="lg"
-                  className="w-full mb-4"
-                  disabled={isLoading}
-                >
+                <Button onClick={() => {
+                if (servico.slug === "psicologa") {
+                  window.location.href = "/psicologo";
+                } else {
+                  handleAgendar();
+                }
+              }} variant="medical" size="lg" className="w-full mb-4" disabled={isLoading}>
                   {isLoading ? "Processando..." : "Agendar agora"}
                 </Button>
 
@@ -299,13 +264,7 @@ const ServicoDetalhe = () => {
         </div>
       </div>
 
-      <CadastroModal 
-        open={isModalOpen}
-        onOpenChange={setIsModalOpen}
-        onSuccess={handleAgendar}
-      />
-    </>
-  );
+      <CadastroModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={handleAgendar} />
+    </>;
 };
-
 export default ServicoDetalhe;
