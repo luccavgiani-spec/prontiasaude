@@ -14,7 +14,7 @@ export default function BlogsIndex() {
   return <section className="mx-auto max-w-6xl px-4 py-10">
       <header className="mb-6 text-center">
         <h1 className="text-3xl md:text-4xl font-semibold text-neutral-900">Blog</h1>
-        <p className="text-neutral-600 mt-2">Conteúdos para cuidar melhor da sua saúde</p>
+        
       </header>
 
       {/* Filtros (botões que de fato filtram) */}
