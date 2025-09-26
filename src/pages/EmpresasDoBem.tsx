@@ -55,12 +55,7 @@ const EmpresasDoBem = () => {
           <div className="space-y-6 text-lg md:text-xl text-muted-foreground leading-relaxed max-w-3xl mx-auto">
             <p className="animate-fade-in" style={{
             animationDelay: '0.2s'
-          }}>
-              Na Prontia Saúde, acreditamos que saúde vai além de consultas e tratamentos: 
-              é sobre cuidar de pessoas, acolher histórias e transformar vidas. Nosso propósito 
-              é democratizar o acesso à saúde de qualidade e refletir solidariedade, gerando 
-              impacto positivo na sociedade.
-            </p>
+          }}>Na Prontia Saúde, acreditamos que saúde vai além de consultas e tratamentos: é sobre cuidar de pessoas, acolher histórias e transformar vidas. Nosso propósito é democratizar o acesso à saúde de qualidade e, ao mesmo tempo, refletir solidariedade e gerar impacto positivo na sociedade.</p>
             
             <p className="animate-fade-in" style={{
             animationDelay: '0.4s'
