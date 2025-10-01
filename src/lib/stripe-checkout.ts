@@ -1,7 +1,7 @@
 // Stripe Checkout via Supabase Edge Function
 import { getPhone } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { trackPurchase } from "@/lib/meta-tracking";
+import { trackViewContent } from "@/lib/meta-tracking";
 
 // Catálogo usando os dados reais do sistema
 export const CATALOG = {
@@ -113,7 +113,15 @@ export async function startCheckout(args: any = {}) {
       return;
     }
 
-    // Track checkout initiation (we'll track actual purchase on confirmation page)
+    // Track InitiateCheckout event with Meta Pixel
+    const preco = _getProductPrice(item.sku);
+    trackViewContent({
+      content_name: payload.product_name,
+      content_category: 'checkout_iniciado',
+      content_ids: [item.sku],
+      value: preco,
+    });
+    
     console.log('Checkout iniciado com sucesso para:', item.sku);
 
     // Abrir checkout em nova aba
@@ -158,4 +166,17 @@ function _getProductName(sku: string): string {
     'LAUDO_LAQ_VAS': 'Laudo para Laqueadura/Vasectomia',
   };
   return nomes[sku] || 'Serviço Médico';
+}
+
+// Função auxiliar para obter preço do produto baseado no SKU
+function _getProductPrice(sku: string): number {
+  const precos: Record<string, number> = {
+    'CONSULTA_CLINICA': 59.90,
+    'RENOVACAO_RECEITA': 39.90,
+    'PSICOLOGA': 59.90,
+    'PSIQUIATRIA': 199.90,
+    'LAUDO_BARIATRICA': 199.90,
+    'LAUDO_LAQ_VAS': 149.90,
+  };
+  return precos[sku] || 0;
 }

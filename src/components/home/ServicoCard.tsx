@@ -5,6 +5,7 @@ import { CadastroModal } from "@/components/modais/CadastroModal";
 import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
 import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
 import { useToast } from "@/hooks/use-toast";
+import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X } from "lucide-react";
 interface Servico {
   slug: string;
@@ -74,6 +75,12 @@ export function ServicoCard({
     
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
+      
+      // Track Lead event when user clicks to schedule
+      trackLead({
+        value: precoComDesconto,
+        content_name: servico.nome,
+      });
       
       await startCheckout({
         productKey,

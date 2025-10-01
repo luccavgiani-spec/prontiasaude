@@ -7,7 +7,7 @@ import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
 import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
-import { trackViewContent } from "@/lib/meta-tracking";
+import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 const ServicoDetalhe = () => {
   const {
     slug
@@ -48,6 +48,13 @@ const ServicoDetalhe = () => {
     setIsLoading(true);
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
+      
+      // Track Lead event when user clicks to schedule
+      trackLead({
+        value: servico.precoBase,
+        content_name: servico.nome,
+      });
+      
       await startCheckout({
         productKey,
         quantity: 1
