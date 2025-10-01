@@ -5,6 +5,8 @@ declare global {
     Stripe?: (key: string) => {
       redirectToCheckout: (options: { sessionId: string }) => Promise<void>;
     };
+    // Facebook Pixel native function
+    fbq?: (command: string, eventName: string, data?: any) => void;
     // Meta Pixel tracking functions
     trackPageView?: () => void;
     trackViewContent?: (data?: {

@@ -168,6 +168,12 @@ async function sendToGTMServer(event: MetaEvent): Promise<void> {
 
 // Track PageView event
 export function trackPageView(): void {
+  // Use native fbq if available (for Meta Pixel Helper detection)
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('track', 'PageView');
+  }
+
+  // Also send to GTM Server for redundancy
   const event: MetaEvent = {
     event_name: 'PageView',
     event_time: Math.floor(Date.now() / 1000),
@@ -191,6 +197,12 @@ export function trackViewContent(data?: {
   content_ids?: string[];
   value?: number;
 }): void {
+  // Use native fbq if available
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('track', 'ViewContent', data);
+  }
+
+  // Also send to GTM Server for redundancy
   const event: MetaEvent = {
     event_name: 'ViewContent',
     event_time: Math.floor(Date.now() / 1000),
@@ -216,6 +228,12 @@ export function trackLead(data?: {
   value?: number;
   content_name?: string;
 }): void {
+  // Use native fbq if available
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('track', 'Lead', data);
+  }
+
+  // Also send to GTM Server for redundancy
   const event: MetaEvent = {
     event_name: 'Lead',
     event_time: Math.floor(Date.now() / 1000),
@@ -247,6 +265,17 @@ export function trackPurchase(data: {
   }>;
   content_name?: string;
 }): void {
+  // Use native fbq if available
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('track', 'Purchase', {
+      value: data.value,
+      currency: 'BRL',
+      contents: data.contents,
+      content_name: data.content_name
+    });
+  }
+
+  // Also send to GTM Server for redundancy
   const event: MetaEvent = {
     event_name: 'Purchase',
     event_time: Math.floor(Date.now() / 1000),
@@ -269,8 +298,8 @@ export function trackPurchase(data: {
 
 // Initialize tracking on page load
 export function initMetaTracking(): void {
-  // Track initial page view
-  trackPageView();
+  // Don't track initial PageView here - it's already tracked by fbq('init') in index.html
+  // This prevents duplicate PageView events
   
   // Track subsequent page views on navigation
   let lastUrl = window.location.href;
