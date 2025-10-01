@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LogoLoop from "@/components/bits/LogoLoop";
 import { supabase } from "@/integrations/supabase/client";
+import { trackLead } from "@/lib/meta-tracking";
 import { Shield, Users, Clock, Heart, TrendingUp, FileText, Building2, CheckCircle } from "lucide-react";
 const Empresas = () => {
   const [showForm, setShowForm] = useState(false);
@@ -20,6 +21,12 @@ const Empresas = () => {
   });
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Track Lead event for business proposal form
+    trackLead({
+      content_name: 'Proposta Empresarial',
+    });
+    
     try {
       const {
         data,

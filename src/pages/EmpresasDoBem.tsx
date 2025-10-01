@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import CircularGallery from "@/components/bits/CircularGallery";
 import { supabase } from "@/integrations/supabase/client";
+import { trackLead } from "@/lib/meta-tracking";
 import { Heart, Globe, Handshake, Users } from "lucide-react";
 const EmpresasDoBem = () => {
   const [formData, setFormData] = useState({
@@ -17,6 +18,12 @@ const EmpresasDoBem = () => {
   });
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Track Lead event for NGO registration
+    trackLead({
+      content_name: 'Cadastro ONG',
+    });
+    
     try {
       const {
         data,

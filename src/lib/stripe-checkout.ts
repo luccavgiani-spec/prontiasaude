@@ -1,7 +1,7 @@
 // Stripe Checkout via Supabase Edge Function
 import { getPhone } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
-import { trackViewContent } from "@/lib/meta-tracking";
+import { trackInitiateCheckout } from "@/lib/meta-tracking";
 
 // Catálogo usando os dados reais do sistema
 export const CATALOG = {
@@ -115,9 +115,9 @@ export async function startCheckout(args: any = {}) {
 
     // Track InitiateCheckout event with Meta Pixel
     const preco = _getProductPrice(item.sku);
-    trackViewContent({
+    trackInitiateCheckout({
       content_name: payload.product_name,
-      content_category: 'checkout_iniciado',
+      content_category: 'servico_medico',
       content_ids: [item.sku],
       value: preco,
     });

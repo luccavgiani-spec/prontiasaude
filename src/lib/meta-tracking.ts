@@ -254,6 +254,71 @@ export function trackLead(data?: {
   sendToGTMServer(event);
 }
 
+// Track InitiateCheckout event
+export function trackInitiateCheckout(data?: {
+  value?: number;
+  content_name?: string;
+  content_category?: string;
+  content_ids?: string[];
+}): void {
+  // Use native fbq if available
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('track', 'InitiateCheckout', data);
+  }
+
+  // Also send to GTM Server for redundancy
+  const event: MetaEvent = {
+    event_name: 'InitiateCheckout',
+    event_time: Math.floor(Date.now() / 1000),
+    event_id: generateEventId(),
+    event_source_url: window.location.href,
+    action_source: 'website',
+    user_data: {
+      client_user_agent: navigator.userAgent,
+      fbp: getFbp(),
+      fbc: getFbc(),
+    },
+    custom_data: {
+      currency: 'BRL',
+      ...data
+    }
+  };
+
+  sendToGTMServer(event);
+}
+
+// Track SubscribedButtonClick event (custom event for subscription plans)
+export function trackSubscribedButtonClick(data?: {
+  value?: number;
+  content_name?: string;
+  content_category?: string;
+}): void {
+  // Use native fbq if available
+  if (typeof window !== 'undefined' && (window as any).fbq) {
+    (window as any).fbq('trackCustom', 'SubscribedButtonClick', data);
+  }
+
+  // Also send to GTM Server for redundancy
+  const event: MetaEvent = {
+    event_name: 'SubscribedButtonClick',
+    event_time: Math.floor(Date.now() / 1000),
+    event_id: generateEventId(),
+    event_source_url: window.location.href,
+    action_source: 'website',
+    user_data: {
+      client_user_agent: navigator.userAgent,
+      fbp: getFbp(),
+      fbc: getFbc(),
+    },
+    custom_data: {
+      currency: 'BRL',
+      ...data
+    }
+  };
+
+  sendToGTMServer(event);
+}
+
 // Track Purchase event
 export function trackPurchase(data: {
   value: number;
@@ -264,6 +329,7 @@ export function trackPurchase(data: {
     item_price?: number;
   }>;
   content_name?: string;
+  content_category?: string;
 }): void {
   // Use native fbq if available
   if (typeof window !== 'undefined' && (window as any).fbq) {
@@ -335,6 +401,8 @@ if (typeof window !== 'undefined') {
   (window as any).trackPageView = trackPageView;
   (window as any).trackViewContent = trackViewContent;
   (window as any).trackLead = trackLead;
+  (window as any).trackInitiateCheckout = trackInitiateCheckout;
+  (window as any).trackSubscribedButtonClick = trackSubscribedButtonClick;
   (window as any).trackPurchase = trackPurchase;
   (window as any).__setGtmFallbackUrl = setGtmFallbackUrl;
   

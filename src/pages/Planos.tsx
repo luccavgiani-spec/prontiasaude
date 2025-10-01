@@ -7,7 +7,7 @@ import { PLANOS, DESCONTOS_PLANO_VISUAL, PRICE_MAP } from "@/lib/constants";
 import { formataPreco, calcularDescontoPlano, getEmailAtual } from "@/lib/utils";
 import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { trackViewContent } from "@/lib/meta-tracking";
+import { trackViewContent, trackLead, trackSubscribedButtonClick, trackInitiateCheckout } from "@/lib/meta-tracking";
 import { 
   Check, 
   Star, 
@@ -143,6 +143,25 @@ const Planos = () => {
   ];
 
   const handleAssinar = async (planoId: string, email?: string) => {
+    // Get plan details for tracking
+    const planoData = novosPlanosData.find(p => p.id === planoId);
+    const meses = parseInt(duracaoSelecionada);
+    const precoComDesconto = planoData ? calcularPreco(planoData.precoBase, meses) : 0;
+    const precoMensal = precoComDesconto / meses;
+    
+    // Track Lead event
+    trackLead({
+      value: precoMensal / 100,
+      content_name: planoData?.nome || planoId,
+    });
+    
+    // Track SubscribedButtonClick event
+    trackSubscribedButtonClick({
+      value: precoMensal / 100,
+      content_name: planoData?.nome || planoId,
+      content_category: 'plano_assinatura',
+    });
+    
     const emailParaUsar = email || (await getEmailAtual());
     if (!emailParaUsar) {
       setPlanoSelecionado(planoId);
@@ -191,6 +210,19 @@ const Planos = () => {
         });
         return;
       }
+
+      // Track InitiateCheckout when Stripe session is successfully created
+      const planoData = novosPlanosData.find(p => p.id === planoId);
+      const meses = parseInt(duracaoSelecionada);
+      const precoComDesconto = planoData ? calcularPreco(planoData.precoBase, meses) : 0;
+      const precoMensal = precoComDesconto / meses;
+      
+      trackInitiateCheckout({
+        value: precoMensal / 100,
+        content_name: planoData?.nome || planoId,
+        content_category: 'plano_assinatura',
+        content_ids: [planoId],
+      });
 
       redirecionarParaCheckout(checkoutData);
     } catch (error) {
