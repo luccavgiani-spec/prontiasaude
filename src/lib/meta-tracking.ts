@@ -1,7 +1,11 @@
 // Meta Pixel tracking via GTM Server-Side
 const GTM_SERVER_URL = 'https://sgtm.prontiasaude.com.br';
-const GTM_SERVER_FALLBACK_URL = import.meta.env.VITE_GTM_SERVER_URL || GTM_SERVER_URL;
 const PIXEL_ID = '1489396668966676';
+
+// Get fallback URL with priority: localStorage > env > default
+let currentFallbackUrl = localStorage.getItem('gtm_fallback_url') || 
+                         import.meta.env.VITE_GTM_SERVER_URL || 
+                         GTM_SERVER_URL;
 
 interface UserData {
   client_ip?: string;
@@ -125,6 +129,8 @@ async function sendToGTMServer(event: MetaEvent): Promise<void> {
     }
 
     console.log('[Meta Tracking] Sending event:', event.event_name, Object.fromEntries(params));
+    console.log('[Meta Tracking] 🎯 Primary URL:', GTM_SERVER_URL);
+    console.log('[Meta Tracking] 🔄 Fallback URL:', currentFallbackUrl);
 
     // Try primary GTM Server URL first
     try {
@@ -141,8 +147,8 @@ async function sendToGTMServer(event: MetaEvent): Promise<void> {
       console.warn('[Meta Tracking] ⚠️ Custom domain unavailable, trying fallback...', primaryError);
       
       // Fallback to alternative GTM Server URL
-      if (GTM_SERVER_FALLBACK_URL !== GTM_SERVER_URL) {
-        await fetch(`${GTM_SERVER_FALLBACK_URL}/g/collect`, {
+      if (currentFallbackUrl !== GTM_SERVER_URL) {
+        await fetch(`${currentFallbackUrl}/g/collect`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -281,10 +287,31 @@ export function initMetaTracking(): void {
   });
 }
 
+// Debug helper: Set fallback URL at runtime
+function setGtmFallbackUrl(url: string): void {
+  if (url) {
+    localStorage.setItem('gtm_fallback_url', url);
+    currentFallbackUrl = url;
+    console.log('[Meta Tracking] 🔧 Fallback URL updated to:', url);
+    console.log('[Meta Tracking] 💡 Changes will take effect immediately.');
+  } else {
+    localStorage.removeItem('gtm_fallback_url');
+    currentFallbackUrl = import.meta.env.VITE_GTM_SERVER_URL || GTM_SERVER_URL;
+    console.log('[Meta Tracking] 🔧 Fallback URL cleared, using default:', currentFallbackUrl);
+  }
+}
+
 // Expose tracking functions globally for testing
 if (typeof window !== 'undefined') {
   (window as any).trackPageView = trackPageView;
   (window as any).trackViewContent = trackViewContent;
   (window as any).trackLead = trackLead;
   (window as any).trackPurchase = trackPurchase;
+  (window as any).__setGtmFallbackUrl = setGtmFallbackUrl;
+  
+  // Log debug instructions on load
+  console.log('[Meta Tracking] 🛠️ Debug mode available:');
+  console.log('  • Set fallback: window.__setGtmFallbackUrl("https://your-url.appspot.com")');
+  console.log('  • Clear fallback: window.__setGtmFallbackUrl("")');
+  console.log('  • Current fallback:', currentFallbackUrl);
 }
