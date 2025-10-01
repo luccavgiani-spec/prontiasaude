@@ -76,19 +76,61 @@ function generateEventId(): string {
 // Send event to GTM Server
 async function sendToGTMServer(event: MetaEvent): Promise<void> {
   try {
-    const payload = {
-      pixel_id: PIXEL_ID,
-      data: [event]
-    };
+    // Flatten event data to URL parameters for GTM Server
+    const params = new URLSearchParams();
+    
+    // Event data
+    params.append('event_name', event.event_name);
+    params.append('pixel_id', PIXEL_ID);
+    params.append('event_time', event.event_time.toString());
+    params.append('event_id', event.event_id);
+    params.append('event_source_url', event.event_source_url);
+    params.append('action_source', event.action_source);
+    
+    // User data
+    if (event.user_data.client_user_agent) {
+      params.append('client_user_agent', event.user_data.client_user_agent);
+    }
+    if (event.user_data.fbp) {
+      params.append('fbp', event.user_data.fbp);
+    }
+    if (event.user_data.fbc) {
+      params.append('fbc', event.user_data.fbc);
+    }
+    
+    // Custom data
+    if (event.custom_data) {
+      if (event.custom_data.currency) {
+        params.append('currency', event.custom_data.currency);
+      }
+      if (event.custom_data.value !== undefined) {
+        params.append('value', event.custom_data.value.toString());
+      }
+      if (event.custom_data.order_id) {
+        params.append('order_id', event.custom_data.order_id);
+      }
+      if (event.custom_data.content_name) {
+        params.append('content_name', event.custom_data.content_name);
+      }
+      if (event.custom_data.content_category) {
+        params.append('content_category', event.custom_data.content_category);
+      }
+      if (event.custom_data.content_ids) {
+        params.append('content_ids', JSON.stringify(event.custom_data.content_ids));
+      }
+      if (event.custom_data.contents) {
+        params.append('contents', JSON.stringify(event.custom_data.contents));
+      }
+    }
 
-    console.log('[Meta Tracking] Sending event:', event.event_name, payload);
+    console.log('[Meta Tracking] Sending event:', event.event_name, Object.fromEntries(params));
 
-    const response = await fetch(`${GTM_SERVER_URL}/mp/collect`, {
+    const response = await fetch(`${GTM_SERVER_URL}/g/collect`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify(payload),
+      body: params.toString(),
       mode: 'no-cors' // GTM Server handles CORS
     });
 
