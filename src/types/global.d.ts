@@ -1,9 +1,33 @@
 // Tipagens globais para o projeto Médicos do Bem
 
-interface Window {
-  Stripe?: (key: string) => {
-    redirectToCheckout: (options: { sessionId: string }) => Promise<void>;
-  };
+declare global {
+  interface Window {
+    Stripe?: (key: string) => {
+      redirectToCheckout: (options: { sessionId: string }) => Promise<void>;
+    };
+    // Meta Pixel tracking functions
+    trackPageView?: () => void;
+    trackViewContent?: (data?: {
+      content_name?: string;
+      content_category?: string;
+      content_ids?: string[];
+      value?: number;
+    }) => void;
+    trackLead?: (data?: {
+      value?: number;
+      content_name?: string;
+    }) => void;
+    trackPurchase?: (data: {
+      value: number;
+      order_id: string;
+      contents?: Array<{
+        id: string;
+        quantity: number;
+        item_price?: number;
+      }>;
+      content_name?: string;
+    }) => void;
+  }
 }
 
 // Google Sheets integration removed
@@ -45,3 +69,5 @@ export interface Subscription {
   status: string;
   current_period_end: string;
 }
+
+export {};

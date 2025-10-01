@@ -260,3 +260,11 @@ export function initMetaTracking(): void {
     subtree: true
   });
 }
+
+// Expose tracking functions globally for testing
+if (typeof window !== 'undefined') {
+  (window as any).trackPageView = trackPageView;
+  (window as any).trackViewContent = trackViewContent;
+  (window as any).trackLead = trackLead;
+  (window as any).trackPurchase = trackPurchase;
+}
