@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +7,7 @@ import { PLANOS, DESCONTOS_PLANO_VISUAL, PRICE_MAP } from "@/lib/constants";
 import { formataPreco, calcularDescontoPlano, getEmailAtual } from "@/lib/utils";
 import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { trackViewContent } from "@/lib/meta-tracking";
 import { 
   Check, 
   Star, 
@@ -34,6 +35,15 @@ const Planos = () => {
   const [planoSelecionado, setPlanoSelecionado] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+
+  // Track ViewContent on page load
+  useEffect(() => {
+    trackViewContent({
+      content_name: 'Página de Planos',
+      content_category: 'Planos',
+      content_ids: ['planos']
+    });
+  }, []);
 
   // Definição dos períodos de pagamento
   const periodos = [

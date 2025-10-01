@@ -4,6 +4,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { useMetaTracking } from "@/hooks/use-meta-tracking";
+import { initMetaTracking } from "@/lib/meta-tracking";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import Index from "./pages/Index";
@@ -42,9 +44,12 @@ import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
-// Scroll to top component
+// Scroll to top component and track page views
 const ScrollToTop = () => {
   const { pathname } = useLocation();
+  
+  // Track page views on route changes
+  useMetaTracking();
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -52,6 +57,11 @@ const ScrollToTop = () => {
 
   return null;
 };
+
+// Initialize Meta tracking once
+if (typeof window !== 'undefined') {
+  initMetaTracking();
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

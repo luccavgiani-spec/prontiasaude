@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CheckCircle, Mail, Calendar, Clock } from "lucide-react";
 import { getAppointments, AppointmentData } from "@/lib/appointments";
 import { requireAuth } from "@/lib/auth";
+import { trackPurchase } from "@/lib/meta-tracking";
 
 const Confirmacao = () => {
   const [searchParams] = useSearchParams();
@@ -22,10 +23,27 @@ const Confirmacao = () => {
         return;
       }
       setUser(authResult.user);
+      
+      // Track purchase on confirmation page load
+      const orderValue = parseFloat(searchParams.get('value') || '0');
+      const orderId = searchParams.get('order_id') || `order_${Date.now()}`;
+      
+      if (orderValue > 0) {
+        trackPurchase({
+          value: orderValue,
+          order_id: orderId,
+          content_name: 'Consulta ou Plano',
+          contents: [{
+            id: orderId,
+            quantity: 1,
+            item_price: orderValue
+          }]
+        });
+      }
     };
     
     checkAuth();
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   useEffect(() => {
     if (user?.email) {

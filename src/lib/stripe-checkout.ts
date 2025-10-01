@@ -1,6 +1,7 @@
 // Stripe Checkout via Supabase Edge Function
 import { getPhone } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { trackPurchase } from "@/lib/meta-tracking";
 
 // Catálogo usando os dados reais do sistema
 export const CATALOG = {
@@ -111,6 +112,9 @@ export async function startCheckout(args: any = {}) {
       alert('Não foi possível iniciar o pagamento. Tente novamente.');
       return;
     }
+
+    // Track checkout initiation (we'll track actual purchase on confirmation page)
+    console.log('Checkout iniciado com sucesso para:', item.sku);
 
     // Abrir checkout em nova aba
     window.open(data.url, '_blank');

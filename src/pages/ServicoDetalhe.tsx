@@ -1,5 +1,5 @@
 import { useParams, Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
@@ -7,6 +7,7 @@ import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
 import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
+import { trackViewContent } from "@/lib/meta-tracking";
 const ServicoDetalhe = () => {
   const {
     slug
@@ -19,6 +20,19 @@ const ServicoDetalhe = () => {
     toast
   } = useToast();
   const servico = CATALOGO_SERVICOS.find(s => s.slug === slug);
+  
+  // Track ViewContent when service is loaded
+  useEffect(() => {
+    if (servico) {
+      trackViewContent({
+        content_name: servico.nome,
+        content_category: 'Serviços',
+        content_ids: [servico.slug],
+        value: servico.precoBase / 100 // Convert cents to reais
+      });
+    }
+  }, [servico]);
+  
   if (!servico) {
     return <div className="py-16">
         <div className="container mx-auto px-4 text-center">

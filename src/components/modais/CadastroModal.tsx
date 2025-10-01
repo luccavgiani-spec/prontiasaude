@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { upsertPatient } from "@/lib/api";
 import { normalizaPhoneE164, setEmailAtual, setPhone, isEmailValid, isTelefoneValid } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
+import { trackLead } from "@/lib/meta-tracking";
 
 interface CadastroModalProps {
   open: boolean;
@@ -63,6 +64,12 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
       });
 
       if (result.success) {
+        // Track Lead event
+        trackLead({
+          content_name: 'Cadastro de Paciente',
+          value: 0
+        });
+        
         setEmailAtual(formData.email.trim().toLowerCase());
         setPhone(formData.phone);
         toast({
