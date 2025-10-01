@@ -1,5 +1,6 @@
 // Meta Pixel tracking via GTM Server-Side
 const GTM_SERVER_URL = 'https://sgtm.prontiasaude.com.br';
+const GTM_SERVER_FALLBACK_URL = import.meta.env.VITE_GTM_SERVER_URL || GTM_SERVER_URL;
 const PIXEL_ID = '1489396668966676';
 
 interface UserData {
@@ -73,7 +74,7 @@ function generateEventId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2)}`;
 }
 
-// Send event to GTM Server
+// Send event to GTM Server with fallback
 async function sendToGTMServer(event: MetaEvent): Promise<void> {
   try {
     // Flatten event data to URL parameters for GTM Server
@@ -125,18 +126,37 @@ async function sendToGTMServer(event: MetaEvent): Promise<void> {
 
     console.log('[Meta Tracking] Sending event:', event.event_name, Object.fromEntries(params));
 
-    const response = await fetch(`${GTM_SERVER_URL}/g/collect`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-      mode: 'no-cors' // GTM Server handles CORS
-    });
-
-    console.log('[Meta Tracking] Event sent successfully:', event.event_name);
+    // Try primary GTM Server URL first
+    try {
+      await fetch(`${GTM_SERVER_URL}/g/collect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+        mode: 'no-cors'
+      });
+      console.log('[Meta Tracking] ✅ Event sent successfully via custom domain:', event.event_name);
+    } catch (primaryError) {
+      console.warn('[Meta Tracking] ⚠️ Custom domain unavailable, trying fallback...', primaryError);
+      
+      // Fallback to alternative GTM Server URL
+      if (GTM_SERVER_FALLBACK_URL !== GTM_SERVER_URL) {
+        await fetch(`${GTM_SERVER_FALLBACK_URL}/g/collect`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+          mode: 'no-cors'
+        });
+        console.log('[Meta Tracking] ✅ Event sent successfully via fallback URL:', event.event_name);
+      } else {
+        throw primaryError;
+      }
+    }
   } catch (error) {
-    console.error('[Meta Tracking] Error sending event:', error);
+    console.error('[Meta Tracking] ❌ Error sending event:', error);
   }
 }
 
