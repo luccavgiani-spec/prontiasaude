@@ -6,7 +6,7 @@ import { formataPreco } from "@/lib/utils";
 import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
-import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell } from "lucide-react";
+import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
 interface Servico {
   slug: string;
   nome: string;
@@ -51,10 +51,10 @@ export function ServicoCard({
     switch (slug) {
       case "consulta":
         return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
-      case "renovacao":
+      case "renovacao_receitas":
         return <Pill className="h-12 w-12 text-primary mb-4" />;
       case "psicologa":
-        return <Heart className="h-12 w-12 text-primary mb-4" />;
+        return <Brain className="h-12 w-12 text-primary mb-4" />;
       case "medicos_especialistas":
         return <UserCheck className="h-12 w-12 text-primary mb-4" />;
       case "laudos_psicologicos":
@@ -73,7 +73,7 @@ export function ServicoCard({
     switch (slug) {
       case "consulta":
         return "Consulte agora";
-      case "renovacao":
+      case "renovacao_receitas":
         return "Renovar agora";
       default:
         return "Agendar agora";
@@ -84,6 +84,12 @@ export function ServicoCard({
     setIsLoading(true);
     
     try {
+      // Redirect to /renovacao for renovacao_receitas
+      if (servico.slug === "renovacao_receitas") {
+        window.location.href = "/renovacao";
+        return;
+      }
+      
       // Redirect to service detail page for services with variants
       if (servico.variantes && servico.variantes.length > 0) {
         window.location.href = `/servicos/${servico.slug}`;

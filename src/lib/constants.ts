@@ -86,6 +86,34 @@ export const CATALOGO_SERVICOS = [
     descricao: "Sessão com personal trainer online",
     tempo: "30-45 minutos",
     inclui: ["Treino personalizado", "Acompanhamento profissional", "Orientações de exercícios"]
+  },
+  { 
+    slug: "laudos_psicologicos", 
+    nome: "Laudos Psicológicos", 
+    precoBase: 30000, 
+    sku: "PRONTIA_LAUDO_PSICOLOGICO",
+    descricao: "Necessário consulta prévia com psicólogo. Aplicável para cirurgia bariátrica, laqueadura, vasectomia, porte de arma, CNH e outros documentos legais",
+    tempo: "Disponível após consulta",
+    inclui: [
+      "Laudo psicológico completo",
+      "Assinatura digital do profissional",
+      "Documento válido para fins legais",
+      "Entrega em até 7 dias úteis"
+    ]
+  },
+  { 
+    slug: "renovacao_receitas", 
+    nome: "Renovação de Receitas e Atestados", 
+    precoBase: 3490, 
+    sku: "PRONTIA_RENOVACAO_RECEITA",
+    descricao: "Assim que o pagamento for aprovado, um de nossos médicos vai entrar em contato com você pelo WhatsApp, solicitar a foto da receita ou atestado e dar prosseguimento imediato ao atendimento",
+    tempo: "Atendimento imediato",
+    inclui: [
+      "Contato via WhatsApp",
+      "Avaliação médica",
+      "Nova receita digital",
+      "Atendimento rápido"
+    ]
   }
 ];
 

@@ -35,6 +35,7 @@ import SaudeMental from "./pages/SaudeMental";
 import Livros from "./pages/Livros";
 import Playlists from "./pages/Playlists";
 import ReceitasSaudaveis from "./pages/ReceitasSaudaveis";
+import Renovacao from "./pages/Renovacao";
 // Footer pages
 import TrabalheConosco from "./pages/TrabalheConosco";
 import SejaNossParceiro from "./pages/SejaNossParceiro";
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="/livros" element={<Livros />} />
               <Route path="/playlists" element={<Playlists />} />
               <Route path="/receitas-saudaveis" element={<ReceitasSaudaveis />} />
+              <Route path="/renovacao" element={<Renovacao />} />
               {/* Footer pages */}
               <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
               <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
