@@ -173,12 +173,14 @@ const Confirmacao = () => {
 
         {/* Suporte */}
         <div className="text-sm text-muted-foreground">
-          Precisa de ajuda? Entre em contato:{' '}
+          Precisa de ajuda? Entre em contato com o{' '}
           <a 
-            href="mailto:suporte@prontiasaude.com.br" 
+            href="https://wa.me/5511933359187" 
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-primary hover:underline"
           >
-            suporte@prontiasaude.com.br
+            Suporte
           </a>
         </div>
       </Card>
