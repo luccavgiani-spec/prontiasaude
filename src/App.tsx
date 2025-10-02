@@ -38,6 +38,8 @@ import ReceitasSaudaveis from "./pages/ReceitasSaudaveis";
 // Footer pages
 import TrabalheConosco from "./pages/TrabalheConosco";
 import SejaNossParceiro from "./pages/SejaNossParceiro";
+import Termos from "./pages/Termos";
+import Privacidade from "./pages/Privacidade";
 // Admin pages
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -103,6 +105,8 @@ const App = () => (
               {/* Footer pages */}
               <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
               <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
+              <Route path="/termos" element={<Termos />} />
+              <Route path="/privacidade" element={<Privacidade />} />
               {/* Admin routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
