@@ -8,21 +8,13 @@ import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 interface Variante {
   valor: number;
   nome: string;
   sku: string;
   consultas?: number;
 }
-
 const ServicoDetalhe = () => {
   const {
     slug
@@ -36,21 +28,21 @@ const ServicoDetalhe = () => {
     toast
   } = useToast();
   const servico = CATALOGO_SERVICOS.find(s => s.slug === slug);
-  
+
   // Set default variant on load
   useEffect(() => {
     if (servico?.variantes && servico.variantes.length > 0) {
       setSelectedVariant(servico.variantes[0].nome);
     }
   }, [servico]);
-  
+
   // Get current variant price
   const getCurrentPrice = () => {
     if (!servico?.variantes) return servico?.precoBase || 0;
     const variant = servico.variantes.find(v => v.nome === selectedVariant);
     return variant?.valor || servico.precoBase;
   };
-  
+
   // Get total price (for packages with multiple sessions)
   const getTotalPrice = () => {
     if (!servico?.variantes) return servico?.precoBase || 0;
@@ -59,13 +51,12 @@ const ServicoDetalhe = () => {
     const consultas = variant.consultas || 1;
     return variant.valor * consultas;
   };
-  
   const getCurrentSku = () => {
     if (!servico?.variantes) return servico?.sku;
     const variant = servico.variantes.find(v => v.nome === selectedVariant);
     return variant?.sku || servico.sku;
   };
-  
+
   // Track ViewContent when service is loaded
   useEffect(() => {
     if (servico) {
@@ -77,7 +68,6 @@ const ServicoDetalhe = () => {
       });
     }
   }, [servico]);
-  
   if (!servico) {
     return <div className="py-16">
         <div className="container mx-auto px-4 text-center">
@@ -93,42 +83,36 @@ const ServicoDetalhe = () => {
     setIsLoading(true);
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
-      
       if (!productKey) {
         toast({
           title: "Erro",
           description: "Serviço não encontrado.",
-          variant: "destructive",
+          variant: "destructive"
         });
         return;
       }
-      
+
       // Track Lead event with current price
       trackLead({
         value: getCurrentPrice(),
-        content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),
+        content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
       });
-      
+
       // Get customer data
       const customerData = await getCurrentCustomerData();
-      
+
       // Open InfinitePay modal
-      openCheckoutModal(
-        productKey,
-        customerData,
-        () => {
-          // Success callback - redirect to confirmation page
-          window.location.href = '/confirmacao';
-        },
-        () => {
-          // Timeout callback
-          toast({
-            title: "Tempo esgotado",
-            description: "O tempo de pagamento expirou. Por favor, tente novamente.",
-            variant: "destructive",
-          });
-        }
-      );
+      openCheckoutModal(productKey, customerData, () => {
+        // Success callback - redirect to confirmation page
+        window.location.href = '/confirmacao';
+      }, () => {
+        // Timeout callback
+        toast({
+          title: "Tempo esgotado",
+          description: "O tempo de pagamento expirou. Por favor, tente novamente.",
+          variant: "destructive"
+        });
+      });
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({
@@ -312,8 +296,7 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 {/* Dropdown for variants */}
-                {servico.variantes && servico.variantes.length > 0 && (
-                  <div className="mb-4">
+                {servico.variantes && servico.variantes.length > 0 && <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
                       {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
                     </label>
@@ -322,32 +305,24 @@ const ServicoDetalhe = () => {
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {servico.variantes.map((variante) => {
-                          const isPsychologist = servico.slug === "psicologa";
-                          const consultas = variante.consultas || 1;
-                          const valorTotal = variante.valor * consultas;
-                          
-                          return (
-                            <SelectItem key={variante.nome} value={variante.nome}>
-                              {isPsychologist && consultas > 1 ? (
-                                <>
+                        {servico.variantes.map(variante => {
+                      const isPsychologist = servico.slug === "psicologa";
+                      const consultas = variante.consultas || 1;
+                      const valorTotal = variante.valor * consultas;
+                      return <SelectItem key={variante.nome} value={variante.nome}>
+                              {isPsychologist && consultas > 1 ? <>
                                   {variante.nome} - {formataPreco(variante.valor)}/consulta 
                                   <span className="text-muted-foreground text-xs ml-1">
                                     (Total: {formataPreco(valorTotal)})
                                   </span>
-                                </>
-                              ) : (
-                                <>
+                                </> : <>
                                   {variante.nome} - {formataPreco(variante.valor)}
-                                </>
-                              )}
-                            </SelectItem>
-                          );
-                        })}
+                                </>}
+                            </SelectItem>;
+                    })}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
+                  </div>}
                 
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
@@ -355,14 +330,12 @@ const ServicoDetalhe = () => {
                     {formataPreco(getTotalPrice())}
                   </div>
                   {servico.slug === "psicologa" && selectedVariant && (() => {
-                    const variant = servico.variantes?.find(v => v.nome === selectedVariant) as Variante | undefined;
-                    const consultas = variant?.consultas || 1;
-                    return consultas > 1 ? (
-                      <p className="text-sm text-muted-foreground">
+                  const variant = servico.variantes?.find(v => v.nome === selectedVariant) as Variante | undefined;
+                  const consultas = variant?.consultas || 1;
+                  return consultas > 1 ? <p className="text-sm text-muted-foreground">
                         {formataPreco(getCurrentPrice())}/consulta × {consultas} sessões
-                      </p>
-                    ) : null;
-                  })()}
+                      </p> : null;
+                })()}
                   <p className="text-muted-foreground">Pagamento único</p>
                 </div>
 
@@ -385,14 +358,7 @@ const ServicoDetalhe = () => {
                 </div>
               </div>
 
-              <div className="mt-6 text-center">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Tem dúvidas sobre este serviço?
-                </p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link to="/quem-somos">Fale Conosco</Link>
-                </Button>
-              </div>
+              
             </div>
           </div>
         </div>
