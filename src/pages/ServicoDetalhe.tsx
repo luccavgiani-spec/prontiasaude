@@ -15,6 +15,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+interface Variante {
+  valor: number;
+  nome: string;
+  sku: string;
+  consultas?: number;
+}
+
 const ServicoDetalhe = () => {
   const {
     slug
@@ -41,6 +49,15 @@ const ServicoDetalhe = () => {
     if (!servico?.variantes) return servico?.precoBase || 0;
     const variant = servico.variantes.find(v => v.nome === selectedVariant);
     return variant?.valor || servico.precoBase;
+  };
+  
+  // Get total price (for packages with multiple sessions)
+  const getTotalPrice = () => {
+    if (!servico?.variantes) return servico?.precoBase || 0;
+    const variant = servico.variantes.find(v => v.nome === selectedVariant) as Variante | undefined;
+    if (!variant) return servico.precoBase;
+    const consultas = variant.consultas || 1;
+    return variant.valor * consultas;
   };
   
   const getCurrentSku = () => {
@@ -335,8 +352,17 @@ const ServicoDetalhe = () => {
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
-                    {formataPreco(getCurrentPrice())}
+                    {formataPreco(getTotalPrice())}
                   </div>
+                  {servico.slug === "psicologa" && selectedVariant && (() => {
+                    const variant = servico.variantes?.find(v => v.nome === selectedVariant) as Variante | undefined;
+                    const consultas = variant?.consultas || 1;
+                    return consultas > 1 ? (
+                      <p className="text-sm text-muted-foreground">
+                        {formataPreco(getCurrentPrice())}/consulta × {consultas} sessões
+                      </p>
+                    ) : null;
+                  })()}
                   <p className="text-muted-foreground">Pagamento único</p>
                 </div>
 
