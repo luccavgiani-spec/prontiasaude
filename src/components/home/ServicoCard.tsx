@@ -6,7 +6,7 @@ import { formataPreco } from "@/lib/utils";
 import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
-import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X } from "lucide-react";
+import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell } from "lucide-react";
 interface Servico {
   slug: string;
   nome: string;
@@ -16,6 +16,11 @@ interface Servico {
   tempo: string;
   inclui: string[];
   naoInclui?: string[];
+  variantes?: Array<{
+    valor: number;
+    nome: string;
+    sku: string;
+  }>;
 }
 interface ServicoCardProps {
   servico: Servico;
@@ -53,6 +58,10 @@ export function ServicoCard({
         return <UserCheck className="h-12 w-12 text-primary mb-4" />;
       case "laudos_psicologicos":
         return <FileText className="h-12 w-12 text-primary mb-4" />;
+      case "nutricionista":
+        return <Apple className="h-12 w-12 text-primary mb-4" />;
+      case "personal_trainer":
+        return <Dumbbell className="h-12 w-12 text-primary mb-4" />;
       default:
         return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
     }
@@ -74,6 +83,12 @@ export function ServicoCard({
     setIsLoading(true);
     
     try {
+      // Redirect to service detail page for services with variants
+      if (servico.variantes && servico.variantes.length > 0) {
+        window.location.href = `/servicos/${servico.slug}`;
+        return;
+      }
+      
       const productKey = getProductKeyFromSlug(servico.slug);
       
       if (!productKey) {

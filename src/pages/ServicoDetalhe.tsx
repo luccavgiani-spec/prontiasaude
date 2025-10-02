@@ -8,6 +8,13 @@ import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 const ServicoDetalhe = () => {
   const {
     slug
@@ -16,10 +23,31 @@ const ServicoDetalhe = () => {
   }>();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedVariant, setSelectedVariant] = useState<string>("");
   const {
     toast
   } = useToast();
   const servico = CATALOGO_SERVICOS.find(s => s.slug === slug);
+  
+  // Set default variant on load
+  useEffect(() => {
+    if (servico?.variantes && servico.variantes.length > 0) {
+      setSelectedVariant(servico.variantes[0].nome);
+    }
+  }, [servico]);
+  
+  // Get current variant price
+  const getCurrentPrice = () => {
+    if (!servico?.variantes) return servico?.precoBase || 0;
+    const variant = servico.variantes.find(v => v.nome === selectedVariant);
+    return variant?.valor || servico.precoBase;
+  };
+  
+  const getCurrentSku = () => {
+    if (!servico?.variantes) return servico?.sku;
+    const variant = servico.variantes.find(v => v.nome === selectedVariant);
+    return variant?.sku || servico.sku;
+  };
   
   // Track ViewContent when service is loaded
   useEffect(() => {
@@ -58,10 +86,10 @@ const ServicoDetalhe = () => {
         return;
       }
       
-      // Track Lead event when user clicks to schedule
+      // Track Lead event with current price
       trackLead({
-        value: servico.precoBase,
-        content_name: servico.nome,
+        value: getCurrentPrice(),
+        content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),
       });
       
       // Get customer data
@@ -266,21 +294,38 @@ const ServicoDetalhe = () => {
             {/* Card de agendamento */}
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
+                {/* Dropdown for variants */}
+                {servico.variantes && servico.variantes.length > 0 && (
+                  <div className="mb-4">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
+                    </label>
+                    <Select value={selectedVariant} onValueChange={setSelectedVariant}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {servico.variantes.map((variante) => (
+                          <SelectItem key={variante.nome} value={variante.nome}>
+                            {variante.nome} - {formataPreco(variante.valor)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
                 <div className="text-center mb-6">
-                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && <p className="text-muted-foreground mb-2">À partir de</p>}
+                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
-                    {formataPreco(servico.precoBase)}
+                    {formataPreco(getCurrentPrice())}
                   </div>
                   <p className="text-muted-foreground">Pagamento único</p>
                 </div>
 
                 <Button onClick={() => {
-                if (servico.slug === "psicologa") {
-                  window.location.href = "/psicologo";
-                } else {
-                  handleAgendar();
-                }
-              }} variant="medical" size="lg" className="w-full mb-4" disabled={isLoading}>
+                handleAgendar();
+              }} variant="medical" size="lg" className="w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
                   {isLoading ? "Processando..." : "Agendar agora"}
                 </Button>
 

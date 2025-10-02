@@ -24,89 +24,50 @@ export const CATALOGO_SERVICOS = [
   },
   { 
     slug: "psicologa", 
-    nome: "Psicóloga - Individual", 
+    nome: "Psicólogo", 
     precoBase: 44.99, 
     sku: "PREENCHER_DEPOIS",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
-    inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"]
-  },
-  { 
-    slug: "psicologa_4_consultas", 
-    nome: "Psicóloga - Plano 4 consultas", 
-    precoBase: 41.99, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Pacote com 4 consultas de psicologia online",
-    tempo: "30 minutos cada",
-    inclui: ["4 sessões terapêuticas", "Acompanhamento psicológico", "Orientações personalizadas"]
-  },
-  { 
-    slug: "psicologa_8_consultas", 
-    nome: "Psicóloga - Plano 8 consultas", 
-    precoBase: 38.49, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Pacote com 8 consultas de psicologia online",
-    tempo: "30 minutos cada",
-    inclui: ["8 sessões terapêuticas", "Acompanhamento psicológico", "Orientações personalizadas"]
-  },
-  { 
-    slug: "medicos_especialistas", 
-    nome: "Especialidades (R$ 89,90)", 
-    precoBase: 89.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Médico da Família",
-    tempo: "45-60 minutos",
-    inclui: [
-      "Cardiologista", "Dermatologista", "Endocrinologista", 
-      "Gastroenterologista", "Ginecologista", "Oftalmologista", 
-      "Ortopedista", "Otorrinolaringologista", "Pediatria", 
-      "Psiquiatria", "Médico da Família"
+    inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
+    variantes: [
+      { valor: 44.99, nome: "Individual", sku: "PREENCHER_DEPOIS" },
+      { valor: 41.99, nome: "Plano 4 consultas", sku: "PREENCHER_DEPOIS" },
+      { valor: 38.49, nome: "Plano 8 consultas", sku: "PREENCHER_DEPOIS" }
     ]
   },
   { 
-    slug: "geriatria", 
-    nome: "Geriatria", 
-    precoBase: 119.90, 
+    slug: "medicos_especialistas", 
+    nome: "Especialidades", 
+    precoBase: 89.90, 
     sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com geriatra online",
+    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Infectologia, Neurologia, Nutrologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Reumatologia, Médico da Família",
     tempo: "45-60 minutos",
-    inclui: ["Consulta especializada", "Avaliação geriátrica", "Orientações médicas"]
-  },
-  { 
-    slug: "nutriologo", 
-    nome: "Nutrólogo", 
-    precoBase: 119.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com nutrólogo online",
-    tempo: "45-60 minutos",
-    inclui: ["Consulta especializada", "Avaliação nutricional", "Orientações médicas"]
-  },
-  { 
-    slug: "infectologista", 
-    nome: "Infectologista", 
-    precoBase: 129.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com infectologista online",
-    tempo: "45-60 minutos",
-    inclui: ["Consulta especializada", "Avaliação infectológica", "Orientações médicas"]
-  },
-  { 
-    slug: "neurologista", 
-    nome: "Neurologista", 
-    precoBase: 129.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com neurologista online",
-    tempo: "45-60 minutos",
-    inclui: ["Consulta especializada", "Avaliação neurológica", "Orientações médicas"]
-  },
-  { 
-    slug: "reumatologista", 
-    nome: "Reumatologista", 
-    precoBase: 129.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com reumatologista online",
-    tempo: "45-60 minutos",
-    inclui: ["Consulta especializada", "Avaliação reumatológica", "Orientações médicas"]
+    inclui: [
+      "Cardiologista", "Dermatologista", "Endocrinologista", 
+      "Gastroenterologista", "Geriatra", "Ginecologista", 
+      "Infectologista", "Neurologista", "Nutrólogo",
+      "Oftalmologista", "Ortopedista", "Otorrinolaringologista", 
+      "Pediatra", "Psiquiatra", "Reumatologista", "Médico da Família"
+    ],
+    variantes: [
+      { valor: 89.90, nome: "Cardiologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Dermatologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Endocrinologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Gastroenterologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 119.90, nome: "Geriatria", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Ginecologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 129.90, nome: "Infectologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 129.90, nome: "Neurologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 119.90, nome: "Nutrologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Oftalmologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Ortopedia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Otorrinolaringologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Pediatria", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Psiquiatria", sku: "PREENCHER_DEPOIS" },
+      { valor: 129.90, nome: "Reumatologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" }
+    ]
   },
   { 
     slug: "nutricionista", 
