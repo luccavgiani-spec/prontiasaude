@@ -25,7 +25,7 @@ const Renovacao = () => {
       }
 
       trackLead({
-        value: 3490,
+        value: 34.90,
         content_name: "Renovação de Receitas e Atestados"
       });
 
@@ -176,7 +176,7 @@ const Renovacao = () => {
             <div className="medical-card p-6">
               <div className="text-center mb-6">
                 <div className="text-3xl font-bold text-foreground mb-2">
-                  {formataPreco(3490)}
+                  {formataPreco(34.90)}
                 </div>
                 <p className="text-muted-foreground">Pagamento único</p>
               </div>

@@ -104,7 +104,7 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "renovacao_receitas", 
     nome: "Renovação de Receitas e Atestados", 
-    precoBase: 3490, 
+    precoBase: 34.90, 
     sku: "PRONTIA_RENOVACAO_RECEITA",
     descricao: "Assim que o pagamento for aprovado, um de nossos médicos vai entrar em contato com você pelo WhatsApp, solicitar a foto da receita ou atestado e dar prosseguimento imediato ao atendimento",
     tempo: "Atendimento imediato",
