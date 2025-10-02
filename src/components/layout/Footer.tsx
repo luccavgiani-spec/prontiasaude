@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Heart, Mail, Phone, MapPin } from "lucide-react";
+import { CATALOGO_SERVICOS } from "@/lib/constants";
 export function Footer() {
   return <footer className="bg-muted/30 border-t border-border mt-16">
       <div className="container mx-auto px-4 py-12">
@@ -35,16 +36,23 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-foreground mb-4">Links Rápidos</h3>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link to="/" className="text-muted-foreground hover:text-primary transition-colors">
-                  Início
-                </Link>
-              </li>
-              <li>
-                <Link to="/servicos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Serviços
-                </Link>
-              </li>
+              {CATALOGO_SERVICOS.map((servico) => (
+                <li key={servico.slug}>
+                  <Link 
+                    to={`/servicos/${servico.slug}`} 
+                    className="text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    {servico.nome}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Institucional */}
+          <div>
+            <h3 className="font-semibold text-foreground mb-4">Institucional</h3>
+            <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/planos" className="text-muted-foreground hover:text-primary transition-colors">
                   Planos
@@ -61,13 +69,13 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Blog
+                <Link to="/quem-somos" className="text-muted-foreground hover:text-primary transition-colors">
+                  Quem Somos
                 </Link>
               </li>
               <li>
-                <Link to="/quem-somos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Quem Somos
+                <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
+                  Blog
                 </Link>
               </li>
               <li>
@@ -77,34 +85,7 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
-                  Seja nosso parceiro
-                </Link>
-              </li>
-            </ul>
-          </div>
-
-          {/* Serviços */}
-          <div>
-            <h3 className="font-semibold text-foreground mb-4">Serviços</h3>
-            <ul className="space-y-2 text-sm">
-              <li>
-                <Link to="/servicos/consulta" className="text-muted-foreground hover:text-primary transition-colors">
-                  Consulta Clínica
-                </Link>
-              </li>
-              <li>
-                <Link to="/servicos/psicologa" className="text-muted-foreground hover:text-primary transition-colors">
-                  Psicologia
-                </Link>
-              </li>
-              <li>
-                <Link to="/servicos/psiquiatria" className="text-muted-foreground hover:text-primary transition-colors">
-                  Psiquiatria
-                </Link>
-              </li>
-              <li>
-                <Link to="/servicos/renovacao" className="text-muted-foreground hover:text-primary transition-colors">
-                  Renovação de Receita
+                  Seja Nosso Parceiro
                 </Link>
               </li>
             </ul>
