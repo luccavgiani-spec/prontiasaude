@@ -31,9 +31,9 @@ export const CATALOGO_SERVICOS = [
     tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
     variantes: [
-      { valor: 44.99, nome: "Individual", sku: "PREENCHER_DEPOIS" },
-      { valor: 41.99, nome: "Plano 4 consultas", sku: "PREENCHER_DEPOIS" },
-      { valor: 38.49, nome: "Plano 8 consultas", sku: "PREENCHER_DEPOIS" }
+      { valor: 44.99, nome: "Individual", sku: "PREENCHER_DEPOIS", consultas: 1 },
+      { valor: 41.99, nome: "Plano 4 consultas", sku: "PREENCHER_DEPOIS", consultas: 4 },
+      { valor: 38.49, nome: "Plano 8 consultas", sku: "PREENCHER_DEPOIS", consultas: 8 }
     ]
   },
   { 

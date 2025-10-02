@@ -305,11 +305,28 @@ const ServicoDetalhe = () => {
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {servico.variantes.map((variante) => (
-                          <SelectItem key={variante.nome} value={variante.nome}>
-                            {variante.nome} - {formataPreco(variante.valor)}
-                          </SelectItem>
-                        ))}
+                        {servico.variantes.map((variante) => {
+                          const isPsychologist = servico.slug === "psicologa";
+                          const consultas = variante.consultas || 1;
+                          const valorTotal = variante.valor * consultas;
+                          
+                          return (
+                            <SelectItem key={variante.nome} value={variante.nome}>
+                              {isPsychologist && consultas > 1 ? (
+                                <>
+                                  {variante.nome} - {formataPreco(variante.valor)}/consulta 
+                                  <span className="text-muted-foreground text-xs ml-1">
+                                    (Total: {formataPreco(valorTotal)})
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  {variante.nome} - {formataPreco(variante.valor)}
+                                </>
+                              )}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
@@ -325,7 +342,7 @@ const ServicoDetalhe = () => {
 
                 <Button onClick={() => {
                 handleAgendar();
-              }} variant="medical" size="lg" className="w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
+              }} variant="outline" size="lg" className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
                   {isLoading ? "Processando..." : "Agendar agora"}
                 </Button>
 

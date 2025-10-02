@@ -20,6 +20,7 @@ interface Servico {
     valor: number;
     nome: string;
     sku: string;
+    consultas?: number;
   }>;
 }
 interface ServicoCardProps {
