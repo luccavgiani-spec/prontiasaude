@@ -50,26 +50,45 @@ export function PlanosSection() {
   // Definição dos períodos de pagamento
   const periodos = [
     { meses: "1", label: "Mensal", desconto: 0 },
-    { meses: "6", label: "Semestral", desconto: 20 },
-    { meses: "12", label: "Anual", desconto: 40 }
+    { meses: "6", label: "Semestral", desconto: 0 },
+    { meses: "12", label: "Anual", desconto: 0 }
   ];
 
-  // Preços base para os novos planos (em centavos)
+  // Preços base para os novos planos (em reais, convertidos para centavos)
   const precosPlanosBase = {
-    individual_com_especialistas: 14900, // R$ 149,00
-    familiar_com_especialistas: 29900,   // R$ 299,00
-    individual_sem_especialistas: 9900,  // R$ 99,00
-    familiar_sem_especialistas: 19900    // R$ 199,00
+    individual_com_especialistas: 2399, // R$ 23,99
+    familiar_com_especialistas: 3999,   // R$ 39,99
+    individual_sem_especialistas: 1999,  // R$ 19,99
+    familiar_sem_especialistas: 2990    // R$ 29,90
   };
 
-  // Função para calcular preço com desconto
-  const calcularPreco = (precoBase: number, meses: number) => {
-    const periodo = periodos.find(p => p.meses === meses.toString());
-    if (!periodo) return precoBase;
+  // Função para calcular preço (sem desconto, valores já são finais)
+  const calcularPreco = (planoId: string, meses: number) => {
+    // Mapeamento direto dos preços finais por plano e duração
+    const precosPorPlanoEDuracao: { [key: string]: { [meses: string]: number } } = {
+      "individual_com_especialistas": {
+        "1": 2399,  // R$ 23,99
+        "6": 1799,  // R$ 17,99
+        "12": 1599  // R$ 15,99
+      },
+      "familiar_com_especialistas": {
+        "1": 3999,  // R$ 39,99
+        "6": 3399,  // R$ 33,99
+        "12": 2990  // R$ 29,90
+      },
+      "individual_sem_especialistas": {
+        "1": 1999,  // R$ 19,99
+        "6": 1599,  // R$ 15,99
+        "12": 1399  // R$ 13,99
+      },
+      "familiar_sem_especialistas": {
+        "1": 2990,  // R$ 29,90
+        "6": 2690,  // R$ 26,90
+        "12": 2430  // R$ 24,30
+      }
+    };
     
-    const desconto = periodo.desconto / 100;
-    const precoComDesconto = precoBase * (1 - desconto);
-    return precoComDesconto;
+    return precosPorPlanoEDuracao[planoId]?.[meses.toString()] || precosPlanosBase[planoId as keyof typeof precosPlanosBase] || 0;
   };
 
   // Definição dos novos planos
@@ -264,12 +283,11 @@ export function PlanosSection() {
 
         {/* Grid de planos */}
         <div className="grid md:grid-cols-4 gap-6 max-w-7xl mx-auto mb-12">
-          {novosPlanosData.map((plano) => {
-            const meses = parseInt(duracaoSelecionada);
-            const precoComDesconto = calcularPreco(plano.precoBase, meses);
-            const precoMensal = precoComDesconto / meses;
-            const precoDiario = precoMensal / 30;
-            const periodo = periodos.find(p => p.meses === duracaoSelecionada);
+                {novosPlanosData.map((plano) => {
+                  const meses = parseInt(duracaoSelecionada);
+                  const precoMensal = calcularPreco(plano.id, meses);
+                  const precoDiario = precoMensal / 30;
+                  const periodo = periodos.find(p => p.meses === duracaoSelecionada);
             
             return (
               <Card 
@@ -304,16 +322,6 @@ export function PlanosSection() {
                     <div className="text-xs text-muted-foreground">
                       Equivale a {formataPreco(precoDiario / 100)}/dia
                     </div>
-                    {periodo && periodo.desconto > 0 && (
-                      <div className="text-xs text-muted-foreground mt-2">
-                        <span className="line-through">
-                          {formataPreco(plano.precoBase / 100)}
-                        </span>
-                        <span className="text-accent font-medium ml-2">
-                          Economize {periodo.desconto}%
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </CardHeader>
 
@@ -347,6 +355,7 @@ export function PlanosSection() {
                       size="sm"
                       className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
                       disabled={isLoading}
+                      data-sku="PREENCHER_DEPOIS"
                     >
                       {isLoading ? "Processando..." : "Assinar Plano"}
                       <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />

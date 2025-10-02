@@ -207,6 +207,7 @@ export function ServicoCard({
             size="default" 
             disabled={isLoading} 
             className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform"
+            data-sku={servico.sku}
           >
             {isLoading ? "Processando..." : getButtonText(servico.slug)}
           </Button>

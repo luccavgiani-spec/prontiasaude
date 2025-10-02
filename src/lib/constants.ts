@@ -15,101 +15,232 @@ export const CHECKOUT_MODE = "infinitepay";
 export const CATALOGO_SERVICOS = [
   { 
     slug: "consulta", 
-    nome: "Consulta clínica", 
+    nome: "Pronto Atendimento", 
     precoBase: 43.90, 
-    sku: "CONSULTA_CLINICA",
-    descricao: "Consulta médica online 24h por dia.",
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta médica online 24h por dia com clínico geral.",
     tempo: "30-45 minutos",
     inclui: ["Consulta por videochamada", "Receituário digital", "Orientações médicas"]
   },
   { 
-    slug: "renovacao", 
-    nome: "Renovação de receita", 
-    precoBase: 29.90, 
-    sku: "RENOVACAO_RECEITA",
-    descricao: "Renove sua receita agora, válida em todo o Brasil e com assinatura digital.",
-    tempo: "15-20 minutos", 
-    inclui: ["Nova receita digital", "Orientações de uso"]
-  },
-  { 
     slug: "psicologa", 
-    nome: "Psicólogo", 
-    precoBase: 39.90, 
-    sku: "PSICOLOGA",
+    nome: "Psicóloga - Individual", 
+    precoBase: 44.99, 
+    sku: "PREENCHER_DEPOIS",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"]
   },
   { 
+    slug: "psicologa_4_consultas", 
+    nome: "Psicóloga - Plano 4 consultas", 
+    precoBase: 41.99, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Pacote com 4 consultas de psicologia online",
+    tempo: "30 minutos cada",
+    inclui: ["4 sessões terapêuticas", "Acompanhamento psicológico", "Orientações personalizadas"]
+  },
+  { 
+    slug: "psicologa_8_consultas", 
+    nome: "Psicóloga - Plano 8 consultas", 
+    precoBase: 38.49, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Pacote com 8 consultas de psicologia online",
+    tempo: "30 minutos cada",
+    inclui: ["8 sessões terapêuticas", "Acompanhamento psicológico", "Orientações personalizadas"]
+  },
+  { 
     slug: "medicos_especialistas", 
-    nome: "Médicos Especialistas", 
-    precoBase: 79.90, 
-    sku: "MEDICOS_ESPECIALISTAS",
-    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia",
+    nome: "Especialidades (R$ 89,90)", 
+    precoBase: 89.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Médico da Família",
     tempo: "45-60 minutos",
     inclui: [
       "Cardiologista", "Dermatologista", "Endocrinologista", 
       "Gastroenterologista", "Ginecologista", "Oftalmologista", 
       "Ortopedista", "Otorrinolaringologista", "Pediatria", 
-      "Psiquiatria", "Urologista", "Fisioterapia"
+      "Psiquiatria", "Médico da Família"
     ]
   },
   { 
-    slug: "laudos_psicologicos", 
-    nome: "Laudos Psicológicos", 
+    slug: "geriatria", 
+    nome: "Geriatria", 
     precoBase: 119.90, 
-    sku: "LAUDOS_PSICOLOGICOS",
-    descricao: "",
-    tempo: "60-90 minutos",
-    inclui: ["Laudo para bariátrica, laqueadura e vasectomia", "Avaliação completa"],
-    naoInclui: ["Consulta psicológica prévia"]
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com geriatra online",
+    tempo: "45-60 minutos",
+    inclui: ["Consulta especializada", "Avaliação geriátrica", "Orientações médicas"]
+  },
+  { 
+    slug: "nutriologo", 
+    nome: "Nutrólogo", 
+    precoBase: 119.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com nutrólogo online",
+    tempo: "45-60 minutos",
+    inclui: ["Consulta especializada", "Avaliação nutricional", "Orientações médicas"]
+  },
+  { 
+    slug: "infectologista", 
+    nome: "Infectologista", 
+    precoBase: 129.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com infectologista online",
+    tempo: "45-60 minutos",
+    inclui: ["Consulta especializada", "Avaliação infectológica", "Orientações médicas"]
+  },
+  { 
+    slug: "neurologista", 
+    nome: "Neurologista", 
+    precoBase: 129.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com neurologista online",
+    tempo: "45-60 minutos",
+    inclui: ["Consulta especializada", "Avaliação neurológica", "Orientações médicas"]
+  },
+  { 
+    slug: "reumatologista", 
+    nome: "Reumatologista", 
+    precoBase: 129.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com reumatologista online",
+    tempo: "45-60 minutos",
+    inclui: ["Consulta especializada", "Avaliação reumatológica", "Orientações médicas"]
+  },
+  { 
+    slug: "nutricionista", 
+    nome: "Nutricionista", 
+    precoBase: 59.90, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Consulta com nutricionista online",
+    tempo: "30-45 minutos",
+    inclui: ["Consulta nutricional", "Plano alimentar", "Orientações personalizadas"]
+  },
+  { 
+    slug: "personal_trainer", 
+    nome: "Personal Trainer", 
+    precoBase: 54.99, 
+    sku: "PREENCHER_DEPOIS",
+    descricao: "Sessão com personal trainer online",
+    tempo: "30-45 minutos",
+    inclui: ["Treino personalizado", "Acompanhamento profissional", "Orientações de exercícios"]
   }
 ];
 
 // Planos de Assinatura
 export const PLANOS = [
   { 
-    code: "INDIVIDUAL", 
-    nome: "Individual", 
-    precoMensal: 187,
+    code: "INDIVIDUAL_COM_ESPECIALISTA", 
+    nome: "Individual - com especialista", 
+    precoMensal: {
+      "1": 23.99,
+      "6": 17.99,
+      "12": 15.99
+    },
+    sku: {
+      "1": "PREENCHER_DEPOIS",
+      "6": "PREENCHER_DEPOIS",
+      "12": "PREENCHER_DEPOIS"
+    },
     beneficios: [
-      "Atendimento para 1 pessoa",
-      "Atendimento prioritário",
       "Atendimento ilimitado",
-      "Atendimento 24h/dia",
-      "Sem coparticipação e sem carência"
-    ],
-    popular: false
-  },
-  { 
-    code: "FAMILIAR", 
-    nome: "Familiar", 
-    precoMensal: 250,
-    beneficios: [
-      "Atendimento para até 4 pessoas",
-      "Atendimento prioritário",
-      "Atendimento ilimitado",
-      "Atendimento 24h/dia",
-      "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
-      "• Nutrição",
-      "• Personal Trainer",
-      "• Psicólogo (2x no mês)"
+      "Consultas com clínico geral 24h/dia",
+      "Especialidades exclusivas",
+      "Nutrição e personal trainer",
+      "Psicólogo quinzenal",
+      "Sem coparticipação e carência",
+      "Descontos em farmácias e exames"
     ],
     popular: true
   },
   { 
+    code: "INDIVIDUAL_SEM_ESPECIALISTA", 
+    nome: "Individual - sem especialista", 
+    precoMensal: {
+      "1": 19.99,
+      "6": 15.99,
+      "12": 13.99
+    },
+    sku: {
+      "1": "PREENCHER_DEPOIS",
+      "6": "PREENCHER_DEPOIS",
+      "12": "PREENCHER_DEPOIS"
+    },
+    beneficios: [
+      "Atendimento ilimitado",
+      "Consultas com clínico geral 24h/dia",
+      "Sem coparticipação e carência",
+      "Descontos em farmácias e exames"
+    ],
+    popular: false
+  },
+  { 
+    code: "FAMILIAR_COM_ESPECIALISTA", 
+    nome: "Familiar - com especialista", 
+    precoMensal: {
+      "1": 39.99,
+      "6": 33.99,
+      "12": 29.90
+    },
+    sku: {
+      "1": "PREENCHER_DEPOIS",
+      "6": "PREENCHER_DEPOIS",
+      "12": "PREENCHER_DEPOIS"
+    },
+    beneficios: [
+      "Atendimento para até 4 familiares",
+      "Atendimento ilimitado",
+      "Consultas com clínico geral 24h/dia",
+      "Especialidades exclusivas",
+      "Nutrição e personal trainer",
+      "Psicólogo quinzenal",
+      "Sem coparticipação e carência",
+      "Descontos em farmácias e exames"
+    ],
+    popular: false
+  },
+  { 
+    code: "FAMILIAR_SEM_ESPECIALISTA", 
+    nome: "Familiar - sem especialista", 
+    precoMensal: {
+      "1": 29.90,
+      "6": 26.90,
+      "12": 24.30
+    },
+    sku: {
+      "1": "PREENCHER_DEPOIS",
+      "6": "PREENCHER_DEPOIS",
+      "12": "PREENCHER_DEPOIS"
+    },
+    beneficios: [
+      "Atendimento para até 4 familiares",
+      "Atendimento ilimitado",
+      "Consultas com clínico geral 24h/dia",
+      "Sem coparticipação e carência",
+      "Descontos em farmácias e exames"
+    ],
+    popular: false
+  },
+  { 
     code: "EMPRESARIAL", 
     nome: "Empresarial", 
-    precoMensal: 0,
+    precoMensal: {
+      "1": 0,
+      "6": 0,
+      "12": 0
+    },
+    sku: {
+      "1": "CONTATO",
+      "6": "CONTATO",
+      "12": "CONTATO"
+    },
     beneficios: [
       "Plano personalizado",
       "Atendimento prioritário",
       "Atendimento ilimitado",
       "Atendimento 24h/dia",
-      "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Psiquiatria, Otorrinolaringologia",
-      "• Nutrição",
-      "• Personal Trainer",
-      "• Psicólogo (2x no mês)",
+      "Especialidades exclusivas",
       "Suporte dedicado"
     ],
     popular: false
