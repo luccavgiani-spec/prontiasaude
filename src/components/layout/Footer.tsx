@@ -132,7 +132,7 @@ export function Footer() {
         <div className="mt-6 flex items-center justify-center gap-6">
           <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
             <div className="w-2 h-2 bg-primary rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Pagamento Seguro (Stripe)</span>
+            <span className="text-xs text-muted-foreground">Pagamento Seguro (InfinitePay)</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
             <div className="w-2 h-2 bg-accent rounded-full"></div>

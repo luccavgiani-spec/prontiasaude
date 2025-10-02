@@ -2,14 +2,14 @@
 
 // Environment Variables
 export const ENV = {
-  STRIPE_PK: "pk_live_51Ry1CkENBHjf6SQJhXbLXOo4Ia72RcHaMFvMk3SKK9FYPeyqkCxA16Sriz5A82UYlpia7sgrEEjFgg5A5nK2qpPE00t2iroVX4"
+  // InfinitePay configuration will be used from the checkout library
 };
 
 // Google Apps Script API Base URL
 export const GAS_BASE = "https://script.google.com/macros/s/AKfycby3nfU-svT3NExBz57fS9Ok8GDPVAg-vYT2mRVqyyFrn-wND7YKUURa9szqeS3P1hC9/exec";
 
 // Checkout Configuration
-export const CHECKOUT_MODE = "stripe";
+export const CHECKOUT_MODE = "infinitepay";
 
 // Catálogo de Serviços
 export const CATALOGO_SERVICOS = [

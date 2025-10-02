@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
-import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
-import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
+import { formataPreco } from "@/lib/utils";
+import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
@@ -49,16 +49,41 @@ const ServicoDetalhe = () => {
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
       
+      if (!productKey) {
+        toast({
+          title: "Erro",
+          description: "Serviço não encontrado.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Track Lead event when user clicks to schedule
       trackLead({
         value: servico.precoBase,
         content_name: servico.nome,
       });
       
-      await startCheckout({
+      // Get customer data
+      const customerData = await getCurrentCustomerData();
+      
+      // Open InfinitePay modal
+      openCheckoutModal(
         productKey,
-        quantity: 1
-      });
+        customerData,
+        () => {
+          // Success callback - redirect to confirmation page
+          window.location.href = '/confirmacao';
+        },
+        () => {
+          // Timeout callback
+          toast({
+            title: "Tempo esgotado",
+            description: "O tempo de pagamento expirou. Por favor, tente novamente.",
+            variant: "destructive",
+          });
+        }
+      );
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({
@@ -261,7 +286,7 @@ const ServicoDetalhe = () => {
 
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-2">
-                    Pagamento seguro via Stripe
+                    Pagamento seguro via InfinitePay
                   </p>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                     <div className="w-2 h-2 bg-primary rounded-full"></div>

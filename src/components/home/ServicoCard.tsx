@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CadastroModal } from "@/components/modais/CadastroModal";
-import { formataPreco, getEmailAtual, getPhone } from "@/lib/utils";
-import { startCheckout, getProductKeyFromSlug } from "@/lib/stripe-checkout";
+import { formataPreco } from "@/lib/utils";
+import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X } from "lucide-react";
@@ -76,16 +76,41 @@ export function ServicoCard({
     try {
       const productKey = getProductKeyFromSlug(servico.slug);
       
+      if (!productKey) {
+        toast({
+          title: "Erro",
+          description: "Serviço não encontrado.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Track Lead event when user clicks to schedule
       trackLead({
         value: precoComDesconto,
         content_name: servico.nome,
       });
       
-      await startCheckout({
+      // Get customer data
+      const customerData = await getCurrentCustomerData();
+      
+      // Open InfinitePay modal
+      openCheckoutModal(
         productKey,
-        quantity: 1
-      });
+        customerData,
+        () => {
+          // Success callback - redirect to confirmation page
+          window.location.href = '/confirmacao';
+        },
+        () => {
+          // Timeout callback
+          toast({
+            title: "Tempo esgotado",
+            description: "O tempo de pagamento expirou. Por favor, tente novamente.",
+            variant: "destructive",
+          });
+        }
+      );
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({
