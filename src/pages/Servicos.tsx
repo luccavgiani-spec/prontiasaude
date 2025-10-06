@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { ServicoCard } from "@/components/home/ServicoCard";
-import { EspecialidadesSelector } from "@/components/home/EspecialidadesSelector";
+
 import { Button } from "@/components/ui/button";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { ArrowLeft, Clock, Users, CheckCircle } from "lucide-react";
@@ -21,7 +21,7 @@ const Servicos = () => {
 
         {/* Especialidades Dinâmicas */}
         <div className="mb-12">
-          <EspecialidadesSelector />
+          
         </div>
 
         {/* Grid de serviços */}

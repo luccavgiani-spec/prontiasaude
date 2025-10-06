@@ -84,9 +84,9 @@ export function ServicoCard({
     setIsLoading(true);
     
     try {
-      // Redirect to /renovacao for renovacao_receitas
+      // Redirect to /servicos/renovacao_receitas for renovacao_receitas
       if (servico.slug === "renovacao_receitas") {
-        window.location.href = "/renovacao";
+        window.location.href = "/servicos/renovacao_receitas";
         return;
       }
       

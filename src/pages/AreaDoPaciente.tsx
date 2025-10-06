@@ -131,7 +131,7 @@ const AreaDoPaciente = () => {
                     </Link>
                   </Button>
                   <Button asChild variant="outline" size="lg" className="flex-1">
-                    <Link to="/servicos/renovacao">
+                    <Link to="/servicos/renovacao_receitas">
                       <Pill className="h-5 w-5 mr-2" />
                       Renovar Receitas
                     </Link>

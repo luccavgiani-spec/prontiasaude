@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
-import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
+import { openInfinitePayCheckout, fetchEspecialidades } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
@@ -24,14 +24,39 @@ const ServicoDetalhe = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<string>("");
+  const [especialidades, setEspecialidades] = useState<Array<{label: string, sku: string}>>([]);
+  const [loadingEspecialidades, setLoadingEspecialidades] = useState(false);
   const {
     toast
   } = useToast();
   const servico = CATALOGO_SERVICOS.find(s => s.slug === slug);
 
-  // Set default variant on load
+  // Load especialidades dynamically for medicos_especialistas
   useEffect(() => {
-    if (servico?.variantes && servico.variantes.length > 0) {
+    if (servico?.slug === "medicos_especialistas") {
+      setLoadingEspecialidades(true);
+      fetchEspecialidades()
+        .then(items => {
+          setEspecialidades(items);
+          if (items.length > 0) {
+            setSelectedVariant(items[0].label);
+          }
+        })
+        .catch(err => {
+          console.error('Erro ao carregar especialidades:', err);
+          toast({
+            title: "Erro",
+            description: "Não foi possível carregar as especialidades.",
+            variant: "destructive"
+          });
+        })
+        .finally(() => setLoadingEspecialidades(false));
+    }
+  }, [servico, toast]);
+
+  // Set default variant on load (for other services)
+  useEffect(() => {
+    if (servico?.variantes && servico.variantes.length > 0 && servico.slug !== "medicos_especialistas") {
       setSelectedVariant(servico.variantes[0].nome);
     }
   }, [servico]);
@@ -52,6 +77,12 @@ const ServicoDetalhe = () => {
     return variant.valor * consultas;
   };
   const getCurrentSku = () => {
+    // For medicos_especialistas, get SKU from dynamic especialidades list
+    if (servico?.slug === "medicos_especialistas") {
+      const esp = especialidades.find(e => e.label === selectedVariant);
+      return esp?.sku || servico?.sku;
+    }
+    
     if (!servico?.variantes) return servico?.sku;
     const variant = servico.variantes.find(v => v.nome === selectedVariant);
     return variant?.sku || servico.sku;
@@ -292,15 +323,34 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 {/* Dropdown for variants */}
-                {servico.variantes && servico.variantes.length > 0 && <div className="mb-4">
+                {servico.slug === "medicos_especialistas" ? (
+                  <div className="mb-4">
+                    <label className="text-sm font-medium text-foreground mb-2 block">
+                      Selecione a especialidade:
+                    </label>
+                    <Select value={selectedVariant} onValueChange={setSelectedVariant} disabled={loadingEspecialidades}>
+                      <SelectTrigger className="w-full bg-background">
+                        <SelectValue placeholder={loadingEspecialidades ? "Carregando..." : "Selecione..."} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-50">
+                        {especialidades.map(esp => (
+                          <SelectItem key={esp.sku} value={esp.label}>
+                            {esp.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : servico.variantes && servico.variantes.length > 0 && (
+                  <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
                       {servico.slug === "psicologa" ? "Selecione o plano:" : servico.slug === "solicitacao_exames" ? "Selecione o exame:" : "Selecione a especialidade:"}
                     </label>
                     <Select value={selectedVariant} onValueChange={setSelectedVariant}>
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full bg-background">
                         <SelectValue placeholder="Selecione..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-background z-50">
                         {servico.variantes.map(variante => {
                       const isPsychologist = servico.slug === "psicologa";
                       const consultas = variante.consultas || 1;
@@ -318,7 +368,8 @@ const ServicoDetalhe = () => {
                     })}
                       </SelectContent>
                     </Select>
-                  </div>}
+                  </div>
+                )}
                 
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "solicitacao_exames") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
