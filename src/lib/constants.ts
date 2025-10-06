@@ -41,11 +41,15 @@ export const CATALOGO_SERVICOS = [
     nome: "Médicos Especialistas", 
     precoBase: 54.90, 
     sku: "BIR7668",
-    descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria",
+    descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria, Cardiologista, Dermatologista, Endocrinologista, Gastroenterologista, Ginecologista, Oftalmologista, Ortopedista, Pediatra, Otorrinolaringologista, Médico da Família, Psiquiatra",
     tempo: "30-60 minutos",
     inclui: [
       "Personal Trainer", "Nutricionista", "Reumatologista", 
-      "Neurologista", "Infectologista", "Nutrólogo", "Geriatra"
+      "Neurologista", "Infectologista", "Nutrólogo", "Geriatra",
+      "Cardiologista", "Dermatologista", "Endocrinologista",
+      "Gastroenterologista", "Ginecologista", "Oftalmologista",
+      "Ortopedista", "Pediatra", "Otorrinolaringologista",
+      "Médico da Família", "Psiquiatra"
     ],
     variantes: [
       { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" },
@@ -54,7 +58,18 @@ export const CATALOGO_SERVICOS = [
       { valor: 129.90, nome: "Neurologista", sku: "PKS9388" },
       { valor: 129.90, nome: "Infectologista", sku: "MYX5186" },
       { valor: 119.90, nome: "Nutrólogo", sku: "LZF3879" },
-      { valor: 119.90, nome: "Geriatria", sku: "YZD9932" }
+      { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
+      { valor: 89.90, nome: "Cardiologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Dermatologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Endocrinologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Gastroenterologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Ginecologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Oftalmologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Ortopedista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Pediatra", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Otorrinolaringologista", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" },
+      { valor: 89.90, nome: "Psiquiatra", sku: "PREENCHER_DEPOIS" }
     ]
   },
   { 
