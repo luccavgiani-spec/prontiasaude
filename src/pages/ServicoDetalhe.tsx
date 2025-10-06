@@ -142,7 +142,7 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.slug === "renovacao_receitas" ? "Assim que o pagamento for aprovado, você receberá um popup para anexar sua receita atual (com validade de até 3 meses) e enviar via WhatsApp +55 11 93335-9187. Um profissional fará a análise e enviará o documento renovado." : servico.slug === "solicitacao_exames" ? "Solicite exames laboratoriais rapidamente. Após o pagamento, você poderá anexar informações e enviar via WhatsApp. Nosso médico avaliará e enviará a solicitação do exame." : servico.slug === "laudos_psicologicos" ? "Necessário consulta prévia com psicólogo." : `${servico.descricao}.`}
+                {servico.descricao}
               </p>
 
               {/* Informações básicas */}
@@ -215,8 +215,8 @@ const ServicoDetalhe = () => {
                           1
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Envio de documentos</h3>
-                          <p className="text-muted-foreground">Após o pagamento, anexe {servico.slug === "renovacao_receitas" ? "sua receita anterior (máximo 3 meses)" : "as informações necessárias"} via WhatsApp +55 11 93335-9187</p>
+                          <h3 className="font-semibold text-foreground mb-1">Realize o pagamento</h3>
+                          <p className="text-muted-foreground">Conclua o pagamento do serviço</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -224,8 +224,8 @@ const ServicoDetalhe = () => {
                           2
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Avaliação médica</h3>
-                          <p className="text-muted-foreground">Nosso médico avalia {servico.slug === "renovacao_receitas" ? "sua receita" : "seu pedido"}</p>
+                          <h3 className="font-semibold text-foreground mb-1">Anexe os documentos</h3>
+                          <p className="text-muted-foreground">Faça o upload {servico.slug === "renovacao_receitas" ? "da sua receita anterior (válida até 3 meses)" : "das informações necessárias"} diretamente no site</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -233,8 +233,8 @@ const ServicoDetalhe = () => {
                           3
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">{servico.slug === "renovacao_receitas" ? "Nova receita" : "Solicitação de exame"}</h3>
-                          <p className="text-muted-foreground">Receba {servico.slug === "renovacao_receitas" ? "sua nova receita" : "a solicitação do exame"} digital com assinatura médica</p>
+                          <h3 className="font-semibold text-foreground mb-1">Receba o atendimento</h3>
+                          <p className="text-muted-foreground">Nossa equipe entrará em contato e você receberá {servico.slug === "renovacao_receitas" ? "a receita renovada" : "a solicitação do exame"} em formato digital</p>
                         </div>
                       </div>
                     </> : <>
