@@ -18,7 +18,6 @@ import EmpresasDoBem from "./pages/EmpresasDoBem";
 import BlogsIndex from "./pages/BlogsIndex";
 import BlogArticlePage from "./pages/BlogArticlePage";
 import Paciente from "./pages/Paciente";
-import Confirmacao from "./pages/Confirmacao";
 import NotFound from "./pages/NotFound";
 // Auth pages
 import Entrar from "./pages/Entrar";
@@ -30,6 +29,7 @@ import CompletarPerfil from "./pages/CompletarPerfil";
 import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
 import Agendamento from "./pages/Agendamento";
+import Confirmacao from "./pages/Confirmacao";
 // New wellness pages
 import SaudeMental from "./pages/SaudeMental";
 import Livros from "./pages/Livros";

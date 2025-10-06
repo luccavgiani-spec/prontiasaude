@@ -41,35 +41,20 @@ export const CATALOGO_SERVICOS = [
     nome: "Médicos Especialistas", 
     precoBase: 54.90, 
     sku: "BIR7668",
-    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Infectologia, Neurologia, Nutrologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Reumatologia, Médico da Família, Nutrição, Personal Trainer",
+    descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria",
     tempo: "30-60 minutos",
     inclui: [
-      "Cardiologista", "Dermatologista", "Endocrinologista", 
-      "Gastroenterologista", "Geriatra", "Ginecologista", 
-      "Infectologista", "Neurologista", "Nutrólogo",
-      "Oftalmologista", "Ortopedista", "Otorrinolaringologista", 
-      "Pediatra", "Psiquiatra", "Reumatologista", "Médico da Família",
-      "Nutricionista", "Personal Trainer"
+      "Personal Trainer", "Nutricionista", "Reumatologista", 
+      "Neurologista", "Infectologista", "Nutrólogo", "Geriatra"
     ],
     variantes: [
-      { valor: 89.90, nome: "Cardiologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Dermatologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Endocrinologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Gastroenterologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
-      { valor: 89.90, nome: "Ginecologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 129.90, nome: "Infectologia", sku: "MYX5186" },
-      { valor: 129.90, nome: "Neurologia", sku: "PKS9388" },
-      { valor: 119.90, nome: "Nutrologia", sku: "LZF3879" },
-      { valor: 89.90, nome: "Oftalmologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Ortopedia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Otorrinolaringologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Pediatria", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Psiquiatria", sku: "PREENCHER_DEPOIS" },
-      { valor: 129.90, nome: "Reumatologia", sku: "UDH3250" },
-      { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" },
+      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" },
       { valor: 59.90, nome: "Nutricionista", sku: "VPNS5132" },
-      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" }
+      { valor: 129.90, nome: "Reumatologista", sku: "UDH3250" },
+      { valor: 129.90, nome: "Neurologista", sku: "PKS9388" },
+      { valor: 129.90, nome: "Infectologista", sku: "MYX5186" },
+      { valor: 119.90, nome: "Nutrólogo", sku: "LZF3879" },
+      { valor: 119.90, nome: "Geriatria", sku: "YZD9932" }
     ]
   },
   { 
