@@ -85,28 +85,10 @@ const QuemSomos = () => {
             a Médicos do Bem nasceu da necessidade de conectar profissionais qualificados 
             a pacientes que buscam cuidado médico conveniente e acessível.
           </p>
-          <p className="text-muted-foreground max-w-3xl mx-auto mb-8">
+          <p className="text-muted-foreground max-w-3xl mx-auto">
             Desde nossa fundação, já realizamos mais de 2.000 atendimentos, 
             mantendo uma avaliação média de 4.9 estrelas de nossos pacientes satisfeitos.
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">2K+</div>
-              <div className="text-sm text-muted-foreground">Atendimentos</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">4.9★</div>
-              <div className="text-sm text-muted-foreground">Avaliação</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">50+</div>
-              <div className="text-sm text-muted-foreground">Especialistas</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold text-primary mb-2">24/7</div>
-              <div className="text-sm text-muted-foreground">Disponibilidade</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>;
