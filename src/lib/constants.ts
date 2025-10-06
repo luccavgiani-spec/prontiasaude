@@ -17,7 +17,7 @@ export const CATALOGO_SERVICOS = [
     slug: "consulta", 
     nome: "Pronto Atendimento", 
     precoBase: 43.90, 
-    sku: "PREENCHER_DEPOIS",
+    sku: "ITC6534",
     descricao: "Consulta médica online 24h por dia com clínico geral.",
     tempo: "30-45 minutos",
     inclui: ["Consulta por videochamada", "Receituário digital", "Orientações médicas"]
@@ -26,21 +26,21 @@ export const CATALOGO_SERVICOS = [
     slug: "psicologa", 
     nome: "Psicólogo", 
     precoBase: 44.99, 
-    sku: "PREENCHER_DEPOIS",
+    sku: "ZWX2165",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
     variantes: [
-      { valor: 44.99, nome: "Individual", sku: "PREENCHER_DEPOIS", consultas: 1 },
-      { valor: 41.99, nome: "Plano 4 consultas", sku: "PREENCHER_DEPOIS", consultas: 4 },
-      { valor: 38.49, nome: "Plano 8 consultas", sku: "PREENCHER_DEPOIS", consultas: 8 }
+      { valor: 44.99, nome: "Individual", sku: "ZWX2165", consultas: 1 },
+      { valor: 167.96, nome: "Plano 4 consultas", sku: "HXR8516", consultas: 4 },
+      { valor: 307.92, nome: "Plano 8 consultas", sku: "YME9025", consultas: 8 }
     ]
   },
   { 
     slug: "medicos_especialistas", 
     nome: "Médicos Especialistas", 
     precoBase: 54.90, 
-    sku: "PREENCHER_DEPOIS",
+    sku: "BIR7668",
     descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Infectologia, Neurologia, Nutrologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Reumatologia, Médico da Família, Nutrição, Personal Trainer",
     tempo: "30-60 minutos",
     inclui: [
@@ -56,20 +56,20 @@ export const CATALOGO_SERVICOS = [
       { valor: 89.90, nome: "Dermatologia", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Endocrinologia", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Gastroenterologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 119.90, nome: "Geriatria", sku: "PREENCHER_DEPOIS" },
+      { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
       { valor: 89.90, nome: "Ginecologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 129.90, nome: "Infectologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 129.90, nome: "Neurologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 119.90, nome: "Nutrologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 129.90, nome: "Infectologia", sku: "MYX5186" },
+      { valor: 129.90, nome: "Neurologia", sku: "PKS9388" },
+      { valor: 119.90, nome: "Nutrologia", sku: "LZF3879" },
       { valor: 89.90, nome: "Oftalmologia", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Ortopedia", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Otorrinolaringologia", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Pediatria", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Psiquiatria", sku: "PREENCHER_DEPOIS" },
-      { valor: 129.90, nome: "Reumatologia", sku: "PREENCHER_DEPOIS" },
+      { valor: 129.90, nome: "Reumatologia", sku: "UDH3250" },
       { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" },
-      { valor: 59.90, nome: "Nutricionista", sku: "PREENCHER_DEPOIS" },
-      { valor: 54.90, nome: "Personal Trainer", sku: "PREENCHER_DEPOIS" }
+      { valor: 59.90, nome: "Nutricionista", sku: "VPNS5132" },
+      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" }
     ]
   },
   { 
@@ -88,7 +88,7 @@ export const CATALOGO_SERVICOS = [
     slug: "renovacao_receitas", 
     nome: "Renovação de receitas", 
     precoBase: 34.90, 
-    sku: "PRONTIA_RENOVACAO_RECEITA",
+    sku: "RZP57555",
     descricao: "Renove suas receitas médicas de forma prática e rápida. Após a confirmação do pagamento, você poderá anexar sua receita atual válida (até 3 meses) e encaminhar para análise. Um médico avaliará e emitirá a renovação em documento digital",
     tempo: "Atendimento imediato",
     inclui: [
@@ -102,7 +102,7 @@ export const CATALOGO_SERVICOS = [
     slug: "solicitacao_exames", 
     nome: "Solicitação de Exames", 
     precoBase: 34.90, 
-    sku: "PRONTIA_SOLICITACAO_EXAMES",
+    sku: "ULT3571",
     descricao: "Obtenha solicitações de exames laboratoriais sem sair de casa. Escolha o exame desejado, informe seus dados clínicos e receba a requisição médica assinada digitalmente para realizar o exame em qualquer laboratório",
     tempo: "Atendimento rápido",
     inclui: [
@@ -112,16 +112,16 @@ export const CATALOGO_SERVICOS = [
       "Atendimento ágil via WhatsApp"
     ],
     variantes: [
-      { valor: 34.90, nome: "Hemograma Completo", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Glicemia em Jejum", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Colesterol Total e Frações", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Função Renal (Ureia e Creatinina)", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "TSH e T4 Livre (Tireoide)", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Exame de Urina Tipo 1", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Vitamina D", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Ferritina", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "Ácido Úrico", sku: "PREENCHER_DEPOIS" },
-      { valor: 34.90, nome: "HbA1c (Hemoglobina Glicada)", sku: "PREENCHER_DEPOIS" }
+      { valor: 34.90, nome: "Hemograma Completo", sku: "ULT3571" },
+      { valor: 34.90, nome: "Glicemia em Jejum", sku: "ULT3571" },
+      { valor: 34.90, nome: "Colesterol Total e Frações", sku: "ULT3571" },
+      { valor: 34.90, nome: "Função Renal (Ureia e Creatinina)", sku: "ULT3571" },
+      { valor: 34.90, nome: "TSH e T4 Livre (Tireoide)", sku: "ULT3571" },
+      { valor: 34.90, nome: "Exame de Urina Tipo 1", sku: "ULT3571" },
+      { valor: 34.90, nome: "Vitamina D", sku: "ULT3571" },
+      { valor: 34.90, nome: "Ferritina", sku: "ULT3571" },
+      { valor: 34.90, nome: "Ácido Úrico", sku: "ULT3571" },
+      { valor: 34.90, nome: "HbA1c (Hemoglobina Glicada)", sku: "ULT3571" }
     ]
   }
 ];

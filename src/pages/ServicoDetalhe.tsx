@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
-import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
+import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
@@ -82,11 +82,12 @@ const ServicoDetalhe = () => {
   const handleAgendar = async () => {
     setIsLoading(true);
     try {
-      const productKey = getProductKeyFromSlug(servico.slug);
-      if (!productKey) {
+      const currentSku = getCurrentSku();
+      
+      if (!currentSku) {
         toast({
           title: "Erro",
-          description: "Serviço não encontrado.",
+          description: "SKU não encontrado.",
           variant: "destructive"
         });
         return;
@@ -98,21 +99,16 @@ const ServicoDetalhe = () => {
         content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
       });
 
-      // Get customer data
-      const customerData = await getCurrentCustomerData();
-
-      // Open InfinitePay modal
-      openCheckoutModal(productKey, customerData, () => {
-        // Success callback - redirect to confirmation page
-        window.location.href = '/confirmacao';
-      }, () => {
-        // Timeout callback
+      // Open InfinitePay checkout using link resolver
+      const success = await openInfinitePayCheckout(currentSku);
+      
+      if (!success) {
         toast({
-          title: "Tempo esgotado",
-          description: "O tempo de pagamento expirou. Por favor, tente novamente.",
+          title: "Erro",
+          description: "Não foi possível abrir o checkout. Tente novamente.",
           variant: "destructive"
         });
-      });
+      }
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { formataPreco } from "@/lib/utils";
-import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
+import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
@@ -96,43 +96,22 @@ export function ServicoCard({
         return;
       }
       
-      const productKey = getProductKeyFromSlug(servico.slug);
-      
-      if (!productKey) {
-        toast({
-          title: "Erro",
-          description: "Serviço não encontrado.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
       // Track Lead event when user clicks to schedule
       trackLead({
         value: precoComDesconto,
         content_name: servico.nome,
       });
       
-      // Get customer data
-      const customerData = await getCurrentCustomerData();
+      // Open InfinitePay checkout using link resolver
+      const success = await openInfinitePayCheckout(servico.sku);
       
-      // Open InfinitePay modal
-      openCheckoutModal(
-        productKey,
-        customerData,
-        () => {
-          // Success callback - redirect to confirmation page
-          window.location.href = '/confirmacao';
-        },
-        () => {
-          // Timeout callback
-          toast({
-            title: "Tempo esgotado",
-            description: "O tempo de pagamento expirou. Por favor, tente novamente.",
-            variant: "destructive",
-          });
-        }
-      );
+      if (!success) {
+        toast({
+          title: "Erro",
+          description: "Não foi possível abrir o checkout. Tente novamente.",
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({
