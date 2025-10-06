@@ -16,63 +16,72 @@ const QuemSomos = () => {
           </p>
         </div>
 
-        {/* Nossa Missão com Imagem */}
+        {/* Nossa Missão e Valores com Imagem */}
         <div className="mb-16">
-          <div className="grid md:grid-cols-2 gap-8 items-center">
+          <div className="grid md:grid-cols-2 gap-8 items-start">
             <div>
               <img 
                 src={quemSomosHero} 
                 alt="Equipe Prontia Saúde" 
-                className="rounded-2xl shadow-lg w-full"
+                className="rounded-2xl shadow-lg w-full h-full object-cover"
               />
             </div>
-            <div>
-              <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
-              <p className="text-muted-foreground mb-4">
-                Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
-                Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
-                mas um direito fundamental.
-              </p>
-              <p className="text-muted-foreground mb-6">
-                Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
-                através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
-              </p>
-              <Button variant="medical" size="lg" asChild>
-                <a href="/#servicos">Conheça Nossos Serviços</a>
-              </Button>
-            </div>
-          </div>
-        </div>
+            <div className="space-y-8">
+              {/* Nossa Missão */}
+              <div>
+                <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
+                <p className="text-muted-foreground mb-4">
+                  Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
+                  Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
+                  mas um direito fundamental.
+                </p>
+                <p className="text-muted-foreground mb-6">
+                  Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
+                  através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
+                </p>
+                <Button variant="medical" size="lg" asChild>
+                  <a href="/#servicos">Conheça Nossos Serviços</a>
+                </Button>
+              </div>
 
-        {/* Nossos Valores */}
-        <div className="mb-16">
-          <h2 className="text-3xl font-bold text-center text-foreground mb-12">
-            Nossos Valores
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="medical-card p-6 text-center">
-              <Users className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-3">Acessibilidade</h3>
-              <p className="text-muted-foreground">
-                Tornamos o acesso à saúde mais fácil e acessível para todos, 
-                independente de localização ou condição socioeconômica.
-              </p>
-            </div>
-            <div className="medical-card p-6 text-center">
-              <Award className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-3">Qualidade</h3>
-              <p className="text-muted-foreground">
-                Todos os nossos profissionais são rigorosamente selecionados e 
-                possuem certificações reconhecidas pelos órgãos competentes.
-              </p>
-            </div>
-            <div className="medical-card p-6 text-center">
-              <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-3">Segurança</h3>
-              <p className="text-muted-foreground">
-                Utilizamos as melhores práticas de segurança digital para proteger 
-                suas informações pessoais e médicas.
-              </p>
+              {/* Nossos Valores */}
+              <div>
+                <h2 className="text-3xl font-bold text-foreground mb-6">
+                  Nossos Valores
+                </h2>
+                <div className="space-y-6">
+                  <div className="flex gap-4">
+                    <Users className="h-10 w-10 text-primary flex-shrink-0" />
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Acessibilidade</h3>
+                      <p className="text-muted-foreground text-sm">
+                        Tornamos o acesso à saúde mais fácil e acessível para todos, 
+                        independente de localização ou condição socioeconômica.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <Award className="h-10 w-10 text-primary flex-shrink-0" />
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Qualidade</h3>
+                      <p className="text-muted-foreground text-sm">
+                        Todos os nossos profissionais são rigorosamente selecionados e 
+                        possuem certificações reconhecidas pelos órgãos competentes.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <Shield className="h-10 w-10 text-primary flex-shrink-0" />
+                    <div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">Segurança</h3>
+                      <p className="text-muted-foreground text-sm">
+                        Utilizamos as melhores práticas de segurança digital para proteger 
+                        suas informações pessoais e médicas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
