@@ -25,15 +25,15 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "psicologa", 
     nome: "Psicólogo", 
-    precoBase: 135.00, 
+    precoBase: 44.99, 
     sku: "ZXW2165",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
     variantes: [
-      { valor: 135.00, nome: "Individual", sku: "ZXW2165", consultas: 1 },
-      { valor: 176.00, nome: "Plano 4 consultas", sku: "HXR8516", consultas: 4 },
-      { valor: 339.00, nome: "Plano 8 consultas", sku: "YME9025", consultas: 8 }
+      { valor: 44.99, nome: "Individual (R$ 44,99/consulta)", sku: "ZXW2165", consultas: 1 },
+      { valor: 167.96, nome: "Plano 4 consultas (R$ 41,99/consulta)", sku: "HXR8516", consultas: 4 },
+      { valor: 307.92, nome: "Plano 8 consultas (R$ 38,49/consulta)", sku: "YME9025", consultas: 8 }
     ]
   },
   { 
