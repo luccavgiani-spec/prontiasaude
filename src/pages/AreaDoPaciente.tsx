@@ -11,6 +11,7 @@ import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
 import { formatCPF } from "@/lib/validations";
+import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -338,6 +339,11 @@ const AreaDoPaciente = () => {
               </div>
             </Link>
           </div>
+        </div>
+
+        {/* Disque Denúncia Section */}
+        <div className="mt-8">
+          <DisqueDenunciaSection />
         </div>
       </div>
     </div>;

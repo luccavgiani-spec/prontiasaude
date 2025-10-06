@@ -5,7 +5,6 @@ import ComoFuncionaStepper from "@/sections/ComoFuncionaStepper";
 import { PlanosSection } from "@/components/home/PlanosSection";
 import { FAQSection } from "@/components/home/FAQSection";
 import { ProvasSection } from "@/components/home/ProvasSection";
-import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 
 const Index = () => {
   return (
@@ -15,7 +14,6 @@ const Index = () => {
       <ServicosSection />
       <ComoFuncionaStepper />
       <PlanosSection />
-      <DisqueDenunciaSection />
       <FAQSection />
       <ProvasSection />
     </>
