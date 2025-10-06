@@ -1,5 +1,7 @@
 import { Heart, Users, Award, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import quemSomosHero from "@/assets/quem-somos-hero.jpg";
+
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
@@ -14,21 +16,32 @@ const QuemSomos = () => {
           </p>
         </div>
 
-        {/* Nossa Missão */}
-        <div className="mb-16 text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
-          <p className="text-muted-foreground mb-4 max-w-3xl mx-auto">
-            Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
-            Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
-            mas um direito fundamental.
-          </p>
-          <p className="text-muted-foreground mb-6 max-w-3xl mx-auto">
-            Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
-            através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
-          </p>
-          <Button variant="medical" size="lg" asChild>
-            <a href="/#servicos">Conheça Nossos Serviços</a>
-          </Button>
+        {/* Nossa Missão com Imagem */}
+        <div className="mb-16">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div>
+              <img 
+                src={quemSomosHero} 
+                alt="Equipe Prontia Saúde" 
+                className="rounded-2xl shadow-lg w-full"
+              />
+            </div>
+            <div>
+              <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
+              <p className="text-muted-foreground mb-4">
+                Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
+                Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
+                mas um direito fundamental.
+              </p>
+              <p className="text-muted-foreground mb-6">
+                Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
+                através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
+              </p>
+              <Button variant="medical" size="lg" asChild>
+                <a href="/#servicos">Conheça Nossos Serviços</a>
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Nossos Valores */}

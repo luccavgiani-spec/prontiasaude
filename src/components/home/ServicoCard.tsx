@@ -53,16 +53,14 @@ export function ServicoCard({
         return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
       case "renovacao_receitas":
         return <Pill className="h-12 w-12 text-primary mb-4" />;
+      case "solicitacao_exames":
+        return <FileText className="h-12 w-12 text-primary mb-4" />;
       case "psicologa":
         return <Brain className="h-12 w-12 text-primary mb-4" />;
       case "medicos_especialistas":
         return <UserCheck className="h-12 w-12 text-primary mb-4" />;
       case "laudos_psicologicos":
         return <FileText className="h-12 w-12 text-primary mb-4" />;
-      case "nutricionista":
-        return <Apple className="h-12 w-12 text-primary mb-4" />;
-      case "personal_trainer":
-        return <Dumbbell className="h-12 w-12 text-primary mb-4" />;
       default:
         return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
     }
@@ -75,6 +73,8 @@ export function ServicoCard({
         return "Consulte agora";
       case "renovacao_receitas":
         return "Renovar agora";
+      case "solicitacao_exames":
+        return "Solicitar exames";
       default:
         return "Agendar agora";
     }
@@ -90,8 +90,8 @@ export function ServicoCard({
         return;
       }
       
-      // Redirect to service detail page for services with variants
-      if (servico.variantes && servico.variantes.length > 0) {
+      // Redirect to service detail page for services with variants or solicitacao_exames
+      if ((servico.variantes && servico.variantes.length > 0) || servico.slug === "solicitacao_exames") {
         window.location.href = `/servicos/${servico.slug}`;
         return;
       }
@@ -214,7 +214,7 @@ export function ServicoCard({
               </div>
             ) : (
               <div>
-                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos") && (
+                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && (
                   <p className="text-sm text-muted-foreground mb-1">a partir de</p>
                 )}
                 <span className="text-2xl font-bold text-foreground">

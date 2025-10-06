@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import LogoLoop from "@/components/bits/LogoLoop";
 import { supabase } from "@/integrations/supabase/client";
 import { trackLead } from "@/lib/meta-tracking";
+import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 import { Shield, Users, Clock, Heart, TrendingUp, FileText, Building2, CheckCircle } from "lucide-react";
 const Empresas = () => {
   const [showForm, setShowForm] = useState(false);
@@ -311,6 +312,9 @@ const Empresas = () => {
           </div>
         </div>
       </section>
+
+      {/* Disque Denúncia Section */}
+      <DisqueDenunciaSection />
 
       {/* Fixed Mobile CTA */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-background border-t">

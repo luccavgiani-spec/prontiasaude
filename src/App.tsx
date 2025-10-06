@@ -39,6 +39,7 @@ import Renovacao from "./pages/Renovacao";
 // Footer pages
 import TrabalheConosco from "./pages/TrabalheConosco";
 import SejaNossParceiro from "./pages/SejaNossParceiro";
+import DisqueDenuncia from "./pages/DisqueDenuncia";
 import Termos from "./pages/Termos";
 import Privacidade from "./pages/Privacidade";
 // Admin pages
@@ -107,6 +108,7 @@ const App = () => (
               {/* Footer pages */}
               <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
               <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
+              <Route path="/disque-denuncia" element={<DisqueDenuncia />} />
               <Route path="/termos" element={<Termos />} />
               <Route path="/privacidade" element={<Privacidade />} />
               {/* Admin routes */}

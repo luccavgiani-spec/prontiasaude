@@ -38,17 +38,18 @@ export const CATALOGO_SERVICOS = [
   },
   { 
     slug: "medicos_especialistas", 
-    nome: "Especialidades", 
-    precoBase: 89.90, 
+    nome: "Médicos Especialistas", 
+    precoBase: 54.90, 
     sku: "PREENCHER_DEPOIS",
-    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Infectologia, Neurologia, Nutrologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Reumatologia, Médico da Família",
-    tempo: "45-60 minutos",
+    descricao: "Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Geriatria, Ginecologia, Infectologia, Neurologia, Nutrologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Reumatologia, Médico da Família, Nutrição, Personal Trainer",
+    tempo: "30-60 minutos",
     inclui: [
       "Cardiologista", "Dermatologista", "Endocrinologista", 
       "Gastroenterologista", "Geriatra", "Ginecologista", 
       "Infectologista", "Neurologista", "Nutrólogo",
       "Oftalmologista", "Ortopedista", "Otorrinolaringologista", 
-      "Pediatra", "Psiquiatra", "Reumatologista", "Médico da Família"
+      "Pediatra", "Psiquiatra", "Reumatologista", "Médico da Família",
+      "Nutricionista", "Personal Trainer"
     ],
     variantes: [
       { valor: 89.90, nome: "Cardiologia", sku: "PREENCHER_DEPOIS" },
@@ -66,53 +67,61 @@ export const CATALOGO_SERVICOS = [
       { valor: 89.90, nome: "Pediatria", sku: "PREENCHER_DEPOIS" },
       { valor: 89.90, nome: "Psiquiatria", sku: "PREENCHER_DEPOIS" },
       { valor: 129.90, nome: "Reumatologia", sku: "PREENCHER_DEPOIS" },
-      { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" }
+      { valor: 89.90, nome: "Médico da Família", sku: "PREENCHER_DEPOIS" },
+      { valor: 59.90, nome: "Nutricionista", sku: "PREENCHER_DEPOIS" },
+      { valor: 54.90, nome: "Personal Trainer", sku: "PREENCHER_DEPOIS" }
     ]
-  },
-  { 
-    slug: "nutricionista", 
-    nome: "Nutricionista", 
-    precoBase: 59.90, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Consulta com nutricionista online",
-    tempo: "30-45 minutos",
-    inclui: ["Consulta nutricional", "Plano alimentar", "Orientações personalizadas"]
-  },
-  { 
-    slug: "personal_trainer", 
-    nome: "Personal Trainer", 
-    precoBase: 54.99, 
-    sku: "PREENCHER_DEPOIS",
-    descricao: "Sessão com personal trainer online",
-    tempo: "30-45 minutos",
-    inclui: ["Treino personalizado", "Acompanhamento profissional", "Orientações de exercícios"]
   },
   { 
     slug: "laudos_psicologicos", 
     nome: "Laudos Psicológicos", 
-    precoBase: 30000, 
+    precoBase: 300.00, 
     sku: "PRONTIA_LAUDO_PSICOLOGICO",
-    descricao: "Necessário consulta prévia com psicólogo. Aplicável para cirurgia bariátrica, laqueadura, vasectomia, porte de arma, CNH e outros documentos legais",
+    descricao: "Necessário consulta prévia com psicólogo",
     tempo: "Disponível após consulta",
     inclui: [
-      "Laudo psicológico completo",
-      "Assinatura digital do profissional",
-      "Documento válido para fins legais",
-      "Entrega em até 7 dias úteis"
+      "Laudo para bariátrica, laudo para laqueadura e laudo para vasectomia",
+      "Avaliação completa"
     ]
   },
   { 
     slug: "renovacao_receitas", 
-    nome: "Renovação de Receitas e Atestados", 
+    nome: "Renovação de receitas", 
     precoBase: 34.90, 
     sku: "PRONTIA_RENOVACAO_RECEITA",
-    descricao: "Assim que o pagamento for aprovado, um de nossos médicos vai entrar em contato com você pelo WhatsApp, solicitar a foto da receita ou atestado e dar prosseguimento imediato ao atendimento",
+    descricao: "Assim que o pagamento for aprovado, você receberá um popup para anexar sua receita atual (com validade de até 3 meses) e enviar via WhatsApp +55 11 93335-9187. Um profissional fará a análise e enviará o documento renovado",
     tempo: "Atendimento imediato",
     inclui: [
+      "Upload de receita anterior (máx. 3 meses)",
       "Contato via WhatsApp",
+      "Avaliação médica rápida",
+      "Nova receita digital"
+    ]
+  },
+  { 
+    slug: "solicitacao_exames", 
+    nome: "Solicitação de Exames", 
+    precoBase: 34.90, 
+    sku: "PRONTIA_SOLICITACAO_EXAMES",
+    descricao: "Solicite exames laboratoriais rapidamente. Após o pagamento, você poderá anexar informações e enviar via WhatsApp. Nosso médico avaliará e enviará a solicitação do exame",
+    tempo: "Atendimento rápido",
+    inclui: [
+      "Solicitação de exames",
       "Avaliação médica",
-      "Nova receita digital",
-      "Atendimento rápido"
+      "Envio via WhatsApp",
+      "Documento digital"
+    ],
+    variantes: [
+      { valor: 34.90, nome: "Hemograma Completo", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Glicemia em Jejum", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Colesterol Total e Frações", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Função Renal (Ureia e Creatinina)", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "TSH e T4 Livre (Tireoide)", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Exame de Urina Tipo 1", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Vitamina D", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Ferritina", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "Ácido Úrico", sku: "PREENCHER_DEPOIS" },
+      { valor: 34.90, nome: "HbA1c (Hemoglobina Glicada)", sku: "PREENCHER_DEPOIS" }
     ]
   }
 ];

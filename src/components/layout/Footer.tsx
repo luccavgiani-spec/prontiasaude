@@ -46,6 +46,16 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
+                  Trabalhe Conosco
+                </Link>
+              </li>
+              <li>
+                <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
+                  Parcerias
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -79,13 +89,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
-                  Trabalhe Conosco
-                </Link>
-              </li>
-              <li>
-                <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
-                  Seja Nosso Parceiro
+                <Link to="/disque-denuncia" className="text-muted-foreground hover:text-primary transition-colors">
+                  Disque Denúncia
                 </Link>
               </li>
             </ul>

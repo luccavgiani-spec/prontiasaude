@@ -142,7 +142,7 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.slug === "renovacao" ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança." : servico.slug === "laudos_psicologicos" ? "Necessário consulta prévia com psicólogo." : `${servico.descricao}.`}
+                {servico.slug === "renovacao_receitas" ? "Assim que o pagamento for aprovado, você receberá um popup para anexar sua receita atual (com validade de até 3 meses) e enviar via WhatsApp +55 11 93335-9187. Um profissional fará a análise e enviará o documento renovado." : servico.slug === "solicitacao_exames" ? "Solicite exames laboratoriais rapidamente. Após o pagamento, você poderá anexar informações e enviar via WhatsApp. Nosso médico avaliará e enviará a solicitação do exame." : servico.slug === "laudos_psicologicos" ? "Necessário consulta prévia com psicólogo." : `${servico.descricao}.`}
               </p>
 
               {/* Informações básicas */}
@@ -163,7 +163,7 @@ const ServicoDetalhe = () => {
                   O que está incluso:
                 </h2>
                 <ul className="space-y-3">
-                  {servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "renovacao" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
+                  {servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">{item}</span>
                         </li>) : <li className="flex items-center gap-3">
@@ -209,14 +209,14 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, vasectomia</p>
                         </div>
                       </div>
-                    </> : servico.slug === "renovacao" ? <>
+                    </> : (servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames") ? <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Envio da receita</h3>
-                          <p className="text-muted-foreground">Após o pagamento, envie sua receita anterior (máximo 3 meses) </p>
+                          <h3 className="font-semibold text-foreground mb-1">Envio de documentos</h3>
+                          <p className="text-muted-foreground">Após o pagamento, anexe {servico.slug === "renovacao_receitas" ? "sua receita anterior (máximo 3 meses)" : "as informações necessárias"} via WhatsApp +55 11 93335-9187</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -225,7 +225,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Avaliação médica</h3>
-                          <p className="text-muted-foreground">Nosso médico avalia sua receita</p>
+                          <p className="text-muted-foreground">Nosso médico avalia {servico.slug === "renovacao_receitas" ? "sua receita" : "seu pedido"}</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -233,8 +233,8 @@ const ServicoDetalhe = () => {
                           3
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Nova receita</h3>
-                          <p className="text-muted-foreground">Receba sua nova receita digital com assinatura médica</p>
+                          <h3 className="font-semibold text-foreground mb-1">{servico.slug === "renovacao_receitas" ? "Nova receita" : "Solicitação de exame"}</h3>
+                          <p className="text-muted-foreground">Receba {servico.slug === "renovacao_receitas" ? "sua nova receita" : "a solicitação do exame"} digital com assinatura médica</p>
                         </div>
                       </div>
                     </> : <>
@@ -298,7 +298,7 @@ const ServicoDetalhe = () => {
                 {/* Dropdown for variants */}
                 {servico.variantes && servico.variantes.length > 0 && <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
+                      {servico.slug === "psicologa" ? "Selecione o plano:" : servico.slug === "solicitacao_exames" ? "Selecione o exame:" : "Selecione a especialidade:"}
                     </label>
                     <Select value={selectedVariant} onValueChange={setSelectedVariant}>
                       <SelectTrigger className="w-full">
@@ -325,7 +325,7 @@ const ServicoDetalhe = () => {
                   </div>}
                 
                 <div className="text-center mb-6">
-                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
+                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "solicitacao_exames") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
                     {formataPreco(getTotalPrice())}
                   </div>
@@ -342,7 +342,7 @@ const ServicoDetalhe = () => {
                 <Button onClick={() => {
                 handleAgendar();
               }} variant="outline" size="lg" className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
-                  {isLoading ? "Processando..." : "Agendar agora"}
+                  {isLoading ? "Processando..." : servico.slug === "solicitacao_exames" ? "Solicitar exames" : "Agendar agora"}
                 </Button>
 
                 <div className="text-center">

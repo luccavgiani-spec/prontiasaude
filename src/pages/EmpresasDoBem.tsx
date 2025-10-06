@@ -70,7 +70,7 @@ const EmpresasDoBem = () => {
             
             <p className="animate-fade-in" style={{
             animationDelay: '0.6s'
-          }}>Acreditamos que cada gesto conta. Cada doação, cada iniciativa apoiada e cada ONG fortalecida é uma oportunidade de espalhar cuidado, amor e esperança. E queremos que você também faça parte disso! Se você representa uma ONG ou conhece alguma instituição que necessita de ajuda, preencha o formulário abaixo!</p>
+          }}>Acreditamos que cada gesto conta. Cada doação, cada iniciativa apoiada e cada ONG fortalecida é uma oportunidade de espalhar cuidado, amor e esperança. E queremos que você também faça parte disso!</p>
           </div>
         </div>
       </section>
@@ -106,7 +106,9 @@ const EmpresasDoBem = () => {
               <CardTitle className="text-2xl md:text-3xl mb-4">
                 Cadastre sua ONG
               </CardTitle>
-              
+              <CardDescription className="text-base">
+                Se você representa uma ONG ou conhece alguma instituição que necessita de ajuda, preencha o formulário abaixo!
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto">
