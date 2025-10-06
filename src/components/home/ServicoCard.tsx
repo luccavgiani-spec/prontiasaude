@@ -102,8 +102,8 @@ export function ServicoCard({
         content_name: servico.nome,
       });
       
-      // Open InfinitePay checkout using link resolver
-      const success = await openInfinitePayCheckout(servico.sku);
+      // Open InfinitePay checkout with redirect to /confirmacao
+      const success = await openInfinitePayCheckout(servico.sku, servico.nome, precoComDesconto);
       
       if (!success) {
         toast({

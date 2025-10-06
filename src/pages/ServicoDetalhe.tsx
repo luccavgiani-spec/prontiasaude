@@ -99,8 +99,12 @@ const ServicoDetalhe = () => {
         content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
       });
 
-      // Open InfinitePay checkout using link resolver
-      const success = await openInfinitePayCheckout(currentSku);
+      // Preparar descrição e preço para o checkout
+      const description = servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '');
+      const price = getTotalPrice();
+
+      // Open InfinitePay checkout with redirect to /confirmacao
+      const success = await openInfinitePayCheckout(currentSku, description, price);
       
       if (!success) {
         toast({

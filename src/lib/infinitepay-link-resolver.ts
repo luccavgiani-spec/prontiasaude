@@ -47,9 +47,65 @@ export async function resolveLinkBySku(sku: string): Promise<string | null> {
 }
 
 /**
- * Abre o link do InfinitePay em uma nova aba/modal
+ * Cria um checkout no InfinitePay com redirect para /confirmacao
  */
-export async function openInfinitePayCheckout(sku: string): Promise<boolean> {
+export async function createCheckoutWithRedirect(sku: string, description: string, price: number): Promise<string | null> {
+  const normalizedSku = sku.trim().toUpperCase();
+  
+  try {
+    const redirectUrl = `${window.location.origin}/confirmacao`;
+    const url = `${GAS_BASE}?fn=createCheckout`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sku: normalizedSku,
+        redirect_url: redirectUrl,
+        description: description,
+        price: Math.round(price * 100) // Converter para centavos
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('Erro ao criar checkout:', response.status);
+      return null;
+    }
+    
+    const data: LinkResponse = await response.json();
+    
+    if (data.ok && data.link) {
+      return data.link;
+    }
+    
+    console.error('Link não retornado na criação do checkout');
+    return null;
+  } catch (error) {
+    console.error('Erro ao criar checkout:', error);
+    return null;
+  }
+}
+
+/**
+ * Abre o checkout do InfinitePay com redirect para /confirmacao
+ */
+export async function openInfinitePayCheckout(sku: string, description?: string, price?: number): Promise<boolean> {
+  // Se description e price forem fornecidos, usar createCheckout
+  if (description && price) {
+    const checkoutLink = await createCheckoutWithRedirect(sku, description, price);
+    
+    if (!checkoutLink) {
+      return false;
+    }
+    
+    // Redirecionar para o checkout (não abrir em nova aba)
+    window.location.href = checkoutLink;
+    return true;
+  }
+  
+  // Fallback: usar o link direto da planilha
   const link = await resolveLinkBySku(sku);
   
   if (!link) {
