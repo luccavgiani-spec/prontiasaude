@@ -92,28 +92,33 @@ export async function createCheckoutWithRedirect(sku: string, description: strin
  * Abre o checkout do InfinitePay com redirect para /confirmacao
  */
 export async function openInfinitePayCheckout(sku: string, description?: string, price?: number): Promise<boolean> {
-  // Se description e price forem fornecidos, usar createCheckout
+  // Se description e price forem fornecidos, tentar createCheckout primeiro
   if (description && price) {
     const checkoutLink = await createCheckoutWithRedirect(sku, description, price);
     
-    if (!checkoutLink) {
-      return false;
+    if (checkoutLink) {
+      // Redirecionar para o checkout (não abrir em nova aba)
+      window.location.href = checkoutLink;
+      return true;
     }
     
-    // Redirecionar para o checkout (não abrir em nova aba)
-    window.location.href = checkoutLink;
-    return true;
+    // Se createCheckout falhar, tentar usar link direto como fallback
+    console.warn('CreateCheckout falhou, tentando link direto...');
   }
   
-  // Fallback: usar o link direto da planilha
-  const link = await resolveLinkBySku(sku);
+  // Fallback: usar o link direto da planilha ou construir URL padrão
+  let link = await resolveLinkBySku(sku);
   
+  // Se não conseguir resolver, construir URL padrão do InfinitePay
   if (!link) {
-    return false;
+    const normalizedSku = sku.trim().toLowerCase();
+    const serviceName = description?.toLowerCase().replace(/\s+/g, '-') || 'servico';
+    link = `https://loja.infinitepay.io/prontiasaude/${normalizedSku}-${serviceName}`;
+    console.log('Usando URL padrão do InfinitePay:', link);
   }
   
-  // Abrir em nova aba
-  window.open(link, '_blank');
+  // Redirecionar direto (sem abrir em nova aba)
+  window.location.href = link;
   return true;
 }
 
