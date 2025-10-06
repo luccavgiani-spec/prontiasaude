@@ -89,13 +89,13 @@ export const CATALOGO_SERVICOS = [
     nome: "Renovação de receitas", 
     precoBase: 34.90, 
     sku: "PRONTIA_RENOVACAO_RECEITA",
-    descricao: "Assim que o pagamento for aprovado, você receberá um popup para anexar sua receita atual (com validade de até 3 meses) e enviar via WhatsApp +55 11 93335-9187. Um profissional fará a análise e enviará o documento renovado",
+    descricao: "Renove suas receitas médicas de forma prática e rápida. Após a confirmação do pagamento, você poderá anexar sua receita atual válida (até 3 meses) e encaminhar para análise. Um médico avaliará e emitirá a renovação em documento digital",
     tempo: "Atendimento imediato",
     inclui: [
-      "Upload de receita anterior (máx. 3 meses)",
-      "Contato via WhatsApp",
-      "Avaliação médica rápida",
-      "Nova receita digital"
+      "Análise de receita anterior (válida até 3 meses)",
+      "Avaliação médica especializada",
+      "Nova receita digital",
+      "Atendimento rápido via WhatsApp"
     ]
   },
   { 
@@ -103,13 +103,13 @@ export const CATALOGO_SERVICOS = [
     nome: "Solicitação de Exames", 
     precoBase: 34.90, 
     sku: "PRONTIA_SOLICITACAO_EXAMES",
-    descricao: "Solicite exames laboratoriais rapidamente. Após o pagamento, você poderá anexar informações e enviar via WhatsApp. Nosso médico avaliará e enviará a solicitação do exame",
+    descricao: "Obtenha solicitações de exames laboratoriais sem sair de casa. Escolha o exame desejado, informe seus dados clínicos e receba a requisição médica assinada digitalmente para realizar o exame em qualquer laboratório",
     tempo: "Atendimento rápido",
     inclui: [
-      "Solicitação de exames",
-      "Avaliação médica",
-      "Envio via WhatsApp",
-      "Documento digital"
+      "Escolha entre 10 exames mais solicitados",
+      "Avaliação e solicitação médica",
+      "Requisição digital assinada",
+      "Atendimento ágil via WhatsApp"
     ],
     variantes: [
       { valor: 34.90, nome: "Hemograma Completo", sku: "PREENCHER_DEPOIS" },
