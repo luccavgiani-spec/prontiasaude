@@ -112,7 +112,13 @@ export async function openInfinitePayCheckout(sku: string, description?: string,
   // Se não conseguir resolver, construir URL padrão do InfinitePay
   if (!link) {
     const normalizedSku = sku.trim().toLowerCase();
-    const serviceName = description?.toLowerCase().replace(/\s+/g, '-') || 'servico';
+    const rawName = description || 'servico';
+    const serviceName = rawName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
     link = `https://loja.infinitepay.io/prontiasaude/${normalizedSku}-${serviceName}`;
     console.log('Usando URL padrão do InfinitePay:', link);
   }
