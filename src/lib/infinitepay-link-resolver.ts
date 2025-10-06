@@ -60,3 +60,44 @@ export async function openInfinitePayCheckout(sku: string): Promise<boolean> {
   window.open(link, '_blank');
   return true;
 }
+
+/**
+ * Interface para especialidade retornada pela API
+ */
+export interface Especialidade {
+  label: string;
+  sku: string;
+}
+
+interface EspecialidadesResponse {
+  ok: boolean;
+  items?: Especialidade[];
+  error?: string;
+}
+
+/**
+ * Busca lista de especialidades disponíveis do Google Apps Script
+ */
+export async function fetchEspecialidades(): Promise<Especialidade[]> {
+  try {
+    const url = `${GAS_BASE}?fn=listEspecialidades`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.error('Erro ao buscar especialidades:', response.status);
+      return [];
+    }
+    
+    const data: EspecialidadesResponse = await response.json();
+    
+    if (data.ok && Array.isArray(data.items)) {
+      return data.items;
+    }
+    
+    console.error('Resposta inválida ao buscar especialidades');
+    return [];
+  } catch (error) {
+    console.error('Erro ao buscar especialidades:', error);
+    return [];
+  }
+}

@@ -76,7 +76,7 @@ export const CATALOGO_SERVICOS = [
     slug: "laudos_psicologicos", 
     nome: "Laudos Psicológicos", 
     precoBase: 32.90, 
-    sku: "PRONTIA_LAUDO_PSICOLOGICO",
+    sku: "OVM9892",
     descricao: "Necessário consulta prévia com psicólogo",
     tempo: "Disponível após consulta",
     inclui: [
@@ -88,7 +88,7 @@ export const CATALOGO_SERVICOS = [
     slug: "renovacao_receitas", 
     nome: "Renovação de receitas", 
     precoBase: 34.90, 
-    sku: "RZP57555",
+    sku: "RZP5755",
     descricao: "Renove suas receitas médicas de forma prática e rápida. Após a confirmação do pagamento, você poderá anexar sua receita atual válida (até 3 meses) e encaminhar para análise. Um médico avaliará e emitirá a renovação em documento digital",
     tempo: "Atendimento imediato",
     inclui: [

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Pill, CheckCircle, ArrowLeft, Clock, Shield, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { formataPreco } from "@/lib/utils";
-import { openCheckoutModal, getProductKeyFromSlug, getCurrentCustomerData } from "@/lib/infinitepay-checkout";
+import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 
@@ -14,32 +14,20 @@ const Renovacao = () => {
   const handleAgendar = async () => {
     setIsLoading(true);
     try {
-      const productKey = getProductKeyFromSlug("renovacao_receitas");
-      if (!productKey) {
-        toast({
-          title: "Erro",
-          description: "Serviço não encontrado.",
-          variant: "destructive"
-        });
-        return;
-      }
-
       trackLead({
         value: 34.90,
         content_name: "Renovação de Receitas e Atestados"
       });
 
-      const customerData = await getCurrentCustomerData();
-
-      openCheckoutModal(productKey, customerData, () => {
-        window.location.href = '/confirmacao';
-      }, () => {
+      const success = await openInfinitePayCheckout("RZP5755");
+      
+      if (!success) {
         toast({
-          title: "Tempo esgotado",
-          description: "O tempo de pagamento expirou. Por favor, tente novamente.",
+          title: "Erro",
+          description: "Não foi possível abrir o checkout. Tente novamente.",
           variant: "destructive"
         });
-      });
+      }
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({

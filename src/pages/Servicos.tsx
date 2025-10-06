@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { ServicoCard } from "@/components/home/ServicoCard";
+import { EspecialidadesSelector } from "@/components/home/EspecialidadesSelector";
 import { Button } from "@/components/ui/button";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { ArrowLeft, Clock, Users, CheckCircle } from "lucide-react";
@@ -16,6 +17,11 @@ const Servicos = () => {
             Nossos Serviços
           </h1>
           <p className="text-xl text-muted-foreground max-w-3xl">Consulta médica online na hora com atestado médico, atestado de aptidão física, renovação de receitas, solicitação de exames, atestado de piscina e laudos psicológicos válidos em todo país.</p>
+        </div>
+
+        {/* Especialidades Dinâmicas */}
+        <div className="mb-12">
+          <EspecialidadesSelector />
         </div>
 
         {/* Grid de serviços */}
