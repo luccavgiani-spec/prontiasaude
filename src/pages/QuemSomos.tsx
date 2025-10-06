@@ -27,7 +27,7 @@ const QuemSomos = () => {
               />
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
+              <h2 className="text-3xl font-bold text-foreground mb-6 text-center">Nossa Missão</h2>
               <p className="text-muted-foreground mb-4">
                 Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
                 Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
