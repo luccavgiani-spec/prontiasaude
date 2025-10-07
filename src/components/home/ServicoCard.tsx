@@ -136,7 +136,9 @@ export function ServicoCard({
             {servico.nome}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {servico.descricao}
+            {servico.slug === "laudos_psicologicos" 
+              ? "Necessário consulta prévia com psicólogo. Aplicável para cirurgia bariátrica, laqueadura e vasectomia." 
+              : servico.descricao}
           </p>
           {showDesconto && descontoContratacao > 0 && (
             <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mt-2">
