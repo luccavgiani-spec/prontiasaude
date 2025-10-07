@@ -75,7 +75,7 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "laudos_psicologicos", 
     nome: "Laudos Psicológicos", 
-    precoBase: 32.90, 
+    precoBase: 99.90, 
     sku: "OVM9892",
     descricao: "Necessário consulta prévia com psicólogo",
     tempo: "Disponível após consulta",
