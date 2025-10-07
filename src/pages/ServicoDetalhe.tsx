@@ -234,7 +234,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Receba o atendimento</h3>
-                          <p className="text-muted-foreground">Nossa equipe entrará em contato e você receberá {servico.slug === "renovacao_receitas" ? "a receita renovada" : "a solicitação do exame"} em formato digital</p>
+                          <p className="text-muted-foreground">Nossa equipe entrará em contato com você receberá a solicitação do exame em formato digital em até 10 minutos.</p>
                         </div>
                       </div>
                     </> : <>
