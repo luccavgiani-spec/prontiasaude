@@ -250,7 +250,7 @@ const ServicoDetalhe = () => {
                           3
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Receba o atendimento</h3>
+                          <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
                           <p className="text-muted-foreground">Nossa equipe entrará em contato com você receberá a solicitação do exame em formato digital em até 10 minutos.</p>
                         </div>
                       </div>
