@@ -142,7 +142,9 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.descricao}
+                {servico.slug === "renovacao_receitas" 
+                  ? "Renove agora sua receita com validade para todo o território nacional, de maneira rápida e prática."
+                  : servico.descricao}
               </p>
 
               {/* Informações básicas */}
