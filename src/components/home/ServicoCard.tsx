@@ -193,31 +193,12 @@ export function ServicoCard({
               </div>
             ) : (
               <div>
-                {servico.slug === "psicologa" ? (
-                  <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">a partir de</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-2xl font-bold text-green-600">
-                        {formataPreco(38.49)}
-                      </span>
-                      <span className="text-sm text-muted-foreground line-through">
-                        {formataPreco(servico.precoBase)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-green-600 font-medium">
-                      no plano anual
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    {(servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && (
-                      <p className="text-sm text-muted-foreground mb-1">a partir de</p>
-                    )}
-                    <span className="text-2xl font-bold text-foreground">
-                      {formataPreco(servico.precoBase)}
-                    </span>
-                  </div>
+                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && (
+                  <p className="text-sm text-muted-foreground mb-1">a partir de</p>
                 )}
+                <span className="text-2xl font-bold text-foreground">
+                  {servico.slug === "psicologa" ? formataPreco(38.49) : formataPreco(servico.precoBase)}
+                </span>
               </div>
             )}
           </div>
