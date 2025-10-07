@@ -159,6 +159,14 @@ export function ServicoCard({
                     <span>{item}</span>
                   </li>
                 ))}
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
+                  <span>Assinatura digital do profissional</span>
+                </li>
+                <li className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
+                  <span>Documento válido para fins legais</span>
+                </li>
               </ul>
             </div>
             {servico.naoInclui && (
