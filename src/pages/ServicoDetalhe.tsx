@@ -163,7 +163,22 @@ const ServicoDetalhe = () => {
                   O que está incluso:
                 </h2>
                 <ul className="space-y-3">
-                  {servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
+                  {servico.slug === "renovacao_receitas" ? (
+                    <>
+                      <li className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Avaliação do histórico</span>
+                      </li>
+                      <li className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Nova receita digital</span>
+                      </li>
+                      <li className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Orientações de Uso</span>
+                      </li>
+                    </>
+                  ) : servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">{item}</span>
                         </li>) : <li className="flex items-center gap-3">
