@@ -296,10 +296,10 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 {/* Dropdown for variants */}
-                {servico.variantes && servico.variantes.length > 0 && (
+                {servico.variantes && servico.variantes.length > 0 && servico.slug !== "solicitacao_exames" && (
                   <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      {servico.slug === "psicologa" ? "Selecione o plano:" : servico.slug === "solicitacao_exames" ? "Selecione o exame:" : "Selecione a especialidade:"}
+                      {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
                     </label>
                     <Select value={selectedVariant} onValueChange={setSelectedVariant}>
                       <SelectTrigger className="w-full bg-background">
@@ -327,7 +327,7 @@ const ServicoDetalhe = () => {
                 )}
                 
                 <div className="text-center mb-6">
-                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "solicitacao_exames") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
+                  {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
                     {formataPreco(getTotalPrice())}
                   </div>
