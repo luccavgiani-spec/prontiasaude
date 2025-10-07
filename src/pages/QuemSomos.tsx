@@ -24,7 +24,7 @@ const QuemSomos = () => {
             <div>
               <h2 className="text-3xl font-bold text-foreground mb-6 text-center">Quem somos nós?</h2>
               
-              <div className="space-y-4 text-muted-foreground mb-8">
+              <div className="space-y-4 text-muted-foreground mb-8 text-center">
                 <p>
                   A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde muito cedo, aprendi que cuidar do próximo é um chamado.
                 </p>
