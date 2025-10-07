@@ -25,21 +25,21 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "psicologa", 
     nome: "Psicólogo", 
-    precoBase: 44.99, 
+    precoBase: 44.90, 
     sku: "ZXW2165",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
     inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
     variantes: [
-      { valor: 44.99, nome: "Individual (R$ 44,99/consulta)", sku: "ZXW2165", consultas: 1 },
-      { valor: 167.96, nome: "Plano 4 consultas (R$ 41,99/consulta)", sku: "HXR8516", consultas: 4 },
+      { valor: 44.90, nome: "Individual (R$ 44,90/consulta)", sku: "ZXW2165", consultas: 1 },
+      { valor: 171.96, nome: "Plano 4 consultas (R$ 42,99/consulta)", sku: "HXR8516", consultas: 4 },
       { valor: 307.92, nome: "Plano 8 consultas (R$ 38,49/consulta)", sku: "YME9025", consultas: 8 }
     ]
   },
   { 
     slug: "medicos_especialistas", 
     nome: "Médicos Especialistas", 
-    precoBase: 54.90, 
+    precoBase: 54.99, 
     sku: "BIR7668",
     descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria, Cardiologista, Dermatologista, Endocrinologista, Gastroenterologista, Ginecologista, Oftalmologista, Ortopedista, Pediatra, Otorrinolaringologista, Médico da Família, Psiquiatra",
     tempo: "30-60 minutos",
@@ -52,24 +52,24 @@ export const CATALOGO_SERVICOS = [
       "Médico da Família", "Psiquiatra"
     ],
     variantes: [
-      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" },
+      { valor: 54.99, nome: "Personal Trainer", sku: "BIR7668" },
       { valor: 59.90, nome: "Nutricionista", sku: "VPN5132" },
       { valor: 129.90, nome: "Reumatologista", sku: "UDH3250" },
       { valor: 129.90, nome: "Neurologista", sku: "PKS9388" },
       { valor: 129.90, nome: "Infectologista", sku: "MYX5186" },
       { valor: 119.90, nome: "Nutrólogo", sku: "LZF3879" },
       { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
-      { valor: 139.00, nome: "Cardiologista", sku: "GGF9727" },
-      { valor: 139.00, nome: "Dermatologista", sku: "HGG3503" },
-      { valor: 139.00, nome: "Endocrinologista", sku: "ABG9429" },
-      { valor: 139.00, nome: "Gastroenterologista", sku: "TSB0751" },
-      { valor: 139.00, nome: "Ginecologista", sku: "CCP1566" },
-      { valor: 139.00, nome: "Oftalmologista", sku: "FKS5964" },
-      { valor: 139.00, nome: "Ortopedista", sku: "OKZ7620" },
-      { valor: 89.00, nome: "Pediatra", sku: "IAL1842" },
-      { valor: 139.00, nome: "Otorrinolaringologista", sku: "HME8366" },
-      { valor: 139.00, nome: "Médico da Família", sku: "YUE3975" },
-      { valor: 139.00, nome: "Psiquiatra", sku: "SGH7835" }
+      { valor: 89.90, nome: "Cardiologista", sku: "TQP5720" },
+      { valor: 89.90, nome: "Dermatologista", sku: "HGG3503" },
+      { valor: 89.90, nome: "Endocrinologista", sku: "VHH8883" },
+      { valor: 89.90, nome: "Gastroenterologista", sku: "TSB0751" },
+      { valor: 89.90, nome: "Ginecologista", sku: "CCP1566" },
+      { valor: 89.90, nome: "Oftalmologista", sku: "FKS5964" },
+      { valor: 89.90, nome: "Ortopedista", sku: "TVQ5046" },
+      { valor: 89.90, nome: "Pediatra", sku: "HMG9544" },
+      { valor: 89.90, nome: "Otorrinolaringologista", sku: "HME8366" },
+      { valor: 89.90, nome: "Médico da Família", sku: "DYY8522" },
+      { valor: 89.90, nome: "Psiquiatra", sku: "QOP1101" }
     ]
   },
   { 
