@@ -242,7 +242,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Anexe os documentos</h3>
-                          <p className="text-muted-foreground">Faça o upload {servico.slug === "renovacao_receitas" ? "da sua receita anterior (válida até 3 meses)" : "das informações necessárias"} diretamente no site</p>
+                          <p className="text-muted-foreground">Seja redirecionado para uma de nossas plataformas parrceiras de atendimento</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
