@@ -241,7 +241,7 @@ const ServicoDetalhe = () => {
                           2
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Atendimento</h3>
+                          <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
                           <p className="text-muted-foreground">Seja redirecionado para uma de nossas plataformas parceiras de atendimento</p>
                         </div>
                       </div>
