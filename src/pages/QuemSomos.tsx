@@ -23,15 +23,8 @@ const QuemSomos = () => {
             </div>
             <div>
               <h2 className="text-3xl font-bold text-foreground mb-6 text-center">Quem somos nós?</h2>
-              <p className="text-muted-foreground mb-4">
-                Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
-                Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
-                mas um direito fundamental.
-              </p>
-              <p className="text-muted-foreground mb-6">
-                Nossa plataforma conecta pacientes a médicos, psicólogos e outros especialistas 
-                através de consultas online seguras, eliminando barreiras geográficas e reduzindo custos.
-              </p>
+              
+              
               <Button variant="medical" size="lg" asChild>
                 <a href="/#servicos">Conheça Nossos Serviços</a>
               </Button>
