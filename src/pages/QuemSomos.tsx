@@ -1,7 +1,6 @@
 import { Heart, Users, Award, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import quemSomosHero from "@/assets/quem-somos-hero.jpg";
-
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
@@ -20,14 +19,10 @@ const QuemSomos = () => {
         <div className="mb-16">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <img 
-                src={quemSomosHero} 
-                alt="Equipe Prontia Saúde" 
-                className="rounded-2xl shadow-lg w-full"
-              />
+              <img src={quemSomosHero} alt="Equipe Prontia Saúde" className="rounded-2xl shadow-lg w-full" />
             </div>
             <div>
-              <h2 className="text-3xl font-bold text-foreground mb-6 text-center">Nossa Missão</h2>
+              <h2 className="text-3xl font-bold text-foreground mb-6 text-center">Quem somos nós?</h2>
               <p className="text-muted-foreground mb-4">
                 Tornar o cuidado com a saúde mais acessível, conveniente e eficiente para todos. 
                 Acreditamos que o acesso a profissionais qualificados de saúde não deveria ser um privilégio, 
