@@ -6,9 +6,7 @@ const QuemSomos = () => {
       <div className="container mx-auto px-4">
         {/* Hero */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
-            Prontia Saúde
-          </h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6">Prontìa Saúde</h1>
           
         </div>
 
