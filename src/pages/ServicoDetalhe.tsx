@@ -166,7 +166,16 @@ const ServicoDetalhe = () => {
                         <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                         <span className="text-muted-foreground">Nova receita digital válida em todo país</span>
                       </li>
-                    </> : servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
+                    </> : servico.slug === "solicitacao_exames" ? <>
+                      <li className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Atendimento ágil via WhatsApp</span>
+                      </li>
+                      <li className="flex items-center gap-3">
+                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-muted-foreground">Pedido de exames digital válido em todo Brasil</span>
+                      </li>
+                    </> : servico.slug === "laudos_psicologicos" || servico.slug === "consulta" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">{item}</span>
                         </li>) : <li className="flex items-center gap-3">
