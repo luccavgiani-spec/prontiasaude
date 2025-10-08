@@ -61,29 +61,33 @@ const QuemSomos = () => {
           <h2 className="text-3xl font-bold text-center text-foreground mb-12">
             Nossos Valores
           </h2>
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="medical-card p-6 text-center">
+              <Heart className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-3">Cuidado Contínuo</h3>
+              <p className="text-muted-foreground">
+                A consulta não é o fim, mas o começo de uma relação. A Prontia acompanha, orienta e apoia o paciente em todas as fases de sua jornada de saúde.
+              </p>
+            </div>
             <div className="medical-card p-6 text-center">
               <Users className="h-12 w-12 text-primary mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-foreground mb-3">Acessibilidade</h3>
               <p className="text-muted-foreground">
-                Tornamos o acesso à saúde mais fácil e acessível para todos, 
-                independente de localização ou condição socioeconômica.
+                Oferecer saúde de qualidade a preços justos, eliminando barreiras de tempo, distância e burocracia.
               </p>
             </div>
             <div className="medical-card p-6 text-center">
-              <Award className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-3">Qualidade</h3>
+              <Heart className="h-12 w-12 text-primary mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-3">Humanização</h3>
               <p className="text-muted-foreground">
-                Todos os nossos profissionais são rigorosamente selecionados e 
-                possuem certificações reconhecidas pelos órgãos competentes.
+                Atender de forma empática, próxima e respeitosa, garantindo que cada paciente se sinta único, ouvido e valorizado.
               </p>
             </div>
             <div className="medical-card p-6 text-center">
               <Shield className="h-12 w-12 text-primary mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-foreground mb-3">Segurança</h3>
+              <h3 className="text-xl font-semibold text-foreground mb-3">Confiança</h3>
               <p className="text-muted-foreground">
-                Utilizamos as melhores práticas de segurança digital para proteger 
-                suas informações pessoais e médicas.
+                Construir relacionamentos sólidos baseados em ética, clareza e competência, transmitindo segurança em cada atendimento.
               </p>
             </div>
           </div>
