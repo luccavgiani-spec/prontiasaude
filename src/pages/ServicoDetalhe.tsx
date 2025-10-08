@@ -231,24 +231,63 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Conclua o pagamento do serviço</p>
                         </div>
                       </div>
-                      <div className="flex gap-4">
-                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                          2
+                      {servico.slug === "solicitacao_exames" ? <>
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Escolha seus exames</h3>
+                            <p className="text-muted-foreground">Informe quais exames você deseja realizar no WhatsApp.</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                          <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses)</p>
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Contato com nosso time médico</h3>
+                            <p className="text-muted-foreground">Nossa equipe entrará em contato para confirmar suas informações.</p>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex gap-4">
-                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                          3
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            4
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Emissão do pedido médico</h3>
+                            <p className="text-muted-foreground">Após a análise, o médico responsável emitirá a solicitação assinada digitalmente.</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                          <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional.</p>
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            5
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Receba sua requisição</h3>
+                            <p className="text-muted-foreground">Você receberá o pedido dos exames por WhatsApp ou e-mail, pronto para usar em qualquer laboratório.</p>
+                          </div>
                         </div>
-                      </div>
+                      </> : <>
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            2
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
+                            <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses)</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-4">
+                          <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                            3
+                          </div>
+                          <div>
+                            <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
+                            <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional.</p>
+                          </div>
+                        </div>
+                      </>}
                     </> : <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
