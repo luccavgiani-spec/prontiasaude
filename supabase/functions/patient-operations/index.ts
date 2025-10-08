@@ -13,6 +13,23 @@ interface UpsertPatientRequest {
   phone_e164: string;
 }
 
+interface CompleteProfileRequest {
+  operation: 'complete_profile';
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  cpf: string;
+  birth_date: string;
+  gender?: string;
+  cep?: string;
+  address_number?: string;
+  address_complement?: string;
+  city?: string;
+  state?: string;
+  plano: boolean;
+}
+
 interface ScheduleAppointmentRequest {
   operation: 'schedule_appointment';
   user_id: string;
@@ -115,6 +132,55 @@ serve(async (req) => {
           JSON.stringify({ 
             success: true, 
             supabase: authData ? 'created' : 'exists', 
+            gas: gasResult,
+            gasStatus: gasResponse.status
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'complete_profile': {
+        const profileData = body as CompleteProfileRequest;
+        
+        console.log('=== COMPLETE PROFILE START ===');
+        console.log('Received data:', profileData);
+        
+        // Prepare GAS API payload
+        const gasPayload = {
+          first_name: profileData.first_name,
+          last_name: profileData.last_name,
+          email: profileData.email,
+          phone: profileData.phone,
+          cpf: profileData.cpf,
+          birth_date: profileData.birth_date,
+          gender: profileData.gender || '',
+          cep: profileData.cep || '',
+          address_number: profileData.address_number || '',
+          address_complement: profileData.address_complement || '',
+          city: profileData.city || '',
+          state: profileData.state || '',
+          source: 'site',
+          plano: profileData.plano
+        };
+
+        console.log('Calling GAS API with payload:', gasPayload);
+        console.log('Full GAS URL:', `${gasBase}?path=site-register`);
+
+        // Call GAS API
+        const gasResponse = await fetch(`${gasBase}?path=site-register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(gasPayload)
+        });
+
+        console.log('GAS response status:', gasResponse.status);
+        const gasResult = await gasResponse.text();
+        console.log('GAS response body:', gasResult);
+        console.log('=== COMPLETE PROFILE END ===');
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
             gas: gasResult,
             gasStatus: gasResponse.status
           }),

@@ -17,7 +17,7 @@ export async function ensurePatientRow(userId: string) {
   return true;
 }
 
-/** Upsert robusto + validações + logs */
+/** Upsert robusto + validações + logs + webhook GAS */
 export async function upsertPatientBasic(payload: {
   first_name: string;
   last_name: string;
@@ -26,9 +26,16 @@ export async function upsertPatientBasic(payload: {
   phone_e164: string;       // ex.: +5511999999999
   birth_date: string;       // YYYY-MM-DD
   termsAccepted: boolean;   // checkbox
+  gender?: string;          // opcional
+  cep?: string;             // opcional
+  address_number?: string;  // opcional
+  address_complement?: string; // opcional
+  city?: string;            // opcional
+  state?: string;           // opcional
 }) {
   const { data: sess } = await supabase.auth.getSession();
   const userId = sess?.session?.user?.id;
+  const userEmail = sess?.session?.user?.email;
   if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
 
   await ensurePatientRow(userId);
@@ -46,7 +53,7 @@ export async function upsertPatientBasic(payload: {
     address_line: payload.address_line,
     cpf: cleanCpf,
     phone_e164: payload.phone_e164,
-    birth_date: payload.birth_date, // Supabase converte para DATE
+    birth_date: payload.birth_date,
     terms_accepted_at: payload.termsAccepted ? new Date().toISOString() : null,
     profile_complete: true
   };
@@ -56,5 +63,30 @@ export async function upsertPatientBasic(payload: {
     console.error('Supabase upsert error (patients):', error);
     throw new Error(error.message || 'Falha ao salvar seus dados.');
   }
+
+  // Send to GAS webhook
+  try {
+    await supabase.functions.invoke('patient-operations', {
+      body: {
+        operation: 'complete_profile',
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+        email: userEmail,
+        phone: payload.phone_e164,
+        cpf: cleanCpf,
+        birth_date: payload.birth_date,
+        gender: payload.gender || '',
+        cep: payload.cep || '',
+        address_number: payload.address_number || '',
+        address_complement: payload.address_complement || '',
+        city: payload.city || '',
+        state: payload.state || '',
+        plano: false // TODO: integrate with subscription system
+      }
+    });
+  } catch (gasError) {
+    console.error('GAS webhook error (non-blocking):', gasError);
+  }
+
   return true;
 }
