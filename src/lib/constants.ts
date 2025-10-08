@@ -77,7 +77,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Laudos Psicológicos", 
     precoBase: 119.90, 
     sku: "OVM9892",
-    descricao: "Necessário consulta prévia com psicólogo",
+    descricao: "Laudos assinados digitalmente",
     tempo: "Disponível após consulta",
     inclui: [
       "Laudo para bariátrica, laqueadura ou vasectomia."
