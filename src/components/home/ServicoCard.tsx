@@ -138,7 +138,7 @@ export function ServicoCard({
           </h3>
           <p className="text-sm text-muted-foreground">
             {servico.slug === "laudos_psicologicos" 
-              ? "Necessário consulta prévia com psicólogo. Aplicável para cirurgia bariátrica, laqueadura e vasectomia." 
+              ? "Laudos assinados digitalmente" 
               : servico.slug === "renovacao_receitas"
               ? "Renove agora sua receita válida em todo país."
               : servico.descricao}
