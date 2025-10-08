@@ -83,7 +83,8 @@ export const CATALOGO_SERVICOS = [
       "Laudo para bariátrica, laqueadura ou vasectomia.",
       "Assinatura digital do profissional",
       "Documento válido para fins legais"
-    ]
+    ],
+    naoInclui: ["placeholder"]
   },
   { 
     slug: "renovacao_receitas", 
