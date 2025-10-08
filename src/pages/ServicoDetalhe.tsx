@@ -236,7 +236,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                          <p className="text-muted-foreground">Seja redirecionado para uma de nossas plataformas parceiras de atendimento</p>
+                          <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses)</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
