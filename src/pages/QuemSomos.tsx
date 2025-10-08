@@ -95,7 +95,7 @@ const QuemSomos = () => {
 
         {/* Nossa História */}
         <div className="bg-muted/30 rounded-2xl p-8 md:p-12 text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-6">Nossa Missão</h2>
+          <h2 className="text-3xl font-bold text-foreground mb-6">Missão</h2>
           <p className="text-muted-foreground max-w-3xl mx-auto mb-8">
             Fundada com o propósito de democratizar o acesso à saúde de qualidade, 
             a Médicos do Bem nasceu da necessidade de conectar profissionais qualificados 
