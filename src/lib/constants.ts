@@ -80,8 +80,7 @@ export const CATALOGO_SERVICOS = [
     descricao: "Necessário consulta prévia com psicólogo",
     tempo: "Disponível após consulta",
     inclui: [
-      "Laudo para bariátrica, laqueadura ou vasectomia.",
-      "Avaliação completa"
+      "Laudo para bariátrica, laqueadura ou vasectomia."
     ]
   },
   { 
