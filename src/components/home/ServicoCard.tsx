@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CadastroModal } from "@/components/modais/CadastroModal";
@@ -214,16 +215,23 @@ export function ServicoCard({
               </div>
             )}
           </div>
-          <Button 
-            onClick={() => handleAgendar()} 
-            variant="outline" 
-            size="default" 
-            disabled={isLoading} 
-            className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform"
-            data-sku={servico.sku}
-          >
-            {isLoading ? "Processando..." : getButtonText(servico.slug)}
-          </Button>
+          <div className="space-y-2">
+            <Button 
+              onClick={() => handleAgendar()} 
+              variant="outline" 
+              size="default" 
+              disabled={isLoading} 
+              className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform"
+              data-sku={servico.sku}
+            >
+              {isLoading ? "Processando..." : getButtonText(servico.slug)}
+            </Button>
+            <Link to={`/servicos/${servico.slug}`}>
+              <Button variant="outline" className="w-full group-hover:border-primary transition-colors">
+                Ver Detalhes
+              </Button>
+            </Link>
+          </div>
         </div>
       </div>
 
