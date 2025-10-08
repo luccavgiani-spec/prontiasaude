@@ -153,9 +153,9 @@ export function ServicoCard({
               </ul>
             </div>
             {servico.naoInclui && <div>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm font-bold text-amber-800">
-                    Necessário consulta psicológica prévia
+                <div className="bg-orange-50 border border-orange-300 rounded-lg p-3">
+                  <p className="text-sm font-bold text-orange-700">
+                    Necessário consulta psicológica prévia!
                   </p>
                 </div>
               </div>}
