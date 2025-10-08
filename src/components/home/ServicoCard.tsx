@@ -88,7 +88,7 @@ export function ServicoCard({
       }
 
       // Redirect to service detail page for services with variants or solicitacao_exames
-      if (servico.variantes && servico.variantes.length > 0 || servico.slug === "solicitacao_exames") {
+      if (servico.variantes && servico.variantes.length > 0 || servico.slug === "solicitacao_exames" || servico.slug === "laudos_psicologicos") {
         window.location.href = `/servicos/${servico.slug}`;
         return;
       }
