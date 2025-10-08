@@ -99,7 +99,7 @@ const Empresas = () => {
     node: <CheckCircle className="h-6 w-6" />
   }];
   const empresaAdvantages = ["Reduz afastamentos e absenteísmo", "Aumenta a produtividade da equipe", "Consultas online sem deslocamento (direto do trabalho)", "Intervenção rápida em riscos psicossociais", "Fortalece a cultura de cuidado da empresa", "Sua empresa em conformidade com a NR-1", "Melhor custo-benefício: sem coparticipação, sem carência, sem taxas extras"];
-  const colaboradorAdvantages = ["Consultas 24 horas de onde estiver", "+10 especialidades sob agendamento", "Acompanhamento de doenças crônicas", "Apoio psicológico e emocional quando precisar", "Palestras e vídeos para saúde mental", "Desconto em exames e medicamentos", "Planos de benefícios em várias lojas para o Brasil todo"];
+  const colaboradorAdvantages = ["Consultas 24 horas de onde estiver", "+10 especialidades sob agendamento", "Acompanhamento de doenças crônicas", "Apoio psicológico e emocional quando precisar", "Palestras e vídeos para saúde mental", "Desconto em exames e medicamentos", "Planos de benefícios com descontos exclusivos em várias lojas do Brasil."];
   return <div className="min-h-screen bg-background">
       {/* Hero Section */}
       <section className="py-16 px-4 bg-gradient-to-br from-primary/5 to-secondary/5">
