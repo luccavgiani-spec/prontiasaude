@@ -144,7 +144,7 @@ const ServicoDetalhe = () => {
               </p>
 
               {/* Informações básicas */}
-              {servico.slug !== "renovacao_receitas" && <div className="flex items-center gap-6 mb-8 text-muted-foreground">
+              {servico.slug !== "renovacao_receitas" && servico.slug !== "solicitacao_exames" && <div className="flex items-center gap-6 mb-8 text-muted-foreground">
                 {servico.slug === "psicologa" && <div className="flex items-center gap-2">
                     <Clock className="h-5 w-5" />
                     <span className="font-medium">30 minutos</span>
