@@ -26,18 +26,7 @@ const Servicos = () => {
 
         {/* Grid de serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
-          {CATALOGO_SERVICOS.map(servico => <div key={servico.slug} className="group h-full flex flex-col">
-              <div className="flex-grow">
-                <ServicoCard servico={servico} />
-              </div>
-              <div className="mt-4">
-                <Link to={`/servicos/${servico.slug}`}>
-                  <Button variant="outline" className="w-full group-hover:border-primary transition-colors">
-                    Ver Detalhes
-                  </Button>
-                </Link>
-              </div>
-            </div>)}
+          {CATALOGO_SERVICOS.map(servico => <ServicoCard key={servico.slug} servico={servico} />)}
         </div>
 
         {/* Vantagens dos serviços online */}
