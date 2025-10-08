@@ -144,15 +144,24 @@ const ServicoDetalhe = () => {
               </p>
 
               {/* Informações básicas */}
-              {servico.slug !== "renovacao_receitas" && servico.slug !== "solicitacao_exames" && <div className="flex items-center gap-6 mb-8 text-muted-foreground">
-                {servico.slug === "psicologa" && <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
-                    <span className="font-medium">30 minutos</span>
-                  </div>}
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5" />
-                  <span className="font-medium">Consulta Online</span>
+              {servico.slug !== "renovacao_receitas" && servico.slug !== "solicitacao_exames" && <div className="mb-8">
+                <div className="flex items-center gap-6 text-muted-foreground">
+                  {servico.slug === "psicologa" && <div className="flex items-center gap-2">
+                      <Clock className="h-5 w-5" />
+                      <span className="font-medium">30 minutos</span>
+                    </div>}
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5" />
+                    <span className="font-medium">Consulta Online</span>
+                  </div>
                 </div>
+                {servico.slug === "laudos_psicologicos" && <div className="mt-4">
+                    <div className="bg-orange-50 border border-orange-300 rounded-lg p-3">
+                      <p className="text-sm font-bold text-orange-700">
+                        Necessário consulta psicológica prévia!
+                      </p>
+                    </div>
+                  </div>}
               </div>}
 
               {/* O que inclui */}
