@@ -92,14 +92,43 @@ const Entrar = () => {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+    try {
+      const nonce = Math.random().toString(36).substring(2);
+      
+      // @ts-ignore - Google Identity Services global
+      if (typeof google === 'undefined' || !google.accounts) {
+        throw new Error('Google Identity Services não carregado');
       }
-    });
 
-    if (error) {
+      // @ts-ignore
+      google.accounts.id.initialize({
+        client_id: '640368297459-abnkvkvjhshvv5kg89a31kgmnlp9oqe3.apps.googleusercontent.com',
+        callback: async (response: any) => {
+          const { data, error } = await supabase.auth.signInWithIdToken({
+            provider: 'google',
+            token: response.credential,
+            nonce
+          });
+
+          if (error) {
+            console.error('Erro ao autenticar com Google:', error);
+            toast({
+              title: "Erro no login",
+              description: "Não foi possível fazer login com Google. Tente novamente.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+
+          navigate('/auth/callback');
+        },
+        nonce,
+      });
+
+      // @ts-ignore
+      google.accounts.id.prompt();
+    } catch (error) {
       console.error('Google login error:', error);
       toast({
         title: "Erro no login",
