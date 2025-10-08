@@ -36,20 +36,20 @@ const ServicoDetalhe = () => {
     }
   }, [servico]);
 
-  // Get current variant price
+  // Get current variant price (per session if multiple sessions)
   const getCurrentPrice = () => {
-    if (!servico?.variantes) return servico?.precoBase || 0;
-    const variant = servico.variantes.find(v => v.nome === selectedVariant);
-    return variant?.valor || servico.precoBase;
-  };
-
-  // Get total price (for packages with multiple sessions)
-  const getTotalPrice = () => {
     if (!servico?.variantes) return servico?.precoBase || 0;
     const variant = servico.variantes.find(v => v.nome === selectedVariant) as Variante | undefined;
     if (!variant) return servico.precoBase;
     const consultas = variant.consultas || 1;
-    return variant.valor * consultas;
+    return consultas > 1 ? variant.valor / consultas : variant.valor;
+  };
+
+  // Get total price (variant.valor is already the total)
+  const getTotalPrice = () => {
+    if (!servico?.variantes) return servico?.precoBase || 0;
+    const variant = servico.variantes.find(v => v.nome === selectedVariant);
+    return variant?.valor || servico.precoBase;
   };
   const getCurrentSku = () => {
     if (!servico?.variantes) return servico?.sku;
@@ -368,12 +368,12 @@ const ServicoDetalhe = () => {
                         {servico.variantes.map(variante => {
                       const isPsychologist = servico.slug === "psicologa";
                       const consultas = variante.consultas || 1;
-                      const valorTotal = variante.valor * consultas;
+                      const valorPorConsulta = consultas > 1 ? variante.valor / consultas : variante.valor;
                       return <SelectItem key={variante.nome} value={variante.nome}>
                               {isPsychologist && consultas > 1 ? <>
-                                  {variante.nome} - {formataPreco(variante.valor)}/consulta 
+                                  {variante.nome} - {formataPreco(valorPorConsulta)}/consulta 
                                   <span className="text-muted-foreground text-xs ml-1">
-                                    (Total: {formataPreco(valorTotal)})
+                                    (Total: {formataPreco(variante.valor)})
                                   </span>
                                 </> : <>
                                   {variante.nome} - {formataPreco(variante.valor)}
