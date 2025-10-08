@@ -368,10 +368,9 @@ const ServicoDetalhe = () => {
                         {servico.variantes.map(variante => {
                       const isPsychologist = servico.slug === "psicologa";
                       const consultas = variante.consultas || 1;
-                      const valorPorConsulta = consultas > 1 ? variante.valor / consultas : variante.valor;
                       return <SelectItem key={variante.nome} value={variante.nome}>
                               {isPsychologist && consultas > 1 ? <>
-                                  {variante.nome} - {formataPreco(valorPorConsulta)}/consulta 
+                                  {variante.nome}
                                   <span className="text-muted-foreground text-xs ml-1">
                                     (Total: {formataPreco(variante.valor)})
                                   </span>
