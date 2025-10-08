@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getPatientPlan } from "./patient-plan";
 
 /** Garante que exista uma linha em public.patients para o usuário atual */
 export async function ensurePatientRow(userId: string) {
@@ -66,6 +67,10 @@ export async function upsertPatientBasic(payload: {
 
   // Send to GAS webhook
   try {
+    // Check if patient has active plan
+    const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
+    const hasActivePlan = patientPlan?.status === 'active' || patientPlan?.plan_code ? true : false;
+
     await supabase.functions.invoke('patient-operations', {
       body: {
         operation: 'complete_profile',
@@ -81,7 +86,7 @@ export async function upsertPatientBasic(payload: {
         address_complement: payload.address_complement || '',
         city: payload.city || '',
         state: payload.state || '',
-        plano: false // TODO: integrate with subscription system
+        plano: hasActivePlan
       }
     });
   } catch (gasError) {
