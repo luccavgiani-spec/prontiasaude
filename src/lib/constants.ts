@@ -80,7 +80,9 @@ export const CATALOGO_SERVICOS = [
     descricao: "Laudos assinados digitalmente",
     tempo: "Disponível após consulta",
     inclui: [
-      "Laudo para bariátrica, laqueadura ou vasectomia."
+      "Laudo para bariátrica, laqueadura ou vasectomia.",
+      "Assinatura digital do profissional",
+      "Documento válido para fins legais"
     ]
   },
   { 
