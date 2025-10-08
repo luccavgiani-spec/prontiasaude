@@ -83,7 +83,6 @@ const ServicoDetalhe = () => {
     setIsLoading(true);
     try {
       const currentSku = getCurrentSku();
-      
       if (!currentSku) {
         toast({
           title: "Erro",
@@ -105,7 +104,6 @@ const ServicoDetalhe = () => {
 
       // Open InfinitePay checkout with redirect to /confirmacao
       const success = await openInfinitePayCheckout(currentSku, description, price);
-      
       if (!success) {
         toast({
           title: "Erro",
@@ -142,9 +140,7 @@ const ServicoDetalhe = () => {
                 {servico.nome}
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                {servico.slug === "renovacao_receitas" 
-                  ? "Renove agora sua receita com validade para todo o território nacional, de maneira rápida e prática."
-                  : servico.descricao}
+                {servico.slug === "renovacao_receitas" ? "Renove agora sua receita com validade para todo o território nacional, de maneira rápida e prática." : servico.descricao}
               </p>
 
               {/* Informações básicas */}
@@ -165,8 +161,7 @@ const ServicoDetalhe = () => {
                   O que está incluso:
                 </h2>
                 <ul className="space-y-3">
-                  {servico.slug === "renovacao_receitas" ? (
-                    <>
+                  {servico.slug === "renovacao_receitas" ? <>
                       <li className="flex items-center gap-3">
                         <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                         <span className="text-muted-foreground">Avaliação do histórico</span>
@@ -179,8 +174,7 @@ const ServicoDetalhe = () => {
                         <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                         <span className="text-muted-foreground">Orientações de Uso</span>
                       </li>
-                    </>
-                  ) : servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
+                    </> : servico.slug === "laudos_psicologicos" || servico.slug === "consulta" || servico.slug === "solicitacao_exames" ? servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                           <span className="text-muted-foreground">{item}</span>
                         </li>) : <li className="flex items-center gap-3">
@@ -223,10 +217,10 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Emissão do laudo</h3>
-                          <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, vasectomia</p>
+                          <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, ou vasectomia.</p>
                         </div>
                       </div>
-                    </> : (servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames") ? <>
+                    </> : servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames" ? <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
@@ -313,8 +307,7 @@ const ServicoDetalhe = () => {
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
                 {/* Dropdown for variants */}
-                {servico.variantes && servico.variantes.length > 0 && servico.slug !== "solicitacao_exames" && (
-                  <div className="mb-4">
+                {servico.variantes && servico.variantes.length > 0 && servico.slug !== "solicitacao_exames" && <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
                       {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
                     </label>
@@ -340,8 +333,7 @@ const ServicoDetalhe = () => {
                     })}
                       </SelectContent>
                     </Select>
-                  </div>
-                )}
+                  </div>}
                 
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
