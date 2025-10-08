@@ -43,10 +43,8 @@ export function ServicoCard({
   } = useToast();
 
   // Cálculo do desconto baseado no tipo de contratação
-  const precoComDesconto = showDesconto && descontoContratacao > 0 ? 
-    servico.precoBase * (1 - descontoContratacao / 100) : 
-    servico.precoBase;
-  
+  const precoComDesconto = showDesconto && descontoContratacao > 0 ? servico.precoBase * (1 - descontoContratacao / 100) : servico.precoBase;
+
   // Função para obter ícone do serviço
   const getServicoIcon = (slug: string) => {
     switch (slug) {
@@ -80,37 +78,34 @@ export function ServicoCard({
         return "Agendar agora";
     }
   };
-  
   const handleAgendar = async () => {
     setIsLoading(true);
-    
     try {
       // Redirect to /servicos/renovacao_receitas for renovacao_receitas
       if (servico.slug === "renovacao_receitas") {
         window.location.href = "/servicos/renovacao_receitas";
         return;
       }
-      
+
       // Redirect to service detail page for services with variants or solicitacao_exames
-      if ((servico.variantes && servico.variantes.length > 0) || servico.slug === "solicitacao_exames") {
+      if (servico.variantes && servico.variantes.length > 0 || servico.slug === "solicitacao_exames") {
         window.location.href = `/servicos/${servico.slug}`;
         return;
       }
-      
+
       // Track Lead event when user clicks to schedule
       trackLead({
         value: precoComDesconto,
-        content_name: servico.nome,
+        content_name: servico.nome
       });
-      
+
       // Open InfinitePay checkout with redirect to /confirmacao
       const success = await openInfinitePayCheckout(servico.sku, servico.nome, precoComDesconto);
-      
       if (!success) {
         toast({
           title: "Erro",
           description: "Não foi possível abrir o checkout. Tente novamente.",
-          variant: "destructive",
+          variant: "destructive"
         });
       }
     } catch (error) {
@@ -118,7 +113,7 @@ export function ServicoCard({
       toast({
         title: "Erro no checkout",
         description: "Não foi possível iniciar o pagamento. Tente novamente.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);
@@ -137,52 +132,34 @@ export function ServicoCard({
             {servico.nome}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {servico.slug === "laudos_psicologicos" 
-              ? "Laudos assinados digitalmente" 
-              : servico.slug === "renovacao_receitas"
-              ? "Renove agora sua receita válida em todo país."
-              : servico.descricao}
+            {servico.slug === "laudos_psicologicos" ? "Laudos assinados digitalmente" : servico.slug === "renovacao_receitas" ? "Renove agora sua receita válida em todo país." : servico.descricao}
           </p>
-          {showDesconto && descontoContratacao > 0 && (
-            <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mt-2">
+          {showDesconto && descontoContratacao > 0 && <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mt-2">
               {descontoContratacao}% OFF na contratação {tipoContratacao?.toLowerCase()}
-            </Badge>
-          )}
+            </Badge>}
         </div>
 
         {/* Seção especial para Laudos Psicológicos */}
-        {servico.slug === "laudos_psicologicos" && (
-          <div className="mb-6 space-y-4 flex-grow">
+        {servico.slug === "laudos_psicologicos" && <div className="mb-6 space-y-4 flex-grow">
             <div>
               <h4 className="text-sm font-medium text-foreground mb-2">Inclui:</h4>
               <ul className="space-y-1">
-                {servico.inclui.map((item, index) => (
-                  <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
+                {servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
                     <span>{item}</span>
-                  </li>
-                ))}
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
-                  <span>Assinatura digital do profissional</span>
-                </li>
-                <li className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
-                  <span>Documento válido para fins legais</span>
-                </li>
+                  </li>)}
+                
+                
               </ul>
             </div>
-            {servico.naoInclui && (
-              <div>
+            {servico.naoInclui && <div>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                   <p className="text-sm font-bold text-amber-800">
                     Necessário consulta psicológica prévia
                   </p>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              </div>}
+          </div>}
 
         {/* Spacer para empurrar o preço e botão para baixo */}
         <div className="flex-grow"></div>
@@ -190,8 +167,7 @@ export function ServicoCard({
         {/* Preço e CTA */}
         <div className="text-center pt-4 border-t border-border mt-auto">
           <div className="mb-4">
-            {showDesconto && descontoContratacao > 0 ? (
-              <div>
+            {showDesconto && descontoContratacao > 0 ? <div>
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-lg font-medium text-muted-foreground line-through">
                     {formataPreco(servico.precoBase)}
@@ -203,27 +179,15 @@ export function ServicoCard({
                 <p className="text-xs text-green-600 font-medium">
                   Economize {descontoContratacao}% na contratação {tipoContratacao?.toLowerCase()}
                 </p>
-              </div>
-            ) : (
-              <div>
-                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && (
-                  <p className="text-sm text-muted-foreground mb-1">a partir de</p>
-                )}
+              </div> : <div>
+                {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && <p className="text-sm text-muted-foreground mb-1">a partir de</p>}
                 <span className="text-2xl font-bold text-foreground">
                   {servico.slug === "psicologa" ? formataPreco(38.49) : formataPreco(servico.precoBase)}
                 </span>
-              </div>
-            )}
+              </div>}
           </div>
           <div className="space-y-2">
-            <Button 
-              onClick={() => handleAgendar()} 
-              variant="outline" 
-              size="default" 
-              disabled={isLoading} 
-              className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform"
-              data-sku={servico.sku}
-            >
+            <Button onClick={() => handleAgendar()} variant="outline" size="default" disabled={isLoading} className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform" data-sku={servico.sku}>
               {isLoading ? "Processando..." : getButtonText(servico.slug)}
             </Button>
             <Link to={`/servicos/${servico.slug}`}>
