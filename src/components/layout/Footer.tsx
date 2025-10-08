@@ -23,7 +23,7 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4" />
-                <span>+55 11 93335-9187</span>
+                <a href="https://wa.me/5511933359187?text=Ol%C3%A1!" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+55 11 93335-9187</a>
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
