@@ -339,7 +339,7 @@ const ServicoDetalhe = () => {
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
-                    {formataPreco(getTotalPrice())}
+                    {servico.slug === "renovacao_receitas" ? formataPreco(9.99) : formataPreco(getTotalPrice())}
                   </div>
                   {servico.slug === "psicologa" && selectedVariant && (() => {
                   const variant = servico.variantes?.find(v => v.nome === selectedVariant) as Variante | undefined;

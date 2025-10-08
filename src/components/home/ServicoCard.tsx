@@ -182,7 +182,7 @@ export function ServicoCard({
               </div> : <div>
                 {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && <p className="text-sm text-muted-foreground mb-1">a partir de</p>}
                 <span className="text-2xl font-bold text-foreground">
-                  {servico.slug === "psicologa" ? formataPreco(38.49) : servico.slug === "solicitacao_exames" ? formataPreco(9.99) : formataPreco(servico.precoBase)}
+                  {servico.slug === "psicologa" ? formataPreco(38.49) : servico.slug === "solicitacao_exames" ? formataPreco(9.99) : servico.slug === "renovacao_receitas" ? formataPreco(9.99) : formataPreco(servico.precoBase)}
                 </span>
               </div>}
           </div>
