@@ -88,11 +88,6 @@ export function Footer() {
                   Blog
                 </Link>
               </li>
-              <li>
-                <Link to="/disque-denuncia" className="text-muted-foreground hover:text-primary transition-colors">
-                  Disque Denúncia
-                </Link>
-              </li>
             </ul>
           </div>
         </div>

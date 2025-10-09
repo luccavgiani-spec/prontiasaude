@@ -113,9 +113,22 @@ const DisqueDenuncia = () => {
             <AlertTriangle className="h-8 w-8 text-white" />
           </div>
           <h1 className="text-4xl font-bold text-foreground mb-4">Disque Denúncia</h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Este é um canal seguro para denunciar inconsistências nos serviços prestados ou condutas profissionais inadequadas. 
-            Sua denúncia será tratada com total confidencialidade.
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-6">
+            Este canal foi criado para reforçar nosso compromisso com um ambiente de trabalho seguro, saudável e respeitoso para todos.
+          </p>
+          <p className="text-base text-muted-foreground max-w-2xl mx-auto mb-4">
+            Aqui, trabalhadores, colaboradores e parceiros podem relatar de forma confidencial situações relacionadas a:
+          </p>
+          <ul className="text-base text-muted-foreground max-w-2xl mx-auto text-left list-disc list-inside space-y-2 mb-6">
+            <li>Condições que possam representar riscos à saúde ou à segurança;</li>
+            <li>Dúvidas sobre o uso de equipamentos de proteção ou sobre procedimentos de segurança;</li>
+            <li>Sugestões de melhoria para o ambiente de trabalho.</li>
+          </ul>
+          <p className="text-base font-semibold text-foreground max-w-2xl mx-auto mb-2">
+            📢 Todos os relatos são tratados com seriedade, responsabilidade e total sigilo.
+          </p>
+          <p className="text-base text-muted-foreground max-w-2xl mx-auto">
+            Acreditamos que a comunicação transparente é essencial para prevenir acidentes e promover o aperfeiçoamento contínuo das condições de trabalho, em conformidade com as Normas Regulamentadoras do Ministério do Trabalho, como a NR 1.
           </p>
         </div>
 
