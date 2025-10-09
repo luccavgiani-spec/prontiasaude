@@ -81,18 +81,6 @@ export function ServicoCard({
   const handleAgendar = async () => {
     setIsLoading(true);
     try {
-      // Redirect to /servicos/renovacao_receitas for renovacao_receitas
-      if (servico.slug === "renovacao_receitas") {
-        window.location.href = "/servicos/renovacao_receitas";
-        return;
-      }
-
-      // Redirect to service detail page for services with variants or solicitacao_exames
-      if (servico.variantes && servico.variantes.length > 0 || servico.slug === "solicitacao_exames" || servico.slug === "laudos_psicologicos") {
-        window.location.href = `/servicos/${servico.slug}`;
-        return;
-      }
-
       // Track Lead event when user clicks to schedule
       trackLead({
         value: precoComDesconto,
