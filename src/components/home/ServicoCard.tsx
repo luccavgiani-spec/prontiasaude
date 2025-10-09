@@ -131,9 +131,15 @@ export function ServicoCard({
           <h3 className="text-xl font-semibold text-foreground mb-2">
             {servico.nome}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {servico.slug === "laudos_psicologicos" ? "Laudos assinados digitalmente" : servico.slug === "renovacao_receitas" ? "Renove agora sua receita válida em todo país." : servico.descricao}
-          </p>
+          {servico.slug !== "laudos_psicologicos" && (
+            <p className="text-sm text-muted-foreground">
+              {servico.slug === "solicitacao_exames" 
+                ? "Obtenha solicitações de exames laboratoriais sem sair de casa." 
+                : servico.slug === "renovacao_receitas" 
+                ? "Renove agora sua receita válida em todo país." 
+                : servico.descricao}
+            </p>
+          )}
           {showDesconto && descontoContratacao > 0 && <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200 mt-2">
               {descontoContratacao}% OFF na contratação {tipoContratacao?.toLowerCase()}
             </Badge>}
