@@ -237,7 +237,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Realize o pagamento</h3>
-                          <p className="text-muted-foreground">Conclua o pagamento do serviço</p>
+                          <p className="text-muted-foreground">Após o pagamento, envie sua receita anterior (no máximo 3 meses).</p>
                         </div>
                       </div>
                       {servico.slug === "solicitacao_exames" ? <>
