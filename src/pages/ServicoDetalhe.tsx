@@ -293,7 +293,7 @@ const ServicoDetalhe = () => {
                           </div>
                           <div>
                             <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                            <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional.</p>
+                            <p className="text-muted-foreground">Receba sua nova receita sigital com assinatura médica.</p>
                           </div>
                         </div>
                       </>}
