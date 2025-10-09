@@ -284,7 +284,7 @@ const ServicoDetalhe = () => {
                           </div>
                           <div>
                             <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                            <p className="text-muted-foreground">Envie sua receita anterior (máximo 3 meses)</p>
+                            <p className="text-muted-foreground">Nosso médico avalia sua receita digital com assinatura médica.</p>
                           </div>
                         </div>
                         <div className="flex gap-4">
