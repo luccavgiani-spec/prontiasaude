@@ -108,13 +108,14 @@ const ServicoDetalhe = () => {
       if (!auth) return;
       
       const patient = await getPatient(auth.user.id);
-      if (!patient?.profile_complete) {
-        window.location.href = '/completar-perfil';
-        return;
-      }
-
+      
       // Build checkout link
       const checkoutLink = await buildCheckoutLink(currentSku, description, price);
+      
+      if (!patient?.profile_complete) {
+        window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(checkoutLink || '');
+        return;
+      }
       if (!checkoutLink) {
         toast({
           title: "Erro",

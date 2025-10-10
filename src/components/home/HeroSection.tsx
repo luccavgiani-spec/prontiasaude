@@ -69,7 +69,7 @@ export function HeroSection() {
                 if (patient?.profile_complete) {
                   window.location.href = checkoutUrl;
                 } else {
-                  window.location.href = '/completar-perfil';
+                  window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(checkoutUrl);
                 }
               }} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora

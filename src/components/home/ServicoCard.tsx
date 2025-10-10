@@ -133,7 +133,7 @@ export function ServicoCard({
     if (patient?.profile_complete) {
       window.location.href = link;
     } else {
-      window.location.href = '/completar-perfil';
+      window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(link);
     }
   };
   return <>

@@ -156,8 +156,12 @@ const CompletarPerfil = () => {
         description: "Suas informações foram salvas com sucesso.",
       });
       
-      // Sempre redirecionar para /servicos após completar perfil
-      navigate('/servicos');
+      const redirectUrl = searchParams.get('redirect');
+      if (redirectUrl) {
+        window.location.href = decodeURIComponent(redirectUrl);
+      } else {
+        navigate('/servicos');
+      }
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
