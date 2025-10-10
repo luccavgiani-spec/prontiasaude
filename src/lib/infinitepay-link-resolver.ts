@@ -89,6 +89,25 @@ export async function createCheckoutWithRedirect(sku: string, description: strin
 }
 
 /**
+ * Constrói o link de checkout do InfinitePay sem redirecionar
+ */
+export async function buildCheckoutLink(sku: string, description: string, price: number): Promise<string | null> {
+  const normalizedSku = sku.trim().toUpperCase();
+  const redirectUrl = `${window.location.origin}/confirmacao/${normalizedSku}`;
+  
+  // Construir URL do checkout do InfinitePay
+  const items = [{
+    name: description,
+    price: Math.round(price), // Preço já deve estar em centavos
+    quantity: 1
+  }];
+  
+  const checkoutUrl = `https://checkout.infinitepay.io/prontiasaude?items=${encodeURIComponent(JSON.stringify(items))}&redirect_url=${encodeURIComponent(redirectUrl)}`;
+  
+  return checkoutUrl;
+}
+
+/**
  * Abre o checkout do InfinitePay com redirect para /confirmacao
  */
 export async function openInfinitePayCheckout(sku: string, description?: string, price?: number): Promise<boolean> {

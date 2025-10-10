@@ -116,7 +116,8 @@ export function ServicoCard({
     // Get the link for this SKU
     const link = SKU_TO_LINK[servico.sku];
     if (link) {
-      window.location.href = link;
+      // Redirect to completar-perfil with checkout URL as parameter
+      window.location.href = `/completar-perfil?redirect=${encodeURIComponent(link)}`;
     } else {
       toast({
         title: "Erro",

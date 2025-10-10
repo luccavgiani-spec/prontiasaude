@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
-import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
+import { buildCheckoutLink } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
@@ -102,15 +102,19 @@ const ServicoDetalhe = () => {
       const description = servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '');
       const price = getTotalPrice();
 
-      // Open InfinitePay checkout with redirect to /confirmacao
-      const success = await openInfinitePayCheckout(currentSku, description, price);
-      if (!success) {
+      // Build checkout link
+      const checkoutLink = await buildCheckoutLink(currentSku, description, price);
+      if (!checkoutLink) {
         toast({
           title: "Erro",
-          description: "Não foi possível abrir o checkout. Tente novamente.",
+          description: "Não foi possível construir o link de checkout.",
           variant: "destructive"
         });
+        return;
       }
+
+      // Redirect to completar-perfil with checkout URL as parameter
+      window.location.href = `/completar-perfil?redirect=${encodeURIComponent(checkoutLink)}`;
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({

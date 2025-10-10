@@ -57,7 +57,10 @@ export function HeroSection() {
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={() => window.location.href = 'https://loja.infinitepay.io/prontiasaude/itc6534-pronto-atendimento'} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
+              <Button onClick={() => {
+                const checkoutUrl = 'https://checkout.infinitepay.io/prontiasaude?items=[{%22name%22:%22Pronto+Atendimento%22,%22price%22:4390,%22quantity%22:1}]&redirect_url=https://prontiasaude.com.br/confirmacao';
+                window.location.href = `/completar-perfil?redirect=${encodeURIComponent(checkoutUrl)}`;
+              }} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
