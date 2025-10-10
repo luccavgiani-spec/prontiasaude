@@ -8,6 +8,7 @@ import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
+import { requireAuth, getPatient } from "@/lib/auth";
 interface Servico {
   slug: string;
   nome: string;
@@ -106,7 +107,7 @@ export function ServicoCard({
     "QOP1101": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Médico+da+Família\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/QOP1101"
   };
 
-  const handleAgendar = () => {
+  const handleAgendar = async () => {
     // Track Lead event when user clicks to schedule
     trackLead({
       value: precoComDesconto,
@@ -115,15 +116,24 @@ export function ServicoCard({
 
     // Get the link for this SKU
     const link = SKU_TO_LINK[servico.sku];
-    if (link) {
-      // Redirect to completar-perfil with checkout URL as parameter
-      window.location.href = `/completar-perfil?redirect=${encodeURIComponent(link)}`;
-    } else {
+    if (!link) {
       toast({
         title: "Erro",
         description: "Link de pagamento não encontrado para este serviço.",
         variant: "destructive"
       });
+      return;
+    }
+
+    // Verificar se usuário está autenticado e perfil completo
+    const auth = await requireAuth();
+    if (!auth) return;
+    
+    const patient = await getPatient(auth.user.id);
+    if (patient?.profile_complete) {
+      window.location.href = link;
+    } else {
+      window.location.href = '/completar-perfil';
     }
   };
   return <>

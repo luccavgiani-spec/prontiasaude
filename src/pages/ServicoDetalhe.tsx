@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { requireAuth, getPatient } from "@/lib/auth";
 interface Variante {
   valor: number;
   nome: string;
@@ -102,6 +103,16 @@ const ServicoDetalhe = () => {
       const description = servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '');
       const price = getTotalPrice();
 
+      // Verificar se usuário está autenticado e perfil completo
+      const auth = await requireAuth();
+      if (!auth) return;
+      
+      const patient = await getPatient(auth.user.id);
+      if (!patient?.profile_complete) {
+        window.location.href = '/completar-perfil';
+        return;
+      }
+
       // Build checkout link
       const checkoutLink = await buildCheckoutLink(currentSku, description, price);
       if (!checkoutLink) {
@@ -113,8 +124,8 @@ const ServicoDetalhe = () => {
         return;
       }
 
-      // Redirect to completar-perfil with checkout URL as parameter
-      window.location.href = `/completar-perfil?redirect=${encodeURIComponent(checkoutLink)}`;
+      // Redirecionar para checkout
+      window.location.href = checkoutLink;
     } catch (error) {
       console.error('Erro no checkout:', error);
       toast({

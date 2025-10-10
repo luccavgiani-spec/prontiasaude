@@ -156,13 +156,8 @@ const CompletarPerfil = () => {
         description: "Suas informações foram salvas com sucesso.",
       });
       
-      // Check if there's a redirect parameter
-      const redirectTo = searchParams.get('redirect');
-      if (redirectTo) {
-        navigate(redirectTo);
-      } else {
-        navigate('/servicos');
-      }
+      // Sempre redirecionar para /servicos após completar perfil
+      navigate('/servicos');
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
