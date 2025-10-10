@@ -73,22 +73,22 @@ export default function Confirmacao() {
     try {
       // ========== CONSTRUÇÃO DO PAYLOAD ==========
       const payload = {
-        path: 'redirect',
+        path: 'site-schedule',
         sku: sku || '',
         cpf: cpf,
         nome: `${firstName} ${lastName}`
       };
       
       console.log('📡 [APP SCRIPT] Iniciando chamada ao Google Apps Script');
-      console.log('📡 [APP SCRIPT] URL:', `${GAS_ENDPOINT}?path=redirect`);
+      console.log('📡 [APP SCRIPT] URL:', `${GAS_ENDPOINT}?path=site-schedule`);
       console.log('📡 [APP SCRIPT] Payload:', {
-        path: 'redirect',
+        path: 'site-schedule',
         sku: sku,
         cpf: cpf ? `${cpf.substring(0, 3)}***` : 'não fornecido',
         nome: `${firstName} ${lastName}`
       });
       
-      const response = await fetch(`${GAS_ENDPOINT}?path=redirect`, {
+      const response = await fetch(`${GAS_ENDPOINT}?path=site-schedule`, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
@@ -115,12 +115,12 @@ export default function Confirmacao() {
       const result = await response.json();
       console.log('✅ [APP SCRIPT] Resposta recebida:', result);
 
-      if (result.success && result.url) {
+      if (result.ok && result.url) {
         console.log('✅ [APP SCRIPT] URL de redirecionamento obtida:', result.url);
         setRedirectUrl(result.url);
       } else {
-        console.error('❌ [APP SCRIPT] Resposta sem URL de redirecionamento:', result);
-        setErrorMessage('O servidor não retornou uma URL de redirecionamento válida.');
+        console.error('❌ [APP SCRIPT] Erro:', result.error || 'URL não retornada');
+        setErrorMessage(result.error || 'O servidor não retornou uma URL de redirecionamento válida.');
         setError(true);
       }
     } catch (err) {
