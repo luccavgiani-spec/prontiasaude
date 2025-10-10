@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 
-const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbxxuPpRI4O-xJEHp_nUsdt3s5py_dZ61x5UsocGWzhO53HYtYXnhfsm4kBiuyoGKvmm/exec";
+const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwaM-nCvG4NchS4HcameieGqvVnHiO-wGf2RgFVF3IMiXky3y0WvqK_2yBVKHvU4xaM/exec";
 const WHATSAPP_LINK = "https://api.whatsapp.com/send/?phone=5511933359187&text=Ol%C3%A1%21&type=phone_number&app_absent=0";
 
 export default function Confirmacao() {
