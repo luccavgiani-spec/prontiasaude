@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, ExternalLink, MessageCircle } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 
 const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbz75MBiAKNvWLQi988cHmovasFE4KLWliRGxnAmfQuyNcx9ipJnkcj6N3cdzlkKWnWc/exec";
+const WHATSAPP_LINK = "https://api.whatsapp.com/send/?phone=5511933359187&text=Ol%C3%A1%21&type=phone_number&app_absent=0";
 
 export default function Confirmacao() {
   const { sku } = useParams<{ sku?: string }>();
@@ -14,24 +15,50 @@ export default function Confirmacao() {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string>("");
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [profileIncomplete, setProfileIncomplete] = useState(false);
+  const [skuError, setSkuError] = useState(false);
+
+  // ========== DIAGNÓSTICO: Log do SKU capturado ==========
+  console.log('🔍 [DIAGNÓSTICO] SKU capturado do useParams:', sku);
+  console.log('🔍 [DIAGNÓSTICO] Tipo do SKU:', typeof sku);
+  console.log('🔍 [DIAGNÓSTICO] SKU é undefined?', sku === undefined);
+  console.log('🔍 [DIAGNÓSTICO] SKU é ":sku"?', sku === ':sku');
 
   useEffect(() => {
     const checkAuthAndProfile = async () => {
+      // ========== VALIDAÇÃO DO SKU ==========
+      console.log('🔍 [VALIDAÇÃO] Iniciando validação do SKU...');
+      
+      if (!sku || sku === ':sku' || sku.trim() === '') {
+        console.error('❌ [ERRO] SKU inválido detectado:', { sku, isEmpty: !sku, isPlaceholder: sku === ':sku' });
+        setSkuError(true);
+        setErrorMessage('SKU do produto não foi identificado na URL. Por favor, verifique o link de acesso.');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('✅ [VALIDAÇÃO] SKU válido:', sku);
+
       const auth = await requireAuth();
       if (!auth) {
+        console.log('⚠️ [AUTH] Usuário não autenticado, redirecionando para login');
         navigate('/entrar');
         return;
       }
 
+      console.log('✅ [AUTH] Usuário autenticado:', auth.user.id);
+
       const patient = await getPatient(auth.user.id);
       if (!patient || !patient.profile_complete) {
+        console.log('⚠️ [PERFIL] Perfil incompleto, solicitando completar cadastro');
         setProfileIncomplete(true);
         setIsLoading(false);
         return;
       }
 
+      console.log('✅ [PERFIL] Perfil completo, iniciando chamada ao App Script');
       setIsLoading(false);
       callAppScript(patient.cpf || '', patient.first_name || '', patient.last_name || '');
     };
@@ -40,33 +67,76 @@ export default function Confirmacao() {
   }, [sku, navigate]);
 
   const callAppScript = async (cpf: string, firstName: string, lastName: string) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
     try {
-      console.log('Calling App Script with SKU:', sku);
-      
+      // ========== CONSTRUÇÃO DA URL ==========
       const url = `${GAS_ENDPOINT}?path=redirect&sku=${encodeURIComponent(sku || '')}&cpf=${encodeURIComponent(cpf)}&nome=${encodeURIComponent(`${firstName} ${lastName}`)}`;
+      
+      console.log('📡 [APP SCRIPT] Iniciando chamada ao Google Apps Script');
+      console.log('📡 [APP SCRIPT] URL completa:', url);
+      console.log('📡 [APP SCRIPT] Parâmetros:', {
+        path: 'redirect',
+        sku: sku,
+        cpf: cpf ? `${cpf.substring(0, 3)}***` : 'não fornecido',
+        nome: `${firstName} ${lastName}`
+      });
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
+
+      console.log('📡 [APP SCRIPT] Status da resposta:', response.status);
+      console.log('📡 [APP SCRIPT] Headers da resposta:', Object.fromEntries(response.headers.entries()));
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error('❌ [APP SCRIPT] Erro HTTP:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
 
       const result = await response.json();
-      console.log('App Script response:', result);
+      console.log('✅ [APP SCRIPT] Resposta recebida:', result);
 
       if (result.success && result.url) {
+        console.log('✅ [APP SCRIPT] URL de redirecionamento obtida:', result.url);
         setRedirectUrl(result.url);
       } else {
-        console.warn('No redirect URL received from App Script');
+        console.error('❌ [APP SCRIPT] Resposta sem URL de redirecionamento:', result);
+        setErrorMessage('O servidor não retornou uma URL de redirecionamento válida.');
         setError(true);
       }
     } catch (err) {
-      console.error('Exception calling App Script:', err);
+      clearTimeout(timeoutId);
+      
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          console.error('❌ [APP SCRIPT] Timeout: A chamada excedeu 10 segundos');
+          setErrorMessage('A conexão com o servidor demorou muito. Por favor, tente novamente.');
+        } else {
+          console.error('❌ [APP SCRIPT] Exceção capturada:', {
+            name: err.name,
+            message: err.message,
+            stack: err.stack
+          });
+          setErrorMessage(`Erro ao conectar: ${err.message}`);
+        }
+      } else {
+        console.error('❌ [APP SCRIPT] Erro desconhecido:', err);
+        setErrorMessage('Erro desconhecido ao tentar conectar.');
+      }
+      
       setError(true);
     }
   };
@@ -236,9 +306,42 @@ export default function Confirmacao() {
                   <p className="text-lg font-semibold text-foreground mb-3">
                     Não foi possível conectar automaticamente
                   </p>
-                  <p className="text-base text-muted-foreground mb-6">
-                    Seu pagamento foi aprovado. Por favor, entre em contato com nosso suporte para prosseguir.
+                  <p className="text-base text-muted-foreground mb-4">
+                    Seu pagamento foi aprovado. {errorMessage || 'Por favor, entre em contato com nosso suporte para prosseguir.'}
                   </p>
+                  <Button 
+                    asChild
+                    size="lg"
+                    className="w-full"
+                  >
+                    <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                      <MessageCircle className="mr-2 h-5 w-5" />
+                      Falar com Suporte via WhatsApp
+                    </a>
+                  </Button>
+                </div>
+              )}
+
+              {/* Erro de SKU inválido */}
+              {skuError && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-8 mb-6">
+                  <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
+                  <p className="text-lg font-semibold text-foreground mb-3">
+                    SKU do produto não identificado
+                  </p>
+                  <p className="text-base text-muted-foreground mb-4">
+                    {errorMessage}
+                  </p>
+                  <Button 
+                    asChild
+                    size="lg"
+                    className="w-full"
+                  >
+                    <a href={WHATSAPP_LINK} target="_blank" rel="noopener noreferrer">
+                      <MessageCircle className="mr-2 h-5 w-5" />
+                      Falar com Suporte via WhatsApp
+                    </a>
+                  </Button>
                 </div>
               )}
             </div>
