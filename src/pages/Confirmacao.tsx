@@ -1,87 +1,78 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, FileText, ExternalLink } from "lucide-react";
+import { CheckCircle, Clock } from "lucide-react";
+
+const GAS_REDIRECT_URL = "https://script.google.com/macros/s/AKfycbwxZbuVgiyqd3dsoFe6azhxc_kYhCTTZEAqN9M0DljZpLP_GpPWvFu2ci2rN7gKz1jd/exec";
 
 export default function Confirmacao() {
-  const [searchParams] = useSearchParams();
-  const [orderData, setOrderData] = useState({
-    receipt_url: searchParams.get("receipt_url") || "",
-    order_nsu: searchParams.get("order_nsu") || "",
-    slug: searchParams.get("slug") || "",
-    capture_method: searchParams.get("capture_method") || "",
-    transaction_nsu: searchParams.get("transaction_nsu") || ""
-  });
+  const { sku } = useParams<{ sku?: string }>();
+  const [countdown, setCountdown] = useState(30);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    // Atualizar dados quando os parâmetros mudarem
-    setOrderData({
-      receipt_url: searchParams.get("receipt_url") || "",
-      order_nsu: searchParams.get("order_nsu") || "",
-      slug: searchParams.get("slug") || "",
-      capture_method: searchParams.get("capture_method") || "",
-      transaction_nsu: searchParams.get("transaction_nsu") || ""
-    });
-  }, [searchParams]);
+    // Start countdown
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleRedirect();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleRedirect = () => {
+    setIsRedirecting(true);
+    // Build redirect URL with SKU parameter if available
+    const redirectUrl = sku 
+      ? `${GAS_REDIRECT_URL}?sku=${sku}`
+      : GAS_REDIRECT_URL;
+    window.location.href = redirectUrl;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background py-16">
       <div className="container mx-auto px-4 max-w-2xl">
         <Card className="shadow-xl">
           <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-10 w-10 text-green-600" />
+            <div className="mx-auto w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="h-12 w-12 text-green-600" />
             </div>
             <CardTitle className="text-3xl font-bold text-foreground">
-              Pagamento Confirmado!
+              ✅ Pagamento aprovado com sucesso!
             </CardTitle>
           </CardHeader>
           
           <CardContent className="space-y-6">
             <div className="text-center">
-              <p className="text-lg text-muted-foreground mb-4">
+              <p className="text-lg text-muted-foreground mb-6">
                 Seu pagamento foi processado com sucesso. Em breve você receberá mais informações no seu WhatsApp.
               </p>
-            </div>
 
-            {orderData.order_nsu && (
-              <div className="bg-muted/30 rounded-lg p-4">
-                <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Detalhes do Pedido
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Número do Pedido:</span>
-                    <span className="font-medium text-foreground">{orderData.order_nsu}</span>
-                  </div>
-                  {orderData.transaction_nsu && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">NSU da Transação:</span>
-                      <span className="font-medium text-foreground">{orderData.transaction_nsu}</span>
-                    </div>
-                  )}
-                  {orderData.capture_method && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Método de Captura:</span>
-                      <span className="font-medium text-foreground capitalize">{orderData.capture_method}</span>
-                    </div>
-                  )}
+              {/* Timer de redirecionamento */}
+              <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6">
+                <div className="flex items-center justify-center gap-3 mb-3">
+                  <Clock className="h-6 w-6 text-primary" />
+                  <span className="text-2xl font-bold text-primary">{countdown}s</span>
                 </div>
-              </div>
-            )}
-
-            {orderData.receipt_url && (
-              <div className="text-center">
-                <Button asChild variant="outline" className="gap-2">
-                  <a href={orderData.receipt_url} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="h-4 w-4" />
-                    Ver Comprovante
-                  </a>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Você será redirecionado automaticamente em {countdown} segundos...
+                </p>
+                <Button 
+                  onClick={handleRedirect} 
+                  disabled={isRedirecting}
+                  className="w-full"
+                >
+                  {isRedirecting ? "Redirecionando..." : "Pular e ir agora"}
                 </Button>
               </div>
-            )}
+            </div>
 
             <div className="border-t pt-6 space-y-4">
               <h3 className="font-semibold text-foreground text-center">Próximos Passos</h3>

@@ -163,72 +163,48 @@ export function PlanosSection() {
     }
   ];
 
-  const handleAssinar = async (planoId: string, email?: string) => {
+  // Links dos planos InfinitePay
+  const PLAN_LINKS: { [key: string]: { [meses: string]: string } } = {
+    "individual_com_especialistas": {
+      "1": "https://invoice.infinitepay.io/plans/prontiasaude/6RYPA4ViYT",
+      "6": "https://invoice.infinitepay.io/plans/prontiasaude/G2kHiqQqV",
+      "12": "https://invoice.infinitepay.io/plans/prontiasaude/3EYKywqyRb"
+    },
+    "individual_sem_especialistas": {
+      "1": "https://invoice.infinitepay.io/plans/prontiasaude/nwYOzRBur",
+      "6": "https://invoice.infinitepay.io/plans/prontiasaude/1cHAfmF3P5",
+      "12": "https://invoice.infinitepay.io/plans/prontiasaude/14qmc6qZkt"
+    },
+    "familiar_com_especialistas": {
+      "1": "https://invoice.infinitepay.io/plans/prontiasaude/6RYSfMYEpl",
+      "6": "https://invoice.infinitepay.io/plans/prontiasaude/e6s2U5raB",
+      "12": "https://invoice.infinitepay.io/plans/prontiasaude/29hZjQZxd9"
+    },
+    "familiar_sem_especialistas": {
+      "1": "https://invoice.infinitepay.io/plans/prontiasaude/1bt7PyHvXJ",
+      "6": "https://invoice.infinitepay.io/plans/prontiasaude/6T6jj6ZlvB",
+      "12": "https://invoice.infinitepay.io/plans/prontiasaude/e6sEnSO1V"
+    }
+  };
+
+  const handleAssinar = (planoId: string) => {
     if (planoId === "empresarial") {
       setShowEmpresarialForm(true);
       return;
     }
 
-    const emailParaUsar = email || (await getEmailAtual());
-    if (!emailParaUsar) {
-      setPlanoSelecionado(planoId);
-      setIsModalOpen(true);
-      return;
-    }
-    await processarCheckoutPlano(planoId, emailParaUsar);
-  };
-
-  const processarCheckoutPlano = async (planoId: string, email: string) => {
-    setIsLoading(true);
-    try {
-      // Mapear plano ID para código do sistema existente
-      const planoCodeMap: { [key: string]: string } = {
-        individual_com_especialistas: "INDIVIDUAL",
-        familiar_com_especialistas: "FAMILIAR",
-        individual_sem_especialistas: "INDIVIDUAL",
-        familiar_sem_especialistas: "FAMILIAR"
-      };
-
-      const planoCode = planoCodeMap[planoId];
-      const priceId = PRICE_MAP[`plano_${planoCode.toLowerCase()}` as keyof typeof PRICE_MAP];
-      
-      if (!priceId || priceId === "price_xxx") {
-        toast({
-          title: "Plano em configuração",
-          description: "Este plano ainda está sendo configurado. Tente novamente mais tarde.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      const checkoutData = await criarCheckout({
-        mode: "subscription",
-        price_id: priceId,
-        plan_code: planoCode,
-        plan_duration_months: parseInt(duracaoSelecionada),
-        email: email
-      });
-
-      if (checkoutData.error) {
-        toast({
-          title: "Erro no checkout",
-          description: checkoutData.error,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      redirecionarParaCheckout(checkoutData);
-    } catch (error) {
+    const link = PLAN_LINKS[planoId]?.[duracaoSelecionada];
+    if (link) {
+      window.location.href = link;
+    } else {
       toast({
-        title: "Erro inesperado",
-        description: "Não foi possível processar a assinatura. Tente novamente.",
+        title: "Erro",
+        description: "Link de assinatura não encontrado.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
   };
+
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -354,10 +330,8 @@ export function PlanosSection() {
                       onClick={() => handleAssinar(plano.id)}
                       size="sm"
                       className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
-                      disabled={isLoading}
-                      data-sku="PREENCHER_DEPOIS"
                     >
-                      {isLoading ? "Processando..." : "Assinar Plano"}
+                      Assinar Plano
                       <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
                     </Button>
                   </div>

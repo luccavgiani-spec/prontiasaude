@@ -37,7 +37,6 @@ export function ServicoCard({
   showDesconto = false
 }: ServicoCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const {
     toast
   } = useToast();
@@ -78,33 +77,52 @@ export function ServicoCard({
         return "Agendar agora";
     }
   };
-  const handleAgendar = async () => {
-    setIsLoading(true);
-    try {
-      // Track Lead event when user clicks to schedule
-      trackLead({
-        value: precoComDesconto,
-        content_name: servico.nome
-      });
+  // Mapeamento de SKUs para links do InfinitePay
+  const SKU_TO_LINK: { [key: string]: string } = {
+    "RZP5755": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Renovação+de+Receitas\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/RZP5755",
+    "ULT3571": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Solicitação+de+Exames\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ULT3571",
+    "BIR7668": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Personal+Trainer\",\"price\":5499,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/BIR7668",
+    "VPN5132": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Nutricionista\",\"price\":5990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/VPN5132",
+    "UDH3250": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Reumatologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/UDH3250",
+    "PKS9388": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Neurologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/PKS9388",
+    "MYX5186": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Infectologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/MYX5186",
+    "LZF3879": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Nutrólogo\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/LZF3879",
+    "YZD9932": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Geriatria\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/YZD9932",
+    "YME9025": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+8+consultas\",\"price\":30792,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/YME9025",
+    "HXR8516": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+4+consultas\",\"price\":17196,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HXR8516",
+    "ZXW2165": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+Consulta+única\",\"price\":4490,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ZXW2165",
+    "ITC6534": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pronto+Atendimento\",\"price\":4390,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao",
+    "OVM9892": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Laudo+psicológico\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/OVM9892",
+    "TQP5720": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Cardiologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TQP5720",
+    "HGG3503": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Dermatologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HGG3503",
+    "VHH8883": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Endocrinologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/VHH8883",
+    "TSB0751": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Gastroenterologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TSB0751",
+    "CCP1566": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Ginecologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/CCP1566",
+    "FKS5964": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Oftalmologista+\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/FKS5964",
+    "TVQ5046": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Ortopedista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TVQ5046",
+    "HMG9544": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pediatria\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HMG9544",
+    "HME8366": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Otorrinolaringologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HME8366",
+    "DYY8522": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Médico+da+Família\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/DYY8522",
+    "QOP1101": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Médico+da+Família\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/QOP1101"
+  };
 
-      // Open InfinitePay checkout with redirect to /confirmacao
-      const success = await openInfinitePayCheckout(servico.sku, servico.nome, precoComDesconto);
-      if (!success) {
-        toast({
-          title: "Erro",
-          description: "Não foi possível abrir o checkout. Tente novamente.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Erro no checkout:', error);
+  const handleAgendar = () => {
+    // Track Lead event when user clicks to schedule
+    trackLead({
+      value: precoComDesconto,
+      content_name: servico.nome
+    });
+
+    // Get the link for this SKU
+    const link = SKU_TO_LINK[servico.sku];
+    if (link) {
+      window.location.href = link;
+    } else {
       toast({
-        title: "Erro no checkout",
-        description: "Não foi possível iniciar o pagamento. Tente novamente.",
+        title: "Erro",
+        description: "Link de pagamento não encontrado para este serviço.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
   };
   return <>
@@ -181,8 +199,8 @@ export function ServicoCard({
               </div>}
           </div>
           <div className="space-y-2">
-            <Button onClick={() => handleAgendar()} variant="outline" size="default" disabled={isLoading} className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform" data-sku={servico.sku}>
-              {isLoading ? "Processando..." : getButtonText(servico.slug)}
+            <Button onClick={() => handleAgendar()} variant="outline" size="default" className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full group-hover:scale-105 transition-transform" data-sku={servico.sku}>
+              {getButtonText(servico.slug)}
             </Button>
             <Link to={`/servicos/${servico.slug}`}>
               <Button variant="outline" className="w-full group-hover:border-primary transition-colors">

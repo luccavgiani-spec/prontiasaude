@@ -89,6 +89,7 @@ const App = () => (
               <Route path="/blogs-artigos/:slug" element={<BlogArticlePage />} />
               <Route path="/paciente" element={<Paciente />} />
               <Route path="/confirmacao" element={<Confirmacao />} />
+              <Route path="/confirmacao/:sku" element={<Confirmacao />} />
               {/* Auth routes */}
               <Route path="/entrar" element={<Entrar />} />
               <Route path="/cadastrar" element={<Cadastrar />} />
