@@ -5,10 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { CadastroModal } from "@/components/modais/CadastroModal";
-import { PRICE_MAP } from "@/lib/constants";
-import { formataPreco, getEmailAtual } from "@/lib/utils";
-import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
+import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Check, 
@@ -35,9 +32,6 @@ export function PlanosSection() {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
   const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -473,12 +467,6 @@ export function PlanosSection() {
           </DialogContent>
         </Dialog>
 
-        {/* CadastroModal */}
-        <CadastroModal 
-          open={isModalOpen} 
-          onOpenChange={setIsModalOpen} 
-          onSuccess={(email) => processarCheckoutPlano(planoSelecionado, email)} 
-        />
       </div>
     </section>
   );
