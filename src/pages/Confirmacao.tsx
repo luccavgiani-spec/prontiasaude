@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Clock, MessageCircle, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 
-const WHATSAPP_FALLBACK = "https://wa.me/5511912345678?text=Preciso%20de%20ajuda%20ap%C3%B3s%20o%20pagamento";
 const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbz75MBiAKNvWLQi988cHmovasFE4KLWliRGxnAmfQuyNcx9ipJnkcj6N3cdzlkKWnWc/exec";
 
 export default function Confirmacao() {
@@ -187,59 +186,46 @@ export default function Confirmacao() {
           
           <CardContent className="space-y-6">
             <div className="text-center">
-              <p className="text-lg text-muted-foreground mb-6">
-                Seu pagamento foi aprovado com sucesso! 🎉
+              <p className="text-xl text-foreground font-semibold mb-4">
+                Pagamento aprovado com sucesso! 🎉
               </p>
               
               <p className="text-base text-muted-foreground mb-8">
-                Você será redirecionado automaticamente para nossa <strong>plataforma parceira</strong> de atendimento médico em instantes.
+                Você será redirecionado automaticamente para sua consulta do serviço escolhido.
               </p>
-
-              {/* Timer de redirecionamento */}
-              {redirectUrl && !error && (
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/30 rounded-xl p-8 mb-6 shadow-lg">
-                  <div className="flex items-center justify-center gap-4 mb-4">
-                    <Clock className="h-8 w-8 text-primary animate-pulse" />
-                    <span className="text-5xl font-bold text-primary">{countdown}s</span>
-                  </div>
-                  <p className="text-lg font-semibold text-foreground mb-2">
-                    Redirecionando para a plataforma parceira...
-                  </p>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Você será encaminhado automaticamente em {countdown} segundos
-                  </p>
-                  <div className="flex flex-col gap-3">
-                    <Button 
-                      onClick={handleRedirect} 
-                      disabled={isRedirecting}
-                      size="lg"
-                      className="w-full"
-                    >
-                      <ExternalLink className="mr-2 h-5 w-5" />
-                      {isRedirecting ? "Redirecionando..." : "Ir Agora para o Atendimento"}
-                    </Button>
-                    <Button 
-                      asChild
-                      variant="outline"
-                      size="lg"
-                      className="w-full"
-                    >
-                      <a href={WHATSAPP_FALLBACK} target="_blank" rel="noopener noreferrer">
-                        <MessageCircle className="mr-2 h-5 w-5" />
-                        Prefiro Falar no WhatsApp
-                      </a>
-                    </Button>
-                  </div>
-                </div>
-              )}
 
               {/* Loading enquanto busca URL */}
               {!redirectUrl && !error && (
                 <div className="bg-muted/50 border border-border rounded-xl p-8 mb-6">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
                   <p className="text-base text-muted-foreground">
-                    Preparando seu acesso à plataforma de atendimento...
+                    Preparando seu redirecionamento...
                   </p>
+                </div>
+              )}
+
+              {/* Timer de redirecionamento */}
+              {redirectUrl && !error && (
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/30 rounded-xl p-10 mb-6 shadow-lg">
+                  <div className="flex items-center justify-center gap-4 mb-5">
+                    <Clock className="h-10 w-10 text-primary animate-pulse" />
+                    <span className="text-6xl font-bold text-primary tabular-nums">{countdown}</span>
+                  </div>
+                  <p className="text-lg font-semibold text-foreground mb-2">
+                    Redirecionando em {countdown} segundos
+                  </p>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Aguarde enquanto preparamos seu acesso...
+                  </p>
+                  <Button 
+                    onClick={handleRedirect} 
+                    disabled={isRedirecting}
+                    size="lg"
+                    className="w-full"
+                  >
+                    <ExternalLink className="mr-2 h-5 w-5" />
+                    {isRedirecting ? "Redirecionando..." : "Acessar Agora"}
+                  </Button>
                 </div>
               )}
 
@@ -251,19 +237,8 @@ export default function Confirmacao() {
                     Não foi possível conectar automaticamente
                   </p>
                   <p className="text-base text-muted-foreground mb-6">
-                    Seu pagamento foi aprovado, mas houve um problema no redirecionamento. 
-                    Entre em contato pelo WhatsApp para prosseguir com seu atendimento.
+                    Seu pagamento foi aprovado. Por favor, entre em contato com nosso suporte para prosseguir.
                   </p>
-                  <Button 
-                    asChild
-                    size="lg"
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
-                    <a href={WHATSAPP_FALLBACK} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="mr-2 h-5 w-5" />
-                      Falar no WhatsApp Agora
-                    </a>
-                  </Button>
                 </div>
               )}
             </div>
@@ -273,15 +248,15 @@ export default function Confirmacao() {
               <ol className="space-y-3 text-sm text-muted-foreground">
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-xs">1</span>
-                  <span>Você receberá uma confirmação no WhatsApp com mais detalhes</span>
+                  <span>Você será redirecionado para a plataforma de atendimento</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-xs">2</span>
-                  <span>Nossa equipe entrará em contato para agendar sua consulta ou prosseguir com o serviço solicitado</span>
+                  <span>Aguarde o profissional para iniciar sua consulta</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-xs">3</span>
-                  <span>Mantenha seu WhatsApp ativo para receber as instruções de acesso</span>
+                  <span>Tenha em mãos seus documentos e histórico médico se necessário</span>
                 </li>
               </ol>
             </div>
