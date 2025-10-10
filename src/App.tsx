@@ -30,6 +30,8 @@ import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
 import Agendamento from "./pages/Agendamento";
 import Confirmacao from "./pages/Confirmacao";
+import ConfirmacaoReceitas from "./pages/ConfirmacaoReceitas";
+import ConfirmacaoExame from "./pages/ConfirmacaoExame";
 // New wellness pages
 import SaudeMental from "./pages/SaudeMental";
 import Livros from "./pages/Livros";
@@ -90,6 +92,8 @@ const App = () => (
               <Route path="/paciente" element={<Paciente />} />
               <Route path="/confirmacao" element={<Confirmacao />} />
               <Route path="/confirmacao/:sku" element={<Confirmacao />} />
+              <Route path="/confirmacao_receitas" element={<ConfirmacaoReceitas />} />
+              <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
               {/* Auth routes */}
               <Route path="/entrar" element={<Entrar />} />
               <Route path="/cadastrar" element={<Cadastrar />} />
