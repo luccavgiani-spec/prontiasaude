@@ -327,10 +327,10 @@ export default function Confirmacao() {
                 <div className="bg-red-50 border-2 border-red-300 rounded-xl p-8 mb-6">
                   <AlertCircle className="h-12 w-12 text-red-600 mx-auto mb-4" />
                   <p className="text-lg font-semibold text-foreground mb-3">
-                    SKU do produto não identificado
+                    Erro no redirecionamento
                   </p>
                   <p className="text-base text-muted-foreground mb-4">
-                    {errorMessage}
+                    Não foi possível completar o redirecionamento automaticamente. Por favor, entre em contato com nosso suporte para dar continuidade ao seu atendimento.
                   </p>
                   <Button 
                     asChild
