@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Clock, MessageCircle, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { CheckCircle, Clock, MessageCircle, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 
 const WHATSAPP_FALLBACK = "https://wa.me/5511912345678?text=Preciso%20de%20ajuda%20ap%C3%B3s%20o%20pagamento";
+const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbz75MBiAKNvWLQi988cHmovasFE4KLWliRGxnAmfQuyNcx9ipJnkcj6N3cdzlkKWnWc/exec";
 
 export default function Confirmacao() {
   const { sku } = useParams<{ sku?: string }>();
@@ -20,14 +20,12 @@ export default function Confirmacao() {
 
   useEffect(() => {
     const checkAuthAndProfile = async () => {
-      // Check authentication
       const auth = await requireAuth();
       if (!auth) {
         navigate('/entrar');
         return;
       }
 
-      // Check if profile is complete
       const patient = await getPatient(auth.user.id);
       if (!patient || !patient.profile_complete) {
         setProfileIncomplete(true);
@@ -35,52 +33,48 @@ export default function Confirmacao() {
         return;
       }
 
-      // Profile is complete, proceed to schedule redirect
       setIsLoading(false);
-      callScheduleRedirect(auth.user.id);
+      callAppScript(patient.cpf || '', patient.first_name || '', patient.last_name || '');
     };
 
     checkAuthAndProfile();
   }, [sku, navigate]);
 
-  const callScheduleRedirect = async (userId: string) => {
+  const callAppScript = async (cpf: string, firstName: string, lastName: string) => {
     try {
-      console.log('Calling schedule_redirect with userId:', userId, 'sku:', sku);
+      console.log('Calling App Script with SKU:', sku);
       
-      const { data, error } = await supabase.functions.invoke('patient-operations', {
-        body: {
-          operation: 'schedule_redirect',
-          user_id: userId,
-          sku: sku || ''
+      const url = `${GAS_ENDPOINT}?path=redirect&sku=${encodeURIComponent(sku || '')}&cpf=${encodeURIComponent(cpf)}&nome=${encodeURIComponent(`${firstName} ${lastName}`)}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
         }
       });
 
-      console.log('schedule_redirect response:', data, error);
-
-      if (error) {
-        console.error('Error calling schedule_redirect:', error);
-        setError(true);
-        return;
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const link = data?.meetingLink || data?.queueURL || data?.url || "";
-      
-      if (link) {
-        setRedirectUrl(link);
+      const result = await response.json();
+      console.log('App Script response:', result);
+
+      if (result.success && result.url) {
+        setRedirectUrl(result.url);
       } else {
-        console.warn('No redirect link received from App Script');
+        console.warn('No redirect URL received from App Script');
         setError(true);
       }
     } catch (err) {
-      console.error('Exception calling schedule_redirect:', err);
+      console.error('Exception calling App Script:', err);
       setError(true);
     }
   };
 
   useEffect(() => {
-    if (!redirectUrl) return;
+    if (!redirectUrl || error) return;
 
-    // Start countdown
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -93,11 +87,11 @@ export default function Confirmacao() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [redirectUrl]);
+  }, [redirectUrl, error]);
 
   const handleRedirect = () => {
     setIsRedirecting(true);
-    window.location.href = redirectUrl || WHATSAPP_FALLBACK;
+    window.location.href = redirectUrl;
   };
 
   const handleCompleteProfile = () => {
@@ -193,60 +187,81 @@ export default function Confirmacao() {
           
           <CardContent className="space-y-6">
             <div className="text-center">
-              {error ? (
-                <p className="text-lg text-muted-foreground mb-6">
-                  Pagamento aprovado, mas não conseguimos iniciar automaticamente o atendimento.
-                  Use o botão do WhatsApp abaixo para falar com nossa equipe.
-                </p>
-              ) : (
-                <p className="text-lg text-muted-foreground mb-6">
-                  Pagamento aprovado! Vamos te encaminhar para a plataforma de atendimento.
-                  Caso não redirecione automaticamente, clique no botão abaixo.
-                </p>
-              )}
+              <p className="text-lg text-muted-foreground mb-6">
+                Seu pagamento foi aprovado com sucesso! 🎉
+              </p>
+              
+              <p className="text-base text-muted-foreground mb-8">
+                Você será redirecionado automaticamente para nossa <strong>plataforma parceira</strong> de atendimento médico em instantes.
+              </p>
 
               {/* Timer de redirecionamento */}
               {redirectUrl && !error && (
-                <div className="bg-primary/10 border border-primary/20 rounded-lg p-6 mb-6">
-                  <div className="flex items-center justify-center gap-3 mb-3">
-                    <Clock className="h-6 w-6 text-primary" />
-                    <span className="text-2xl font-bold text-primary">{countdown}s</span>
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 border-2 border-primary/30 rounded-xl p-8 mb-6 shadow-lg">
+                  <div className="flex items-center justify-center gap-4 mb-4">
+                    <Clock className="h-8 w-8 text-primary animate-pulse" />
+                    <span className="text-5xl font-bold text-primary">{countdown}s</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Encaminhando em {countdown} segundos...
+                  <p className="text-lg font-semibold text-foreground mb-2">
+                    Redirecionando para a plataforma parceira...
                   </p>
-                  <div className="flex flex-col sm:flex-row gap-3">
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Você será encaminhado automaticamente em {countdown} segundos
+                  </p>
+                  <div className="flex flex-col gap-3">
                     <Button 
                       onClick={handleRedirect} 
                       disabled={isRedirecting}
-                      className="flex-1"
+                      size="lg"
+                      className="w-full"
                     >
-                      {isRedirecting ? "Redirecionando..." : "Ir para o atendimento"}
+                      <ExternalLink className="mr-2 h-5 w-5" />
+                      {isRedirecting ? "Redirecionando..." : "Ir Agora para o Atendimento"}
                     </Button>
                     <Button 
                       asChild
                       variant="outline"
-                      className="flex-1"
+                      size="lg"
+                      className="w-full"
                     >
                       <a href={WHATSAPP_FALLBACK} target="_blank" rel="noopener noreferrer">
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        Falar no WhatsApp
+                        <MessageCircle className="mr-2 h-5 w-5" />
+                        Prefiro Falar no WhatsApp
                       </a>
                     </Button>
                   </div>
                 </div>
               )}
 
-              {/* Fallback apenas WhatsApp em caso de erro */}
+              {/* Loading enquanto busca URL */}
+              {!redirectUrl && !error && (
+                <div className="bg-muted/50 border border-border rounded-xl p-8 mb-6">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-base text-muted-foreground">
+                    Preparando seu acesso à plataforma de atendimento...
+                  </p>
+                </div>
+              )}
+
+              {/* Fallback em caso de erro */}
               {error && (
-                <div className="mb-6">
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-8 mb-6">
+                  <AlertCircle className="h-12 w-12 text-amber-600 mx-auto mb-4" />
+                  <p className="text-lg font-semibold text-foreground mb-3">
+                    Não foi possível conectar automaticamente
+                  </p>
+                  <p className="text-base text-muted-foreground mb-6">
+                    Seu pagamento foi aprovado, mas houve um problema no redirecionamento. 
+                    Entre em contato pelo WhatsApp para prosseguir com seu atendimento.
+                  </p>
                   <Button 
                     asChild
+                    size="lg"
                     className="w-full bg-green-600 hover:bg-green-700"
                   >
                     <a href={WHATSAPP_FALLBACK} target="_blank" rel="noopener noreferrer">
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Falar no WhatsApp
+                      <MessageCircle className="mr-2 h-5 w-5" />
+                      Falar no WhatsApp Agora
                     </a>
                   </Button>
                 </div>
