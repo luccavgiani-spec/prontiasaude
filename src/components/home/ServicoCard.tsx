@@ -92,7 +92,7 @@ export function ServicoCard({
     "YME9025": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+8+consultas\",\"price\":30792,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/YME9025",
     "HXR8516": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+4+consultas\",\"price\":17196,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HXR8516",
     "ZXW2165": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+Consulta+única\",\"price\":4490,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ZXW2165",
-    "ITC6534": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pronto+Atendimento\",\"price\":4390,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao",
+    "ITC6534": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pronto+Atendimento\",\"price\":4390,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ITC6534",
     "OVM9892": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Laudo+psicológico\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/OVM9892",
     "TQP5720": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Cardiologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TQP5720",
     "HGG3503": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Dermatologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HGG3503",
