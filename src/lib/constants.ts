@@ -6,7 +6,7 @@ export const ENV = {
 };
 
 // Google Apps Script API Base URL
-export const GAS_BASE = "https://script.google.com/macros/s/AKfycbx80rwMZwJVjiw8DMtwaQERGPzFzHU2ZVSLRBfQ5tRJkHwVvYB9ep9lABKdKuBJ4tFL/exec";
+export const GAS_BASE = "https://script.google.com/macros/s/AKfycbz75MBiAKNvWLQi988cHmovasFE4KLWliRGxnAmfQuyNcx9ipJnkcj6N3cdzlkKWnWc/exec";
 
 // Checkout Configuration
 export const CHECKOUT_MODE = "infinitepay";
