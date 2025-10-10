@@ -90,7 +90,6 @@ const App = () => (
               <Route path="/blogs-artigos" element={<BlogsIndex />} />
               <Route path="/blogs-artigos/:slug" element={<BlogArticlePage />} />
               <Route path="/paciente" element={<Paciente />} />
-              <Route path="/confirmacao" element={<Confirmacao />} />
               <Route path="/confirmacao/:sku" element={<Confirmacao />} />
               <Route path="/confirmacao_receitas" element={<ConfirmacaoReceitas />} />
               <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
