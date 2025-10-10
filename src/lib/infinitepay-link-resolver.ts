@@ -93,7 +93,15 @@ export async function createCheckoutWithRedirect(sku: string, description: strin
  */
 export async function buildCheckoutLink(sku: string, description: string, price: number): Promise<string | null> {
   const normalizedSku = sku.trim().toUpperCase();
-  const redirectUrl = `${window.location.origin}/confirmacao/${normalizedSku}`;
+  
+  // URLs de redirecionamento especiais por SKU
+  const specialRedirects: { [key: string]: string } = {
+    "RZP5755": `${window.location.origin}/confirmacao_receitas`,
+    "ULT3571": `${window.location.origin}/solicitacao_exame`,
+    "ITC6534": `${window.location.origin}/confirmacao`
+  };
+  
+  const redirectUrl = specialRedirects[normalizedSku] || `${window.location.origin}/confirmacao/${normalizedSku}`;
   
   // Construir URL do checkout do InfinitePay
   const items = [{

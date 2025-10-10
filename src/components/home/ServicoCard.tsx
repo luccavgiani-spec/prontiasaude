@@ -78,10 +78,10 @@ export function ServicoCard({
         return "Agendar agora";
     }
   };
-  // Mapeamento de SKUs para links do InfinitePay
+  // Mapeamento de SKUs para links do InfinitePay (atualizado conforme planilha)
   const SKU_TO_LINK: { [key: string]: string } = {
-    "RZP5755": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Renovação+de+Receitas\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/RZP5755",
-    "ULT3571": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Solicitação+de+Exames\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ULT3571",
+    "RZP5755": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Renovação+de+Receitas\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao_receitas",
+    "ULT3571": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Solicitação+de+Exame\",\"price\":3490,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/solicitacao_exame",
     "BIR7668": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Personal+Trainer\",\"price\":5499,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/BIR7668",
     "VPN5132": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Nutricionista\",\"price\":5990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/VPN5132",
     "UDH3250": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Reumatologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/UDH3250",
