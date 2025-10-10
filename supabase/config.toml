@@ -1,19 +1,4 @@
 project_id = "ploqujuhpwutpcibedbr"
 
-[functions.patient-operations]
-verify_jwt = false
-
-[functions.stripe-checkout]
-verify_jwt = false
-
 [functions.stripe-webhook]
-verify_jwt = false
-
-[functions.appointment-manager]
-verify_jwt = false
-
-[functions.subscription-manager]
-verify_jwt = false
-
-[functions.send-form-emails]
 verify_jwt = false

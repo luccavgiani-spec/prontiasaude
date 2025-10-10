@@ -6,6 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Validation helpers
+const validateEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 255;
+};
+
+const validatePhone = (phone: string): boolean => {
+  const phoneRegex = /^\+[1-9]\d{1,14}$/;
+  return phoneRegex.test(phone);
+};
+
+const validateCPF = (cpf: string): boolean => {
+  const cpfRegex = /^\d{11}$/;
+  return cpfRegex.test(cpf);
+};
+
+const validateString = (str: string, maxLength: number): boolean => {
+  return typeof str === 'string' && str.length > 0 && str.length <= maxLength;
+};
+
+const validateDate = (dateStr: string): boolean => {
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(dateStr)) return false;
+  const date = new Date(dateStr);
+  return date instanceof Date && !isNaN(date.getTime());
+};
+
 interface UpsertPatientRequest {
   operation: 'upsert_patient';
   name: string;
@@ -75,22 +102,59 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    // Create Supabase client with service role key
+    // Get authenticated user from JWT (except for upsert_patient which allows registration)
+    const authHeader = req.headers.get('Authorization');
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
+    
     const body = await req.json();
-    console.log('Patient operations request:', body);
+    
+    // Validate authenticated user for operations that require it
+    if (body.operation !== 'upsert_patient') {
+      if (!authHeader) {
+        return new Response(
+          JSON.stringify({ error: 'Autenticação necessária' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Token inválido' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     switch (body.operation) {
       case 'upsert_patient': {
         const { name, email, phone_e164 } = body as UpsertPatientRequest;
         
-        console.log('=== PATIENT REGISTRATION START ===');
-        console.log('Received data:', { name, email, phone_e164 });
-        console.log('GAS_BASE URL:', gasBase);
+        // Validate inputs
+        if (!validateString(name, 255)) {
+          return new Response(
+            JSON.stringify({ error: 'Nome inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validateEmail(email)) {
+          return new Response(
+            JSON.stringify({ error: 'Email inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validatePhone(phone_e164)) {
+          return new Response(
+            JSON.stringify({ error: 'Telefone inválido (formato E.164 esperado)' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         
         // Save to Supabase auth.users
-        console.log('Creating user in Supabase auth...');
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
           email_confirm: true,
@@ -106,8 +170,6 @@ serve(async (req) => {
           throw authError;
         }
 
-        console.log('Supabase auth result:', authData ? 'Success' : 'User already exists');
-
         // Prepare GAS API payload
         const gasPayload = {
           first_name: name.split(' ')[0] || '',
@@ -116,9 +178,6 @@ serve(async (req) => {
           phone: phone_e164
         };
 
-        console.log('Calling GAS API with payload:', gasPayload);
-        console.log('Full GAS URL:', `${gasBase}?path=site-register`);
-
         // Call GAS API
         const gasResponse = await fetch(`${gasBase}?path=site-register`, {
           method: 'POST',
@@ -126,13 +185,7 @@ serve(async (req) => {
           body: JSON.stringify(gasPayload)
         });
 
-        console.log('GAS response status:', gasResponse.status);
-        console.log('GAS response ok:', gasResponse.ok);
-        
         const gasResult = await gasResponse.text();
-        console.log('GAS response body:', gasResult);
-        
-        console.log('=== PATIENT REGISTRATION END ===');
 
         return new Response(
           JSON.stringify({ 
@@ -148,29 +201,60 @@ serve(async (req) => {
       case 'complete_profile': {
         const profileData = body as CompleteProfileRequest;
         
-        console.log('=== COMPLETE PROFILE START ===');
-        console.log('Received data:', profileData);
+        // Validate required fields
+        if (!validateString(profileData.first_name, 100) || 
+            !validateString(profileData.last_name, 100)) {
+          return new Response(
+            JSON.stringify({ error: 'Nome ou sobrenome inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         
-        // Prepare GAS API payload
+        if (!validateEmail(profileData.email)) {
+          return new Response(
+            JSON.stringify({ error: 'Email inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validatePhone(profileData.phone)) {
+          return new Response(
+            JSON.stringify({ error: 'Telefone inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validateCPF(profileData.cpf)) {
+          return new Response(
+            JSON.stringify({ error: 'CPF inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validateDate(profileData.birth_date)) {
+          return new Response(
+            JSON.stringify({ error: 'Data de nascimento inválida' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Prepare GAS API payload with validated data
         const gasPayload = {
-          first_name: profileData.first_name,
-          last_name: profileData.last_name,
-          email: profileData.email,
+          first_name: profileData.first_name.substring(0, 100),
+          last_name: profileData.last_name.substring(0, 100),
+          email: profileData.email.substring(0, 255),
           phone: profileData.phone,
           cpf: profileData.cpf,
           birth_date: profileData.birth_date,
-          gender: profileData.gender || '',
-          cep: profileData.cep || '',
-          address_number: profileData.address_number || '',
-          address_complement: profileData.address_complement || '',
-          city: profileData.city || '',
-          state: profileData.state || '',
+          gender: profileData.gender ? profileData.gender.substring(0, 1) : '',
+          cep: profileData.cep ? profileData.cep.substring(0, 10) : '',
+          address_number: profileData.address_number ? profileData.address_number.substring(0, 20) : '',
+          address_complement: profileData.address_complement ? profileData.address_complement.substring(0, 100) : '',
+          city: profileData.city ? profileData.city.substring(0, 100) : '',
+          state: profileData.state ? profileData.state.substring(0, 2) : '',
           source: 'site',
           plano: profileData.plano
         };
-
-        console.log('Calling GAS API with payload:', gasPayload);
-        console.log('Full GAS URL:', `${gasBase}?path=site-register`);
 
         // Call GAS API
         const gasResponse = await fetch(`${gasBase}?path=site-register`, {
@@ -179,10 +263,7 @@ serve(async (req) => {
           body: JSON.stringify(gasPayload)
         });
 
-        console.log('GAS response status:', gasResponse.status);
         const gasResult = await gasResponse.text();
-        console.log('GAS response body:', gasResult);
-        console.log('=== COMPLETE PROFILE END ===');
 
         return new Response(
           JSON.stringify({ 
@@ -197,22 +278,33 @@ serve(async (req) => {
       case 'schedule_appointment': {
         const appointmentData = body as ScheduleAppointmentRequest;
         
-        // Save to Supabase appointments table (if exists)
-        // For now, we'll just log and proceed to GAS
-        console.log('Scheduling appointment in Supabase:', appointmentData);
+        // Validate inputs
+        if (!validateEmail(appointmentData.email)) {
+          return new Response(
+            JSON.stringify({ error: 'Email inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!validateString(appointmentData.nome, 255)) {
+          return new Response(
+            JSON.stringify({ error: 'Nome inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         // Call GAS API
         const gasPayload = {
           user_id: appointmentData.user_id,
-          email: appointmentData.email,
-          nome: appointmentData.nome,
+          email: appointmentData.email.substring(0, 255),
+          nome: appointmentData.nome.substring(0, 255),
           especialidade: appointmentData.especialidade,
           horario_iso: appointmentData.horario_iso,
           plano_ativo: appointmentData.plano_ativo,
           servico: appointmentData.servico,
-          ...(appointmentData.cpf && { cpf: appointmentData.cpf }),
-          ...(appointmentData.adicional && { adicional: appointmentData.adicional }),
-          ...(appointmentData.cupom && { cupom: appointmentData.cupom }),
+          ...(appointmentData.cpf && validateCPF(appointmentData.cpf) && { cpf: appointmentData.cpf }),
+          ...(appointmentData.adicional && { adicional: appointmentData.adicional.substring(0, 1000) }),
+          ...(appointmentData.cupom && { cupom: appointmentData.cupom.substring(0, 50) }),
           ...(appointmentData.fotos_base64 && { fotos_base64: appointmentData.fotos_base64 })
         };
 
@@ -223,7 +315,6 @@ serve(async (req) => {
         });
 
         const gasResult = await gasResponse.text();
-        console.log('GAS schedule response:', gasResult);
 
         return new Response(
           JSON.stringify({ success: true, gas: gasResult }),
@@ -234,10 +325,12 @@ serve(async (req) => {
       case 'sync_appointment': {
         const { appointment_id, status, meeting_link, provider, external_appointment_id } = body as SyncAppointmentRequest;
         
-        // Update Supabase appointment (if appointments table exists)
-        console.log('Syncing appointment:', body);
-        
-        // For now, just log the sync - you can implement Supabase update later
+        if (!validateString(appointment_id, 255) || !validateString(status, 50)) {
+          return new Response(
+            JSON.stringify({ error: 'Dados inválidos' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         
         return new Response(
           JSON.stringify({ 
@@ -256,8 +349,12 @@ serve(async (req) => {
       case 'schedule_redirect': {
         const { user_id, sku } = body as ScheduleRedirectRequest;
         
-        console.log('=== SCHEDULE REDIRECT START ===');
-        console.log('User ID:', user_id, 'SKU:', sku);
+        if (!validateString(sku, 50)) {
+          return new Response(
+            JSON.stringify({ error: 'SKU inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
         
         // Fetch complete patient data
         const { data: patient, error: patientError } = await supabase
@@ -267,18 +364,16 @@ serve(async (req) => {
           .single();
         
         if (patientError || !patient) {
-          console.error('Patient not found:', patientError);
           return new Response(
             JSON.stringify({ error: 'Paciente não encontrado' }),
-            { status: 404, headers: corsHeaders }
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
         if (!patient.profile_complete) {
-          console.error('Profile incomplete for user:', user_id);
           return new Response(
             JSON.stringify({ error: 'Cadastro incompleto' }),
-            { status: 400, headers: corsHeaders }
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
@@ -286,10 +381,9 @@ serve(async (req) => {
         const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(user_id);
         
         if (userError || !user?.email) {
-          console.error('User email not found:', userError);
           return new Response(
             JSON.stringify({ error: 'Email do usuário não encontrado' }),
-            { status: 404, headers: corsHeaders }
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
@@ -317,11 +411,9 @@ serve(async (req) => {
           cidade: patient.city || '',
           uf: patient.state || '',
           fonte: patient.source || 'site',
-          plano: false, // TODO: integrate with plan system
-          sku: sku || ''
+          plano: false,
+          sku: sku.substring(0, 50)
         };
-        
-        console.log('Calling App Script with payload:', gasPayload);
         
         // Call App Script
         const gasResponse = await fetch(`${gasBase}?path=site-schedule`, {
@@ -330,10 +422,7 @@ serve(async (req) => {
           body: JSON.stringify(gasPayload)
         });
         
-        console.log('App Script response status:', gasResponse.status);
         const gasResult = await gasResponse.json();
-        console.log('App Script response:', gasResult);
-        console.log('=== SCHEDULE REDIRECT END ===');
         
         return new Response(
           JSON.stringify({ 
@@ -347,7 +436,10 @@ serve(async (req) => {
       }
 
       default:
-        throw new Error(`Unknown operation: ${body.operation}`);
+        return new Response(
+          JSON.stringify({ error: `Operação desconhecida: ${body.operation}` }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
     }
 
   } catch (error) {
@@ -356,11 +448,11 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error instanceof Error ? error.message : String(error)
+        error: 'Erro interno do servidor'
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
+        status: 500,
       },
     );
   }

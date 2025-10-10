@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Upload, FileText, Video, Link as LinkIcon, MessageSquare, LogOut, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -45,17 +46,39 @@ const AdminDashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check admin authentication
-    const isLoggedIn = localStorage.getItem('admin-logged-in');
-    if (!isLoggedIn) {
-      navigate('/admin/login');
-      return;
-    }
-    setIsAuthenticated(true);
+    const checkAdminAccess = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        navigate('/admin/login');
+        return;
+      }
 
-    // Load existing content
-    loadPublishedContent();
-  }, [navigate]);
+      // Check if user has admin role
+      const { data: roleData, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .eq('role', 'admin')
+        .single();
+
+      if (error || !roleData) {
+        toast({
+          title: "Acesso negado",
+          description: "Você não tem permissão para acessar esta página.",
+          variant: "destructive"
+        });
+        await supabase.auth.signOut();
+        navigate('/admin/login');
+        return;
+      }
+
+      setIsAuthenticated(true);
+      loadPublishedContent();
+    };
+
+    checkAdminAccess();
+  }, [navigate, toast]);
 
   const loadPublishedContent = () => {
     const destinations = ['saude-mental-content', 'livros-content', 'playlists-content', 'receitas-content'];
@@ -225,8 +248,8 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin-logged-in');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     navigate('/admin/login');
   };
 

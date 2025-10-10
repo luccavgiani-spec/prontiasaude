@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Lock, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const AdminLogin = () => {
   const [credentials, setCredentials] = useState({
@@ -25,18 +26,42 @@ const AdminLogin = () => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Check admin credentials
-    if (credentials.email === 'admin@admin.com' && credentials.password === 'adminprontia123') {
-      // Store admin session
-      localStorage.setItem('admin-logged-in', 'true');
+    try {
+      // Authenticate with Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: credentials.email,
+        password: credentials.password,
+      });
+
+      if (error) throw error;
+
+      // Check if user has admin role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', data.user.id)
+        .eq('role', 'admin')
+        .single();
+
+      if (!roleData) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Acesso negado",
+          description: "Você não tem permissão para acessar o painel administrativo.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
       toast({
         title: "Login realizado",
         description: "Bem-vindo ao painel administrativo!"
       });
       navigate('/admin/dashboard');
-    } else {
+    } catch (error) {
       toast({
-        title: "Credenciais inválidas",
+        title: "Erro no login",
         description: "E-mail ou senha incorretos.",
         variant: "destructive"
       });
