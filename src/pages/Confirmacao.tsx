@@ -71,23 +71,29 @@ export default function Confirmacao() {
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     try {
-      // ========== CONSTRUÇÃO DA URL ==========
-      const url = `${GAS_ENDPOINT}?path=redirect&sku=${encodeURIComponent(sku || '')}&cpf=${encodeURIComponent(cpf)}&nome=${encodeURIComponent(`${firstName} ${lastName}`)}`;
+      // ========== CONSTRUÇÃO DO PAYLOAD ==========
+      const payload = {
+        path: 'redirect',
+        sku: sku || '',
+        cpf: cpf,
+        nome: `${firstName} ${lastName}`
+      };
       
       console.log('📡 [APP SCRIPT] Iniciando chamada ao Google Apps Script');
-      console.log('📡 [APP SCRIPT] URL completa:', url);
-      console.log('📡 [APP SCRIPT] Parâmetros:', {
+      console.log('📡 [APP SCRIPT] URL:', `${GAS_ENDPOINT}?path=redirect`);
+      console.log('📡 [APP SCRIPT] Payload:', {
         path: 'redirect',
         sku: sku,
         cpf: cpf ? `${cpf.substring(0, 3)}***` : 'não fornecido',
         nome: `${firstName} ${lastName}`
       });
       
-      const response = await fetch(url, {
-        method: 'GET',
+      const response = await fetch(`${GAS_ENDPOINT}?path=redirect`, {
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain;charset=utf-8',
         },
+        body: JSON.stringify(payload),
         signal: controller.signal
       });
 
