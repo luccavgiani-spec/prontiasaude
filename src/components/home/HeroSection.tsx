@@ -59,7 +59,7 @@ export function HeroSection() {
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
               <Button onClick={async () => {
-                const checkoutUrl = 'https://checkout.infinitepay.io/prontiasaude?items=[{"name":"Pronto+Atendimento","price":4390,"quantity":1}]&redirect_url=https://prontiasaude.com.br/confirmacao';
+                const checkoutUrl = 'https://checkout.infinitepay.io/prontiasaude?items=[{"name":"Pronto+Atendimento","price":4390,"quantity":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ITC6534';
                 
                 // Verificar se usuário está autenticado e perfil completo
                 const auth = await requireAuth();
