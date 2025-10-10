@@ -16,14 +16,19 @@ export type Database = {
     Tables: {
       patients: {
         Row: {
+          address_complement: string | null
           address_line: string | null
+          address_number: string | null
           allergies: string | null
           birth_date: string | null
+          cep: string | null
           chronic_meds: string | null
+          city: string | null
           comorbidities: string | null
           cpf: string | null
           created_at: string | null
           first_name: string | null
+          gender: string | null
           has_allergies: boolean | null
           has_chronic_meds: boolean | null
           has_comorbidities: boolean | null
@@ -34,18 +39,25 @@ export type Database = {
           phone_e164: string | null
           pregnancy_status: string | null
           profile_complete: boolean | null
+          source: string | null
+          state: string | null
           terms_accepted_at: string | null
           updated_at: string | null
         }
         Insert: {
+          address_complement?: string | null
           address_line?: string | null
+          address_number?: string | null
           allergies?: string | null
           birth_date?: string | null
+          cep?: string | null
           chronic_meds?: string | null
+          city?: string | null
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
           first_name?: string | null
+          gender?: string | null
           has_allergies?: boolean | null
           has_chronic_meds?: boolean | null
           has_comorbidities?: boolean | null
@@ -56,18 +68,25 @@ export type Database = {
           phone_e164?: string | null
           pregnancy_status?: string | null
           profile_complete?: boolean | null
+          source?: string | null
+          state?: string | null
           terms_accepted_at?: string | null
           updated_at?: string | null
         }
         Update: {
+          address_complement?: string | null
           address_line?: string | null
+          address_number?: string | null
           allergies?: string | null
           birth_date?: string | null
+          cep?: string | null
           chronic_meds?: string | null
+          city?: string | null
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
           first_name?: string | null
+          gender?: string | null
           has_allergies?: boolean | null
           has_chronic_meds?: boolean | null
           has_comorbidities?: boolean | null
@@ -78,6 +97,8 @@ export type Database = {
           phone_e164?: string | null
           pregnancy_status?: string | null
           profile_complete?: boolean | null
+          source?: string | null
+          state?: string | null
           terms_accepted_at?: string | null
           updated_at?: string | null
         }

@@ -27,12 +27,12 @@ export async function upsertPatientBasic(payload: {
   phone_e164: string;       // ex.: +5511999999999
   birth_date: string;       // YYYY-MM-DD
   termsAccepted: boolean;   // checkbox
-  gender?: string;          // opcional
-  cep?: string;             // opcional
-  address_number?: string;  // opcional
+  gender: string;           // obrigatório: M, F ou I
+  cep: string;              // obrigatório: 8 dígitos
+  address_number: string;   // obrigatório
   address_complement?: string; // opcional
-  city?: string;            // opcional
-  state?: string;           // opcional
+  city: string;             // obrigatório
+  state: string;            // obrigatório: UF
 }) {
   const { data: sess } = await supabase.auth.getSession();
   const userId = sess?.session?.user?.id;
@@ -42,10 +42,14 @@ export async function upsertPatientBasic(payload: {
   await ensurePatientRow(userId);
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
+  const cleanCep = (payload.cep || '').replace(/\D/g, '');
   if (!payload.first_name || !payload.last_name) throw new Error('Nome e sobrenome são obrigatórios.');
   if (!/^\+?\d{10,16}$/.test(payload.phone_e164)) throw new Error('Telefone inválido. Use formato E.164 (ex.: +5511999999999).');
   if (!/^\d{11}$/.test(cleanCpf)) throw new Error('CPF deve ter 11 dígitos.');
   if (!payload.birth_date) throw new Error('Data de nascimento é obrigatória.');
+  if (!payload.gender || !['M', 'F', 'I'].includes(payload.gender)) throw new Error('Gênero inválido.');
+  if (!/^\d{8}$/.test(cleanCep)) throw new Error('CEP deve ter 8 dígitos.');
+  if (!payload.city || !payload.state) throw new Error('Cidade e UF são obrigatórios.');
 
   const update = {
     id: userId,
@@ -55,6 +59,13 @@ export async function upsertPatientBasic(payload: {
     cpf: cleanCpf,
     phone_e164: payload.phone_e164,
     birth_date: payload.birth_date,
+    gender: payload.gender,
+    cep: cleanCep,
+    address_number: payload.address_number,
+    address_complement: payload.address_complement || null,
+    city: payload.city,
+    state: payload.state,
+    source: 'site',
     terms_accepted_at: payload.termsAccepted ? new Date().toISOString() : null,
     profile_complete: true
   };

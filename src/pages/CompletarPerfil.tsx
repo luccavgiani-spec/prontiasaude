@@ -4,10 +4,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
-import { Loader2, User, MapPin, Phone, Calendar } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Loader2, User, MapPin, Phone, Calendar, Home } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
 import { upsertPatientBasic } from "@/lib/patients";
@@ -20,12 +21,19 @@ const CompletarPerfil = () => {
     cpf: "",
     phone_e164: "",
     birth_date: "",
+    gender: "",
+    cep: "",
+    address_number: "",
+    address_complement: "",
+    city: "",
+    state: "",
     terms_accepted: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     const loadPatientData = async () => {
@@ -44,6 +52,12 @@ const CompletarPerfil = () => {
           cpf: patient.cpf || "",
           phone_e164: patient.phone_e164 || "",
           birth_date: patient.birth_date || "",
+          gender: patient.gender || "",
+          cep: patient.cep || "",
+          address_number: patient.address_number || "",
+          address_complement: patient.address_complement || "",
+          city: patient.city || "",
+          state: patient.state || "",
           terms_accepted: !!patient.terms_accepted_at
         });
       }
@@ -57,6 +71,9 @@ const CompletarPerfil = () => {
       value = formatPhoneE164(value);
     }
     if (field === 'cpf' && typeof value === 'string') {
+      value = value.replace(/\D/g, '');
+    }
+    if (field === 'cep' && typeof value === 'string') {
       value = value.replace(/\D/g, '');
     }
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -87,6 +104,22 @@ const CompletarPerfil = () => {
       toast({ title: "Erro", description: "Data de nascimento inválida.", variant: "destructive" });
       return false;
     }
+    if (!formData.gender || !['M', 'F', 'I'].includes(formData.gender)) {
+      toast({ title: "Erro", description: "Gênero é obrigatório.", variant: "destructive" });
+      return false;
+    }
+    if (!/^\d{8}$/.test(formData.cep)) {
+      toast({ title: "Erro", description: "CEP deve ter 8 dígitos.", variant: "destructive" });
+      return false;
+    }
+    if (!formData.city.trim()) {
+      toast({ title: "Erro", description: "Cidade é obrigatória.", variant: "destructive" });
+      return false;
+    }
+    if (!formData.state.trim()) {
+      toast({ title: "Erro", description: "Estado é obrigatório.", variant: "destructive" });
+      return false;
+    }
     if (!formData.terms_accepted) {
       toast({ title: "Erro", description: "Você deve aceitar os termos de uso.", variant: "destructive" });
       return false;
@@ -109,6 +142,12 @@ const CompletarPerfil = () => {
         cpf: formData.cpf,
         phone_e164: formData.phone_e164,
         birth_date: formData.birth_date,
+        gender: formData.gender,
+        cep: formData.cep,
+        address_number: formData.address_number,
+        address_complement: formData.address_complement,
+        city: formData.city,
+        state: formData.state,
         termsAccepted: formData.terms_accepted
       });
       
@@ -117,7 +156,13 @@ const CompletarPerfil = () => {
         description: "Suas informações foram salvas com sucesso.",
       });
       
-      window.location.replace('/servicos');
+      // Check if there's a redirect parameter
+      const redirectTo = searchParams.get('redirect');
+      if (redirectTo) {
+        navigate(redirectTo);
+      } else {
+        navigate('/servicos');
+      }
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -135,7 +180,7 @@ const CompletarPerfil = () => {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-foreground">Completar Perfil</CardTitle>
           <CardDescription>
-            Complete suas informações básicas para continuar
+            Complete TODAS as informações abaixo para acessar o atendimento
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -171,21 +216,6 @@ const CompletarPerfil = () => {
               </div>
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="address_line">Endereço *</Label>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="address_line"
-                  placeholder="Rua, número, bairro, cidade"
-                  value={formData.address_line}
-                  onChange={(e) => handleInputChange('address_line', e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cpf">CPF *</Label>
@@ -199,14 +229,14 @@ const CompletarPerfil = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="phone_e164">Telefone *</Label>
+                <Label htmlFor="birth_date">Data de Nascimento *</Label>
                 <div className="relative">
-                  <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="phone_e164"
-                    placeholder="+5511999999999"
-                    value={formData.phone_e164}
-                    onChange={(e) => handleInputChange('phone_e164', e.target.value)}
+                    id="birth_date"
+                    type="date"
+                    value={formData.birth_date}
+                    onChange={(e) => handleInputChange('birth_date', e.target.value)}
                     className="pl-10"
                     required
                   />
@@ -215,17 +245,140 @@ const CompletarPerfil = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="birth_date">Data de Nascimento *</Label>
+              <Label htmlFor="gender">Gênero *</Label>
+              <Select value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)}>
+                <SelectTrigger id="gender">
+                  <SelectValue placeholder="Selecione seu gênero" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="M">Masculino</SelectItem>
+                  <SelectItem value="F">Feminino</SelectItem>
+                  <SelectItem value="I">Prefiro não informar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="phone_e164">Telefone *</Label>
               <div className="relative">
-                <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="birth_date"
-                  type="date"
-                  value={formData.birth_date}
-                  onChange={(e) => handleInputChange('birth_date', e.target.value)}
+                  id="phone_e164"
+                  placeholder="+5511999999999"
+                  value={formData.phone_e164}
+                  onChange={(e) => handleInputChange('phone_e164', e.target.value)}
                   className="pl-10"
                   required
                 />
+              </div>
+            </div>
+            
+            <div className="border-t pt-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Home className="h-5 w-5" />
+                Endereço Completo
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="address_line">Rua/Avenida *</Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="address_line"
+                        placeholder="Nome da rua"
+                        value={formData.address_line}
+                        onChange={(e) => handleInputChange('address_line', e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address_number">Número *</Label>
+                    <Input
+                      id="address_number"
+                      placeholder="123"
+                      value={formData.address_number}
+                      onChange={(e) => handleInputChange('address_number', e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cep">CEP *</Label>
+                    <Input
+                      id="cep"
+                      placeholder="00000000"
+                      value={formData.cep}
+                      onChange={(e) => handleInputChange('cep', e.target.value)}
+                      maxLength={8}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address_complement">Complemento</Label>
+                    <Input
+                      id="address_complement"
+                      placeholder="Apto, Bloco, etc (opcional)"
+                      value={formData.address_complement}
+                      onChange={(e) => handleInputChange('address_complement', e.target.value)}
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Cidade *</Label>
+                    <Input
+                      id="city"
+                      placeholder="São Paulo"
+                      value={formData.city}
+                      onChange={(e) => handleInputChange('city', e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">Estado (UF) *</Label>
+                    <Select value={formData.state} onValueChange={(value) => handleInputChange('state', value)}>
+                      <SelectTrigger id="state">
+                        <SelectValue placeholder="Selecione o estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AC">Acre</SelectItem>
+                        <SelectItem value="AL">Alagoas</SelectItem>
+                        <SelectItem value="AP">Amapá</SelectItem>
+                        <SelectItem value="AM">Amazonas</SelectItem>
+                        <SelectItem value="BA">Bahia</SelectItem>
+                        <SelectItem value="CE">Ceará</SelectItem>
+                        <SelectItem value="DF">Distrito Federal</SelectItem>
+                        <SelectItem value="ES">Espírito Santo</SelectItem>
+                        <SelectItem value="GO">Goiás</SelectItem>
+                        <SelectItem value="MA">Maranhão</SelectItem>
+                        <SelectItem value="MT">Mato Grosso</SelectItem>
+                        <SelectItem value="MS">Mato Grosso do Sul</SelectItem>
+                        <SelectItem value="MG">Minas Gerais</SelectItem>
+                        <SelectItem value="PA">Pará</SelectItem>
+                        <SelectItem value="PB">Paraíba</SelectItem>
+                        <SelectItem value="PR">Paraná</SelectItem>
+                        <SelectItem value="PE">Pernambuco</SelectItem>
+                        <SelectItem value="PI">Piauí</SelectItem>
+                        <SelectItem value="RJ">Rio de Janeiro</SelectItem>
+                        <SelectItem value="RN">Rio Grande do Norte</SelectItem>
+                        <SelectItem value="RS">Rio Grande do Sul</SelectItem>
+                        <SelectItem value="RO">Rondônia</SelectItem>
+                        <SelectItem value="RR">Roraima</SelectItem>
+                        <SelectItem value="SC">Santa Catarina</SelectItem>
+                        <SelectItem value="SP">São Paulo</SelectItem>
+                        <SelectItem value="SE">Sergipe</SelectItem>
+                        <SelectItem value="TO">Tocantins</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             </div>
             

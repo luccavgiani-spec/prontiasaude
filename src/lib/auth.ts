@@ -9,6 +9,13 @@ export interface Patient {
   cpf?: string;
   phone_e164?: string;
   birth_date?: string;
+  gender?: string;
+  cep?: string;
+  address_number?: string;
+  address_complement?: string;
+  city?: string;
+  state?: string;
+  source?: string;
   terms_accepted_at?: string;
   marketing_opt_in?: boolean;
   profile_complete: boolean;

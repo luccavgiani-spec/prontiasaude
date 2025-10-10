@@ -54,6 +54,12 @@ interface SyncAppointmentRequest {
   external_appointment_id?: string;
 }
 
+interface ScheduleRedirectRequest {
+  operation: 'schedule_redirect';
+  user_id: string;
+  sku: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -242,6 +248,99 @@ serve(async (req) => {
             meeting_link,
             provider,
             external_appointment_id
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'schedule_redirect': {
+        const { user_id, sku } = body as ScheduleRedirectRequest;
+        
+        console.log('=== SCHEDULE REDIRECT START ===');
+        console.log('User ID:', user_id, 'SKU:', sku);
+        
+        // Fetch complete patient data
+        const { data: patient, error: patientError } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', user_id)
+          .single();
+        
+        if (patientError || !patient) {
+          console.error('Patient not found:', patientError);
+          return new Response(
+            JSON.stringify({ error: 'Paciente não encontrado' }),
+            { status: 404, headers: corsHeaders }
+          );
+        }
+        
+        if (!patient.profile_complete) {
+          console.error('Profile incomplete for user:', user_id);
+          return new Response(
+            JSON.stringify({ error: 'Cadastro incompleto' }),
+            { status: 400, headers: corsHeaders }
+          );
+        }
+        
+        // Get user email from auth
+        const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(user_id);
+        
+        if (userError || !user?.email) {
+          console.error('User email not found:', userError);
+          return new Response(
+            JSON.stringify({ error: 'Email do usuário não encontrado' }),
+            { status: 404, headers: corsHeaders }
+          );
+        }
+        
+        // Format birth_date to DD-MM-AAAA
+        const formatDateBR = (dateStr: string) => {
+          if (!dateStr) return '';
+          const [year, month, day] = dateStr.split('-');
+          return `${day}-${month}-${year}`;
+        };
+        
+        // Build complete payload for App Script
+        const gasPayload = {
+          data: new Date().toISOString().split('T')[0],
+          id_user: patient.id,
+          nome: patient.first_name || '',
+          sobrenome: patient.last_name || '',
+          email: user.email,
+          telefone: patient.phone_e164 || '',
+          cpf: patient.cpf || '',
+          data_nascimento: formatDateBR(patient.birth_date || ''),
+          genero: patient.gender || '',
+          cep: patient.cep || '',
+          endereco_numero: patient.address_number || '',
+          complemento: patient.address_complement || '',
+          cidade: patient.city || '',
+          uf: patient.state || '',
+          fonte: patient.source || 'site',
+          plano: false, // TODO: integrate with plan system
+          sku: sku || ''
+        };
+        
+        console.log('Calling App Script with payload:', gasPayload);
+        
+        // Call App Script
+        const gasResponse = await fetch(`${gasBase}?path=site-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(gasPayload)
+        });
+        
+        console.log('App Script response status:', gasResponse.status);
+        const gasResult = await gasResponse.json();
+        console.log('App Script response:', gasResult);
+        console.log('=== SCHEDULE REDIRECT END ===');
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            meetingLink: gasResult.meetingLink || null,
+            queueURL: gasResult.queueURL || null,
+            url: gasResult.url || null
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
