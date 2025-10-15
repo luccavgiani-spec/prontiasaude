@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
-import { requireAuth, getPatient } from "@/lib/auth";
+import { toast } from "sonner";
 export function HeroSection() {
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
@@ -58,19 +58,8 @@ export function HeroSection() {
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={async () => {
-                const checkoutUrl = 'https://checkout.infinitepay.io/prontiasaude?items=[{"name":"Pronto+Atendimento","price":4390,"quantity":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ITC6534';
-                
-                // Verificar se usuário está autenticado e perfil completo
-                const auth = await requireAuth();
-                if (!auth) return;
-                
-                const patient = await getPatient(auth.user.id);
-                if (patient?.profile_complete) {
-                  window.location.href = checkoutUrl;
-                } else {
-                  window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(checkoutUrl);
-                }
+              <Button onClick={() => {
+                toast.info('Pagamentos temporariamente indisponíveis. Em breve novo gateway de pagamento!');
               }} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />

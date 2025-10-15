@@ -96,7 +96,7 @@ const Termos = () => {
                 Sobre as transações financeiras:
               </p>
               <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-                <li>Os pagamentos são processados de forma segura através do InfinitePay</li>
+                <li>Os pagamentos são processados de forma segura através de gateway criptografado</li>
                 <li>Os valores são cobrados no momento da confirmação do agendamento</li>
                 <li>Cancelamentos com até 24h de antecedência garantem reembolso integral</li>
                 <li>Cancelamentos com menos de 24h podem ter taxas aplicadas</li>

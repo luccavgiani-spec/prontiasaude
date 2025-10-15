@@ -1,15 +1,9 @@
 // PRONTIA SAÚDE - Constantes e Configurações
 
-// Environment Variables
-export const ENV = {
-  // InfinitePay configuration will be used from the checkout library
-};
-
 // Google Apps Script API Base URL
 export const GAS_BASE = "https://script.google.com/macros/s/AKfycbwaM-nCvG4NchS4HcameieGqvVnHiO-wGf2RgFVF3IMiXky3y0WvqK_2yBVKHvU4xaM/exec";
 
-// Checkout Configuration
-export const CHECKOUT_MODE = "infinitepay";
+// Checkout temporariamente desabilitado - aguardando novo gateway
 
 // Catálogo de Serviços
 export const CATALOGO_SERVICOS = [

@@ -157,46 +157,17 @@ export function PlanosSection() {
     }
   ];
 
-  // Links dos planos InfinitePay
-  const PLAN_LINKS: { [key: string]: { [meses: string]: string } } = {
-    "individual_com_especialistas": {
-      "1": "https://invoice.infinitepay.io/plans/prontiasaude/6RYPA4ViYT",
-      "6": "https://invoice.infinitepay.io/plans/prontiasaude/G2kHiqQqV",
-      "12": "https://invoice.infinitepay.io/plans/prontiasaude/3EYKywqyRb"
-    },
-    "individual_sem_especialistas": {
-      "1": "https://invoice.infinitepay.io/plans/prontiasaude/nwYOzRBur",
-      "6": "https://invoice.infinitepay.io/plans/prontiasaude/1cHAfmF3P5",
-      "12": "https://invoice.infinitepay.io/plans/prontiasaude/14qmc6qZkt"
-    },
-    "familiar_com_especialistas": {
-      "1": "https://invoice.infinitepay.io/plans/prontiasaude/6RYSfMYEpl",
-      "6": "https://invoice.infinitepay.io/plans/prontiasaude/e6s2U5raB",
-      "12": "https://invoice.infinitepay.io/plans/prontiasaude/29hZjQZxd9"
-    },
-    "familiar_sem_especialistas": {
-      "1": "https://invoice.infinitepay.io/plans/prontiasaude/1bt7PyHvXJ",
-      "6": "https://invoice.infinitepay.io/plans/prontiasaude/6T6jj6ZlvB",
-      "12": "https://invoice.infinitepay.io/plans/prontiasaude/e6sEnSO1V"
-    }
-  };
-
   const handleAssinar = (planoId: string) => {
     if (planoId === "empresarial") {
       setShowEmpresarialForm(true);
       return;
     }
 
-    const link = PLAN_LINKS[planoId]?.[duracaoSelecionada];
-    if (link) {
-      window.location.href = link;
-    } else {
-      toast({
-        title: "Erro",
-        description: "Link de assinatura não encontrado.",
-        variant: "destructive"
-      });
-    }
+    // Placeholder: assinaturas indisponíveis temporariamente
+    toast({
+      title: "Assinaturas Indisponíveis",
+      description: "Assinaturas temporariamente indisponíveis. Entre em contato pelo WhatsApp!",
+    });
   };
 
 

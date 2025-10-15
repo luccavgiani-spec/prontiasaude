@@ -4,12 +4,10 @@ import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
-import { buildCheckoutLink } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { requireAuth, getPatient } from "@/lib/auth";
 interface Variante {
   valor: number;
   nome: string;
@@ -80,63 +78,18 @@ const ServicoDetalhe = () => {
         </div>
       </div>;
   }
-  const handleAgendar = async () => {
-    setIsLoading(true);
-    try {
-      const currentSku = getCurrentSku();
-      if (!currentSku) {
-        toast({
-          title: "Erro",
-          description: "SKU não encontrado.",
-          variant: "destructive"
-        });
-        return;
-      }
+  const handleAgendar = () => {
+    // Track Lead event with current price
+    trackLead({
+      value: getCurrentPrice(),
+      content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
+    });
 
-      // Track Lead event with current price
-      trackLead({
-        value: getCurrentPrice(),
-        content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
-      });
-
-      // Preparar descrição e preço para o checkout
-      const description = servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '');
-      const price = getTotalPrice();
-
-      // Verificar se usuário está autenticado e perfil completo
-      const auth = await requireAuth();
-      if (!auth) return;
-      
-      const patient = await getPatient(auth.user.id);
-      
-      // Build checkout link
-      const checkoutLink = await buildCheckoutLink(currentSku, description, price);
-      
-      if (!patient?.profile_complete) {
-        window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(checkoutLink || '');
-        return;
-      }
-      if (!checkoutLink) {
-        toast({
-          title: "Erro",
-          description: "Não foi possível construir o link de checkout.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Redirecionar para checkout
-      window.location.href = checkoutLink;
-    } catch (error) {
-      console.error('Erro no checkout:', error);
-      toast({
-        title: "Erro no checkout",
-        description: "Não foi possível iniciar o pagamento. Tente novamente.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Placeholder: pagamentos indisponíveis temporariamente
+    toast({
+      title: "Pagamentos Indisponíveis",
+      description: "Em breve novo gateway de pagamento! Entre em contato pelo WhatsApp.",
+    });
   };
   return <>
       <div className="py-16">
@@ -417,7 +370,7 @@ const ServicoDetalhe = () => {
 
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground mb-2">
-                    Pagamento seguro via InfinitePay
+                    Pagamento seguro e criptografado
                   </p>
                   <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                     <div className="w-2 h-2 bg-primary rounded-full"></div>

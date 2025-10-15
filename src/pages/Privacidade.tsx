@@ -66,7 +66,7 @@ const Privacidade = () => {
 
               <h3 className="font-semibold mt-4 mb-2">1.4 Dados de Pagamento</h3>
               <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-                <li>Informações de transações financeiras (processadas via InfinitePay)</li>
+                <li>Informações de transações financeiras (processadas por gateway seguro)</li>
                 <li>Histórico de pagamentos e faturas</li>
               </ul>
             </section>
@@ -125,7 +125,7 @@ const Privacidade = () => {
               </p>
               <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
                 <li><strong>Profissionais de saúde:</strong> Médicos, psicólogos e outros profissionais que realizam seu atendimento</li>
-                <li><strong>Processadores de pagamento:</strong> InfinitePay para processamento seguro de transações</li>
+                <li><strong>Processadores de pagamento:</strong> Gateway de pagamento seguro para processamento de transações</li>
                 <li><strong>Provedores de serviços:</strong> Empresas que nos auxiliam com infraestrutura e tecnologia</li>
                 <li><strong>Autoridades competentes:</strong> Quando exigido por lei ou ordem judicial</li>
               </ul>

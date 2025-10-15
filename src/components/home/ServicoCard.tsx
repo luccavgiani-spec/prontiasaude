@@ -4,11 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { formataPreco } from "@/lib/utils";
-import { openInfinitePayCheckout } from "@/lib/infinitepay-link-resolver";
 import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
-import { requireAuth, getPatient } from "@/lib/auth";
 interface Servico {
   slug: string;
   nome: string;
@@ -78,63 +76,18 @@ export function ServicoCard({
         return "Agendar agora";
     }
   };
-  // Mapeamento de SKUs para links do InfinitePay (atualizado conforme planilha)
-  const SKU_TO_LINK: { [key: string]: string } = {
-    "RZP5755": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Renovação+de+Receitas\",\"price\":999,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao_receitas",
-    "ULT3571": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Solicitação+de+Exame\",\"price\":3490,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/solicitacao_exame",
-    "BIR7668": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Personal+Trainer\",\"price\":5499,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/BIR7668",
-    "VPN5132": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Nutricionista\",\"price\":5990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/VPN5132",
-    "UDH3250": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Reumatologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/UDH3250",
-    "PKS9388": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Neurologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/PKS9388",
-    "MYX5186": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Infectologista\",\"price\":12990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/MYX5186",
-    "LZF3879": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Nutrólogo\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/LZF3879",
-    "YZD9932": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Geriatria\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/YZD9932",
-    "YME9025": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+8+consultas\",\"price\":30792,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/YME9025",
-    "HXR8516": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+4+consultas\",\"price\":17196,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HXR8516",
-    "ZXW2165": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Psicólogo+-+Consulta+única\",\"price\":4490,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ZXW2165",
-    "ITC6534": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pronto+Atendimento\",\"price\":4390,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/ITC6534",
-    "OVM9892": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Laudo+psicológico\",\"price\":11990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/OVM9892",
-    "TQP5720": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Cardiologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TQP5720",
-    "HGG3503": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Dermatologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HGG3503",
-    "VHH8883": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Endocrinologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/VHH8883",
-    "TSB0751": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Gastroenterologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TSB0751",
-    "CCP1566": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Ginecologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/CCP1566",
-    "FKS5964": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Oftalmologista+\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/FKS5964",
-    "TVQ5046": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Ortopedista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/TVQ5046",
-    "HMG9544": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Pediatria\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HMG9544",
-    "HME8366": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Otorrinolaringologista\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/HME8366",
-    "DYY8522": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Médico+da+Família\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/DYY8522",
-    "QOP1101": "https://checkout.infinitepay.io/prontiasaude?items=[{\"name\":\"Médico+da+Família\",\"price\":8990,\"quantity\":1}]&redirect_url=https://prontiasaude.com.br/confirmacao/QOP1101"
-  };
-
-  const handleAgendar = async () => {
+  const handleAgendar = () => {
     // Track Lead event when user clicks to schedule
     trackLead({
       value: precoComDesconto,
       content_name: servico.nome
     });
 
-    // Get the link for this SKU
-    const link = SKU_TO_LINK[servico.sku];
-    if (!link) {
-      toast({
-        title: "Erro",
-        description: "Link de pagamento não encontrado para este serviço.",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    // Verificar se usuário está autenticado e perfil completo
-    const auth = await requireAuth();
-    if (!auth) return;
-    
-    const patient = await getPatient(auth.user.id);
-    if (patient?.profile_complete) {
-      window.location.href = link;
-    } else {
-      window.location.href = '/completar-perfil?redirect=' + encodeURIComponent(link);
-    }
+    // Placeholder: pagamentos indisponíveis temporariamente
+    toast({
+      title: "Pagamentos Indisponíveis",
+      description: "Em breve novo gateway de pagamento! Entre em contato pelo WhatsApp.",
+    });
   };
   return <>
       <div className="bg-card/50 border border-border/50 rounded-xl p-6 hover:shadow-lg transition-all duration-300 group hover:border-primary/20 h-full flex flex-col">

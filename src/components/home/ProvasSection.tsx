@@ -59,7 +59,7 @@ export function ProvasSection() {
         <div className="mt-12 flex items-center justify-center gap-6 flex-wrap">
           <div className="flex items-center gap-2 px-4 py-2 bg-card rounded-lg border border-border shadow-sm">
             <div className="w-3 h-3 bg-primary rounded-full"></div>
-            <span className="text-sm text-muted-foreground font-medium">Pagamento Seguro (InfinitePay)</span>
+            <span className="text-sm text-muted-foreground font-medium">Pagamento Seguro (SSL Criptografado)</span>
           </div>
           <div className="flex items-center gap-2 px-4 py-2 bg-card rounded-lg border border-border shadow-sm">
             <div className="w-3 h-3 bg-accent rounded-full"></div>
