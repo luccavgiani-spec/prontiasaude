@@ -213,8 +213,8 @@ export function SubscriptionModal({
           </Alert>
         )}
 
-        {/* Form */}
-        {status === 'idle' && (
+        {/* Form - só mostra quando não está processando */}
+        {(status === 'idle' || status === 'processing') && (
           <div className="space-y-4">
             {/* Dados pessoais */}
             <div className="space-y-4">
@@ -226,6 +226,7 @@ export function SubscriptionModal({
                   onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                   placeholder="Seu nome completo"
                   required
+                  disabled={status === 'processing'}
                 />
               </div>
 
@@ -238,6 +239,7 @@ export function SubscriptionModal({
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="seu@email.com"
                   required
+                  disabled={status === 'processing'}
                 />
               </div>
 
@@ -250,6 +252,7 @@ export function SubscriptionModal({
                   placeholder="000.000.000-00"
                   maxLength={14}
                   required
+                  disabled={status === 'processing'}
                 />
               </div>
 
@@ -262,6 +265,7 @@ export function SubscriptionModal({
                   placeholder="(00) 00000-0000"
                   maxLength={15}
                   required
+                  disabled={status === 'processing'}
                 />
               </div>
             </div>
@@ -297,7 +301,7 @@ export function SubscriptionModal({
               </div>
             )}
 
-            {!isFormValid && (
+            {!isFormValid && status === 'idle' && (
               <Alert>
                 <AlertDescription className="text-sm">
                   Preencha todos os dados acima para continuar com o pagamento.
