@@ -5,6 +5,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { extractBIN } from '@/lib/card-utils';
 import { InstallmentOption } from '@/lib/types/payment';
 import { toast } from 'sonner';
+import { GAS_BASE } from '@/lib/constants';
 
 interface CardPaymentFormProps {
   publicKey: string;
@@ -19,8 +20,7 @@ interface CardPaymentFormProps {
   isProcessing: boolean;
 }
 
-const SDK_LOAD_TIMEOUT = 10000; // 10 segundos
-const GAS_BASE = 'https://script.google.com/macros/s/AKfycbwFmTT5l0p1gF8fZXVtBQOVg5Dd8yxFCOiTKy4yCTaFVvfDr9QoybXpDPqcwlgVaW09/exec';
+const SDK_LOAD_TIMEOUT = 15000; // 15 segundos
 
 export function CardPaymentForm({
   publicKey,
@@ -93,6 +93,7 @@ export function CardPaymentForm({
     mountedRef.current = true;
 
     try {
+      console.log('[CardForm] Initializing with PUBLIC_KEY:', publicKey.substring(0, 20) + '...');
       // @ts-ignore - MercadoPago global
       const mp = new window.MercadoPago(publicKey, {
         locale: 'pt-BR',
@@ -189,9 +190,9 @@ export function CardPaymentForm({
     console.log('[CardForm] Fetching installments for BIN:', bin);
 
     try {
-      const response = await fetch(
-        `${GAS_BASE}?path=mp-get-installments&amount=${(amount / 100).toFixed(2)}&bin=${bin}`
-      );
+      const url = `${GAS_BASE}?path=mp-get-installments&amount=${(amount / 100).toFixed(2)}&bin=${bin}`;
+      console.log('[CardForm] Fetching installments from:', url);
+      const response = await fetch(url);
       
       const data = await response.json();
 
@@ -213,6 +214,10 @@ export function CardPaymentForm({
       }
     } catch (error) {
       console.error('[CardForm] Error fetching installments:', error);
+      console.error('[CardForm] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       // Fallback: 1x sem juros
       setInstallmentsOptions([
         {
