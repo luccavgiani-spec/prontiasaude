@@ -1,10 +1,30 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PaymentModal } from "@/components/payment/PaymentModal";
+import { supabase } from "@/integrations/supabase/client";
 import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const navigate = useNavigate();
+  
+  const handleCTA = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      localStorage.setItem('returnUrl', '/');
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: 'ITC6534',
+        name: 'Pronto Atendimento',
+        amount: 4390
+      }));
+      navigate('/area-do-paciente');
+      return;
+    }
+    
+    setIsPaymentModalOpen(true);
+  };
   
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
@@ -61,7 +81,7 @@ export function HeroSection() {
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={() => setIsPaymentModalOpen(true)} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
+              <Button onClick={handleCTA} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>

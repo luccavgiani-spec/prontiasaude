@@ -56,9 +56,31 @@ const AreaDoPaciente = () => {
         console.error('Erro ao carregar plano do paciente:', error);
       }
       setIsLoading(false);
+      
+      // Verificar returnUrl após login
+      const returnUrl = localStorage.getItem('returnUrl');
+      const pendingService = localStorage.getItem('pendingService');
+      const pendingPlan = localStorage.getItem('pendingPlan');
+
+      if (returnUrl) {
+        localStorage.removeItem('returnUrl');
+        localStorage.removeItem('pendingService');
+        localStorage.removeItem('pendingPlan');
+        
+        toast({
+          title: "✅ Cadastro concluído com sucesso!",
+          description: "Você pode finalizar a compra do serviço escolhido agora.",
+          variant: "default",
+        });
+        
+        // Redirecionar após 2s
+        setTimeout(() => {
+          navigate(returnUrl);
+        }, 2000);
+      }
     };
     loadPatientData();
-  }, []);
+  }, [navigate, toast]);
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast({

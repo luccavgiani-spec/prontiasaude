@@ -203,11 +203,6 @@ export function CardPaymentForm({
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Banco Emissor</label>
-          <select id="form-checkout__issuer" className="w-full p-3 border rounded-lg" />
-        </div>
-
-        <div>
           <label className="block text-sm font-medium mb-2">Parcelas</label>
           <select id="form-checkout__installments" className="w-full p-3 border rounded-lg" />
         </div>

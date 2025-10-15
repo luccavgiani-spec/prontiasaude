@@ -39,6 +39,8 @@ export function SubscriptionModal({
   const [status, setStatus] = useState<PaymentStatus>('idle');
   const [error, setError] = useState<string>('');
   const [subscriptionId, setSubscriptionId] = useState<string>('');
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
+  const [hasRequiredData, setHasRequiredData] = useState(false);
   
   const [formData, setFormData] = useState({
     nome: '',
@@ -47,7 +49,6 @@ export function SubscriptionModal({
     telefone: '',
   });
 
-  // Carregar dados do usuário
   useEffect(() => {
     if (open) {
       loadUserData();
@@ -57,12 +58,27 @@ export function SubscriptionModal({
   const loadUserData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        setFormData(prev => ({
-          ...prev,
+      if (!user) {
+        setIsUserLoggedIn(false);
+        return;
+      }
+      
+      setIsUserLoggedIn(true);
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('first_name, last_name, cpf, phone_e164')
+        .eq('id', user.id)
+        .single();
+
+      if (patient) {
+        const fullName = [patient.first_name, patient.last_name].filter(Boolean).join(' ');
+        setFormData({
+          nome: fullName,
           email: user.email || '',
-          nome: user.user_metadata?.first_name || '',
-        }));
+          cpf: patient.cpf || '',
+          telefone: patient.phone_e164 || '',
+        });
+        setHasRequiredData(Boolean(fullName && user.email && patient.cpf && patient.phone_e164));
       }
     } catch (err) {
       console.error('Error loading user data:', err);
@@ -213,11 +229,17 @@ export function SubscriptionModal({
           </Alert>
         )}
 
-        {/* Form - só mostra quando não está processando */}
         {(status === 'idle' || status === 'processing') && (
           <div className="space-y-4">
-            {/* Dados pessoais */}
-            <div className="space-y-4">
+            {isUserLoggedIn && hasRequiredData && (
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <p className="text-sm"><strong>Assinatura:</strong> {formData.nome}</p>
+                <p className="text-xs text-muted-foreground">{formData.email} • CPF: {formData.cpf}</p>
+              </div>
+            )}
+            
+            {(!isUserLoggedIn || !hasRequiredData) && (
+              <div className="space-y-4">
               <div>
                 <Label htmlFor="nome">Nome Completo</Label>
                 <Input
@@ -269,6 +291,7 @@ export function SubscriptionModal({
                 />
               </div>
             </div>
+            )}
 
             {/* Informações da assinatura */}
             <Alert>

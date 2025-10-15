@@ -202,13 +202,22 @@ export function PlanosSection() {
       return;
     }
 
+    // 1. Verificar login PRIMEIRO
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      localStorage.setItem('returnUrl', '/planos');
+      localStorage.setItem('pendingPlan', JSON.stringify({ planoId }));
+      navigate('/area-do-paciente');
+      return;
+    }
+
     const plano = novosPlanosData.find(p => p.id === planoId);
     if (!plano) return;
 
     const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));
     const meses = parseInt(duracaoSelecionada);
     
-    // BYPASS: Se usuário tem plano ativo, agenda direto
+    // 2. BYPASS: Se usuário tem plano ativo, agenda direto
     if (userHasActivePlan) {
       try {
         const { data: { user } } = await supabase.auth.getUser();

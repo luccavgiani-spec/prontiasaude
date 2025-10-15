@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +10,8 @@ import { createPayment, pollPixStatus, PaymentPayload } from '@/lib/mercadopago-
 import { trackInitiateCheckout, trackPurchase } from '@/lib/meta-tracking';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Clock } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, Clock, CreditCard, QrCode } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface PaymentModalProps {
   open: boolean;
@@ -82,6 +82,8 @@ export function PaymentModal({
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [error, setError] = useState<string>('');
   const [paymentId, setPaymentId] = useState<string>('');
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
+  const [hasRequiredData, setHasRequiredData] = useState(false);
 
   const publicKey = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '';
 
@@ -108,7 +110,12 @@ export function PaymentModal({
   const loadUserData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setIsUserLoggedIn(false);
+        return;
+      }
+      
+      setIsUserLoggedIn(true);
 
       const { data: patient } = await supabase
         .from('patients')
@@ -125,12 +132,19 @@ export function PaymentModal({
           telefone: patient.phone_e164 || '',
           especialidade: especialidade || '',
         });
+        
+        // Verificar se tem todos os dados necessários
+        const hasData = Boolean(
+          fullName && user.email && patient.cpf && patient.phone_e164
+        );
+        setHasRequiredData(hasData);
+        
+        if (!hasData) {
+          toast.error('Complete seus dados no perfil para finalizar a compra.');
+        }
       } else {
-        // Sem dados do paciente, usar apenas email do user
-        setFormData({
-          ...formData,
-          email: user.email || '',
-        });
+        setFormData({ ...formData, email: user.email || '' });
+        setHasRequiredData(false);
       }
     } catch (error) {
       console.error('Error loading user data:', error);
@@ -394,7 +408,7 @@ export function PaymentModal({
     }
   };
 
-  const showForm = paymentStatus === 'idle';
+  const showForm = paymentStatus === 'idle' || paymentStatus === 'processing';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -418,110 +432,157 @@ export function PaymentModal({
 
         {showForm && (
           <div className="space-y-6">
-            {/* Form fields */}
-            <div className="grid gap-4">
-              <div>
-                <Label htmlFor="nome">Nome Completo</Label>
-                <Input
-                  id="nome"
-                  value={formData.nome}
-                  onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                  placeholder="Seu nome completo"
-                />
+            {/* EXIBIR INFO READONLY SE LOGADO */}
+            {isUserLoggedIn && hasRequiredData && (
+              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  <strong>Pagamento em nome de:</strong> {formData.nome}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formData.email} • CPF: {formData.cpf}
+                </p>
               </div>
-
-              <div>
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="seu@email.com"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            )}
+            
+            {/* CAMPOS EDITÁVEIS APENAS SE NÃO LOGADO OU DADOS INCOMPLETOS */}
+            {(!isUserLoggedIn || !hasRequiredData) && (
+              <div className="grid gap-4">
                 <div>
-                  <Label htmlFor="cpf">CPF</Label>
+                  <Label htmlFor="nome">Nome Completo</Label>
                   <Input
-                    id="cpf"
-                    value={formData.cpf}
-                    onChange={(e) => {
-                      const cleaned = cleanCPF(e.target.value);
-                      setFormData({ ...formData, cpf: formatCPF(cleaned) });
-                    }}
-                    placeholder="000.000.000-00"
-                    maxLength={14}
+                    id="nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    placeholder="Seu nome completo"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="telefone">Telefone</Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="telefone"
-                    value={formData.telefone}
-                    onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    placeholder="(11) 99999-9999"
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="seu@email.com"
                   />
                 </div>
-              </div>
 
-              {/* Especialidade (condicional) */}
-              {(sku.includes('especialista') || especialidade) && (
-                <div>
-                  <Label htmlFor="especialidade">Especialidade</Label>
-                  <Select
-                    value={formData.especialidade}
-                    onValueChange={(value) => setFormData({ ...formData, especialidade: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a especialidade" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ESPECIALIDADES.map((esp) => (
-                        <SelectItem key={esp} value={esp}>
-                          {esp}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="cpf">CPF</Label>
+                    <Input
+                      id="cpf"
+                      value={formData.cpf}
+                      onChange={(e) => {
+                        const cleaned = cleanCPF(e.target.value);
+                        setFormData({ ...formData, cpf: formatCPF(cleaned) });
+                      }}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="telefone">Telefone</Label>
+                    <Input
+                      id="telefone"
+                      value={formData.telefone}
+                      onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
+                      placeholder="(11) 99999-9999"
+                    />
+                  </div>
                 </div>
-              )}
+
+                {/* Especialidade (condicional) */}
+                {(sku.includes('especialista') || especialidade) && (
+                  <div>
+                    <Label htmlFor="especialidade">Especialidade</Label>
+                    <Select
+                      value={formData.especialidade}
+                      onValueChange={(value) => setFormData({ ...formData, especialidade: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a especialidade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ESPECIALIDADES.map((esp) => (
+                          <SelectItem key={esp} value={esp}>
+                            {esp}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Segmented Control - Método de Pagamento */}
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('card')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
+                  paymentMethod === 'card'
+                    ? "border-primary bg-primary text-primary-foreground shadow-md"
+                    : "border-border bg-card hover:border-primary/50"
+                )}
+              >
+                <CreditCard className="h-5 w-5" />
+                <span className="font-medium">Cartão</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('pix')}
+                className={cn(
+                  "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
+                  paymentMethod === 'pix'
+                    ? "border-primary bg-primary text-primary-foreground shadow-md"
+                    : "border-border bg-card hover:border-primary/50"
+                )}
+              >
+                <QrCode className="h-5 w-5" />
+                <span className="font-medium">PIX</span>
+              </button>
             </div>
 
-            {/* Payment Tabs */}
-            <Tabs value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="card">💳 Cartão de Crédito</TabsTrigger>
-                <TabsTrigger value="pix">📱 PIX</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="card" className="mt-6">
+            {/* Conteúdo Dinâmico */}
+            <div className="mt-6">
+              {paymentMethod === 'card' && (
                 <CardPaymentForm
                   publicKey={publicKey}
                   amount={amount}
                   onSubmit={handleCardSubmit}
                   onError={setError}
-                  isProcessing={paymentStatus !== 'idle' && paymentStatus !== 'rejected'}
+                  isProcessing={paymentStatus === 'processing'}
                 />
-              </TabsContent>
-
-              <TabsContent value="pix" className="mt-6">
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground text-center">
-                    Ao clicar em "Gerar QR Code PIX", você receberá um código para pagamento instantâneo.
-                  </p>
-                  <button
-                    onClick={handlePixSubmit}
-                    disabled={paymentStatus !== 'idle'}
-                    className="w-full py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {paymentStatus !== 'idle' ? 'Gerando...' : 'Gerar QR Code PIX'}
-                  </button>
+              )}
+              
+              {paymentMethod === 'pix' && (
+                <div className="text-center space-y-4">
+                  {isUserLoggedIn && hasRequiredData ? (
+                    <button
+                      onClick={handlePixSubmit}
+                      disabled={paymentStatus === 'processing'}
+                      className="w-full py-3 px-6 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+                    >
+                      {paymentStatus === 'processing' ? (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Gerando QR Code...</>
+                      ) : (
+                        <><QrCode className="h-4 w-4" /> Gerar QR Code PIX</>
+                      )}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Complete seus dados acima para gerar o PIX.
+                    </p>
+                  )}
                 </div>
-              </TabsContent>
-            </Tabs>
+              )}
+            </div>
           </div>
         )}
       </DialogContent>

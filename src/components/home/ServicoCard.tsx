@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
 import { trackLead } from "@/lib/meta-tracking";
+import { supabase } from "@/integrations/supabase/client";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 interface Servico {
   slug: string;
   nome: string;
@@ -74,7 +74,25 @@ export function ServicoCard({
         return "Agendar agora";
     }
   };
-  const handleAgendar = () => {
+  const handleAgendar = async () => {
+    // Verificar se usuário está logado
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      // Salvar returnUrl no localStorage
+      const returnUrl = window.location.pathname + window.location.search;
+      localStorage.setItem('returnUrl', returnUrl);
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: servico.sku,
+        name: servico.nome,
+        amount: Math.round(precoComDesconto * 100)
+      }));
+      
+      // Redirecionar para /area-do-paciente
+      navigate('/area-do-paciente');
+      return;
+    }
+    
     // Track Lead event when user clicks to schedule
     trackLead({
       value: precoComDesconto,
