@@ -22,6 +22,19 @@ interface CardPaymentFormProps {
 
 const SDK_LOAD_TIMEOUT = 15000; // 15 segundos
 
+// Global flag to prevent double initialization
+if (typeof window !== 'undefined' && !(window as any).__MP_CARDFORM_MOUNTED) {
+  (window as any).__MP_CARDFORM_MOUNTED = false;
+}
+
+function isCardFormAlreadyMounted() {
+  try {
+    return !!document.querySelector('iframe[src*="mercadopago"]');
+  } catch(e) { 
+    return false; 
+  }
+}
+
 export function CardPaymentForm({
   publicKey,
   amount,
@@ -100,9 +113,9 @@ export function CardPaymentForm({
   }
 
   const initializeCardForm = () => {
-    console.log('[CardForm] initialize start, mountedRef=', mountedRef.current, 'domMounted=', isCardFormMountedOnDOM());
+    console.log('[CardForm] initialize start, mountedRef=', mountedRef.current, 'domMounted=', isCardFormMountedOnDOM(), 'globalFlag=', (window as any).__MP_CARDFORM_MOUNTED);
 
-    if (mountedRef.current || isCardFormMountedOnDOM()) {
+    if ((window as any).__MP_CARDFORM_MOUNTED || mountedRef.current || isCardFormMountedOnDOM() || isCardFormAlreadyMounted()) {
       console.log('[CardForm] Skipping init because already mounted');
       setIsSDKLoaded(true);
       return;
@@ -201,6 +214,7 @@ export function CardPaymentForm({
 
       cardFormRef.current = cardForm;
       mountedRef.current = true;
+      (window as any).__MP_CARDFORM_MOUNTED = true;
       console.log('[CardForm] cardForm created and mountedRef set true');
       } catch (error) {
         console.error('[CardForm] Initialization error:', error);
@@ -304,10 +318,14 @@ export function CardPaymentForm({
 
   const removeMercadoPagoSdk = () => {
     document.getElementById('mercadopago-sdk')?.remove();
-    const container = document.getElementById('form-checkout__cardNumber');
-    if (container) container.innerHTML = ''; // remove iframe se existir
+    const ids = ['form-checkout__cardNumber', 'form-checkout__expirationDate', 'form-checkout__securityCode', 'form-checkout__cardholderName'];
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '';
+    });
     mountedRef.current = false;
     cardFormRef.current = null;
+    (window as any).__MP_CARDFORM_MOUNTED = false;
     setIsSDKLoaded(false);
     setSdkError(null);
     console.log('[CardForm] SDK and iframe cleaned up');
