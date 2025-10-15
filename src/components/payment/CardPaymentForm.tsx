@@ -88,8 +88,17 @@ export function CardPaymentForm({
     document.body.appendChild(script);
   };
 
+  const isCardFormMounted = () => {
+    const cn = document.getElementById('form-checkout__cardNumber');
+    return !!cn?.querySelector('iframe');
+  };
+
   const initializeCardForm = () => {
-    if (mountedRef.current) return;
+    if (mountedRef.current || isCardFormMounted()) {
+      console.log('[CardForm] Already mounted, skipping init');
+      setIsSDKLoaded(true);
+      return;
+    }
     
     // Aguardar até window.MercadoPago estar disponível
     const checkAndInit = (retries = 0) => {
@@ -106,8 +115,6 @@ export function CardPaymentForm({
           return;
         }
       }
-
-      mountedRef.current = true;
 
       try {
         console.log('[CardForm] Initializing with PUBLIC_KEY:', publicKey.substring(0, 20) + '...');
@@ -184,6 +191,7 @@ export function CardPaymentForm({
       });
 
       cardFormRef.current = cardForm;
+      mountedRef.current = true;
       } catch (error) {
         console.error('[CardForm] Initialization error:', error);
         setSdkError('Erro ao inicializar formulário');
