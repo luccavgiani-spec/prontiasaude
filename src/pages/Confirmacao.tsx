@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
-import { GAS_BASE } from "@/lib/constants";
-
-const GAS_ENDPOINT = GAS_BASE;
+import { callGas } from "@/lib/gas-proxy";
 const WHATSAPP_LINK = "https://api.whatsapp.com/send/?phone=5511933359187&text=Ol%C3%A1%21&type=phone_number&app_absent=0";
 
 export default function Confirmacao() {
@@ -74,54 +72,32 @@ export default function Confirmacao() {
     try {
       // ========== CONSTRUÇÃO DO PAYLOAD ==========
       const payload = {
-        path: 'site-schedule',
         sku: sku || '',
         cpf: cpf,
         nome: `${firstName} ${lastName}`
       };
       
-      console.log('📡 [APP SCRIPT] Iniciando chamada ao Google Apps Script');
-      console.log('📡 [APP SCRIPT] URL:', `${GAS_ENDPOINT}?path=site-schedule`);
-      console.log('📡 [APP SCRIPT] Payload:', {
-        path: 'site-schedule',
+      console.log('📡 [GAS PROXY] Iniciando chamada via Supabase gas-proxy');
+      console.log('📡 [GAS PROXY] Path: site-schedule');
+      console.log('📡 [GAS PROXY] Payload:', {
         sku: sku,
         cpf: cpf ? `${cpf.substring(0, 3)}***` : 'não fornecido',
         nome: `${firstName} ${lastName}`
       });
       
-      const response = await fetch(`${GAS_ENDPOINT}?path=site-schedule`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8',
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
+      const { status, json: result } = await callGas('site-schedule', payload);
 
       clearTimeout(timeoutId);
+      
+      console.log('📡 [GAS PROXY] Status da resposta:', status);
+      console.log('✅ [GAS PROXY] Resposta recebida:', result);
 
-      console.log('📡 [APP SCRIPT] Status da resposta:', response.status);
-      console.log('📡 [APP SCRIPT] Headers da resposta:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ [APP SCRIPT] Erro HTTP:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        });
-        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-      }
-
-      const result = await response.json();
-      console.log('✅ [APP SCRIPT] Resposta recebida:', result);
-
-      if (result.ok && result.url) {
-        console.log('✅ [APP SCRIPT] URL de redirecionamento obtida:', result.url);
+      if (result && result.ok && result.url) {
+        console.log('✅ [GAS PROXY] URL de redirecionamento obtida:', result.url);
         setRedirectUrl(result.url);
       } else {
-        console.error('❌ [APP SCRIPT] Erro:', result.error || 'URL não retornada');
-        setErrorMessage(result.error || 'O servidor não retornou uma URL de redirecionamento válida.');
+        console.error('❌ [GAS PROXY] Erro:', result?.error || 'URL não retornada');
+        setErrorMessage(result?.error || 'O servidor não retornou uma URL de redirecionamento válida.');
         setError(true);
       }
     } catch (err) {
@@ -129,10 +105,10 @@ export default function Confirmacao() {
       
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          console.error('❌ [APP SCRIPT] Timeout: A chamada excedeu 10 segundos');
+          console.error('❌ [GAS PROXY] Timeout: A chamada excedeu 10 segundos');
           setErrorMessage('A conexão com o servidor demorou muito. Por favor, tente novamente.');
         } else {
-          console.error('❌ [APP SCRIPT] Exceção capturada:', {
+          console.error('❌ [GAS PROXY] Exceção capturada:', {
             name: err.name,
             message: err.message,
             stack: err.stack
@@ -140,7 +116,7 @@ export default function Confirmacao() {
           setErrorMessage(`Erro ao conectar: ${err.message}`);
         }
       } else {
-        console.error('❌ [APP SCRIPT] Erro desconhecido:', err);
+        console.error('❌ [GAS PROXY] Erro desconhecido:', err);
         setErrorMessage('Erro desconhecido ao tentar conectar.');
       }
       

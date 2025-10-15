@@ -5,7 +5,7 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { extractBIN } from '@/lib/card-utils';
 import { InstallmentOption } from '@/lib/types/payment';
 import { toast } from 'sonner';
-import { GAS_BASE } from '@/lib/constants';
+import { callGas } from '@/lib/gas-proxy';
 
 interface CardPaymentFormProps {
   publicKey: string;
@@ -218,13 +218,15 @@ export function CardPaymentForm({
     console.log('[CardForm] Fetching installments for BIN:', bin);
 
     try {
-      const url = `${GAS_BASE}?path=mp-get-installments&amount=${(amount / 100).toFixed(2)}&bin=${bin}`;
-      console.log('[CardForm] Fetching installments from:', url);
-      const response = await fetch(url);
+      const payload = {
+        amount: (amount / 100).toFixed(2),
+        bin: bin
+      };
       
-      const data = await response.json();
+      console.log('[CardForm] Calling gas-proxy for installments:', payload);
+      const { json: data } = await callGas('mp-get-installments', payload);
 
-      if (data.success && data.installments && data.installments.length > 0) {
+      if (data && data.success && data.installments && data.installments.length > 0) {
         setInstallmentsOptions(data.installments);
         setSelectedInstallments(1);
         console.log('[CardForm] Installments loaded:', data.installments.length);

@@ -1,5 +1,5 @@
 // Google Apps Script API integration
-import { GAS_BASE } from './constants';
+import { callGas } from './gas-proxy';
 
 // Types for GAS API
 export interface GASRegisterRequest {
@@ -39,21 +39,9 @@ export async function gasRegisterPatient(data: GASRegisterRequest): Promise<{ su
   try {
     console.log('Registering patient via GAS:', data);
     
-    const response = await fetch(`${GAS_BASE}?path=site-register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
+    const { json: result } = await callGas('site-register', data);
     
-    if (result.success === false) {
+    if (result && result.success === false) {
       throw new Error(result.error || 'Unknown error from GAS');
     }
 
@@ -73,28 +61,16 @@ export async function gasScheduleAppointment(data: GASScheduleRequest): Promise<
   try {
     console.log('Scheduling appointment via GAS:', data);
     
-    const response = await fetch(`${GAS_BASE}?path=site-schedule`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
+    const { json: result } = await callGas('site-schedule', data);
     
-    if (result.success === false) {
+    if (result && result.success === false) {
       throw new Error(result.error || 'Unknown error from GAS');
     }
 
     console.log('Appointment scheduled in GAS successfully:', result);
     return { 
       success: true,
-      appointment_id: result.appointment_id 
+      appointment_id: result?.appointment_id 
     };
   } catch (error) {
     console.error('Error scheduling appointment in GAS:', error);
@@ -110,27 +86,16 @@ export async function gasGetAppointments(email: string): Promise<{ success: bool
   try {
     console.log('Fetching appointments from GAS for:', email);
     
-    const response = await fetch(`${GAS_BASE}?path=get-appointments&email=${encodeURIComponent(email)}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
+    const { json: result } = await callGas('get-appointments', { email });
     
-    if (result.success === false) {
+    if (result && result.success === false) {
       throw new Error(result.error || 'Unknown error from GAS');
     }
 
     console.log('Appointments fetched from GAS successfully:', result);
     return { 
       success: true,
-      appointments: result.appointments || []
+      appointments: result?.appointments || []
     };
   } catch (error) {
     console.error('Error fetching appointments from GAS:', error);

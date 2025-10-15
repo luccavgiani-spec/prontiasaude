@@ -1,9 +1,9 @@
 /**
  * Mercado Pago API Integration
- * Handles payment creation (Card & PIX) via Google Apps Script
+ * Handles payment creation (Card & PIX) via Supabase gas-proxy
  */
 
-import { GAS_BASE } from './constants';
+import { callGas } from './gas-proxy';
 
 export interface PaymentPayload {
   method: 'card' | 'pix';
@@ -50,36 +50,23 @@ export function initMercadoPago(publicKey: string): void {
 }
 
 /**
- * Cria pagamento via Google Apps Script
+ * Cria pagamento via Supabase gas-proxy
  */
 export async function createPayment(payload: PaymentPayload): Promise<PaymentResponse> {
   try {
-    const endpoint = `${GAS_BASE}?path=mp-create-payment`;
+    console.log('[MP] Creating payment via gas-proxy:', payload.method);
     
-    console.log('[MP] Creating payment:', payload.method);
-    
-    // Enviar sem Content-Type para evitar preflight CORS
-    // O browser define como text/plain (simple request)
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
+    const { json: data } = await callGas('mp-create-payment', payload);
     console.log('[MP] Payment response:', data);
     
     return {
-      success: data.success !== false,
-      status: data.status,
-      payment_id: data.payment_id || data.id,
-      qr_code: data.qr_code,
-      qr_code_base64: data.qr_code_base64,
-      error: data.error,
-      message: data.message,
+      success: data && data.success !== false,
+      status: data?.status,
+      payment_id: data?.payment_id || data?.id,
+      qr_code: data?.qr_code,
+      qr_code_base64: data?.qr_code_base64,
+      error: data?.error,
+      message: data?.message,
     };
   } catch (error) {
     console.error('[MP] Payment creation error:', error);
@@ -103,16 +90,8 @@ export async function pollPixStatus(
 
   const poll = async () => {
     try {
-      const endpoint = `${GAS_BASE}?path=mp-payment-status&payment_id=${paymentId}`;
-      const response = await fetch(endpoint);
-      
-      if (!response.ok) {
-        console.warn('[MP] Polling failed, retrying...');
-        return;
-      }
-
-      const data = await response.json();
-      const status = data.status as PaymentResponse['status'];
+      const { json: data } = await callGas('mp-payment-status', { payment_id: paymentId });
+      const status = data?.status as PaymentResponse['status'];
       
       console.log('[MP] Polling status:', status);
       onStatusUpdate(status);
@@ -144,35 +123,21 @@ export async function pollPixStatus(
 }
 
 /**
- * Cria assinatura recorrente via Google Apps Script
+ * Cria assinatura recorrente via Supabase gas-proxy
  */
 export async function createSubscription(payload: any): Promise<any> {
   try {
-    const endpoint = `${GAS_BASE}?path=mp-create-subscription`;
+    console.log('[MP] Creating subscription via gas-proxy:', payload.reason);
     
-    console.log('[MP] Creating subscription:', payload.reason);
-    
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
+    const { json: data } = await callGas('mp-create-subscription', payload);
     console.log('[MP] Subscription response:', data);
     
     return {
-      success: data.success !== false,
-      status: data.status,
-      subscription_id: data.subscription_id || data.id,
-      error: data.error,
-      message: data.message,
+      success: data && data.success !== false,
+      status: data?.status,
+      subscription_id: data?.subscription_id || data?.id,
+      error: data?.error,
+      message: data?.message,
     };
   } catch (error) {
     console.error('[MP] Subscription creation error:', error);
@@ -196,24 +161,16 @@ export async function pollSubscriptionStatus(
 
   const poll = async () => {
     try {
-      const endpoint = `${GAS_BASE}?path=mp-subscription-status&subscription_id=${subscriptionId}`;
-      const response = await fetch(endpoint);
-      
-      if (!response.ok) {
-        console.warn('[MP] Subscription polling failed, retrying...');
-        return;
-      }
-
-      const data = await response.json();
-      const status = data.status;
+      const { json: data } = await callGas('mp-subscription-status', { subscription_id: subscriptionId });
+      const status = data?.status;
       
       console.log('[MP] Subscription polling status:', status);
 
       // Mapear status do MP para nosso status
-      if (status === 'authorized' && data.first_payment_status === 'approved') {
+      if (status === 'authorized' && data?.first_payment_status === 'approved') {
         onStatusUpdate('confirmed');
         return;
-      } else if (status === 'cancelled' || data.first_payment_status === 'rejected') {
+      } else if (status === 'cancelled' || data?.first_payment_status === 'rejected') {
         onStatusUpdate('rejected');
         return;
       }
