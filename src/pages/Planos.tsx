@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { CadastroModal } from "@/components/modais/CadastroModal";
-import { PLANOS, DESCONTOS_PLANO_VISUAL, PRICE_MAP } from "@/lib/constants";
-import { formataPreco, calcularDescontoPlano, getEmailAtual } from "@/lib/utils";
-import { criarCheckout, redirecionarParaCheckout } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
-import { trackViewContent, trackLead, trackSubscribedButtonClick, trackInitiateCheckout } from "@/lib/meta-tracking";
+import { SubscriptionModal } from "@/components/payment/SubscriptionModal";
+import { formataPreco } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { checkPatientPlanActive } from "@/lib/patient-plan";
+import { scheduleWithActivePlan } from "@/lib/schedule-service";
+import { toast as sonnerToast } from "sonner";
+import { trackViewContent } from "@/lib/meta-tracking";
+import type { DirectSchedulePayload } from "@/lib/types/plan";
 import { 
   Check, 
   Star, 
@@ -31,19 +34,38 @@ import {
 
 const Planos = () => {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [planoSelecionado, setPlanoSelecionado] = useState<string>("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { toast } = useToast();
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [userHasActivePlan, setUserHasActivePlan] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{
+    sku: string;
+    name: string;
+    amount: number;
+    recurring?: boolean;
+    frequency?: number;
+    frequencyType?: 'months' | 'days';
+  } | null>(null);
+  const navigate = useNavigate();
 
-  // Track ViewContent on page load
   useEffect(() => {
     trackViewContent({
       content_name: 'Página de Planos',
       content_category: 'Planos',
       content_ids: ['planos']
     });
+    checkActivePlan();
   }, []);
+
+  const checkActivePlan = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      
+      const planStatus = await checkPatientPlanActive(user.email);
+      setUserHasActivePlan(planStatus.canBypassPayment);
+    } catch (error) {
+      console.error('Error checking plan:', error);
+    }
+  };
 
   // Definição dos períodos de pagamento
   const periodos = [
@@ -161,96 +183,71 @@ const Planos = () => {
     }
   ];
 
-  const handleAssinar = async (planoId: string, email?: string) => {
-    // Get plan details for tracking
-    const planoData = novosPlanosData.find(p => p.id === planoId);
-    const meses = parseInt(duracaoSelecionada);
-    const precoMensal = planoData ? calcularPreco(planoId, meses) : 0;
-    
-    // Track Lead event
-    trackLead({
-      value: precoMensal / 100,
-      content_name: planoData?.nome || planoId,
-    });
-    
-    // Track SubscribedButtonClick event
-    trackSubscribedButtonClick({
-      value: precoMensal / 100,
-      content_name: planoData?.nome || planoId,
-      content_category: 'plano_assinatura',
-    });
-    
-    const emailParaUsar = email || (await getEmailAtual());
-    if (!emailParaUsar) {
-      setPlanoSelecionado(planoId);
-      setIsModalOpen(true);
+  const handleAssinar = async (planoId: string) => {
+    // 1. Verificar login PRIMEIRO
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      localStorage.setItem('returnUrl', '/planos');
+      localStorage.setItem('pendingPlan', JSON.stringify({ planoId }));
+      navigate('/area-do-paciente');
       return;
     }
-    await processarCheckoutPlano(planoId, emailParaUsar);
-  };
 
-  const processarCheckoutPlano = async (planoId: string, email: string) => {
-    setIsLoading(true);
-    try {
-      // Mapear plano ID para código do sistema existente
-      const planoCodeMap: { [key: string]: string } = {
-        individual_com_especialistas: "INDIVIDUAL",
-        familiar_com_especialistas: "FAMILIAR",
-        individual_sem_especialistas: "INDIVIDUAL",
-        familiar_sem_especialistas: "FAMILIAR"
-      };
+    const plano = novosPlanosData.find(p => p.id === planoId);
+    if (!plano) return;
 
-      const planoCode = planoCodeMap[planoId];
-      const priceId = PRICE_MAP[`plano_${planoCode.toLowerCase()}` as keyof typeof PRICE_MAP];
-      
-      if (!priceId || priceId === "price_xxx") {
-        toast({
-          title: "Plano em configuração",
-          description: "Este plano ainda está sendo configurado. Tente novamente mais tarde.",
-          variant: "destructive"
-        });
-        return;
+    const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));
+    const meses = parseInt(duracaoSelecionada);
+    
+    // 2. BYPASS: Se usuário tem plano ativo, agenda direto
+    if (userHasActivePlan) {
+      try {
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (!patient) {
+          sonnerToast.error('Dados do paciente não encontrados');
+          return;
+        }
+
+        sonnerToast.loading('Redirecionando para atendimento...');
+
+        const schedulePayload: DirectSchedulePayload = {
+          cpf: patient.cpf || '',
+          email: user.email,
+          nome: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
+          telefone: patient.phone_e164 || '',
+          sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+          plano_ativo: true,
+        };
+
+        const result = await scheduleWithActivePlan(schedulePayload);
+
+        if (result.ok && result.url) {
+          window.location.href = result.url;
+        } else {
+          sonnerToast.error(result.error || 'Não foi possível agendar. Tente novamente.');
+        }
+      } catch (error) {
+        console.error('Bypass error:', error);
+        sonnerToast.error('Erro ao processar. Tente novamente.');
       }
-
-      const checkoutData = await criarCheckout({
-        mode: "subscription",
-        price_id: priceId,
-        plan_code: planoCode,
-        plan_duration_months: parseInt(duracaoSelecionada),
-        email: email
-      });
-
-      if (checkoutData.error) {
-        toast({
-          title: "Erro no checkout",
-          description: checkoutData.error,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Track InitiateCheckout when Stripe session is successfully created
-      const planoData = novosPlanosData.find(p => p.id === planoId);
-      const meses = parseInt(duracaoSelecionada);
-      const precoMensal = planoData ? calcularPreco(planoId, meses) : 0;
-      
-      trackInitiateCheckout({
-        value: precoMensal / 100,
-        content_name: planoData?.nome || planoId,
-        content_category: 'plano_assinatura',
-        content_ids: [planoId],
-      });
-
-      redirecionarParaCheckout(checkoutData);
-    } catch (error) {
-      toast({
-        title: "Erro inesperado",
-        description: "Não foi possível processar a assinatura. Tente novamente.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
+      return;
     }
+
+    // 3. Sem plano ativo: abrir modal de assinatura
+    setSelectedPlan({
+      sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+      name: plano.nome,
+      amount: precoMensal,
+      recurring: true,
+      frequency: meses,
+      frequencyType: 'months',
+    });
+    setIsPaymentModalOpen(true);
   };
 
   return (
@@ -373,10 +370,8 @@ const Planos = () => {
                             onClick={() => handleAssinar(plano.id)}
                             size="sm"
                             className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700"
-                            disabled={isLoading}
-                            data-sku="PREENCHER_DEPOIS"
                           >
-                            {isLoading ? "Processando..." : "Assinar Plano"}
+                            Assinar Plano
                             <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
                           </Button>
                         </div>
@@ -443,7 +438,6 @@ const Planos = () => {
                       </div>
                     </div>
 
-                    {/* Botões do plano empresarial */}
                     <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
                       <Button 
                         asChild
@@ -456,11 +450,13 @@ const Planos = () => {
                         </a>
                       </Button>
                       <Button 
-                        onClick={() => setIsModalOpen(true)}
+                        asChild
                         size="lg" 
                         className="px-8"
                       >
-                        Solicitar Proposta
+                        <a href="/empresas">
+                          Solicitar Proposta
+                        </a>
                       </Button>
                     </div>
                   </CardContent>
@@ -529,11 +525,21 @@ const Planos = () => {
         </section>
       </div>
 
-      <CadastroModal 
-        open={isModalOpen} 
-        onOpenChange={setIsModalOpen} 
-        onSuccess={(email) => processarCheckoutPlano(planoSelecionado, email)} 
-      />
+      {/* Subscription Modal */}
+      {selectedPlan && (
+        <SubscriptionModal
+          open={isPaymentModalOpen}
+          onOpenChange={setIsPaymentModalOpen}
+          sku={selectedPlan.sku}
+          planName={selectedPlan.name}
+          amount={selectedPlan.amount}
+          frequency={selectedPlan.frequency || 1}
+          frequencyType={selectedPlan.frequencyType || 'months'}
+          onSuccess={() => {
+            window.location.href = '/area-do-paciente';
+          }}
+        />
+      )}
     </>
   );
 };
