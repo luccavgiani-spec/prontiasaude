@@ -69,7 +69,7 @@ export function ServicoCard({
       case "renovacao_receitas":
         return "Renovar agora";
       case "solicitacao_exames":
-        return "Solicitar exames";
+        return "Solicitar agora";
       default:
         return "Agendar agora";
     }
