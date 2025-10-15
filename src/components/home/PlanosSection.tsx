@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,8 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PaymentModal } from "@/components/payment/PaymentModal";
+import { SubscriptionModal } from "@/components/payment/SubscriptionModal";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { checkPatientPlanActive } from "@/lib/patient-plan";
+import { scheduleWithActivePlan } from "@/lib/schedule-service";
+import { toast as sonnerToast } from "sonner";
 import { 
   Check, 
   Star, 
@@ -35,9 +40,34 @@ export function PlanosSection() {
   const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<{sku: string; name: string; amount: number} | null>(null);
+  const [userHasActivePlan, setUserHasActivePlan] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{
+    sku: string;
+    name: string;
+    amount: number;
+    recurring?: boolean;
+    frequency?: number;
+    frequencyType?: 'months' | 'days';
+  } | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Verificar plano ativo ao carregar
+  useEffect(() => {
+    checkActivePlan();
+  }, []);
+
+  const checkActivePlan = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) return;
+      
+      const planStatus = await checkPatientPlanActive(user.email);
+      setUserHasActivePlan(planStatus.canBypassPayment);
+    } catch (error) {
+      console.error('Error checking plan:', error);
+    }
+  };
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -97,6 +127,7 @@ export function PlanosSection() {
       nome: "Individual com Especialistas",
       icone: <Users className="h-12 w-12 text-primary" />,
       popular: true,
+      recurring: true,
       precoBase: precosPlanosBase.individual_com_especialistas,
       beneficios: [
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
@@ -115,6 +146,7 @@ export function PlanosSection() {
       nome: "Familiar com Especialistas",
       icone: <Crown className="h-12 w-12 text-primary" />,
       popular: false,
+      recurring: true,
       precoBase: precosPlanosBase.familiar_com_especialistas,
       beneficios: [
         { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
@@ -134,6 +166,7 @@ export function PlanosSection() {
       nome: "Individual sem Especialistas",
       icone: <Activity className="h-12 w-12 text-primary" />,
       popular: false,
+      recurring: true,
       precoBase: precosPlanosBase.individual_sem_especialistas,
       beneficios: [
         { icone: <Stethoscope className="h-5 w-5" />, texto: "Atendimento ilimitado" },
@@ -149,6 +182,7 @@ export function PlanosSection() {
       nome: "Familiar sem Especialistas",
       icone: <Users className="h-12 w-12 text-primary" />,
       popular: false,
+      recurring: true,
       precoBase: precosPlanosBase.familiar_sem_especialistas,
       beneficios: [
         { icone: <Users className="h-5 w-5" />, texto: "Atendimento para até 4 familiares" },
@@ -162,22 +196,73 @@ export function PlanosSection() {
     }
   ];
 
-  const handleAssinar = (planoId: string) => {
+  const handleAssinar = async (planoId: string) => {
     if (planoId === "empresarial") {
       setShowEmpresarialForm(true);
       return;
     }
 
-    // Abrir modal de pagamento
     const plano = novosPlanosData.find(p => p.id === planoId);
     if (!plano) return;
 
     const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));
+    const meses = parseInt(duracaoSelecionada);
     
+    // BYPASS: Se usuário tem plano ativo, agenda direto
+    if (userHasActivePlan) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user?.email) {
+          sonnerToast.error('Você precisa estar logado');
+          navigate('/entrar');
+          return;
+        }
+
+        // Buscar dados do paciente
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (!patient) {
+          sonnerToast.error('Dados do paciente não encontrados');
+          return;
+        }
+
+        sonnerToast.loading('Redirecionando para atendimento...');
+
+        const schedulePayload = {
+          cpf: patient.cpf || '',
+          email: user.email,
+          nome: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
+          telefone: patient.phone_e164 || '',
+          sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+          plano_ativo: true as const,
+        };
+
+        const result = await scheduleWithActivePlan(schedulePayload);
+
+        if (result.ok && result.url) {
+          window.location.href = result.url;
+        } else {
+          sonnerToast.error(result.error || 'Não foi possível agendar. Tente novamente.');
+        }
+      } catch (error) {
+        console.error('Bypass error:', error);
+        sonnerToast.error('Erro ao processar. Tente novamente.');
+      }
+      return;
+    }
+
+    // Sem plano ativo: abrir modal de assinatura
     setSelectedPlan({
       sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
       name: plano.nome,
-      amount: precoMensal // já em centavos
+      amount: precoMensal,
+      recurring: true,
+      frequency: meses,
+      frequencyType: 'months',
     });
     setIsPaymentModalOpen(true);
   };
@@ -449,6 +534,33 @@ export function PlanosSection() {
             </Button>
           </DialogContent>
         </Dialog>
+
+        {/* Modal de Assinatura/Pagamento */}
+        {selectedPlan && (
+          <>
+            {selectedPlan.recurring ? (
+              <SubscriptionModal
+                open={isPaymentModalOpen}
+                onOpenChange={setIsPaymentModalOpen}
+                sku={selectedPlan.sku}
+                planName={selectedPlan.name}
+                amount={selectedPlan.amount}
+                frequency={selectedPlan.frequency || 1}
+                frequencyType={selectedPlan.frequencyType || 'months'}
+                onSuccess={() => navigate('/area-do-paciente')}
+              />
+            ) : (
+              <PaymentModal
+                open={isPaymentModalOpen}
+                onOpenChange={setIsPaymentModalOpen}
+                sku={selectedPlan.sku}
+                serviceName={selectedPlan.name}
+                amount={selectedPlan.amount}
+                onSuccess={() => navigate('/area-do-paciente')}
+              />
+            )}
+          </>
+        )}
 
       </div>
     </section>

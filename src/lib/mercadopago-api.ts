@@ -143,3 +143,99 @@ export async function pollPixStatus(
   // Inicia polling
   setTimeout(poll, 5000); // Primeira checagem após 5s
 }
+
+/**
+ * Cria assinatura recorrente via Google Apps Script
+ */
+export async function createSubscription(payload: any): Promise<any> {
+  try {
+    const endpoint = `${GAS_BASE}?path=mp-create-subscription`;
+    
+    console.log('[MP] Creating subscription:', payload.reason);
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('[MP] Subscription response:', data);
+    
+    return {
+      success: data.success !== false,
+      status: data.status,
+      subscription_id: data.subscription_id || data.id,
+      error: data.error,
+      message: data.message,
+    };
+  } catch (error) {
+    console.error('[MP] Subscription creation error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erro ao criar assinatura',
+    };
+  }
+}
+
+/**
+ * Polling para verificar status da assinatura
+ * Consulta a cada 5 segundos por até 3 minutos
+ */
+export async function pollSubscriptionStatus(
+  subscriptionId: string,
+  onStatusUpdate: (status: 'confirmed' | 'pending' | 'rejected') => void,
+  maxAttempts = 36 // 36 * 5s = 3 minutos
+): Promise<void> {
+  let attempts = 0;
+
+  const poll = async () => {
+    try {
+      const endpoint = `${GAS_BASE}?path=mp-subscription-status&subscription_id=${subscriptionId}`;
+      const response = await fetch(endpoint);
+      
+      if (!response.ok) {
+        console.warn('[MP] Subscription polling failed, retrying...');
+        return;
+      }
+
+      const data = await response.json();
+      const status = data.status;
+      
+      console.log('[MP] Subscription polling status:', status);
+
+      // Mapear status do MP para nosso status
+      if (status === 'authorized' && data.first_payment_status === 'approved') {
+        onStatusUpdate('confirmed');
+        return;
+      } else if (status === 'cancelled' || data.first_payment_status === 'rejected') {
+        onStatusUpdate('rejected');
+        return;
+      }
+
+      // Continua polling
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 5000);
+      } else {
+        console.warn('[MP] Subscription polling timeout');
+        onStatusUpdate('pending');
+      }
+    } catch (error) {
+      console.error('[MP] Subscription polling error:', error);
+      attempts++;
+      if (attempts < maxAttempts) {
+        setTimeout(poll, 5000);
+      }
+    }
+  };
+
+  // Inicia polling
+  setTimeout(poll, 5000);
+}

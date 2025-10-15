@@ -58,3 +58,41 @@ export const formatPlanExpiry = (expiresAt?: string): string => {
     return expiresAt;
   }
 };
+
+export interface PatientPlanStatus {
+  hasActivePlan: boolean;
+  planCode?: string;
+  planExpiresAt?: string;
+  canBypassPayment: boolean;
+}
+
+export const checkPatientPlanActive = async (email: string): Promise<PatientPlanStatus> => {
+  try {
+    const plan = await getPatientPlan(email);
+    
+    if (!plan?.plan_code || !plan?.plan_expires_at) {
+      return {
+        hasActivePlan: false,
+        canBypassPayment: false,
+      };
+    }
+
+    // Verificar se o plano está ativo (não expirado)
+    const expiresAt = new Date(plan.plan_expires_at);
+    const now = new Date();
+    const isActive = expiresAt > now && plan.status === 'active';
+
+    return {
+      hasActivePlan: isActive,
+      planCode: plan.plan_code,
+      planExpiresAt: plan.plan_expires_at,
+      canBypassPayment: isActive,
+    };
+  } catch (error) {
+    console.error('Error checking plan status:', error);
+    return {
+      hasActivePlan: false,
+      canBypassPayment: false,
+    };
+  }
+};
