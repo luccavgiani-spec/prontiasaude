@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CardPaymentForm } from './CardPaymentForm';
+import { CardPreview } from './CardPreview';
 import { PixPaymentForm } from './PixPaymentForm';
 import { validateCPF, formatCPF, cleanCPF } from '@/lib/cpf-validator';
 import { createPayment, pollPixStatus, PaymentPayload } from '@/lib/mercadopago-api';
@@ -84,6 +85,7 @@ export function PaymentModal({
   const [paymentId, setPaymentId] = useState<string>('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [hasRequiredData, setHasRequiredData] = useState(false);
+  const [cardPreviewData, setCardPreviewData] = useState({ number: '', holder: '', expiry: '' });
 
   const publicKey = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '';
 
@@ -552,13 +554,28 @@ export function PaymentModal({
             {/* Conteúdo Dinâmico */}
             <div className="mt-6">
               {paymentMethod === 'card' && (
-                <CardPaymentForm
-                  publicKey={publicKey}
-                  amount={amount}
-                  onSubmit={handleCardSubmit}
-                  onError={setError}
-                  isProcessing={paymentStatus === 'processing'}
-                />
+                <div className="grid md:grid-cols-[400px_1fr] gap-6 items-start">
+                  {/* Preview à esquerda no desktop */}
+                  <div className="order-2 md:order-1">
+                    <CardPreview
+                      cardNumber={cardPreviewData.number}
+                      cardHolder={cardPreviewData.holder}
+                      expiry={cardPreviewData.expiry}
+                    />
+                  </div>
+                  
+                  {/* Formulário à direita */}
+                  <div className="order-1 md:order-2">
+                    <CardPaymentForm
+                      publicKey={publicKey}
+                      amount={amount}
+                      onSubmit={handleCardSubmit}
+                      onError={setError}
+                      onCardDataChange={setCardPreviewData}
+                      isProcessing={paymentStatus === 'processing'}
+                    />
+                  </div>
+                </div>
               )}
               
               {paymentMethod === 'pix' && (
