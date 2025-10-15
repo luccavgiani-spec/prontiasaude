@@ -14,7 +14,7 @@ const QuemSomos = () => {
         <div className="mb-16">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <img src={quemSomosHero} alt="Equipe Prontia Saúde" className="rounded-2xl shadow-lg w-full max-h-[600px] object-contain" />
+              <img src={quemSomosHero} alt="Equipe Prontia Saúde" className="rounded-2xl shadow-lg w-full max-h-[500px] object-cover" />
             </div>
             <div>
               
