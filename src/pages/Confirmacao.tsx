@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
+import { GAS_BASE } from "@/lib/constants";
 
-const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwaM-nCvG4NchS4HcameieGqvVnHiO-wGf2RgFVF3IMiXky3y0WvqK_2yBVKHvU4xaM/exec";
+const GAS_ENDPOINT = GAS_BASE;
 const WHATSAPP_LINK = "https://api.whatsapp.com/send/?phone=5511933359187&text=Ol%C3%A1%21&type=phone_number&app_absent=0";
 
 export default function Confirmacao() {

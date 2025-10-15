@@ -1,7 +1,7 @@
 // PRONTIA SAÚDE - Constantes e Configurações
 
-// Google Apps Script API Base URL
-export const GAS_BASE = "https://script.google.com/macros/s/AKfycbwYJcK7ZmwR2WvgxYk89Veu63d-VlSxKS9yIlsMQmCq-sw5LDc99pXF14N0wXhYTPw4/exec";
+// Google Apps Script API Base URL (via Supabase Edge Function Proxy)
+export const GAS_BASE = import.meta.env.VITE_GAS_BASE || "https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/gas-proxy";
 
 // Checkout temporariamente desabilitado - aguardando novo gateway
 
