@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -32,7 +34,10 @@ export function PlanosSection() {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
   const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{sku: string; name: string; amount: number} | null>(null);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     nome: "",
@@ -163,11 +168,18 @@ export function PlanosSection() {
       return;
     }
 
-    // Placeholder: assinaturas indisponíveis temporariamente
-    toast({
-      title: "Assinaturas Indisponíveis",
-      description: "Assinaturas temporariamente indisponíveis. Entre em contato pelo WhatsApp!",
+    // Abrir modal de pagamento
+    const plano = novosPlanosData.find(p => p.id === planoId);
+    if (!plano) return;
+
+    const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));
+    
+    setSelectedPlan({
+      sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+      name: plano.nome,
+      amount: precoMensal // já em centavos
     });
+    setIsPaymentModalOpen(true);
   };
 
 

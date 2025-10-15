@@ -1,8 +1,11 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
-import { toast } from "sonner";
 export function HeroSection() {
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
     if (element) {
@@ -58,9 +61,7 @@ export function HeroSection() {
             
             {/* Modern CTAs */}
             <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={() => {
-                toast.info('Pagamentos temporariamente indisponíveis. Em breve novo gateway de pagamento!');
-              }} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
+              <Button onClick={() => setIsPaymentModalOpen(true)} size="xl" className="medical-button-primary text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -91,5 +92,15 @@ export function HeroSection() {
           </div>
         </div>
       </div>
+
+      {/* Payment Modal */}
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        sku="ITC6534"
+        serviceName="Pronto Atendimento"
+        amount={4390}
+        onSuccess={() => window.location.href = '/confirmacao/ITC6534'}
+      />
     </section>;
 }

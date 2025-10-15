@@ -2,11 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CadastroModal } from "@/components/modais/CadastroModal";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 import { trackLead } from "@/lib/meta-tracking";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 interface Servico {
   slug: string;
   nome: string;
@@ -35,10 +35,8 @@ export function ServicoCard({
   descontoContratacao = 0,
   showDesconto = false
 }: ServicoCardProps) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const {
-    toast
-  } = useToast();
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Cálculo do desconto baseado no tipo de contratação
   const precoComDesconto = showDesconto && descontoContratacao > 0 ? servico.precoBase * (1 - descontoContratacao / 100) : servico.precoBase;
@@ -83,14 +81,12 @@ export function ServicoCard({
       content_name: servico.nome
     });
 
-    // Placeholder: pagamentos indisponíveis temporariamente
-    toast({
-      title: "Pagamentos Indisponíveis",
-      description: "Em breve novo gateway de pagamento! Entre em contato pelo WhatsApp.",
-    });
+    // Abre modal de pagamento
+    setIsPaymentModalOpen(true);
   };
   return <>
       <div className="bg-card/50 border border-border/50 rounded-xl p-6 hover:shadow-lg transition-all duration-300 group hover:border-primary/20 h-full flex flex-col">
+        {/* ... keep existing code ... */}
         {/* Ícone do Serviço */}
         <div className="text-center mb-4">
           {getServicoIcon(servico.slug)}
@@ -175,6 +171,16 @@ export function ServicoCard({
         </div>
       </div>
 
-      <CadastroModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={handleAgendar} />
+      {/* Payment Modal */}
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        sku={servico.sku}
+        serviceName={servico.nome}
+        amount={Math.round(precoComDesconto * 100)} // em centavos
+        onSuccess={() => {
+          navigate(`/confirmacao/${servico.sku}`);
+        }}
+      />
     </>;
 }
