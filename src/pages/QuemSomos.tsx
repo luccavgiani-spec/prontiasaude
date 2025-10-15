@@ -12,11 +12,11 @@ const QuemSomos = () => {
 
         {/* Nossa Missão com Imagem */}
         <div className="mb-16">
-          <div className="grid md:grid-cols-2 gap-8 items-center">
-            <div>
-              <img src={quemSomosHero} alt="Equipe Prontia Saúde" className="rounded-2xl shadow-lg w-full max-h-[500px] object-cover object-top" />
+          <div className="grid md:grid-cols-2 gap-8 items-start">
+            <div className="h-full">
+              <img src={quemSomosHero} alt="Equipe Prontia Saúde" className="rounded-2xl shadow-lg w-full h-full object-cover object-top" />
             </div>
-            <div>
+            <div className="flex flex-col h-full">
               
               
               <div className="space-y-4 text-muted-foreground mb-8 text-center">
