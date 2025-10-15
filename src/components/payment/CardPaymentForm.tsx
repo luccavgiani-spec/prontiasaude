@@ -88,14 +88,22 @@ export function CardPaymentForm({
     document.body.appendChild(script);
   };
 
-  const isCardFormMounted = () => {
-    const cn = document.getElementById('form-checkout__cardNumber');
-    return !!cn?.querySelector('iframe');
-  };
+  // util: detecta iframe do card form já montado
+  function isCardFormMountedOnDOM() {
+    try {
+      const el = document.getElementById('form-checkout__cardNumber');
+      if (!el) return false;
+      return !!el.querySelector('iframe');
+    } catch (e) {
+      return false;
+    }
+  }
 
   const initializeCardForm = () => {
-    if (mountedRef.current || isCardFormMounted()) {
-      console.log('[CardForm] Already mounted, skipping init');
+    console.log('[CardForm] initialize start, mountedRef=', mountedRef.current, 'domMounted=', isCardFormMountedOnDOM());
+
+    if (mountedRef.current || isCardFormMountedOnDOM()) {
+      console.log('[CardForm] Skipping init because already mounted');
       setIsSDKLoaded(true);
       return;
     }
@@ -122,6 +130,7 @@ export function CardPaymentForm({
         const mp = new window.MercadoPago(publicKey, {
           locale: 'pt-BR',
         });
+        console.log('[CardForm] MercadoPago ok, creating cardForm...');
 
       const cardForm = mp.cardForm({
         amount: String((amount / 100).toFixed(2)),
@@ -192,10 +201,12 @@ export function CardPaymentForm({
 
       cardFormRef.current = cardForm;
       mountedRef.current = true;
+      console.log('[CardForm] cardForm created and mountedRef set true');
       } catch (error) {
         console.error('[CardForm] Initialization error:', error);
         setSdkError('Erro ao inicializar formulário');
         onError('Erro ao inicializar formulário de cartão');
+        toast.error('Erro ao inicializar formulário de cartão');
       }
     };
 
@@ -289,21 +300,19 @@ export function CardPaymentForm({
     }
   };
 
-  const handleRetry = () => {
-    // Remover script antigo explicitamente
-    const oldScript = document.getElementById('mercadopago-sdk');
-    if (oldScript) {
-      oldScript.remove();
-      console.log('[CardForm] Old SDK script removed');
-    }
-    
-    // Resetar estados
-    setSdkError(null);
-    setIsSDKLoaded(false);
+  const removeMercadoPagoSdk = () => {
+    document.getElementById('mercadopago-sdk')?.remove();
+    const container = document.getElementById('form-checkout__cardNumber');
+    if (container) container.innerHTML = ''; // remove iframe se existir
     mountedRef.current = false;
     cardFormRef.current = null;
-    
-    // Recarregar SDK
+    setIsSDKLoaded(false);
+    setSdkError(null);
+    console.log('[CardForm] SDK and iframe cleaned up');
+  };
+
+  const handleRetry = () => {
+    removeMercadoPagoSdk();
     loadMercadoPagoSDK();
   };
 
