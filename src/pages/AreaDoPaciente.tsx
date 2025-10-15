@@ -363,10 +363,12 @@ const AreaDoPaciente = () => {
           </div>
         </div>
 
-        {/* Disque Denúncia Section */}
-        <div className="mt-8">
-          <DisqueDenunciaSection />
-        </div>
+        {/* Disque Denúncia Section - Only for users with active plan */}
+        {patientPlan?.plan_code && patientPlan?.status === 'active' && (
+          <div className="mt-8">
+            <DisqueDenunciaSection />
+          </div>
+        )}
       </div>
     </div>;
 };
