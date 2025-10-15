@@ -21,11 +21,7 @@ const QuemSomos = () => {
               
               <div className="space-y-4 text-muted-foreground mb-8 text-center">
                 <p>
-                  A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde muito cedo, aprendi que cuidar do próximo é um chamado.
-                </p>
-                
-                <p>
-                  Cresci acompanhando meus pais em ações sociais, onde observei como um gesto simples pode transformar a realidade de alguém. Esse olhar sensível foi reforçado pelo exemplo da minha mãe, uma mulher dedicada, generosa e incansável, que sempre trabalhou auxiliando pessoas e me ensinou, na prática, o verdadeiro sentido da empatia.
+                  A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde cedo, acompanhei meus pais em ações sociais, especialmente minha mãe, e aprendi que cuidar do próximo é um chamado.
                 </p>
                 
                 <p>
@@ -33,19 +29,16 @@ const QuemSomos = () => {
                 </p>
                 
                 <p>
-                  Minha trajetória no SUS foi fundamental para compreender tanto a grandeza quanto os desafios do sistema público. Acompanhei filas extensas, pacientes que aguardavam meses por atendimento e famílias que, por estarem distantes dos grandes centros, não conseguiam acesso a cuidados básicos no tempo adequado. Percebi, então, que não seria possível mudar todo o sistema sozinha, mas que poderia desenvolver alternativas concretas para levar saúde de forma justa, ágil e humanizada a quem mais precisa.
+                  Minha trajetória no SUS foi fundamental para compreender tanto a grandeza quanto os desafios do sistema público. Acompanhei filas extensas, pacientes que aguardavam meses por atendimento e famílias que, por estarem distantes dos grandes centros, não conseguiam acesso a cuidados básicos no tempo adequado. Percebi, então, que não seria possível mudar todo o sistema sozinha, mas que poderia desenvolver alternativas reais para levar saúde de forma justa, ágil e humanizada a quem mais precisa.
                 </p>
                 
                 <p>
-                  Assim surgiu a Prontìa Saúde: um projeto construído com amor, propósito e parceria. Ao lado da minha mãe — que hoje é também minha sócia e grande inspiração — transformamos um sonho em realidade. Ela trouxe sua experiência de vida, sua sensibilidade e sua visão acolhedora para cada decisão e para cada cuidado que oferecemos.
-                </p>
-                
-                <p>
+                  Assim surgiu a Prontìa Saúde: um projeto construído com amor, propósito e parceria. Ao lado da minha mãe transformamos um sonho em realidade.
                   Nosso objetivo é democratizar o acesso à saúde no Brasil, oferecendo atendimento médico de qualidade, de forma simples, acessível e a baixo custo. Acreditamos na tecnologia como instrumento para aproximar pessoas, superar barreiras geográficas e fortalecer a relação médico-paciente.
                 </p>
                 
                 <p>
-                  A Prontìa Saúde não é apenas telemedicina. É um compromisso com dignidade, inclusão e eficiência. É o resultado de um amor que passou de mãe para filha e se transformou em uma missão: levar saúde sem fronteiras, acessível a todos.
+                  A Prontìa Saúde não é apenas telemedicina. É um compromisso da nossa família com todas as famílias de trazer dignidade, inclusão, proximidade, acolhimento, e eficiência.
                 </p>
               </div>
               
