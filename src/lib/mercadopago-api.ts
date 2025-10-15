@@ -58,11 +58,10 @@ export async function createPayment(payload: PaymentPayload): Promise<PaymentRes
     
     console.log('[MP] Creating payment:', payload.method);
     
+    // Enviar sem Content-Type para evitar preflight CORS
+    // O browser define como text/plain (simple request)
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(payload),
     });
 

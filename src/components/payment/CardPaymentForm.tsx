@@ -90,14 +90,31 @@ export function CardPaymentForm({
 
   const initializeCardForm = () => {
     if (mountedRef.current) return;
-    mountedRef.current = true;
-
-    try {
-      console.log('[CardForm] Initializing with PUBLIC_KEY:', publicKey.substring(0, 20) + '...');
+    
+    // Aguardar até window.MercadoPago estar disponível
+    const checkAndInit = (retries = 0) => {
       // @ts-ignore - MercadoPago global
-      const mp = new window.MercadoPago(publicKey, {
-        locale: 'pt-BR',
-      });
+      if (!window.MercadoPago) {
+        if (retries < 30) { // 30 * 100ms = 3s
+          setTimeout(() => checkAndInit(retries + 1), 100);
+          return;
+        } else {
+          setSdkError('Erro ao carregar formulário de pagamento');
+          onError('Erro ao carregar formulário de pagamento — tente atualizar a página.');
+          toast.error('Erro ao carregar formulário de pagamento — tente atualizar a página.');
+          console.error('[CardForm] window.MercadoPago not available after timeout');
+          return;
+        }
+      }
+
+      mountedRef.current = true;
+
+      try {
+        console.log('[CardForm] Initializing with PUBLIC_KEY:', publicKey.substring(0, 20) + '...');
+        // @ts-ignore - MercadoPago global
+        const mp = new window.MercadoPago(publicKey, {
+          locale: 'pt-BR',
+        });
 
       const cardForm = mp.cardForm({
         amount: String((amount / 100).toFixed(2)),
@@ -119,17 +136,6 @@ export function CardPaymentForm({
           cardholderName: {
             id: 'form-checkout__cardholderName',
             placeholder: 'Nome como está no cartão',
-          },
-          identificationType: {
-            id: 'form-checkout__identificationType',
-          },
-          identificationNumber: {
-            id: 'form-checkout__identificationNumber',
-            placeholder: 'CPF',
-          },
-          cardholderEmail: {
-            id: 'form-checkout__cardholderEmail',
-            placeholder: 'E-mail',
           },
         },
         callbacks: {
@@ -178,11 +184,14 @@ export function CardPaymentForm({
       });
 
       cardFormRef.current = cardForm;
-    } catch (error) {
-      console.error('[CardForm] Initialization error:', error);
-      setSdkError('Erro ao inicializar formulário');
-      onError('Erro ao inicializar formulário de cartão');
-    }
+      } catch (error) {
+        console.error('[CardForm] Initialization error:', error);
+        setSdkError('Erro ao inicializar formulário');
+        onError('Erro ao inicializar formulário de cartão');
+      }
+    };
+
+    checkAndInit();
   };
 
   const fetchInstallments = async (bin: string) => {
@@ -273,9 +282,20 @@ export function CardPaymentForm({
   };
 
   const handleRetry = () => {
+    // Remover script antigo explicitamente
+    const oldScript = document.getElementById('mercadopago-sdk');
+    if (oldScript) {
+      oldScript.remove();
+      console.log('[CardForm] Old SDK script removed');
+    }
+    
+    // Resetar estados
     setSdkError(null);
     setIsSDKLoaded(false);
     mountedRef.current = false;
+    cardFormRef.current = null;
+    
+    // Recarregar SDK
     loadMercadoPagoSDK();
   };
 
@@ -318,22 +338,6 @@ export function CardPaymentForm({
         <div>
           <label className="block text-sm font-medium mb-2 text-foreground">Nome no Cartão</label>
           <div id="form-checkout__cardholderName" className="mp-input" />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2 text-foreground">CPF</label>
-          <div id="form-checkout__identificationNumber" className="mp-input" />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-2 text-foreground">E-mail</label>
-          <div id="form-checkout__cardholderEmail" className="mp-input" />
-        </div>
-
-        <div className="hidden">
-          <select id="form-checkout__identificationType">
-            <option value="CPF">CPF</option>
-          </select>
         </div>
 
         {/* Dropdown de Parcelas Customizado */}

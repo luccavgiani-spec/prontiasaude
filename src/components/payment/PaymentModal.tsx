@@ -524,7 +524,10 @@ export function PaymentModal({
             <div className="flex items-center justify-center gap-2 mt-6">
               <button
                 type="button"
-                onClick={() => setPaymentMethod('card')}
+                onClick={() => {
+                  setPaymentMethod('card');
+                  setError('');
+                }}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
                   paymentMethod === 'card'
@@ -538,7 +541,10 @@ export function PaymentModal({
               
               <button
                 type="button"
-                onClick={() => setPaymentMethod('pix')}
+                onClick={() => {
+                  setPaymentMethod('pix');
+                  setError('');
+                }}
                 className={cn(
                   "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
                   paymentMethod === 'pix'
