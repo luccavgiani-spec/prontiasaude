@@ -213,56 +213,63 @@ export function PaymentModal({
   };
 
   const buildSchedulePayload = () => {
-    const [firstName, ...lastNameParts] = formData.name.split(' ');
     return {
-      cpf: formData.cpf,
       email: formData.email,
+      cpf: (formData.cpf || '').replace(/\D/g, ''),
       nome: formData.name,
-      telefone: formData.phone,
+      telefone: formData.phone, // should be E.164 format (+55...)
       sku,
-      especialidade: especialidade || '',
+      especialidade: especialidade || 'Clínico Geral',
       plano_ativo: false,
+      horario_iso: new Date().toISOString()
     };
   };
 
   const handleCardSubmit = async (cardFormData: any) => {
     if (!validateForm()) return;
 
+    console.log('[handleCardSubmit] Card form data:', cardFormData);
     setPaymentStatus('processing');
     setError('');
 
     try {
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
+      
+      const paymentRequest = {
+        items: [{
+          id: sku,
+          title: serviceName,
+          unit_price: amount / 100,
+          quantity: 1
+        }],
+        payer: {
+          email: formData.email,
+          first_name: formData.name.split(' ')[0],
+          last_name: formData.name.split(' ').slice(1).join(' '),
+          identification: {
+            type: 'CPF',
+            number: formData.cpf.replace(/\D/g, '')
+          }
+        },
+        token: cardFormData.token,
+        payment_method_id: cardFormData.payment_method_id,
+        installments: cardFormData.installments,
+        metadata: {
+          order_id: orderId,
+          schedulePayload
+        }
+      };
+
+      console.log('[handleCardSubmit] Payment request:', paymentRequest);
 
       const { data, error } = await supabase.functions.invoke('mp-create-payment', {
-        body: {
-          items: [{
-            id: sku,
-            title: serviceName,
-            unit_price: amount / 100,
-            quantity: 1
-          }],
-          payer: {
-            email: formData.email,
-            first_name: formData.name.split(' ')[0],
-            last_name: formData.name.split(' ').slice(1).join(' '),
-            identification: {
-              type: 'CPF',
-              number: formData.cpf.replace(/\D/g, '')
-            }
-          },
-          token: cardFormData.token,
-          payment_method_id: cardFormData.payment_method_id,
-          installments: cardFormData.installments,
-          metadata: {
-            order_id: orderId,
-            schedulePayload
-          }
-        }
+        body: paymentRequest
       });
 
       if (error) throw error;
+
+      console.log('[handleCardSubmit] Payment creation response:', data);
 
       if (data.status === 'approved') {
         setPaymentStatus('approved');
@@ -275,16 +282,23 @@ export function PaymentModal({
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
         toast.info('Pagamento em análise. Aguarde confirmação.');
-        // Redirecionar para página de confirmação para aguardar
+        // Redirecionar para página de confirmação com dados completos
+        const params = new URLSearchParams({
+          payment_id: data.payment_id,
+          order_id: orderId,
+          email: schedulePayload.email,
+          cpf: schedulePayload.cpf,
+          sku
+        });
         setTimeout(() => {
-          window.location.href = `/pagamento/confirmado?payment_id=${data.payment_id}&order_id=${orderId}`;
+          window.location.href = `/pagamento/confirmado?${params.toString()}`;
         }, 2000);
       } else {
         setPaymentStatus('rejected');
         setError('Pagamento rejeitado. Verifique os dados do cartão.');
       }
     } catch (err: any) {
-      console.error('Erro ao processar pagamento:', err);
+      console.error('[handleCardSubmit] Card payment error:', err);
       setError(err.message || 'Erro ao processar pagamento');
       setPaymentStatus('idle');
     }
@@ -293,38 +307,45 @@ export function PaymentModal({
   const handlePixSubmit = async () => {
     if (!validateForm()) return;
 
+    console.log('[handlePixSubmit] Starting PIX generation');
     setPaymentStatus('processing');
     setError('');
 
     try {
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
+      
+      const paymentRequest = {
+        items: [{
+          id: sku,
+          title: serviceName,
+          unit_price: amount / 100,
+          quantity: 1
+        }],
+        payer: {
+          email: formData.email,
+          first_name: formData.name.split(' ')[0],
+          last_name: formData.name.split(' ').slice(1).join(' '),
+          identification: {
+            type: 'CPF',
+            number: formData.cpf.replace(/\D/g, '')
+          }
+        },
+        metadata: {
+          order_id: orderId,
+          schedulePayload
+        }
+      };
+
+      console.log('[handlePixSubmit] Payment request:', paymentRequest);
 
       const { data, error } = await supabase.functions.invoke('mp-create-payment', {
-        body: {
-          items: [{
-            id: sku,
-            title: serviceName,
-            unit_price: amount / 100,
-            quantity: 1
-          }],
-          payer: {
-            email: formData.email,
-            first_name: formData.name.split(' ')[0],
-            last_name: formData.name.split(' ').slice(1).join(' '),
-            identification: {
-              type: 'CPF',
-              number: formData.cpf.replace(/\D/g, '')
-            }
-          },
-          metadata: {
-            order_id: orderId,
-            schedulePayload
-          }
-        }
+        body: paymentRequest
       });
 
       if (error) throw error;
+
+      console.log('[handlePixSubmit] PIX creation response:', data);
 
       setPixData({
         qrCode: data.qr_code,
@@ -334,11 +355,10 @@ export function PaymentModal({
       setPaymentId(data.payment_id);
       setPaymentStatus('pending_pix');
       
-      // Iniciar polling manual (usuário paga PIX, webhook notifica GAS)
-      // Frontend aguarda e permite tentar novamente se necessário
+      // Usuário paga PIX, webhook notifica GAS em background
       toast.info('Aguardando pagamento do PIX...');
     } catch (err: any) {
-      console.error('Erro ao gerar PIX:', err);
+      console.error('[handlePixSubmit] PIX generation error:', err);
       setError(err.message || 'Erro ao gerar PIX');
       setPaymentStatus('idle');
     }
@@ -346,47 +366,58 @@ export function PaymentModal({
 
   const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
     try {
+      const body = {
+        payment_id: paymentId,
+        status: 'approved',
+        email: schedulePayload.email,
+        cpf: schedulePayload.cpf,
+        sku,
+        origin: 'lovable',
+        cart: {
+          items: [{ sku, qty: 1, price: amount / 100 }]
+        },
+        schedulePayload
+      };
+
+      console.log('[notifyPaymentAndRedirect] Request body:', body);
+
       const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payment_id: paymentId,
-          status: 'approved',
-          email: formData.email,
-          cpf: formData.cpf,
-          sku,
-          origin: 'lovable',
-          cart: {
-            items: [{
-              sku,
-              qty: 1,
-              price: amount / 100
-            }]
-          },
-          schedulePayload
-        })
+        body: JSON.stringify(body)
       });
 
-      const data = await response.json();
+      console.log('[notifyPaymentAndRedirect] Response status:', response.status);
 
-      if (data.success && data.redirectUrl) {
-        toast.success('Redirecionando para seu atendimento...');
-        setTimeout(() => {
-          window.location.href = data.redirectUrl;
-        }, 1500);
+      const data = await response.json().catch(() => ({}));
+      console.log('[notifyPaymentAndRedirect] Response data:', data);
+
+      if (response.ok && data.success && data.redirectUrl) {
+        toast.success('Redirecionando para o atendimento...');
+        window.location.href = data.redirectUrl;
       } else {
-        // Fallback: ir para página de confirmação
-        toast.warning('Processando... Você será redirecionado em breve.');
-        setTimeout(() => {
-          window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
-        }, 2000);
+        const params = new URLSearchParams({
+          payment_id: paymentId,
+          order_id: orderId || '',
+          email: schedulePayload.email,
+          cpf: schedulePayload.cpf,
+          sku
+        });
+        console.warn('[notifyPaymentAndRedirect] Failed, redirecting to /pagamento/confirmado', data);
+        toast.error(data.error || data.message || 'Não foi possível obter o link de redirecionamento.');
+        window.location.href = `/pagamento/confirmado?${params.toString()}`;
       }
     } catch (err) {
-      console.error('Erro ao notificar pagamento:', err);
-      // Fallback
-      setTimeout(() => {
-        window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
-      }, 2000);
+      console.error('[notifyPaymentAndRedirect] Error:', err);
+      const params = new URLSearchParams({
+        payment_id: paymentId,
+        order_id: orderId || '',
+        email: schedulePayload.email,
+        cpf: schedulePayload.cpf,
+        sku
+      });
+      toast.error('Erro ao processar redirecionamento.');
+      window.location.href = `/pagamento/confirmado?${params.toString()}`;
     }
   };
 

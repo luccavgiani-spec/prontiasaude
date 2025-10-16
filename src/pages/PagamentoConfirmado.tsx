@@ -12,34 +12,66 @@ export default function PagamentoConfirmado() {
 
   const payment_id = searchParams.get('payment_id');
   const order_id = searchParams.get('order_id');
+  const email = searchParams.get('email') || '';
+  const cpf = (searchParams.get('cpf') || '').replace(/\D/g, '');
+  const sku = searchParams.get('sku') || 'ITC6534';
 
   const handleRetry = async () => {
-    if (!payment_id) return;
+    if (!payment_id) {
+      toast.error('ID de pagamento não encontrado');
+      return;
+    }
 
     setIsRetrying(true);
     
     try {
+      const schedulePayload = {
+        email,
+        cpf,
+        nome: '', // not available in confirmation page
+        telefone: '', // not available in confirmation page
+        sku,
+        especialidade: 'Clínico Geral',
+        plano_ativo: false,
+        horario_iso: new Date().toISOString()
+      };
+
+      const body = {
+        payment_id,
+        status: 'approved',
+        email,
+        cpf,
+        sku,
+        origin: 'lovable_retry',
+        cart: {
+          items: [{ sku, qty: 1, price: 43.9 }]
+        },
+        schedulePayload
+      };
+
+      console.log('[handleRetry] Request body:', body);
+
       const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          payment_id,
-          status: 'approved',
-          origin: 'lovable_retry'
-        })
+        body: JSON.stringify(body)
       });
 
-      const data = await response.json();
+      console.log('[handleRetry] Response status:', response.status);
 
-      if (data.success && data.redirectUrl) {
+      const data = await response.json().catch(() => ({}));
+      console.log('[handleRetry] Response data:', data);
+
+      if (response.ok && data.success && data.redirectUrl) {
         toast.success('Redirecionando...');
         window.location.href = data.redirectUrl;
       } else {
-        toast.error('Não foi possível obter o link. Tente novamente.');
+        console.error('[handleRetry] Failed to get redirect URL:', data);
+        toast.error(data.error || data.message || 'Não foi possível obter o link. Tente novamente.');
         setIsRetrying(false);
       }
     } catch (err) {
-      console.error('Erro ao tentar novamente:', err);
+      console.error('[handleRetry] Error:', err);
       toast.error('Erro ao processar. Tente novamente.');
       setIsRetrying(false);
     }
