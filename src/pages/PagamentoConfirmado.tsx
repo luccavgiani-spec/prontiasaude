@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { transformToGASPayload } from '@/lib/payload-transform';
 
 const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 
@@ -40,29 +41,19 @@ export default function PagamentoConfirmado() {
     setIsRetrying(true);
     
     try {
-      const schedulePayload = {
-        email,
-        cpf,
-        nome: '', // not available in confirmation page
-        telefone: '', // not available in confirmation page
-        sku,
-        especialidade: 'Clínico Geral',
-        plano_ativo: false,
-        horario_iso: new Date().toISOString()
-      };
-
-      const body = {
+      const body = transformToGASPayload({
         payment_id,
-        status: 'approved',
-        email,
-        cpf,
+        payment_status: 'approved',
         sku,
-        origin: 'lovable_confirmacao',
-        cart: {
-          items: [{ sku, qty: 1, price: 43.9 }]
-        },
-        schedulePayload
-      };
+        amount: 4390, // fallback genérico (43.90 * 100)
+        cpf,
+        email,
+        name: '', // não disponível via searchParams
+        phone: '', // não disponível via searchParams
+        especialidade: 'Clínico Geral',
+        horario_iso: new Date().toISOString(),
+        plano_ativo: false
+      });
 
       console.log('[handleRetry] Request body:', body);
 

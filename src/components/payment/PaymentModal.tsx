@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
 import { MP_PUBLIC_KEY } from '@/lib/constants';
+import { transformToGASPayload } from '@/lib/payload-transform';
 
 const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 
@@ -393,20 +394,21 @@ export function PaymentModal({
   const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
     setPaymentStatus('processing');
     
-    const body = {
+    const body = transformToGASPayload({
       payment_id: paymentId,
-      status: 'approved',
-      email: schedulePayload.email,
-      cpf: schedulePayload.cpf,
+      payment_status: 'approved',
       sku,
-      origin: 'lovable_card',
-      cart: {
-        items: [{ sku, qty: 1, price: amount / 100 }]
-      },
-      schedulePayload
-    };
+      amount,
+      cpf: schedulePayload.cpf,
+      email: schedulePayload.email,
+      name: schedulePayload.nome,
+      phone: schedulePayload.telefone,
+      especialidade: schedulePayload.especialidade || 'Clínico Geral',
+      horario_iso: schedulePayload.horario_iso,
+      plano_ativo: schedulePayload.plano_ativo
+    });
 
-    console.log('[notifyPaymentAndRedirect] Request body:', body);
+    console.log('[Card] notify body:', body);
 
     try {
       const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
@@ -454,18 +456,21 @@ export function PaymentModal({
     
     const schedulePayload = buildSchedulePayload();
 
-    const body = {
+    const body = transformToGASPayload({
       payment_id: String(lastPaymentId),
-      status: 'approved',
-      email: schedulePayload.email,
-      cpf: schedulePayload.cpf,
+      payment_status: 'approved',
       sku,
-      origin: 'lovable_pix_cta',
-      cart: { items: [{ sku, qty: 1, price: amount / 100 }] },
-      schedulePayload
-    };
+      amount,
+      cpf: schedulePayload.cpf,
+      email: schedulePayload.email,
+      name: schedulePayload.nome,
+      phone: schedulePayload.telefone,
+      especialidade: schedulePayload.especialidade || 'Clínico Geral',
+      horario_iso: schedulePayload.horario_iso,
+      plano_ativo: schedulePayload.plano_ativo
+    });
 
-    console.log('[pix CTA] notify body:', body);
+    console.log('[PIX CTA] notify body:', body);
 
     try {
       const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
