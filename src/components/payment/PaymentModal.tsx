@@ -300,17 +300,7 @@ export function PaymentModal({
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
         toast.info('Pagamento em análise. Aguarde confirmação.');
-        // Redirecionar para página de confirmação com dados completos
-        const params = new URLSearchParams({
-          payment_id: data.payment_id,
-          order_id: orderId,
-          email: schedulePayload.email,
-          cpf: schedulePayload.cpf,
-          sku
-        });
-        setTimeout(() => {
-          window.location.href = `/pagamento/confirmado?${params.toString()}`;
-        }, 2000);
+        // NÃO redirecionar - webhook do MP notificará o GAS quando aprovar
       } else {
         setPaymentStatus('rejected');
         setError('Pagamento rejeitado. Verifique os dados do cartão.');
@@ -452,7 +442,7 @@ export function PaymentModal({
 
     const body = {
       payment_id: String(lastPaymentId),
-      status: 'approved', // o GAS confirmará no MP
+      status: 'approved',
       email: schedulePayload.email,
       cpf: schedulePayload.cpf,
       sku,
@@ -464,39 +454,30 @@ export function PaymentModal({
     console.log('[pix CTA] notify body:', body);
 
     try {
-      const res = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const { callGasViaProxy } = await import('@/lib/gas-proxy');
+      const { ok, data } = await callGasViaProxy('lovable-payment-notify', body);
+      
+      console.log('[pix CTA] notify response:', ok ? 200 : 500, data);
 
-      const data = await res.json().catch(() => ({} as any));
-      console.log('[pix CTA] notify response:', res.status, data);
-
-      if (res.ok && data?.success && data?.redirectUrl) {
+      if (ok && data?.success && data?.redirectUrl) {
         toast.success('Redirecionando para o atendimento...');
         window.location.href = data.redirectUrl;
       } else {
-        const q = new URLSearchParams({
-          payment_id: String(lastPaymentId),
-          email: schedulePayload.email || '',
-          cpf: schedulePayload.cpf || '',
-          sku: String(sku || '')
+        // NÃO redirecionar - apenas mostrar toast e voltar para tela QR Code
+        setPaymentStatus('pending_pix');
+        const errorMsg = data.error || data.message || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
+        console.error('[NOTIFY ERROR]', {
+          payment_id: lastPaymentId,
+          error: data.error,
+          message: data.message,
+          full_response: data
         });
-        console.warn('[pix CTA] Failed, redirecting to /pagamento/confirmado', data);
-        toast.error(data.error || data.message || 'Não foi possível obter o link de redirecionamento.');
-        window.location.href = `/pagamento/confirmado?${q.toString()}`;
+        toast.error(errorMsg);
       }
     } catch (err) {
       console.error('[pix CTA] Error:', err);
-      const q = new URLSearchParams({
-        payment_id: String(lastPaymentId),
-        email: schedulePayload.email || '',
-        cpf: schedulePayload.cpf || '',
-        sku: String(sku || '')
-      });
-      toast.error('Erro ao processar redirecionamento.');
-      window.location.href = `/pagamento/confirmado?${q.toString()}`;
+      setPaymentStatus('pending_pix');
+      toast.error('Erro ao processar. Tente novamente.');
     }
   };
 
@@ -544,10 +525,19 @@ export function PaymentModal({
 
     if (paymentStatus === 'in_process') {
       return (
-        <div className="flex flex-col items-center justify-center py-8">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-          <p className="text-lg font-medium">Aguardando confirmação do pagamento...</p>
-          <p className="text-sm text-muted-foreground mt-2">Isso pode levar alguns instantes</p>
+        <div className="space-y-6 text-center py-8">
+          <div className="flex justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </div>
+          <div>
+            <p className="text-lg font-medium mb-2">Pagamento em análise...</p>
+            <p className="text-sm text-muted-foreground">
+              Aguarde enquanto validamos seu pagamento. Você será notificado quando o pagamento for aprovado.
+            </p>
+          </div>
+          <Button onClick={handleTryAgain} variant="outline">
+            Voltar
+          </Button>
         </div>
       );
     }
@@ -559,6 +549,7 @@ export function PaymentModal({
           qrCodeBase64={pixData.qrCodeBase64}
           onCancel={handleTryAgain}
           onAccessAttendance={handlePixAccess}
+          isProcessing={false}
         />
       );
     }

@@ -51,24 +51,26 @@ export default function PagamentoConfirmado() {
 
       console.log('[handleRetry] Request body:', body);
 
-      const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
+      const { callGasViaProxy } = await import('@/lib/gas-proxy');
+      const { ok, data } = await callGasViaProxy('lovable-payment-notify', body);
 
-      console.log('[handleRetry] Response status:', response.status);
-
-      const data = await response.json().catch(() => ({}));
+      console.log('[handleRetry] Response status:', ok ? 200 : 500);
       console.log('[handleRetry] Response data:', data);
 
-      if (response.ok && data.success && data.redirectUrl) {
+      if (ok && data.success && data.redirectUrl) {
         toast.success('Redirecionando...');
         window.location.href = data.redirectUrl;
       } else {
-        console.error('[handleRetry] Failed to get redirect URL:', data);
-        toast.error(data.error || data.message || 'Não foi possível obter o link. Tente novamente.');
+        const errorMsg = data.error || data.message || 'Pagamento ainda não compensou. Tente novamente em instantes.';
+        console.error('[NOTIFY ERROR]', {
+          payment_id,
+          error: data.error,
+          message: data.message,
+          full_response: data
+        });
+        toast.error(errorMsg);
         setIsRetrying(false);
+        // NÃO sair da página
       }
     } catch (err) {
       console.error('[handleRetry] Error:', err);

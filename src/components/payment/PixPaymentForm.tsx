@@ -8,9 +8,10 @@ interface PixPaymentFormProps {
   qrCodeBase64: string;
   onCancel: () => void;
   onAccessAttendance?: () => void;
+  isProcessing?: boolean;
 }
 
-export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel, onAccessAttendance }: PixPaymentFormProps) {
+export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel, onAccessAttendance, isProcessing }: PixPaymentFormProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyCode = async () => {
@@ -94,8 +95,9 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel, onAccessAttenda
           onClick={onAccessAttendance}
           className="w-full"
           size="lg"
+          disabled={isProcessing}
         >
-          Acessar atendimento
+          {isProcessing ? 'Processando...' : 'Acessar atendimento'}
         </Button>
       )}
 
