@@ -9,7 +9,23 @@ import { validatePhoneE164 } from '@/lib/validations';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
-import { MP_PUBLIC_KEY, GAS_BASE_ROUTE_URL } from '@/lib/constants';
+import { MP_PUBLIC_KEY } from '@/lib/constants';
+
+const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
+async function callNotifyViaProxy(path: string, payload: any) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/gas-proxy?path=${encodeURIComponent(path)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    mode: 'cors',
+    credentials: 'omit',
+  });
+
+  let data: any = null;
+  try { data = await res.json(); } catch {}
+  return { ok: res.ok, status: res.status, data };
+}
 
 declare global {
   interface Window {
@@ -289,8 +305,9 @@ export function PaymentModal({
 
       console.log('[handleCardSubmit] Payment creation response:', data);
 
+      console.log('[handleCardSubmit] Payment creation response:', data);
+
       if (data.status === 'approved') {
-        setPaymentStatus('approved');
         setPaymentId(data.payment_id);
         toast.success('Pagamento aprovado!');
         
@@ -300,7 +317,7 @@ export function PaymentModal({
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
         toast.info('Pagamento em análise. Aguarde confirmação.');
-        // NÃO redirecionar - webhook do MP notificará o GAS quando aprovar
+        // ✅ NÃO redirecionar - webhook do MP notificará o GAS quando aprovar
       } else {
         setPaymentStatus('rejected');
         setError('Pagamento rejeitado. Verifique os dados do cartão.');
@@ -374,37 +391,33 @@ export function PaymentModal({
   };
 
   const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
+    setPaymentStatus('processing');
+    
+    const body = {
+      payment_id: paymentId,
+      status: 'approved',
+      email: schedulePayload.email,
+      cpf: schedulePayload.cpf,
+      sku,
+      origin: 'lovable_card',
+      cart: {
+        items: [{ sku, qty: 1, price: amount / 100 }]
+      },
+      schedulePayload
+    };
+
+    console.log('[notifyPaymentAndRedirect] Request body:', body);
+
     try {
-      const body = {
-        payment_id: paymentId,
-        status: 'approved',
-        email: schedulePayload.email,
-        cpf: schedulePayload.cpf,
-        sku,
-        origin: 'lovable',
-        cart: {
-          items: [{ sku, qty: 1, price: amount / 100 }]
-        },
-        schedulePayload
-      };
+      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
+      console.log('[notifyPaymentAndRedirect] status/data:', status, data);
 
-      console.log('[notifyPaymentAndRedirect] Request body:', body);
-
-      const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      console.log('[notifyPaymentAndRedirect] Response status:', response.status);
-
-      const data = await response.json().catch(() => ({}));
-      console.log('[notifyPaymentAndRedirect] Response data:', data);
-
-      if (response.ok && data.success && data.redirectUrl) {
+      if (ok && data?.success && data?.redirectUrl) {
         toast.success('Redirecionando para o atendimento...');
         window.location.href = data.redirectUrl;
       } else {
+        // ✅ Fallback para /pagamento/confirmado apenas se notify falhar
+        setPaymentStatus('idle');
         const params = new URLSearchParams({
           payment_id: paymentId,
           order_id: orderId || '',
@@ -413,11 +426,12 @@ export function PaymentModal({
           sku
         });
         console.warn('[notifyPaymentAndRedirect] Failed, redirecting to /pagamento/confirmado', data);
-        toast.error(data.error || data.message || 'Não foi possível obter o link de redirecionamento.');
+        toast.error(data?.error || data?.message || 'Não foi possível obter o link de redirecionamento.');
         window.location.href = `/pagamento/confirmado?${params.toString()}`;
       }
     } catch (err) {
       console.error('[notifyPaymentAndRedirect] Error:', err);
+      setPaymentStatus('idle');
       const params = new URLSearchParams({
         payment_id: paymentId,
         order_id: orderId || '',
@@ -454,22 +468,20 @@ export function PaymentModal({
     console.log('[pix CTA] notify body:', body);
 
     try {
-      const { callGasViaProxy } = await import('@/lib/gas-proxy');
-      const { ok, data } = await callGasViaProxy('lovable-payment-notify', body);
-      
-      console.log('[pix CTA] notify response:', ok ? 200 : 500, data);
+      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
+      console.log('[pix CTA] notify response status/data:', status, data);
 
       if (ok && data?.success && data?.redirectUrl) {
         toast.success('Redirecionando para o atendimento...');
         window.location.href = data.redirectUrl;
       } else {
-        // NÃO redirecionar - apenas mostrar toast e voltar para tela QR Code
+        // ✅ NÃO redirecionar - volta para tela QR Code
         setPaymentStatus('pending_pix');
-        const errorMsg = data.error || data.message || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
+        const errorMsg = data?.error || data?.message || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
         console.error('[NOTIFY ERROR]', {
           payment_id: lastPaymentId,
-          error: data.error,
-          message: data.message,
+          error: data?.error,
+          message: data?.message,
           full_response: data
         });
         toast.error(errorMsg);

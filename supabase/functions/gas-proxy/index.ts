@@ -1,71 +1,55 @@
-// gas-proxy (Supabase Edge Function) - replace entire handler file
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyEH4Wn4FEViaYtgbRpL1IKp8Yzz8Q-xZNzRKCeidrfRYqFlyl_rbyV3jXQk11Vmn4n/exec';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+// supabase/functions/gas-proxy/index.ts
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
 
-// allowed origin list (adapte se precisar)
-const ALLOWED_ORIGIN = 'https://prontiasaude.com.br';
+const GAS_BASE = 'https://script.google.com/macros/s/AKfycbyEH4Wn4FEViaYtgbRpL1IKp8Yzz8Q-xZNzRKCeidrfRYqFlyl_rbyV3jXQk11Vmn4n/exec';
 
-export default async function handler(req: Request) {
-  // CORS headers (always include)
-  const origin = req.headers.get('origin') || ALLOWED_ORIGIN;
-  const corsHeaders = new Headers({
-    'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
-  });
-
-  // respond preflight
+Deno.serve(async (req) => {
+  // 1) OPTIONS → responde rápido (evita 504 no preflight)
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // require Authorization header from frontend (Bearer <ANON_KEY>)
-  const auth = req.headers.get('authorization') || '';
-  if (auth !== `Bearer ${SUPABASE_ANON}`) {
-    return new Response(JSON.stringify({ ok:false, error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
-  }
-
   try {
-    // parse path query param from original request (frontend calls gas-proxy?path=mp-create-payment)
-    const urlObj = new URL(req.url);
-    const path = urlObj.searchParams.get('path') || '';
-    const target = GAS_URL + (path ? `?path=${encodeURIComponent(path)}` : '');
+    const url = new URL(req.url);
+    const path = url.searchParams.get('path') || '';
+    if (!path) {
+      return new Response(JSON.stringify({ success: false, error: 'Missing path' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // build fetch options forwarding body & content-type
-    const headers = new Headers();
-    // forward content-type if present
-    const incomingCt = req.headers.get('content-type');
-    if (incomingCt) headers.set('Content-Type', incomingCt);
+    // 2) Só permitimos POST para os paths do GAS
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ success: false, error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // forward other useful headers (NOT Authorization to GAS)
-    // forward X-Requested-With if exists
-    const xr = req.headers.get('x-requested-with');
-    if (xr) headers.set('X-Requested-With', xr);
-
-    const fetchInit: RequestInit = {
-      method: req.method,
-      headers,
-      // read body as text and forward (if present)
-      body: ['GET','HEAD'].includes(req.method.toUpperCase()) ? undefined : await req.text()
-    };
-
-    const res = await fetch(target, fetchInit);
-    const text = await res.text();
-
-    // copy response and attach CORS headers
-    const respHeaders = new Headers(res.headers);
-    respHeaders.set('Access-Control-Allow-Origin', origin);
-    respHeaders.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    respHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-
-    return new Response(text, { status: res.status, headers: respHeaders });
-  } catch (err: any) {
-    const h = new Headers({
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With'
+    // 3) Repassa o corpo para o GAS
+    const body = await req.text();
+    const upstream = await fetch(`${GAS_BASE}?path=${encodeURIComponent(path)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }, // só este header (evita preflight extra)
+      body,
     });
-    return new Response(JSON.stringify({ ok:false, error: String(err) }), { status: 500, headers: h });
+
+    const data = await upstream.text(); // pode não ser JSON sempre
+    // 4) Retorna a resposta do GAS com CORS
+    return new Response(data, {
+      status: upstream.status,
+      headers: { ...corsHeaders, 'Content-Type': upstream.headers.get('content-type') || 'application/json' },
+    });
+  } catch (err) {
+    console.error('[gas-proxy] error', err);
+    return new Response(JSON.stringify({ success: false, error: 'Proxy error', detail: String(err) }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
-}
+});

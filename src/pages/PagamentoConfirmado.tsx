@@ -2,8 +2,23 @@ import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
-import { GAS_BASE_ROUTE_URL } from '@/lib/constants';
 import { toast } from 'sonner';
+
+const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
+async function callNotifyViaProxy(path: string, payload: any) {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/gas-proxy?path=${encodeURIComponent(path)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    mode: 'cors',
+    credentials: 'omit',
+  });
+
+  let data: any = null;
+  try { data = await res.json(); } catch {}
+  return { ok: res.ok, status: res.status, data };
+}
 
 export default function PagamentoConfirmado() {
   const [searchParams] = useSearchParams();
@@ -42,7 +57,7 @@ export default function PagamentoConfirmado() {
         email,
         cpf,
         sku,
-        origin: 'lovable_retry',
+        origin: 'lovable_confirmacao',
         cart: {
           items: [{ sku, qty: 1, price: 43.9 }]
         },
@@ -51,26 +66,23 @@ export default function PagamentoConfirmado() {
 
       console.log('[handleRetry] Request body:', body);
 
-      const { callGasViaProxy } = await import('@/lib/gas-proxy');
-      const { ok, data } = await callGasViaProxy('lovable-payment-notify', body);
+      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
+      console.log('[handleRetry] Response status/data:', status, data);
 
-      console.log('[handleRetry] Response status:', ok ? 200 : 500);
-      console.log('[handleRetry] Response data:', data);
-
-      if (ok && data.success && data.redirectUrl) {
+      if (ok && data?.success && data?.redirectUrl) {
         toast.success('Redirecionando...');
         window.location.href = data.redirectUrl;
       } else {
-        const errorMsg = data.error || data.message || 'Pagamento ainda não compensou. Tente novamente em instantes.';
+        // ✅ Permanece na página mostrando erro
+        const errorMsg = data?.error || data?.message || 'Pagamento ainda não compensou. Tente novamente em instantes.';
         console.error('[NOTIFY ERROR]', {
           payment_id,
-          error: data.error,
-          message: data.message,
+          error: data?.error,
+          message: data?.message,
           full_response: data
         });
         toast.error(errorMsg);
         setIsRetrying(false);
-        // NÃO sair da página
       }
     } catch (err) {
       console.error('[handleRetry] Error:', err);
