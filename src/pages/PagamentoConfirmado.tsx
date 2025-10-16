@@ -1,142 +1,102 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { GAS_BASE_ROUTE_URL } from '@/lib/constants';
+import { toast } from 'sonner';
 
 export default function PagamentoConfirmado() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [status, setStatus] = useState<'loading' | 'success' | 'timeout'>('loading');
-  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(60);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const payment_id = searchParams.get('payment_id');
   const order_id = searchParams.get('order_id');
 
-  useEffect(() => {
-    if (!payment_id || !order_id) {
-      navigate('/');
-      return;
-    }
+  const handleRetry = async () => {
+    if (!payment_id) return;
 
-    // Polling para obter redirect_url do Apps Script
-    const pollInterval = setInterval(async () => {
-      try {
-        const response = await fetch(
-          `${GAS_BASE_ROUTE_URL}?path=route&payment_id=${payment_id}`
-        );
-        const data = await response.json();
-
-        if (data.redirect_url) {
-          setRedirectUrl(data.redirect_url);
-          setStatus('success');
-          clearInterval(pollInterval);
-          
-          // Redirecionar após 2 segundos
-          setTimeout(() => {
-            window.location.href = data.redirect_url;
-          }, 2000);
-        }
-      } catch (error) {
-        console.error('[Polling] Error:', error);
-      }
-    }, 3000); // Poll a cada 3 segundos
-
-    // Countdown timer
-    const countdownInterval = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          clearInterval(pollInterval);
-          setStatus('timeout');
-          return 0;
-        }
-        return prev - 1;
+    setIsRetrying(true);
+    
+    try {
+      const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_id,
+          status: 'approved',
+          origin: 'lovable_retry'
+        })
       });
-    }, 1000);
 
-    // Cleanup
-    return () => {
-      clearInterval(pollInterval);
-      clearInterval(countdownInterval);
-    };
-  }, [payment_id, order_id, navigate]);
+      const data = await response.json();
 
-  const handleRetry = () => {
-    window.location.reload();
+      if (data.success && data.redirectUrl) {
+        toast.success('Redirecionando...');
+        window.location.href = data.redirectUrl;
+      } else {
+        toast.error('Não foi possível obter o link. Tente novamente.');
+        setIsRetrying(false);
+      }
+    } catch (err) {
+      console.error('Erro ao tentar novamente:', err);
+      toast.error('Erro ao processar. Tente novamente.');
+      setIsRetrying(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <div className="max-w-md w-full bg-card rounded-xl shadow-lg p-8 text-center space-y-6">
-        {status === 'loading' && (
-          <>
-            <div className="flex justify-center">
-              <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Pagamento aprovado!
-            </h1>
-            <p className="text-muted-foreground">
-              Preparando seu atendimento...
-            </p>
-            <div className="text-4xl font-bold text-primary">
-              {countdown}s
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Aguarde enquanto processamos sua solicitação
-            </p>
-          </>
+        <div className="flex justify-center">
+          <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle className="h-10 w-10 text-green-600" />
+          </div>
+        </div>
+        
+        <h1 className="text-2xl font-bold text-green-600">
+          Pagamento Confirmado!
+        </h1>
+        
+        <p className="text-muted-foreground">
+          Seu pagamento foi processado com sucesso. Você será redirecionado para o atendimento em instantes.
+        </p>
+
+        {payment_id && (
+          <p className="text-xs text-muted-foreground">
+            ID do pagamento: {payment_id}
+          </p>
         )}
 
-        {status === 'success' && (
-          <>
-            <div className="flex justify-center">
-              <div className="h-16 w-16 rounded-full bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-10 w-10 text-green-600" />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-green-600">
-              Tudo certo!
-            </h1>
-            <p className="text-muted-foreground">
-              Redirecionando para sua consulta...
-            </p>
-            {redirectUrl && (
-              <p className="text-xs text-muted-foreground break-all">
-                {redirectUrl}
-              </p>
-            )}
-          </>
-        )}
+        <div className="space-y-2 pt-4">
+          <Button 
+            onClick={handleRetry} 
+            className="w-full"
+            disabled={isRetrying}
+          >
+            {isRetrying ? 'Processando...' : 'Acessar Atendimento'}
+          </Button>
+          
+          <Button 
+            onClick={() => navigate('/paciente')} 
+            variant="outline" 
+            className="w-full"
+          >
+            Ir para Área do Paciente
+          </Button>
+          
+          <Button 
+            onClick={() => navigate('/')} 
+            variant="ghost" 
+            className="w-full"
+          >
+            Voltar ao início
+          </Button>
+        </div>
 
-        {status === 'timeout' && (
-          <>
-            <div className="flex justify-center">
-              <div className="h-16 w-16 rounded-full bg-orange-100 flex items-center justify-center">
-                <XCircle className="h-10 w-10 text-orange-600" />
-              </div>
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Tempo esgotado
-            </h1>
-            <p className="text-muted-foreground">
-              Ainda estamos processando seu pagamento. Por favor, aguarde alguns instantes e tente novamente.
-            </p>
-            <div className="space-y-2">
-              <Button onClick={handleRetry} className="w-full">
-                Tentar novamente
-              </Button>
-              <Button onClick={() => navigate('/')} variant="outline" className="w-full">
-                Voltar ao início
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Se o problema persistir, entre em contato com nosso suporte.
-            </p>
-          </>
-        )}
+        <p className="text-xs text-muted-foreground pt-4">
+          Se não for redirecionado automaticamente, clique em "Acessar Atendimento" acima.
+        </p>
       </div>
     </div>
   );

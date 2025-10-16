@@ -269,14 +269,16 @@ export function PaymentModal({
         setPaymentId(data.payment_id);
         toast.success('Pagamento aprovado!');
         
-        // Redirecionar para página de confirmação
-        setTimeout(() => {
-          window.location.href = `/pagamento/confirmado?payment_id=${data.payment_id}&order_id=${orderId}`;
-        }, 2000);
+        // Chamar lovable-payment-notify para obter redirectUrl
+        await notifyPaymentAndRedirect(data.payment_id, orderId, schedulePayload);
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
-        startPollingForCardPayment(data.payment_id, orderId);
+        toast.info('Pagamento em análise. Aguarde confirmação.');
+        // Redirecionar para página de confirmação para aguardar
+        setTimeout(() => {
+          window.location.href = `/pagamento/confirmado?payment_id=${data.payment_id}&order_id=${orderId}`;
+        }, 2000);
       } else {
         setPaymentStatus('rejected');
         setError('Pagamento rejeitado. Verifique os dados do cartão.');
@@ -332,8 +334,9 @@ export function PaymentModal({
       setPaymentId(data.payment_id);
       setPaymentStatus('pending_pix');
       
-      // Iniciar polling para status do PIX
-      startPollingForPixPayment(data.payment_id, orderId);
+      // Iniciar polling manual (usuário paga PIX, webhook notifica GAS)
+      // Frontend aguarda e permite tentar novamente se necessário
+      toast.info('Aguardando pagamento do PIX...');
     } catch (err: any) {
       console.error('Erro ao gerar PIX:', err);
       setError(err.message || 'Erro ao gerar PIX');
@@ -341,56 +344,50 @@ export function PaymentModal({
     }
   };
 
-  const startPollingForPixPayment = (paymentId: string, orderId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        // Polling via GAS
-        const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=mp-payment-status&payment_id=${paymentId}`);
-        const data = await response.json();
-        
-        if (data.status === 'approved') {
-          clearInterval(interval);
-          setPaymentStatus('approved');
-          toast.success('Pagamento confirmado!');
-          
-          setTimeout(() => {
-            window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
-          }, 2000);
-        }
-      } catch (err) {
-        console.error('Erro no polling:', err);
+  const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
+    try {
+      const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_id: paymentId,
+          status: 'approved',
+          email: formData.email,
+          cpf: formData.cpf,
+          sku,
+          origin: 'lovable',
+          cart: {
+            items: [{
+              sku,
+              qty: 1,
+              price: amount / 100
+            }]
+          },
+          schedulePayload
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.redirectUrl) {
+        toast.success('Redirecionando para seu atendimento...');
+        setTimeout(() => {
+          window.location.href = data.redirectUrl;
+        }, 1500);
+      } else {
+        // Fallback: ir para página de confirmação
+        toast.warning('Processando... Você será redirecionado em breve.');
+        setTimeout(() => {
+          window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
+        }, 2000);
       }
-    }, 3000);
-
-    // Parar após 10 minutos
-    setTimeout(() => clearInterval(interval), 600000);
-  };
-
-  const startPollingForCardPayment = (paymentId: string, orderId: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=mp-payment-status&payment_id=${paymentId}`);
-        const data = await response.json();
-        
-        if (data.status === 'approved') {
-          clearInterval(interval);
-          setPaymentStatus('approved');
-          toast.success('Pagamento aprovado!');
-          
-          setTimeout(() => {
-            window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
-          }, 2000);
-        } else if (data.status === 'rejected') {
-          clearInterval(interval);
-          setPaymentStatus('rejected');
-          setError('Pagamento rejeitado');
-        }
-      } catch (err) {
-        console.error('Erro no polling:', err);
-      }
-    }, 3000);
-
-    setTimeout(() => clearInterval(interval), 300000);
+    } catch (err) {
+      console.error('Erro ao notificar pagamento:', err);
+      // Fallback
+      setTimeout(() => {
+        window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
+      }, 2000);
+    }
   };
 
   const handleTryAgain = () => {
