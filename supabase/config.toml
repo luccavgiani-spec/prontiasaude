@@ -1,7 +1,4 @@
 project_id = "ploqujuhpwutpcibedbr"
 
-[functions.stripe-webhook]
-verify_jwt = false
-
-[functions.mp-create-payment]
+[functions.mp-webhook-proxy]
 verify_jwt = false
