@@ -1,9 +1,11 @@
 // PRONTIA SAÚDE - Constantes e Configurações
 
-// Google Apps Script API Base URL (via Supabase Edge Function Proxy)
-export const GAS_BASE = import.meta.env.VITE_GAS_BASE || "https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/gas-proxy";
+// Mercado Pago Configuration
+export const MP_PUBLIC_KEY = "APP_USR-f1ef5dbe-cddf-4502-8439-1217b51e0af2";
+export const GAS_BASE_ROUTE_URL = "<PREENCHER COM URL DO APPS SCRIPT>";
 
-// Checkout temporariamente desabilitado - aguardando novo gateway
+// Google Apps Script (apenas para roteamento/schedule, NÃO para pagamentos)
+export const GAS_BASE = "https://script.google.com/macros/s/AKfycbyoS_NkEnauFJGEIs3Rz2NR9UglWfi3qjsg6Ef0TtfDEPlyqFuVvb9WIFkgOLNuN4kk/exec";
 
 // Catálogo de Serviços
 export const CATALOGO_SERVICOS = [
