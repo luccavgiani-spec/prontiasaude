@@ -69,6 +69,7 @@ export function PaymentModal({
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [error, setError] = useState<string>('');
   const [paymentId, setPaymentId] = useState<string>('');
+  const [lastPaymentId, setLastPaymentId] = useState<string>('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [hasRequiredData, setHasRequiredData] = useState(false);
   
@@ -160,6 +161,23 @@ export function PaymentModal({
       mountCardPaymentBrick();
     }
   }, [open, paymentMethod, mpInstanceRef.current]);
+
+  // Retry automático para PIX (a cada 20s)
+  useEffect(() => {
+    if (!lastPaymentId || paymentStatus !== 'pending_pix') return;
+    
+    console.log('[PIX Auto-retry] Starting interval for payment_id:', lastPaymentId);
+    
+    const interval = setInterval(() => {
+      console.log('[PIX Auto-retry] Attempting notify call...');
+      handlePixAccess();
+    }, 20000); // 20 segundos
+    
+    return () => {
+      console.log('[PIX Auto-retry] Clearing interval');
+      clearInterval(interval);
+    };
+  }, [lastPaymentId, paymentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
@@ -353,6 +371,7 @@ export function PaymentModal({
         paymentId: data.payment_id
       });
       setPaymentId(data.payment_id);
+      setLastPaymentId(data.payment_id);
       setPaymentStatus('pending_pix');
       
       // Usuário paga PIX, webhook notifica GAS em background
@@ -421,6 +440,66 @@ export function PaymentModal({
     }
   };
 
+  const handlePixAccess = async () => {
+    if (!lastPaymentId) {
+      toast.error('ID do pagamento não encontrado');
+      return;
+    }
+
+    setPaymentStatus('processing');
+    
+    const schedulePayload = buildSchedulePayload();
+
+    const body = {
+      payment_id: String(lastPaymentId),
+      status: 'approved', // o GAS confirmará no MP
+      email: schedulePayload.email,
+      cpf: schedulePayload.cpf,
+      sku,
+      origin: 'lovable_pix_cta',
+      cart: { items: [{ sku, qty: 1, price: amount / 100 }] },
+      schedulePayload
+    };
+
+    console.log('[pix CTA] notify body:', body);
+
+    try {
+      const res = await fetch(`${GAS_BASE_ROUTE_URL}?path=lovable-payment-notify`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json().catch(() => ({} as any));
+      console.log('[pix CTA] notify response:', res.status, data);
+
+      if (res.ok && data?.success && data?.redirectUrl) {
+        toast.success('Redirecionando para o atendimento...');
+        window.location.href = data.redirectUrl;
+      } else {
+        const q = new URLSearchParams({
+          payment_id: String(lastPaymentId),
+          email: schedulePayload.email || '',
+          cpf: schedulePayload.cpf || '',
+          sku: String(sku || '')
+        });
+        console.warn('[pix CTA] Failed, redirecting to /pagamento/confirmado', data);
+        toast.error(data.error || data.message || 'Não foi possível obter o link de redirecionamento.');
+        window.location.href = `/pagamento/confirmado?${q.toString()}`;
+      }
+    } catch (err) {
+      console.error('[pix CTA] Error:', err);
+      const q = new URLSearchParams({
+        payment_id: String(lastPaymentId),
+        email: schedulePayload.email || '',
+        cpf: schedulePayload.cpf || '',
+        sku: String(sku || '')
+      });
+      toast.error('Erro ao processar redirecionamento.');
+      window.location.href = `/pagamento/confirmado?${q.toString()}`;
+    }
+  };
+
   const handleTryAgain = () => {
     setPaymentStatus('idle');
     setError('');
@@ -479,6 +558,7 @@ export function PaymentModal({
           qrCode={pixData.qrCode}
           qrCodeBase64={pixData.qrCodeBase64}
           onCancel={handleTryAgain}
+          onAccessAttendance={handlePixAccess}
         />
       );
     }

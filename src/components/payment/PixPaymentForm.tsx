@@ -7,9 +7,10 @@ interface PixPaymentFormProps {
   qrCode: string;
   qrCodeBase64: string;
   onCancel: () => void;
+  onAccessAttendance?: () => void;
 }
 
-export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel }: PixPaymentFormProps) {
+export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel, onAccessAttendance }: PixPaymentFormProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyCode = async () => {
@@ -85,6 +86,18 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel }: PixPaymentFor
           O pagamento será confirmado automaticamente após a compensação
         </p>
       </div>
+
+      {/* Botão de acesso ao atendimento */}
+      {onAccessAttendance && (
+        <Button
+          type="button"
+          onClick={onAccessAttendance}
+          className="w-full"
+          size="lg"
+        >
+          Acessar atendimento
+        </Button>
+      )}
 
       {/* Cancel */}
       <Button
