@@ -509,55 +509,6 @@ export function PaymentModal({
     }
   };
 
-  // ⚠️ TESTE APENAS - Agendar sem pagamento
-  const handleTestSchedule = async (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!validateForm()) return;
-
-    console.log('[TEST] Agendamento direto sem pagamento - BYPASS MERCADO PAGO');
-    setPaymentStatus('processing');
-    setError('');
-
-    const schedulePayload = buildSchedulePayload();
-    const testPaymentId = `TEST_${Date.now()}`;
-
-    const body = transformToGASPayload({
-      payment_id: testPaymentId,
-      payment_status: 'approved',
-      sku,
-      amount,
-      cpf: schedulePayload.cpf,
-      email: schedulePayload.email,
-      name: schedulePayload.nome,
-      phone: schedulePayload.telefone,
-      especialidade: schedulePayload.especialidade || 'Clínico Geral',
-      horario_iso: schedulePayload.horario_iso,
-      plano_ativo: schedulePayload.plano_ativo
-    });
-
-    console.log('[TEST] Payload enviado para GAS:', body);
-
-    try {
-      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
-      console.log('[TEST] Resposta GAS:', { ok, status, data });
-
-      if (ok && data?.success && data?.redirectUrl) {
-        toast.success('Teste bem-sucedido! Redirecionando...');
-        window.location.href = data.redirectUrl;
-      } else {
-        setPaymentStatus('idle');
-        toast.error(data?.error || data?.message || 'Erro no teste de agendamento');
-        console.error('[TEST] Falha:', data);
-      }
-    } catch (err) {
-      console.error('[TEST] Erro:', err);
-      setPaymentStatus('idle');
-      toast.error('Erro ao testar agendamento');
-    }
-  };
-
   const renderStatus = () => {
     if (paymentStatus === 'processing') {
       return (
@@ -720,22 +671,6 @@ export function PaymentModal({
                 Gerar QR Code PIX
               </Button>
             )}
-
-            {/* ⚠️ BOTÃO DE TESTE - Remover após validação */}
-            <div className="mt-4 pt-4 border-t border-dashed">
-              <p className="text-xs text-muted-foreground mb-2 text-center">
-                🧪 Modo Teste - Apps Script (Bypass MP)
-              </p>
-              <Button 
-                type="button"
-                onClick={handleTestSchedule} 
-                variant="outline" 
-                className="w-full"
-                size="sm"
-              >
-                Agendar Sem Pagamento (Teste)
-              </Button>
-            </div>
           </div>
         )}
       </DialogContent>
