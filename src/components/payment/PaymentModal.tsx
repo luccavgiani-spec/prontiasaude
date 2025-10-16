@@ -510,10 +510,13 @@ export function PaymentModal({
   };
 
   // ⚠️ TESTE APENAS - Agendar sem pagamento
-  const handleTestSchedule = async () => {
+  const handleTestSchedule = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (!validateForm()) return;
 
-    console.log('[TEST] Agendamento direto sem pagamento');
+    console.log('[TEST] Agendamento direto sem pagamento - BYPASS MERCADO PAGO');
     setPaymentStatus('processing');
     setError('');
 
@@ -721,9 +724,10 @@ export function PaymentModal({
             {/* ⚠️ BOTÃO DE TESTE - Remover após validação */}
             <div className="mt-4 pt-4 border-t border-dashed">
               <p className="text-xs text-muted-foreground mb-2 text-center">
-                🧪 Modo Teste - Apps Script
+                🧪 Modo Teste - Apps Script (Bypass MP)
               </p>
               <Button 
+                type="button"
                 onClick={handleTestSchedule} 
                 variant="outline" 
                 className="w-full"
