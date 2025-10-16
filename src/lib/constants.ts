@@ -2,7 +2,7 @@
 
 // Mercado Pago Configuration
 export const MP_PUBLIC_KEY = "APP_USR-f1ef5dbe-cddf-4502-8439-1217b51e0af2";
-export const GAS_BASE_ROUTE_URL = "<PREENCHER COM URL DO APPS SCRIPT>";
+export const GAS_BASE_ROUTE_URL = "https://script.google.com/macros/s/AKfycbyEH4Wn4FEViaYtgbRpL1IKp8Yzz8Q-xZNzRKCeidrfRYqFlyl_rbyV3jXQk11Vmn4n/exec";
 
 // Google Apps Script (apenas para roteamento/schedule, NÃO para pagamentos)
 export const GAS_BASE = "https://script.google.com/macros/s/AKfycbyoS_NkEnauFJGEIs3Rz2NR9UglWfi3qjsg6Ef0TtfDEPlyqFuVvb9WIFkgOLNuN4kk/exec";

@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PaymentModal } from "@/components/payment/PaymentModal";
-import { SubscriptionModal } from "@/components/payment/SubscriptionModal";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -547,27 +546,17 @@ export function PlanosSection() {
         {/* Modal de Assinatura/Pagamento */}
         {selectedPlan && (
           <>
-            {selectedPlan.recurring ? (
-              <SubscriptionModal
-                open={isPaymentModalOpen}
-                onOpenChange={setIsPaymentModalOpen}
-                sku={selectedPlan.sku}
-                planName={selectedPlan.name}
-                amount={selectedPlan.amount}
-                frequency={selectedPlan.frequency || 1}
-                frequencyType={selectedPlan.frequencyType || 'months'}
-                onSuccess={() => navigate('/area-do-paciente')}
-              />
-            ) : (
-              <PaymentModal
-                open={isPaymentModalOpen}
-                onOpenChange={setIsPaymentModalOpen}
-                sku={selectedPlan.sku}
-                serviceName={selectedPlan.name}
-                amount={selectedPlan.amount}
-                onSuccess={() => navigate('/area-do-paciente')}
-              />
-            )}
+            <PaymentModal
+              open={isPaymentModalOpen}
+              onOpenChange={setIsPaymentModalOpen}
+              sku={selectedPlan.sku}
+              serviceName={selectedPlan.name}
+              amount={selectedPlan.amount}
+              recurring={selectedPlan.recurring}
+              frequency={selectedPlan.frequency}
+              frequencyType={selectedPlan.frequencyType}
+              onSuccess={() => navigate('/area-do-paciente')}
+            />
           </>
         )}
 

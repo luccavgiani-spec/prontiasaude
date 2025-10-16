@@ -32,6 +32,7 @@ import Agendamento from "./pages/Agendamento";
 import Confirmacao from "./pages/Confirmacao";
 import ConfirmacaoReceitas from "./pages/ConfirmacaoReceitas";
 import ConfirmacaoExame from "./pages/ConfirmacaoExame";
+import PagamentoConfirmado from "./pages/PagamentoConfirmado";
 // New wellness pages
 import SaudeMental from "./pages/SaudeMental";
 import Livros from "./pages/Livros";
@@ -93,6 +94,7 @@ const App = () => (
               <Route path="/confirmacao/:sku" element={<Confirmacao />} />
               <Route path="/confirmacao_receitas" element={<ConfirmacaoReceitas />} />
               <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
+              <Route path="/pagamento/confirmado" element={<PagamentoConfirmado />} />
               {/* Auth routes */}
               <Route path="/entrar" element={<Entrar />} />
               <Route path="/cadastrar" element={<Cadastrar />} />

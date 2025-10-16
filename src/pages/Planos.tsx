@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SubscriptionModal } from "@/components/payment/SubscriptionModal";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
@@ -527,14 +527,15 @@ const Planos = () => {
 
       {/* Subscription Modal */}
       {selectedPlan && (
-        <SubscriptionModal
+        <PaymentModal
           open={isPaymentModalOpen}
           onOpenChange={setIsPaymentModalOpen}
           sku={selectedPlan.sku}
-          planName={selectedPlan.name}
+          serviceName={selectedPlan.name}
           amount={selectedPlan.amount}
-          frequency={selectedPlan.frequency || 1}
-          frequencyType={selectedPlan.frequencyType || 'months'}
+          recurring={selectedPlan.recurring}
+          frequency={selectedPlan.frequency}
+          frequencyType={selectedPlan.frequencyType}
           onSuccess={() => {
             window.location.href = '/area-do-paciente';
           }}

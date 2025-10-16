@@ -1,5 +1,5 @@
 // gas-proxy (Supabase Edge Function) - replace entire handler file
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyoS_NkEnauFJGEIs3Rz2NR9UglWfi3qjsg6Ef0TtfDEPlyqFuVvb9WIFkgOLNuN4kk/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyEH4Wn4FEViaYtgbRpL1IKp8Yzz8Q-xZNzRKCeidrfRYqFlyl_rbyV3jXQk11Vmn4n/exec';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
 
 // allowed origin list (adapte se precisar)

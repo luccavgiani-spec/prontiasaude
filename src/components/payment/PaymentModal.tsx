@@ -1,66 +1,50 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CardPaymentForm } from './CardPaymentForm';
-import { CardPreview } from './CardPreview';
-import { PixPaymentForm } from './PixPaymentForm';
-import { validateCPF, formatCPF, cleanCPF } from '@/lib/cpf-validator';
-import { createPayment, pollPixStatus, PaymentPayload } from '@/lib/mercadopago-api';
-import { trackInitiateCheckout, trackPurchase } from '@/lib/meta-tracking';
+import { Loader2, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react';
+import { validateCPF } from '@/lib/cpf-validator';
+import { validatePhoneE164 } from '@/lib/validations';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Loader2, Clock, CreditCard, QrCode } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { PixPaymentForm } from './PixPaymentForm';
+import { MP_PUBLIC_KEY, GAS_BASE_ROUTE_URL } from '@/lib/constants';
+
+declare global {
+  interface Window {
+    MercadoPago: any;
+  }
+}
 
 interface PaymentModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sku: string;
   serviceName: string;
-  amount: number; // em centavos
+  amount: number;
   especialidade?: string;
-  onSuccess: (paymentId: string) => void;
+  recurring?: boolean;
+  frequency?: number;
+  frequencyType?: 'months' | 'days';
+  onSuccess?: () => void;
 }
 
 type PaymentMethod = 'card' | 'pix';
 type PaymentStatus = 'idle' | 'processing' | 'approved' | 'rejected' | 'pending_pix' | 'in_process';
 
 interface FormData {
-  nome: string;
+  name: string;
   email: string;
   cpf: string;
-  telefone: string;
-  especialidade?: string;
+  phone: string;
 }
 
 interface PixData {
-  qr_code: string;
-  qr_code_base64: string;
-  payment_id: string;
+  qrCode: string;
+  qrCodeBase64: string;
+  paymentId: string;
 }
-
-const ESPECIALIDADES = [
-  'Personal Trainer',
-  'Nutricionista',
-  'Reumatologista',
-  'Neurologista',
-  'Infectologista',
-  'Nutrólogo',
-  'Geriatria',
-  'Cardiologista',
-  'Dermatologista',
-  'Endocrinologista',
-  'Gastroenterologista',
-  'Ginecologista',
-  'Oftalmologista',
-  'Ortopedista',
-  'Pediatra',
-  'Otorrinolaringologista',
-  'Médico da Família',
-  'Psiquiatra',
-];
 
 export function PaymentModal({
   open,
@@ -69,45 +53,46 @@ export function PaymentModal({
   serviceName,
   amount,
   especialidade,
-  onSuccess,
+  recurring = false,
+  frequency = 1,
+  frequencyType = 'months',
+  onSuccess
 }: PaymentModalProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
   const [formData, setFormData] = useState<FormData>({
-    nome: '',
+    name: '',
     email: '',
     cpf: '',
-    telefone: '',
-    especialidade: especialidade || '',
+    phone: ''
   });
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [error, setError] = useState<string>('');
   const [paymentId, setPaymentId] = useState<string>('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [hasRequiredData, setHasRequiredData] = useState(false);
-  const [cardPreviewData, setCardPreviewData] = useState({ number: '', holder: '', expiry: '' });
+  
+  const mpInstanceRef = useRef<any>(null);
+  const cardPaymentBrickRef = useRef<any>(null);
+  const isBrickMountedRef = useRef(false);
 
-  const publicKey = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || '';
-
-  // Track InitiateCheckout quando abre modal
+  // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
     if (open) {
-      trackInitiateCheckout({
-        value: amount / 100,
-        content_name: serviceName,
-        content_ids: [sku],
-      });
-
-      // Pré-preencher dados se usuário logado
       loadUserData();
+      loadMercadoPagoSDK();
     } else {
       // Reset ao fechar
       setPaymentStatus('idle');
-      setError('');
       setPixData(null);
-      setPaymentId('');
+      setError('');
+      if (cardPaymentBrickRef.current) {
+        cardPaymentBrickRef.current.unmount();
+        cardPaymentBrickRef.current = null;
+        isBrickMountedRef.current = false;
+      }
     }
-  }, [open, amount, serviceName, sku]);
+  }, [open]);
 
   const loadUserData = async () => {
     try {
@@ -116,150 +101,190 @@ export function PaymentModal({
         setIsUserLoggedIn(false);
         return;
       }
-      
+
       setIsUserLoggedIn(true);
 
       const { data: patient } = await supabase
         .from('patients')
-        .select('first_name, last_name, cpf, phone_e164')
+        .select('*')
         .eq('id', user.id)
         .single();
 
       if (patient) {
-        const fullName = [patient.first_name, patient.last_name].filter(Boolean).join(' ');
-        setFormData({
-          nome: fullName,
-          email: user.email || '',
-          cpf: patient.cpf || '',
-          telefone: patient.phone_e164 || '',
-          especialidade: especialidade || '',
-        });
-        
-        // Verificar se tem todos os dados necessários
-        const hasData = Boolean(
-          fullName && user.email && patient.cpf && patient.phone_e164
+        const hasData = !!(
+          patient.first_name &&
+          patient.last_name &&
+          patient.cpf &&
+          patient.phone_e164 &&
+          user.email
         );
+
         setHasRequiredData(hasData);
-        
-        if (!hasData) {
-          toast.error('Complete seus dados no perfil para finalizar a compra.');
+
+        if (hasData) {
+          setFormData({
+            name: `${patient.first_name} ${patient.last_name}`,
+            email: user.email,
+            cpf: patient.cpf,
+            phone: patient.phone_e164
+          });
         }
-      } else {
-        setFormData({ ...formData, email: user.email || '' });
-        setHasRequiredData(false);
       }
-    } catch (error) {
-      console.error('Error loading user data:', error);
+    } catch (err) {
+      console.error('Erro ao carregar dados:', err);
+    }
+  };
+
+  const loadMercadoPagoSDK = () => {
+    if (window.MercadoPago) {
+      mpInstanceRef.current = new window.MercadoPago(MP_PUBLIC_KEY, {
+        locale: 'pt-BR'
+      });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.async = true;
+    script.onload = () => {
+      mpInstanceRef.current = new window.MercadoPago(MP_PUBLIC_KEY, {
+        locale: 'pt-BR'
+      });
+    };
+    document.body.appendChild(script);
+  };
+
+  // Montar Card Payment Brick quando método = cartão
+  useEffect(() => {
+    if (open && paymentMethod === 'card' && mpInstanceRef.current && !isBrickMountedRef.current) {
+      mountCardPaymentBrick();
+    }
+  }, [open, paymentMethod, mpInstanceRef.current]);
+
+  const mountCardPaymentBrick = async () => {
+    if (isBrickMountedRef.current || !mpInstanceRef.current) return;
+
+    try {
+      const bricksBuilder = mpInstanceRef.current.bricks();
+      
+      const cardPaymentBrick = await bricksBuilder.create('cardPayment', 'cardPaymentBrick', {
+        initialization: {
+          amount: amount / 100,
+        },
+        callbacks: {
+          onReady: () => {
+            console.log('Card Payment Brick pronto');
+            isBrickMountedRef.current = true;
+          },
+          onSubmit: async (formData: any) => {
+            await handleCardSubmit(formData);
+          },
+          onError: (error: any) => {
+            console.error('Erro no Card Payment Brick:', error);
+            setError('Erro ao processar pagamento. Tente novamente.');
+          },
+        },
+      });
+
+      cardPaymentBrickRef.current = cardPaymentBrick;
+    } catch (err) {
+      console.error('Erro ao montar brick:', err);
+      setError('Erro ao carregar formulário de pagamento');
     }
   };
 
   const validateForm = (): boolean => {
-    if (!formData.nome.trim()) {
-      setError('Nome é obrigatório');
+    if (!formData.name || !formData.email || !formData.cpf || !formData.phone) {
+      setError('Preencha todos os campos');
       return false;
     }
-    if (!formData.email.trim()) {
-      setError('Email é obrigatório');
-      return false;
-    }
+
     if (!validateCPF(formData.cpf)) {
       setError('CPF inválido');
       return false;
     }
-    if (!formData.telefone.trim()) {
-      setError('Telefone é obrigatório');
-      return false;
-    }
-    
-    // Validar especialidade para SKUs de médicos especialistas
-    if (sku.includes('especialista') && !formData.especialidade) {
-      setError('Selecione uma especialidade');
+
+    if (!validatePhoneE164(formData.phone)) {
+      setError('Telefone inválido');
       return false;
     }
 
-    setError('');
     return true;
   };
 
   const buildSchedulePayload = () => {
+    const [firstName, ...lastNameParts] = formData.name.split(' ');
     return {
-      cpf: cleanCPF(formData.cpf),
+      cpf: formData.cpf,
       email: formData.email,
-      nome: formData.nome,
-      telefone: formData.telefone.replace(/\D/g, ''),
-      especialidade: formData.especialidade,
-      sku: sku,
-      horario_iso: new Date().toISOString(),
-      plano_ativo: sku.includes('PLANO_'),
+      nome: formData.name,
+      telefone: formData.phone,
+      sku,
+      especialidade: especialidade || '',
+      plano_ativo: false,
     };
   };
 
-  const handleCardSubmit = async (cardData: {
-    token: string;
-    payment_method_id: string;
-    installments: number;
-  }) => {
+  const handleCardSubmit = async (cardFormData: any) => {
     if (!validateForm()) return;
 
     setPaymentStatus('processing');
     setError('');
 
-    const payload: PaymentPayload = {
-      method: 'card',
-      token: cardData.token,
-      transaction_amount: amount / 100,
-      payment_method_id: cardData.payment_method_id,
-      installments: cardData.installments,
-      description: serviceName,
-      payer: {
-        email: formData.email,
-        identification: {
-          type: 'CPF',
-          number: cleanCPF(formData.cpf),
-        },
-      },
-      schedulePayload: buildSchedulePayload(),
-    };
+    try {
+      const orderId = `order_${Date.now()}`;
+      const schedulePayload = buildSchedulePayload();
 
-    const response = await createPayment(payload);
-
-    if (!response.success) {
-      setPaymentStatus('rejected');
-      setError(response.error || 'Erro ao processar pagamento');
-      toast.error('Pagamento rejeitado');
-      return;
-    }
-
-    // Handle status
-    if (response.status === 'approved') {
-      setPaymentStatus('approved');
-      setPaymentId(response.payment_id || '');
-      
-      // Track purchase
-      trackPurchase({
-        value: amount / 100,
-        order_id: response.payment_id || '',
-        content_name: serviceName,
-        contents: [{ id: sku, quantity: 1 }],
+      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+        body: {
+          items: [{
+            id: sku,
+            title: serviceName,
+            unit_price: amount / 100,
+            quantity: 1
+          }],
+          payer: {
+            email: formData.email,
+            first_name: formData.name.split(' ')[0],
+            last_name: formData.name.split(' ').slice(1).join(' '),
+            identification: {
+              type: 'CPF',
+              number: formData.cpf.replace(/\D/g, '')
+            }
+          },
+          token: cardFormData.token,
+          payment_method_id: cardFormData.payment_method_id,
+          installments: cardFormData.installments,
+          metadata: {
+            order_id: orderId,
+            schedulePayload
+          }
+        }
       });
 
-      toast.success('Pagamento aprovado!');
-      
-      // Redirect após 3s
-      setTimeout(() => {
-        onSuccess(response.payment_id || '');
-      }, 3000);
-    } else if (response.status === 'rejected') {
-      setPaymentStatus('rejected');
-      setError('Pagamento rejeitado. Tente outro cartão.');
-      toast.error('Pagamento rejeitado');
-    } else if (response.status === 'in_process') {
-      setPaymentStatus('in_process');
-      setPaymentId(response.payment_id || '');
-      toast.info('Pagamento em análise...');
-      
-      // Start light polling
-      startPollingForCardPayment(response.payment_id || '');
+      if (error) throw error;
+
+      if (data.status === 'approved') {
+        setPaymentStatus('approved');
+        setPaymentId(data.payment_id);
+        toast.success('Pagamento aprovado!');
+        
+        // Redirecionar para página de confirmação
+        setTimeout(() => {
+          window.location.href = `/pagamento/confirmado?payment_id=${data.payment_id}&order_id=${orderId}`;
+        }, 2000);
+      } else if (data.status === 'in_process' || data.status === 'pending') {
+        setPaymentStatus('in_process');
+        setPaymentId(data.payment_id);
+        startPollingForCardPayment(data.payment_id, orderId);
+      } else {
+        setPaymentStatus('rejected');
+        setError('Pagamento rejeitado. Verifique os dados do cartão.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao processar pagamento:', err);
+      setError(err.message || 'Erro ao processar pagamento');
+      setPaymentStatus('idle');
     }
   };
 
@@ -269,198 +294,206 @@ export function PaymentModal({
     setPaymentStatus('processing');
     setError('');
 
-    const payload: PaymentPayload = {
-      method: 'pix',
-      transaction_amount: amount / 100,
-      description: serviceName,
-      payer: {
-        email: formData.email,
-      },
-      schedulePayload: buildSchedulePayload(),
-    };
+    try {
+      const orderId = `order_${Date.now()}`;
+      const schedulePayload = buildSchedulePayload();
 
-    const response = await createPayment(payload);
+      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+        body: {
+          items: [{
+            id: sku,
+            title: serviceName,
+            unit_price: amount / 100,
+            quantity: 1
+          }],
+          payer: {
+            email: formData.email,
+            first_name: formData.name.split(' ')[0],
+            last_name: formData.name.split(' ').slice(1).join(' '),
+            identification: {
+              type: 'CPF',
+              number: formData.cpf.replace(/\D/g, '')
+            }
+          },
+          metadata: {
+            order_id: orderId,
+            schedulePayload
+          }
+        }
+      });
 
-    if (!response.success || !response.qr_code) {
-      setPaymentStatus('rejected');
-      setError(response.error || 'Erro ao gerar QR Code PIX');
-      toast.error('Erro ao gerar PIX');
-      return;
+      if (error) throw error;
+
+      setPixData({
+        qrCode: data.qr_code,
+        qrCodeBase64: data.qr_code_base64,
+        paymentId: data.payment_id
+      });
+      setPaymentId(data.payment_id);
+      setPaymentStatus('pending_pix');
+      
+      // Iniciar polling para status do PIX
+      startPollingForPixPayment(data.payment_id, orderId);
+    } catch (err: any) {
+      console.error('Erro ao gerar PIX:', err);
+      setError(err.message || 'Erro ao gerar PIX');
+      setPaymentStatus('idle');
     }
-
-    // Exibir QR Code
-    setPixData({
-      qr_code: response.qr_code,
-      qr_code_base64: response.qr_code_base64 || '',
-      payment_id: response.payment_id || '',
-    });
-    setPaymentStatus('pending_pix');
-    setPaymentId(response.payment_id || '');
-
-    // Start polling
-    pollPixStatus(response.payment_id || '', (status) => {
-      if (status === 'approved') {
-        setPaymentStatus('approved');
-        
-        // Track purchase
-        trackPurchase({
-          value: amount / 100,
-          order_id: response.payment_id || '',
-          content_name: serviceName,
-          contents: [{ id: sku, quantity: 1 }],
-        });
-
-        toast.success('Pagamento PIX confirmado!');
-        
-        setTimeout(() => {
-          onSuccess(response.payment_id || '');
-        }, 3000);
-      } else if (status === 'rejected') {
-        setPaymentStatus('rejected');
-        setError('Pagamento PIX rejeitado');
-        toast.error('Pagamento rejeitado');
-      }
-    });
   };
 
-  const startPollingForCardPayment = (id: string) => {
-    // Polling leve para cartão in_process (5s por 2min)
-    pollPixStatus(id, (status) => {
-      if (status === 'approved') {
-        setPaymentStatus('approved');
-        trackPurchase({
-          value: amount / 100,
-          order_id: id,
-          content_name: serviceName,
-          contents: [{ id: sku, quantity: 1 }],
-        });
-        toast.success('Pagamento aprovado!');
-        setTimeout(() => onSuccess(id), 3000);
-      } else if (status === 'rejected') {
-        setPaymentStatus('rejected');
-        setError('Pagamento rejeitado após análise');
-        toast.error('Pagamento rejeitado');
+  const startPollingForPixPayment = (paymentId: string, orderId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        // Polling via GAS
+        const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=mp-payment-status&payment_id=${paymentId}`);
+        const data = await response.json();
+        
+        if (data.status === 'approved') {
+          clearInterval(interval);
+          setPaymentStatus('approved');
+          toast.success('Pagamento confirmado!');
+          
+          setTimeout(() => {
+            window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
+          }, 2000);
+        }
+      } catch (err) {
+        console.error('Erro no polling:', err);
       }
-    });
+    }, 3000);
+
+    // Parar após 10 minutos
+    setTimeout(() => clearInterval(interval), 600000);
+  };
+
+  const startPollingForCardPayment = (paymentId: string, orderId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`${GAS_BASE_ROUTE_URL}?path=mp-payment-status&payment_id=${paymentId}`);
+        const data = await response.json();
+        
+        if (data.status === 'approved') {
+          clearInterval(interval);
+          setPaymentStatus('approved');
+          toast.success('Pagamento aprovado!');
+          
+          setTimeout(() => {
+            window.location.href = `/pagamento/confirmado?payment_id=${paymentId}&order_id=${orderId}`;
+          }, 2000);
+        } else if (data.status === 'rejected') {
+          clearInterval(interval);
+          setPaymentStatus('rejected');
+          setError('Pagamento rejeitado');
+        }
+      } catch (err) {
+        console.error('Erro no polling:', err);
+      }
+    }, 3000);
+
+    setTimeout(() => clearInterval(interval), 300000);
   };
 
   const handleTryAgain = () => {
     setPaymentStatus('idle');
     setError('');
     setPixData(null);
-  };
-
-  const renderStatus = () => {
-    switch (paymentStatus) {
-      case 'processing':
-        return (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p className="text-lg font-medium">Processando pagamento...</p>
-          </div>
-        );
-
-      case 'approved':
-        return (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <CheckCircle className="h-16 w-16 text-green-600" />
-            <p className="text-xl font-bold text-green-600">Pagamento Aprovado!</p>
-            <p className="text-muted-foreground">Redirecionando...</p>
-          </div>
-        );
-
-      case 'rejected':
-        return (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <XCircle className="h-16 w-16 text-red-600" />
-            <p className="text-xl font-bold text-red-600">Pagamento Rejeitado</p>
-            <p className="text-muted-foreground">{error || 'Tente outro método de pagamento'}</p>
-            <button
-              onClick={handleTryAgain}
-              className="px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90"
-            >
-              Tentar Novamente
-            </button>
-          </div>
-        );
-
-      case 'in_process':
-        return (
-          <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Clock className="h-16 w-16 text-yellow-600 animate-pulse" />
-            <p className="text-xl font-bold text-yellow-600">Analisando Pagamento...</p>
-            <p className="text-muted-foreground text-center">
-              Seu pagamento está sendo analisado.<br />
-              Você receberá confirmação em breve.
-            </p>
-          </div>
-        );
-
-      case 'pending_pix':
-        return pixData ? (
-          <PixPaymentForm
-            qrCode={pixData.qr_code}
-            qrCodeBase64={pixData.qr_code_base64}
-            onCancel={() => onOpenChange(false)}
-          />
-        ) : null;
-
-      default:
-        return null;
+    if (cardPaymentBrickRef.current) {
+      cardPaymentBrickRef.current.unmount();
+      cardPaymentBrickRef.current = null;
+      isBrickMountedRef.current = false;
     }
   };
 
-  const showForm = paymentStatus === 'idle' || paymentStatus === 'processing';
+  const renderStatus = () => {
+    if (paymentStatus === 'processing') {
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg font-medium">Processando pagamento...</p>
+        </div>
+      );
+    }
+
+    if (paymentStatus === 'approved') {
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
+          <p className="text-xl font-bold text-green-600 mb-2">Pagamento Aprovado!</p>
+          <p className="text-muted-foreground">Redirecionando...</p>
+        </div>
+      );
+    }
+
+    if (paymentStatus === 'rejected') {
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
+          <p className="text-xl font-bold text-red-600 mb-2">Pagamento Recusado</p>
+          <p className="text-muted-foreground mb-4">{error || 'Verifique os dados e tente novamente'}</p>
+          <Button onClick={handleTryAgain}>Tentar Novamente</Button>
+        </div>
+      );
+    }
+
+    if (paymentStatus === 'in_process') {
+      return (
+        <div className="flex flex-col items-center justify-center py-8">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+          <p className="text-lg font-medium">Aguardando confirmação do pagamento...</p>
+          <p className="text-sm text-muted-foreground mt-2">Isso pode levar alguns instantes</p>
+        </div>
+      );
+    }
+
+    if (paymentStatus === 'pending_pix' && pixData) {
+      return (
+        <PixPaymentForm
+          qrCode={pixData.qrCode}
+          qrCodeBase64={pixData.qrCodeBase64}
+          onCancel={handleTryAgain}
+        />
+      );
+    }
+
+    return null;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle className="text-2xl">
+          <DialogTitle>
             {serviceName}
           </DialogTitle>
-          <p className="text-muted-foreground">
-            Valor: <span className="font-bold text-primary">R$ {(amount / 100).toFixed(2)}</span>
+          <p className="text-2xl font-bold text-primary">
+            R$ {(amount / 100).toFixed(2).replace('.', ',')}
           </p>
         </DialogHeader>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {error}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <p className="text-red-600 text-sm">{error}</p>
           </div>
         )}
 
-        {!showForm && renderStatus()}
+        {renderStatus()}
 
-        {showForm && (
-          <div className="space-y-6">
-            {/* EXIBIR INFO READONLY SE LOGADO */}
-            {isUserLoggedIn && hasRequiredData && (
-              <div className="bg-muted/50 p-4 rounded-lg space-y-2">
-                <p className="text-sm text-muted-foreground">
-                  <strong>Pagamento em nome de:</strong> {formData.nome}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {formData.email} • CPF: {formData.cpf}
-                </p>
-              </div>
-            )}
-            
-            {/* CAMPOS EDITÁVEIS APENAS SE NÃO LOGADO OU DADOS INCOMPLETOS */}
+        {paymentStatus === 'idle' && (
+          <div className="space-y-4">
+            {/* Formulário de dados do usuário (se necessário) */}
             {(!isUserLoggedIn || !hasRequiredData) && (
-              <div className="grid gap-4">
+              <div className="space-y-4">
                 <div>
-                  <Label htmlFor="nome">Nome Completo</Label>
+                  <Label htmlFor="name">Nome Completo</Label>
                   <Input
-                    id="nome"
-                    value={formData.nome}
-                    onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Seu nome completo"
                   />
                 </div>
-
                 <div>
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">E-mail</Label>
                   <Input
                     id="email"
                     type="email"
@@ -469,143 +502,59 @@ export function PaymentModal({
                     placeholder="seu@email.com"
                   />
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="cpf">CPF</Label>
-                    <Input
-                      id="cpf"
-                      value={formData.cpf}
-                      onChange={(e) => {
-                        const cleaned = cleanCPF(e.target.value);
-                        setFormData({ ...formData, cpf: formatCPF(cleaned) });
-                      }}
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="telefone">Telefone</Label>
-                    <Input
-                      id="telefone"
-                      value={formData.telefone}
-                      onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                      placeholder="(11) 99999-9999"
-                    />
-                  </div>
+                <div>
+                  <Label htmlFor="cpf">CPF</Label>
+                  <Input
+                    id="cpf"
+                    value={formData.cpf}
+                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                    placeholder="000.000.000-00"
+                  />
                 </div>
-
-                {/* Especialidade (condicional) */}
-                {(sku.includes('especialista') || especialidade) && (
-                  <div>
-                    <Label htmlFor="especialidade">Especialidade</Label>
-                    <Select
-                      value={formData.especialidade}
-                      onValueChange={(value) => setFormData({ ...formData, especialidade: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a especialidade" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ESPECIALIDADES.map((esp) => (
-                          <SelectItem key={esp} value={esp}>
-                            {esp}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                <div>
+                  <Label htmlFor="phone">Telefone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+55 11 99999-9999"
+                  />
+                </div>
               </div>
             )}
 
-            {/* Segmented Control - Método de Pagamento */}
-            <div className="flex items-center justify-center gap-2 mt-6">
-              <button
+            {/* Seletor de método de pagamento */}
+            <div className="flex gap-2 border-b pb-4">
+              <Button
                 type="button"
-                onClick={() => {
-                  setPaymentMethod('card');
-                  setError('');
-                }}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
-                  paymentMethod === 'card'
-                    ? "border-primary bg-primary text-primary-foreground shadow-md"
-                    : "border-border bg-card hover:border-primary/50"
-                )}
+                variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                onClick={() => setPaymentMethod('card')}
+                className="flex-1"
               >
-                <CreditCard className="h-5 w-5" />
-                <span className="font-medium">Cartão</span>
-              </button>
-              
-              <button
+                <CreditCard className="mr-2 h-4 w-4" />
+                Cartão
+              </Button>
+              <Button
                 type="button"
-                onClick={() => {
-                  setPaymentMethod('pix');
-                  setError('');
-                }}
-                className={cn(
-                  "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-all",
-                  paymentMethod === 'pix'
-                    ? "border-primary bg-primary text-primary-foreground shadow-md"
-                    : "border-border bg-card hover:border-primary/50"
-                )}
+                variant={paymentMethod === 'pix' ? 'default' : 'outline'}
+                onClick={() => setPaymentMethod('pix')}
+                className="flex-1"
               >
-                <QrCode className="h-5 w-5" />
-                <span className="font-medium">PIX</span>
-              </button>
+                PIX
+              </Button>
             </div>
 
-            {/* Conteúdo Dinâmico */}
-            <div className="mt-6">
-              {paymentMethod === 'card' && (
-                <div className="grid md:grid-cols-[400px_1fr] gap-6 items-start">
-                  {/* Preview à esquerda no desktop */}
-                  <div className="order-2 md:order-1">
-                    <CardPreview
-                      cardNumber={cardPreviewData.number}
-                      cardHolder={cardPreviewData.holder}
-                      expiry={cardPreviewData.expiry}
-                    />
-                  </div>
-                  
-                  {/* Formulário à direita */}
-                  <div className="order-1 md:order-2">
-                    <CardPaymentForm
-                      publicKey={publicKey}
-                      amount={amount}
-                      onSubmit={handleCardSubmit}
-                      onError={setError}
-                      onCardDataChange={setCardPreviewData}
-                      isProcessing={paymentStatus === 'processing'}
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {paymentMethod === 'pix' && (
-                <div className="text-center space-y-4">
-                  {isUserLoggedIn && hasRequiredData ? (
-                    <button
-                      onClick={handlePixSubmit}
-                      disabled={paymentStatus === 'processing'}
-                      className="w-full py-3 px-6 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
-                    >
-                      {paymentStatus === 'processing' ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> Gerando QR Code...</>
-                      ) : (
-                        <><QrCode className="h-4 w-4" /> Gerar QR Code PIX</>
-                      )}
-                    </button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Complete seus dados acima para gerar o PIX.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            {/* Card Payment Brick (renderiza automaticamente quando método = cartão) */}
+            {paymentMethod === 'card' && (
+              <div id="cardPaymentBrick"></div>
+            )}
+
+            {/* Botão PIX */}
+            {paymentMethod === 'pix' && (
+              <Button onClick={handlePixSubmit} className="w-full" size="lg">
+                Gerar QR Code PIX
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>
