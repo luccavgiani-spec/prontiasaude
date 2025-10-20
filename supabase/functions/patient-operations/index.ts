@@ -42,6 +42,7 @@ interface UpsertPatientRequest {
 
 interface CompleteProfileRequest {
   operation: 'complete_profile';
+  user_id: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -229,8 +230,24 @@ serve(async (req) => {
           );
         }
         
+        // Validate user_id
+        if (!profileData.user_id) {
+          console.error('[complete_profile] Missing user_id');
+          return new Response(
+            JSON.stringify({ error: 'user_id é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[complete_profile] Sending to GAS:', {
+          user_id: profileData.user_id,
+          email: profileData.email,
+          has_plano: profileData.plano
+        });
+        
         // Prepare GAS API payload with validated data
         const gasPayload = {
+          user_id: profileData.user_id,
           first_name: profileData.first_name.substring(0, 100),
           last_name: profileData.last_name.substring(0, 100),
           email: profileData.email.substring(0, 255),
@@ -255,6 +272,11 @@ serve(async (req) => {
         });
 
         const gasResult = await gasResponse.text();
+
+        console.log('[complete_profile] GAS Response:', {
+          status: gasResponse.status,
+          body: gasResult
+        });
 
         return new Response(
           JSON.stringify({ 

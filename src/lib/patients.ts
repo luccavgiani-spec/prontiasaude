@@ -85,6 +85,7 @@ export async function upsertPatientBasic(payload: {
     await supabase.functions.invoke('patient-operations', {
       body: {
         operation: 'complete_profile',
+        user_id: userId,
         first_name: payload.first_name,
         last_name: payload.last_name,
         email: userEmail,
