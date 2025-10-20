@@ -69,7 +69,7 @@ async function registerClickLifePatient(
   email: string,
   telefone: string,
   planoId: number
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; authtoken?: string }> {
   const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
   
   const cpfClean = cpf.replace(/\D/g, '');
@@ -113,49 +113,25 @@ async function registerClickLifePatient(
     return { success: false, error: `HTTP ${res.status}: ${resText}` };
   }
   
+  // Investigar se retorna authtoken
+  try {
+    const data = JSON.parse(resText);
+    console.log('[ClickLife] Resposta do cadastro:', JSON.stringify(data));
+    if (data.authtoken || data.auth_token) {
+      console.log('[ClickLife] ✓ authtoken encontrado na resposta do cadastro');
+      return { 
+        success: true, 
+        authtoken: data.authtoken || data.auth_token 
+      };
+    }
+  } catch (e) {
+    console.log('[ClickLife] Resposta não é JSON válido');
+  }
+  
   console.log('[ClickLife] Paciente cadastrado com sucesso');
   return { success: true };
 }
 
-/**
- * Faz login do paciente na ClickLife para obter authtoken individual
- */
-async function loginClickLifePatient(
-  cpf: string,
-  senha: string = "Pr0ntia!2025"
-): Promise<{ success: boolean; authtoken?: string; error?: string }> {
-  const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
-  const cpfClean = cpf.replace(/\D/g, '');
-  
-  console.log('[ClickLife] Fazendo login do paciente:', cpfClean);
-  
-  const res = await fetch(`${API_BASE}/usuarios/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      cpf: cpfClean,
-      senha: senha,
-      metodo: 'CPF_SENHA'
-    })
-  });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error('[ClickLife] Login falhou:', res.status, errorText);
-    return { 
-      success: false, 
-      error: `Login falhou: ${res.status} - ${errorText}` 
-    };
-  }
-  
-  const data = await res.json();
-  console.log('[ClickLife] Login bem-sucedido, authtoken obtido');
-  
-  return { 
-    success: true, 
-    authtoken: data.token || data.authtoken 
-  };
-}
 
 /**
  * Busca ou cria paciente na Communicare e retorna patientId
@@ -168,71 +144,42 @@ async function getOrCreateCommunicarePatient(
   telefone: string,
   jwt: string
 ): Promise<{ patientId: string | null; error?: string }> {
-  const COMMUNICARE_BASE = Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')!;
+  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE')!;
   
+  // Payload simplificado (não-FHIR) para API de Pacientes
   const payload = {
-    identifier: [
-      {
-        system: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf",
-        value: cpf.replace(/\D/g, '')
-      }
-    ],
-    name: [
-      {
-        use: "official",
-        text: nome
-      }
-    ],
-    telecom: [
-      {
-        system: "phone",
-        value: telefone,
-        use: "mobile"
-      },
-      {
-        system: "email",
-        value: email
-      }
-    ]
+    name: nome,
+    cpf: cpf.replace(/\D/g, ''),
+    email: email,
+    mobileNumber: telefone.replace(/\D/g, '').replace(/^\+55/, ''),
+    birthDate: "01011990",
+    gender: "M",
+    externalId: cpf.replace(/\D/g, '')
   };
   
   console.log('[Communicare] Criando/buscando paciente:', cpf);
   
-  // Tentar endpoints sequencialmente
-  const endpoints = [
-    '/v1/patients',
-    '/v1/patient',
-    '/v1/fhir/Patient'
-  ];
+  const res = await fetch(`${PATIENTS_BASE}/v1/patient`, {
+    method: 'POST',
+    headers: {
+      'api_token': jwt,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
   
-  for (const endpoint of endpoints) {
-    console.log(`[Communicare] Tentando endpoint: ${endpoint}`);
-    
-    const res = await fetch(`${COMMUNICARE_BASE}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'api_token': jwt,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      console.log(`[Communicare] ✓ Sucesso em ${endpoint}, patientId:`, data.id);
-      return { patientId: data.id };
-    }
-    
-    if (res.status !== 404) {
-      const errorText = await res.text();
-      console.error(`[Communicare] Erro ${res.status} em ${endpoint}:`, errorText);
-    } else {
-      console.warn(`[Communicare] Endpoint ${endpoint} não encontrado (404), tentando próximo...`);
-    }
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error(`[Communicare] Erro ${res.status}:`, errorText);
+    return { 
+      patientId: null, 
+      error: `HTTP ${res.status}: ${errorText}` 
+    };
   }
   
-  console.error('[Communicare] Falha em todos os endpoints de criação de paciente');
-  return { patientId: null, error: 'Nenhum endpoint de criação de paciente disponível' };
+  const data = await res.json();
+  console.log('[Communicare] Paciente criado/encontrado, patientId:', data.id);
+  return { patientId: data.id };
 }
 
 Deno.serve(async (req) => {
@@ -336,32 +283,10 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     console.warn('[ClickLife] Cadastro falhou, tentando agendar mesmo assim:', registration.error);
   }
 
-  // Fazer login do paciente para obter authtoken individual
-  const login = await loginClickLifePatient(payload.cpf);
-
-  if (!login.success || !login.authtoken) {
-    console.error('[ClickLife] Falha no login:', login.error);
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        provider: 'clicklife',
-        error: 'Falha na autenticação do paciente',
-        details: {
-          reason: 'Não foi possível fazer login com CPF + senha padrão',
-          login_error: login.error,
-          cpf: payload.cpf
-        }
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
-  }
-
+  // Usar token de integrador (cadastro não retorna authtoken acessível ainda)
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: login.authtoken, // Token do paciente, não mais do integrador
+    authtoken: AUTH_TOKEN,
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
