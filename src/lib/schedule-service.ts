@@ -1,31 +1,25 @@
-import { GAS_BASE } from './constants';
+import { supabase } from '@/integrations/supabase/client';
 import type { DirectSchedulePayload, DirectScheduleResponse } from './types/plan';
 
 /**
  * Agenda diretamente com plano ativo (bypass de pagamento)
- * Backend força ClickLife quando plano_ativo=true
+ * Roteamento inteligente: ClickLife ou Communicare baseado em regras
  */
 export async function scheduleWithActivePlan(
   payload: DirectSchedulePayload
 ): Promise<DirectScheduleResponse> {
   try {
-    const endpoint = `${GAS_BASE}?path=site-schedule`;
-    
     console.log('[Schedule] Direct scheduling with active plan:', payload.sku);
     
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+      body: payload,
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    if (error) {
+      console.error('[Schedule] Supabase function error:', error);
+      throw error;
     }
 
-    const data = await response.json();
     console.log('[Schedule] Response:', data);
     
     return {

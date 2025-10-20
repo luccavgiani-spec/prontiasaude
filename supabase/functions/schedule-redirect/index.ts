@@ -1,0 +1,311 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Mapeamento SKU → especialidadeId ClickLife (padrão: 8 para todos)
+const SKU_TO_CLICKLIFE_ID: Record<string, number> = {
+  'ITC6534': 8, // Clínico Geral
+  'ZXW2165': 8, // Psicólogo 1 sessão
+  'HXR8516': 8, // Psicólogo 4 sessões
+  'YME9025': 8, // Psicólogo 8 sessões
+  'BIR7668': 8, // Personal Trainer
+  'VPN5132': 8, // Nutricionista
+  'TQP5720': 8, // Cardiologista
+  'HGG3503': 8, // Dermatologista
+  'VHH8883': 8, // Endocrinologista
+  'TSB0751': 8, // Gastroenterologista
+  'CCP1566': 8, // Ginecologista
+  'FKS5964': 8, // Oftalmologista
+  'TVQ5046': 8, // Ortopedista
+  'HMG9544': 8, // Pediatra
+  'HME8366': 8, // Otorrinolaringologista
+  'DYY8522': 8, // Médico da Família
+  'QOP1101': 8, // Psiquiatra
+  'LZF3879': 8, // Nutrólogo
+  'YZD9932': 8, // Geriatria
+  'UDH3250': 8, // Reumatologista
+  'PKS9388': 8, // Neurologista
+  'MYX5186': 8, // Infectologista
+  'OVM9892': 8, // Laudos Psicológicos
+  'RZP5755': 8, // Renovação de Receitas
+  'ULT3571': 8, // Solicitação de Exames
+};
+
+// SKUs que requerem plano 864 (especialistas)
+const ESPECIALISTA_SKUS = [
+  'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
+  'CCP1566', 'FKS5964', 'TVQ5046', 'HMG9544', 'HME8366', 'DYY8522',
+  'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186'
+];
+
+// Especialidades disponíveis na Communicare
+const COMMUNICARE_SPECIALTIES = [
+  'clinico geral', 'consulta', 'laudos', 'psicologo_8', 'psicologo_4',
+  'psicologo_1', 'geriatria', 'nutrologo', 'infectologista', 'neurologista',
+  'reumatologista', 'nutricionista', 'personal trainer', 'solicitacao_exames',
+  'renovacao_receitas'
+];
+
+interface SchedulePayload {
+  cpf: string;
+  email: string;
+  nome: string;
+  telefone: string;
+  especialidade?: string;
+  sku: string;
+  horario_iso?: string;
+  plano_ativo: boolean;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const payload: SchedulePayload = await req.json();
+    console.log('[schedule-redirect] Request:', payload);
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // 1. Verificar override do admin
+    const { data: forceData } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'force_clicklife')
+      .maybeSingle();
+
+    if (forceData?.value === 'true') {
+      console.log('[schedule-redirect] Admin override: Forçando ClickLife');
+      return await redirectClickLife(payload, 'admin_override');
+    }
+
+    // 2. Verificar plano ativo
+    if (payload.plano_ativo) {
+      console.log('[schedule-redirect] Plano ativo detectado → ClickLife');
+      return await redirectClickLife(payload, 'active_plan');
+    }
+
+    // 3. Verificar horário e especialidade
+    const horario = payload.horario_iso ? new Date(payload.horario_iso) : new Date();
+    const especialidadeNorm = payload.especialidade?.toLowerCase() || '';
+
+    const isWeekend = horario.getDay() === 0 || horario.getDay() === 6;
+    const hour = horario.getUTCHours() - 3; // Ajustar para horário de Brasília (UTC-3)
+    const isNighttime = hour < 7 || hour >= 19;
+
+    if (isWeekend) {
+      console.log('[schedule-redirect] Fim de semana → ClickLife');
+      return await redirectClickLife(payload, 'weekend');
+    }
+
+    if (isNighttime) {
+      console.log('[schedule-redirect] Horário noturno → ClickLife');
+      return await redirectClickLife(payload, 'nighttime');
+    }
+
+    // 4. Verificar disponibilidade na Communicare
+    if (!COMMUNICARE_SPECIALTIES.includes(especialidadeNorm)) {
+      console.log('[schedule-redirect] Especialidade indisponível na Communicare → ClickLife');
+      return await redirectClickLife(payload, 'specialty_unavailable');
+    }
+
+    // 5. Redirecionar para Communicare
+    console.log('[schedule-redirect] Condições atendidas → Communicare');
+    return await redirectCommunicare(payload, supabase);
+
+  } catch (error) {
+    console.error('[schedule-redirect] Error:', error);
+    return new Response(
+      JSON.stringify({ 
+        ok: false, 
+        error: error instanceof Error ? error.message : 'Internal error' 
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+});
+
+async function redirectClickLife(payload: SchedulePayload, reason: string) {
+  console.log(`[ClickLife] Motivo: ${reason}`);
+
+  const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
+  const AUTH_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
+  const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!;
+  const CUPOM_DEFAULT = Deno.env.get('CLICKLIFE_CUPOM_DEFAULT');
+
+  // Determinar plano_id: 864 se plano ativo + especialista, senão 863
+  const planoId = (payload.plano_ativo && ESPECIALISTA_SKUS.includes(payload.sku)) ? 864 : 863;
+  
+  console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
+
+  const requestBody: any = {
+    cpf: payload.cpf.replace(/\D/g, ''),
+    authtoken: AUTH_TOKEN,
+    especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
+  };
+
+  // Adicionar cupom se NÃO tiver plano ativo
+  if (!payload.plano_ativo && CUPOM_DEFAULT) {
+    requestBody.cupom = CUPOM_DEFAULT;
+    console.log(`[ClickLife] Cupom adicionado: ${CUPOM_DEFAULT}`);
+  }
+
+  console.log('[ClickLife] Request body:', requestBody);
+
+  const response = await fetch(
+    `${API_BASE}/atendimentos/atendimentos`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[ClickLife] HTTP ${response.status}:`, errorText);
+    
+    // Tentar parsear erro JSON
+    try {
+      const errorData = JSON.parse(errorText);
+      throw new Error(errorData.error || errorText);
+    } catch {
+      throw new Error(`ClickLife API error: ${response.status} - ${errorText}`);
+    }
+  }
+
+  const data = await response.json();
+  console.log('[ClickLife] Response:', data);
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      url: REDIRECT_URL,
+      provider: 'clicklife',
+      reason,
+      plano_id: planoId
+    }),
+    { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
+}
+
+async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
+  console.log('[Communicare] Iniciando redirecionamento');
+
+  const INTEGRATIONS_BASE = Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')!;
+  const SSO_API_KEY = Deno.env.get('COMMUNICARE_SSO_API_KEY')!;
+  const SSO_CPF = Deno.env.get('COMMUNICARE_SSO_CPF')!;
+  const QUEUE_UUID = Deno.env.get('COMMUNICARE_QUEUE_UUID')!;
+
+  // Obter JWT (com cache de 23h)
+  let jwt = await getCachedJWT(supabase);
+
+  if (!jwt) {
+    console.log('[Communicare] Gerando novo JWT...');
+    const ssoResponse = await fetch(
+      `${INTEGRATIONS_BASE}/sso/${SSO_CPF}`,
+      {
+        method: 'GET',
+        headers: {
+          'x-sso-api-key': SSO_API_KEY,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!ssoResponse.ok) {
+      throw new Error(`SSO failed: ${ssoResponse.status}`);
+    }
+
+    const ssoData = await ssoResponse.json();
+    jwt = ssoData.token;
+    await cacheJWT(jwt, supabase);
+  }
+
+  // Enfileirar paciente
+  console.log('[Communicare] Enfileirando paciente...');
+  const queueResponse = await fetch(
+    `${INTEGRATIONS_BASE}/v1/queue`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_token': jwt
+      },
+      body: JSON.stringify({
+        queueUUID: QUEUE_UUID,
+        cpf: payload.cpf.replace(/\D/g, '')
+      })
+    }
+  );
+
+  if (!queueResponse.ok) {
+    const errorText = await queueResponse.text();
+    console.error(`[Communicare] Queue error:`, errorText);
+    throw new Error(`Communicare queue failed: ${errorText}`);
+  }
+
+  const queueData = await queueResponse.json();
+  console.log('[Communicare] Response:', queueData);
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      url: queueData.queueURL,
+      provider: 'communicare',
+      queuePatientUUID: queueData.queuePatientUUID
+    }),
+    { 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    }
+  );
+}
+
+async function getCachedJWT(supabase: any): Promise<string | null> {
+  const { data } = await supabase
+    .from('admin_settings')
+    .select('value')
+    .eq('key', 'communicare_jwt_cache')
+    .maybeSingle();
+
+  if (!data?.value) return null;
+
+  const { data: expiresData } = await supabase
+    .from('admin_settings')
+    .select('value')
+    .eq('key', 'communicare_jwt_expires_at')
+    .maybeSingle();
+
+  const expiresAt = new Date(expiresData?.value || 0);
+  if (expiresAt < new Date()) {
+    console.log('[JWT Cache] Expirado');
+    return null;
+  }
+
+  console.log('[JWT Cache] JWT válido encontrado');
+  return data.value;
+}
+
+async function cacheJWT(jwt: string, supabase: any): Promise<void> {
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 23);
+
+  await supabase.from('admin_settings').upsert([
+    { key: 'communicare_jwt_cache', value: jwt },
+    { key: 'communicare_jwt_expires_at', value: expiresAt.toISOString() }
+  ]);
+
+  console.log(`[JWT Cache] Cacheado até ${expiresAt.toISOString()}`);
+}
