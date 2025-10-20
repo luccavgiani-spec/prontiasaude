@@ -83,7 +83,7 @@ const CENARIOS_TESTE: TestScenario[] = [
     id: 'B1',
     nome: 'Plano Ativo + Clínico Geral → ClickLife (863)',
     payload: {
-      cpf: '12345678901',
+      cpf: '404.166.998-71', // ✅ CPF válido
       email: 'teste.b1@prontiasaude.com.br',
       nome: 'Teste B1 Plano Ativo',
       telefone: '+5511999999992',
@@ -121,7 +121,7 @@ const CENARIOS_TESTE: TestScenario[] = [
     id: 'C1',
     nome: 'Sem Plano + Horário Comercial + Clínico → Communicare',
     payload: {
-      cpf: '12345678903',
+      cpf: '404.166.998-71', // ✅ CPF válido (mesmo do B1 para simplificar)
       email: 'teste.c1@prontiasaude.com.br',
       nome: 'Teste C1 Communicare',
       telefone: '+5511999999994',
@@ -175,7 +175,7 @@ const CENARIOS_TESTE: TestScenario[] = [
     id: 'D1',
     nome: 'Sem Plano + Noturno → ClickLife',
     payload: {
-      cpf: '12345678906',
+      cpf: '279.248.818-24', // ✅ CPF válido diferente
       email: 'teste.d1@prontiasaude.com.br',
       nome: 'Teste D1 Noturno',
       telefone: '+5511999999997',

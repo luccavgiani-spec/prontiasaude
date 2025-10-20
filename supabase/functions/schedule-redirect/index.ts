@@ -133,54 +133,8 @@ async function registerClickLifePatient(
 }
 
 
-/**
- * Busca ou cria paciente na Communicare e retorna patientId
- * Tenta múltiplos endpoints sequencialmente até encontrar o correto
- */
-async function getOrCreateCommunicarePatient(
-  cpf: string,
-  nome: string,
-  email: string,
-  telefone: string,
-  jwt: string
-): Promise<{ patientId: string | null; error?: string }> {
-  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE')!;
-  
-  // Payload simplificado (não-FHIR) para API de Pacientes
-  const payload = {
-    name: nome,
-    cpf: cpf.replace(/\D/g, ''),
-    email: email,
-    mobileNumber: telefone.replace(/\D/g, '').replace(/^\+55/, ''),
-    birthDate: "01011990",
-    gender: "M",
-    externalId: cpf.replace(/\D/g, '')
-  };
-  
-  console.log('[Communicare] Criando/buscando paciente:', cpf);
-  
-  const res = await fetch(`${PATIENTS_BASE}/v1/patient`, {
-    method: 'POST',
-    headers: {
-      'api_token': jwt,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error(`[Communicare] Erro ${res.status}:`, errorText);
-    return { 
-      patientId: null, 
-      error: `HTTP ${res.status}: ${errorText}` 
-    };
-  }
-  
-  const data = await res.json();
-  console.log('[Communicare] Paciente criado/encontrado, patientId:', data.id);
-  return { patientId: data.id };
-}
+// Função removida: getOrCreateCommunicarePatient
+// A Communicare cria o paciente automaticamente ao enfileirar
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -368,11 +322,13 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   const SSO_CPF = Deno.env.get('COMMUNICARE_SSO_CPF')!;
   const QUEUE_UUID = Deno.env.get('COMMUNICARE_QUEUE_UUID')!;
 
-  // Obter JWT (com cache de 23h)
+  // 1. OBTER JWT DINÂMICO (com cache de 20h)
   let jwt = await getCachedJWT(supabase);
 
   if (!jwt) {
-    console.log('[Communicare] Gerando novo JWT...');
+    console.log('[Communicare] Cache vazio, gerando novo JWT via SSO...');
+    console.log(`[Communicare] GET ${INTEGRATIONS_BASE}/sso/${SSO_CPF}`);
+    
     const ssoResponse = await fetch(
       `${INTEGRATIONS_BASE}/sso/${SSO_CPF}`,
       {
@@ -387,6 +343,13 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     if (!ssoResponse.ok) {
       const errorText = await ssoResponse.text();
       console.error(`[Communicare] SSO failed: ${ssoResponse.status}`, errorText);
+      
+      // Log CURL para debug
+      const curlSSO = `curl -X GET '${INTEGRATIONS_BASE}/sso/${SSO_CPF}' \\
+  -H 'x-sso-api-key: ${SSO_API_KEY.substring(0, 20)}...' \\
+  -H 'Content-Type: application/json'`;
+      console.log('[Communicare] CURL SSO:', curlSSO);
+      
       return new Response(
         JSON.stringify({
           ok: false,
@@ -396,7 +359,8 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
             status_code: ssoResponse.status,
             response_body: errorText,
             reason: 'Falha na autenticação SSO',
-            endpoint: '/sso'
+            endpoint: '/sso',
+            curl: curlSSO
           }
         }),
         { 
@@ -408,60 +372,52 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
 
     const ssoData = await ssoResponse.json();
     jwt = ssoData.token;
+    console.log('[Communicare] ✓ JWT gerado com sucesso');
+    console.log('[Communicare] JWT (primeiros 30 chars):', jwt.substring(0, 30));
     await cacheJWT(jwt, supabase);
+  } else {
+    console.log('[Communicare] Usando JWT do cache');
+    console.log('[Communicare] JWT (primeiros 30 chars):', jwt.substring(0, 30));
   }
 
-  // Buscar ou criar paciente e obter patientId
-  const patientResult = await getOrCreateCommunicarePatient(
-    payload.cpf,
-    payload.nome,
-    payload.email,
-    payload.telefone,
-    jwt
-  );
+  // 2. ENFILEIRAR PACIENTE (Communicare cria paciente automaticamente)
+  const cpfClean = payload.cpf.replace(/\D/g, '');
+  
+  const queuePayload = {
+    queueUUID: QUEUE_UUID,
+    patientId: cpfClean, // Usar CPF como patientId
+  };
 
-  if (!patientResult.patientId) {
-    console.error('[Communicare] Falha ao obter patientId');
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        provider: 'communicare',
-        error: 'Falha ao criar/buscar paciente',
-        details: {
-          reason: 'Nenhum endpoint de criação disponível',
-          attempted_endpoints: ['/v1/patients', '/v1/patient', '/v1/fhir/Patient'],
-          cpf: payload.cpf,
-          base_url: Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')
-        }
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
-  }
+  console.log('[Communicare] Enfileirando paciente CPF:', payload.cpf);
+  console.log('[Communicare] Payload:', JSON.stringify(queuePayload, null, 2));
+  console.log(`[Communicare] POST ${INTEGRATIONS_BASE}/v1/queue`);
 
-  // Enfileirar paciente
-  console.log('[Communicare] Enfileirando paciente...');
   const queueResponse = await fetch(
     `${INTEGRATIONS_BASE}/v1/queue`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_token': jwt
+        'api_token': jwt, // ✅ JWT DINÂMICO (não token fixo)
       },
-      body: JSON.stringify({
-        patientId: patientResult.patientId,
-        queueUuid: QUEUE_UUID,
-        specialty: payload.especialidade || 'clinico geral'
-      })
+      body: JSON.stringify(queuePayload)
     }
   );
 
+  const queueText = await queueResponse.text();
+  console.log('[Communicare] Response status:', queueResponse.status);
+  console.log('[Communicare] Response body:', queueText);
+
   if (!queueResponse.ok) {
-    const errorText = await queueResponse.text();
-    console.error(`[Communicare] Queue error:`, errorText);
+    console.error(`[Communicare] Erro ao enfileirar:`, queueResponse.status);
+    
+    // Log CURL para debug
+    const curlQueue = `curl -X POST '${INTEGRATIONS_BASE}/v1/queue' \\
+  -H 'Content-Type: application/json' \\
+  -H 'api_token: ${jwt.substring(0, 30)}...' \\
+  -d '${JSON.stringify(queuePayload)}'`;
+    console.log('[Communicare] CURL Queue:', curlQueue);
+    
     return new Response(
       JSON.stringify({
         ok: false,
@@ -469,10 +425,11 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
         error: `Falha ao enfileirar paciente: ${queueResponse.status}`,
         details: {
           status_code: queueResponse.status,
-          response_body: errorText,
+          response_body: queueText,
           reason: 'Erro ao adicionar paciente na fila',
           endpoint: '/v1/queue',
-          patient_id: patientResult.patientId
+          cpf: payload.cpf,
+          curl: curlQueue
         }
       }),
       { 
@@ -482,15 +439,22 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     );
   }
 
-  const queueData = await queueResponse.json();
-  console.log('[Communicare] Response:', queueData);
+  let queueData;
+  try {
+    queueData = JSON.parse(queueText);
+  } catch {
+    queueData = { raw: queueText };
+  }
+
+  console.log('[Communicare] ✓ Paciente enfileirado com sucesso');
 
   return new Response(
     JSON.stringify({
       ok: true,
-      url: queueData.queueURL,
+      url: queueData.queueURL || `https://communicare.com.br/queue/${QUEUE_UUID}`,
       provider: 'communicare',
-      queuePatientUUID: queueData.queuePatientUUID
+      queuePatientUUID: queueData.queuePatientUUID,
+      queueData
     }),
     { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -525,7 +489,7 @@ async function getCachedJWT(supabase: any): Promise<string | null> {
 
 async function cacheJWT(jwt: string, supabase: any): Promise<void> {
   const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 23);
+  expiresAt.setHours(expiresAt.getHours() + 20); // ✅ 20 horas (renovação diária)
 
   await supabase.from('admin_settings').upsert([
     { key: 'communicare_jwt_cache', value: jwt },
