@@ -79,7 +79,7 @@ async function registerClickLifePatient(
     nome,
     cpf: cpfClean,
     email,
-    senha: "Prontia@2025",
+    senha: "Pr0ntia!2025",
     datanascimento: "01-01-1990",
     sexo: "O",
     telefone: phoneClean,
@@ -115,6 +115,46 @@ async function registerClickLifePatient(
   
   console.log('[ClickLife] Paciente cadastrado com sucesso');
   return { success: true };
+}
+
+/**
+ * Faz login do paciente na ClickLife para obter authtoken individual
+ */
+async function loginClickLifePatient(
+  cpf: string,
+  senha: string = "Pr0ntia!2025"
+): Promise<{ success: boolean; authtoken?: string; error?: string }> {
+  const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
+  const cpfClean = cpf.replace(/\D/g, '');
+  
+  console.log('[ClickLife] Fazendo login do paciente:', cpfClean);
+  
+  const res = await fetch(`${API_BASE}/usuarios/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cpf: cpfClean,
+      senha: senha,
+      metodo: 'CPF_SENHA'
+    })
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('[ClickLife] Login falhou:', res.status, errorText);
+    return { 
+      success: false, 
+      error: `Login falhou: ${res.status} - ${errorText}` 
+    };
+  }
+  
+  const data = await res.json();
+  console.log('[ClickLife] Login bem-sucedido, authtoken obtido');
+  
+  return { 
+    success: true, 
+    authtoken: data.token || data.authtoken 
+  };
 }
 
 /**
@@ -296,9 +336,32 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     console.warn('[ClickLife] Cadastro falhou, tentando agendar mesmo assim:', registration.error);
   }
 
+  // Fazer login do paciente para obter authtoken individual
+  const login = await loginClickLifePatient(payload.cpf);
+
+  if (!login.success || !login.authtoken) {
+    console.error('[ClickLife] Falha no login:', login.error);
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'clicklife',
+        error: 'Falha na autenticação do paciente',
+        details: {
+          reason: 'Não foi possível fazer login com CPF + senha padrão',
+          login_error: login.error,
+          cpf: payload.cpf
+        }
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: AUTH_TOKEN,
+    authtoken: login.authtoken, // Token do paciente, não mais do integrador
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
