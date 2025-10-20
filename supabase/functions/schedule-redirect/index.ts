@@ -60,6 +60,124 @@ interface SchedulePayload {
   plano_ativo: boolean;
 }
 
+/**
+ * Registra paciente na ClickLife antes de criar agendamento
+ */
+async function registerClickLifePatient(
+  cpf: string,
+  nome: string,
+  email: string,
+  telefone: string,
+  planoId: number
+): Promise<{ success: boolean; error?: string }> {
+  const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
+  
+  const cpfClean = cpf.replace(/\D/g, '');
+  const phoneClean = telefone.replace(/\D/g, '').replace(/^\+55/, '');
+  
+  const payload = {
+    nome,
+    cpf: cpfClean,
+    email,
+    senha: "Prontia@2025",
+    datanascimento: "01-01-1990",
+    sexo: "O",
+    telefone: phoneClean,
+    logradouro: "Rua Exemplo",
+    numero: "123",
+    bairro: "Centro",
+    cep: "01000000",
+    cidade: "São Paulo",
+    estado: "SP",
+    empresaid: 9083,
+    planoid: planoId
+  };
+  
+  console.log('[ClickLife] Cadastrando paciente:', { cpf: cpfClean, planoId });
+  
+  const res = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  
+  const resText = await res.text();
+  
+  if (!res.ok) {
+    if (res.status === 409) {
+      console.log('[ClickLife] Paciente já cadastrado (409), prosseguindo...');
+      return { success: true };
+    }
+    
+    console.error('[ClickLife] Erro no cadastro:', res.status, resText);
+    return { success: false, error: `HTTP ${res.status}: ${resText}` };
+  }
+  
+  console.log('[ClickLife] Paciente cadastrado com sucesso');
+  return { success: true };
+}
+
+/**
+ * Busca ou cria paciente na Communicare e retorna patientId
+ */
+async function getOrCreateCommunicarePatient(
+  cpf: string,
+  nome: string,
+  email: string,
+  telefone: string,
+  jwt: string
+): Promise<{ patientId: string | null; error?: string }> {
+  const COMMUNICARE_BASE = Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')!;
+  
+  const payload = {
+    identifier: [
+      {
+        system: "http://rnds.saude.gov.br/fhir/r4/NamingSystem/cpf",
+        value: cpf.replace(/\D/g, '')
+      }
+    ],
+    name: [
+      {
+        use: "official",
+        text: nome
+      }
+    ],
+    telecom: [
+      {
+        system: "phone",
+        value: telefone,
+        use: "mobile"
+      },
+      {
+        system: "email",
+        value: email
+      }
+    ]
+  };
+  
+  console.log('[Communicare] Criando/buscando paciente:', cpf);
+  
+  const res = await fetch(`${COMMUNICARE_BASE}/v1/patients`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('[Communicare] Erro ao criar paciente:', res.status, errorText);
+    return { patientId: null, error: `HTTP ${res.status}` };
+  }
+  
+  const data = await res.json();
+  console.log('[Communicare] Paciente criado/encontrado:', data.id);
+  
+  return { patientId: data.id };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -148,6 +266,19 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   
   console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
 
+  // Tentar cadastrar paciente antes de agendar
+  const registration = await registerClickLifePatient(
+    payload.cpf,
+    payload.nome,
+    payload.email,
+    payload.telefone,
+    planoId
+  );
+
+  if (!registration.success && registration.error) {
+    console.warn('[ClickLife] Cadastro falhou, tentando agendar mesmo assim:', registration.error);
+  }
+
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
     authtoken: AUTH_TOKEN,
@@ -234,6 +365,27 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     await cacheJWT(jwt, supabase);
   }
 
+  // Buscar ou criar paciente e obter patientId
+  const patientResult = await getOrCreateCommunicarePatient(
+    payload.cpf,
+    payload.nome,
+    payload.email,
+    payload.telefone,
+    jwt
+  );
+
+  if (!patientResult.patientId) {
+    console.error('[Communicare] Falha ao obter patientId');
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'communicare',
+        error: 'Falha ao criar/buscar paciente'
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   // Enfileirar paciente
   console.log('[Communicare] Enfileirando paciente...');
   const queueResponse = await fetch(
@@ -245,8 +397,9 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
         'api_token': jwt
       },
       body: JSON.stringify({
-        queueUUID: QUEUE_UUID,
-        cpf: payload.cpf.replace(/\D/g, '')
+        patientId: patientResult.patientId,
+        queueUuid: QUEUE_UUID,
+        specialty: payload.especialidade || 'clinico geral'
       })
     }
   );
