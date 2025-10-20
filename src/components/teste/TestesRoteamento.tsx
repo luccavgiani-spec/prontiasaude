@@ -358,6 +358,28 @@ const TestesRoteamento: React.FC = () => {
     } catch (error: any) {
       console.error('[QA Test] Erro:', error);
       
+      // Tentar extrair detalhes do erro da Edge Function
+      let errorDetails = error.message || 'Erro desconhecido';
+      let errorContext = null;
+      
+      // Se for FunctionsHttpError, tentar pegar contexto adicional
+      if (error.context) {
+        errorContext = error.context;
+      }
+      
+      // Tentar parsear mensagem de erro estruturada da Edge Function
+      if (error.message && error.message.includes('{')) {
+        try {
+          const jsonMatch = error.message.match(/\{.*\}/s);
+          if (jsonMatch) {
+            errorContext = JSON.parse(jsonMatch[0]);
+            errorDetails = errorContext.error || errorDetails;
+          }
+        } catch (parseError) {
+          console.warn('[QA Test] Não foi possível parsear erro JSON:', parseError);
+        }
+      }
+      
       const responseTime = Date.now() - startTime;
       const result: TestResult = {
         scenario_id: selectedScenario || 'Manual',
@@ -365,13 +387,13 @@ const TestesRoteamento: React.FC = () => {
         status: 'falhou',
         response_time: responseTime,
         request: testData,
-        response: null,
-        error: error.message || 'Erro desconhecido'
+        response: errorContext, // Incluir contexto estruturado se disponível
+        error: errorDetails
       };
 
       setCurrentResult(result);
       setTestHistory(prev => [result, ...prev].slice(0, 10));
-      toast.error('Erro ao executar teste');
+      toast.error(`Erro: ${errorDetails}`);
     } finally {
       setIsExecuting(false);
     }
@@ -565,8 +587,18 @@ const TestesRoteamento: React.FC = () => {
               <CardContent className="space-y-3">
                 {currentResult.error ? (
                   <Alert variant="destructive">
-                    <XCircle className="h-4 w-4" />
-                    <AlertDescription>{currentResult.error}</AlertDescription>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Erro:</strong> {currentResult.error}
+                      
+                      {/* Mostrar contexto adicional se existir */}
+                      {currentResult.response && (
+                        <div className="mt-3 p-3 bg-destructive/10 rounded text-xs font-mono overflow-auto max-h-60">
+                          <p className="font-semibold mb-1 font-sans">Detalhes do erro:</p>
+                          <pre>{JSON.stringify(currentResult.response, null, 2)}</pre>
+                        </div>
+                      )}
+                    </AlertDescription>
                   </Alert>
                 ) : (
                   <>

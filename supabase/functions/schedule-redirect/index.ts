@@ -326,21 +326,35 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     const errorText = await response.text();
     console.error(`[ClickLife] HTTP ${response.status}:`, errorText);
     
+    let errorReason = 'Erro na API ClickLife';
     if (response.status === 401) {
       console.error('[ClickLife] ⚠️ Token inválido - Verifique CLICKLIFE_AUTH_TOKEN no ambiente');
+      errorReason = 'Token inválido ou usuário não encontrado';
     } else if (response.status === 403) {
       console.error('[ClickLife] ⚠️ Acesso negado - Verifique se o cadastro está ativo na plataforma');
+      errorReason = 'Cadastro inativo';
     }
     
-    // Tentar parsear erro JSON
-    try {
-      const errorData = JSON.parse(errorText);
-      throw new Error(errorData.error || errorText);
-    } catch {
-      throw new Error(`ClickLife API error: ${response.status} - ${errorText}`);
-    }
+    // Retornar erro estruturado
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'clicklife',
+        error: `ClickLife API error: ${response.status} - ${errorText}`,
+        details: {
+          status_code: response.status,
+          response_body: errorText,
+          reason: errorReason,
+          endpoint: '/atendimentos/atendimentos'
+        }
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
-
+  
   const data = await response.json();
   console.log('[ClickLife] Response:', data);
 
@@ -406,9 +420,18 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
       JSON.stringify({
         ok: false,
         provider: 'communicare',
-        error: 'Falha ao criar/buscar paciente'
+        error: 'Falha ao criar/buscar paciente',
+        details: {
+          reason: 'Nenhum endpoint de criação disponível',
+          attempted_endpoints: ['/v1/patients', '/v1/patient', '/v1/fhir/Patient'],
+          cpf: payload.cpf,
+          base_url: Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')
+        }
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
   }
 
