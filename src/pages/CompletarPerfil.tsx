@@ -66,6 +66,44 @@ const CompletarPerfil = () => {
     loadPatientData();
   }, []);
 
+  const fetchAddressByCEP = async (cep: string) => {
+    if (cep.length !== 8) return;
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        toast({
+          title: "CEP não encontrado",
+          description: "Verifique o CEP digitado.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        address_line: data.logradouro || prev.address_line,
+        city: data.localidade || prev.city,
+        state: data.uf || prev.state,
+        address_complement: data.complemento || prev.address_complement,
+      }));
+
+      toast({
+        title: "Endereço encontrado",
+        description: "Os campos foram preenchidos automaticamente.",
+      });
+    } catch (error) {
+      console.error('Erro ao buscar CEP:', error);
+      toast({
+        title: "Erro ao buscar CEP",
+        description: "Não foi possível buscar o endereço. Preencha manualmente.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleInputChange = (field: string, value: string | boolean) => {
     if (field === 'phone_e164' && typeof value === 'string') {
       value = formatPhoneE164(value);
@@ -74,7 +112,12 @@ const CompletarPerfil = () => {
       value = value.replace(/\D/g, '');
     }
     if (field === 'cep' && typeof value === 'string') {
-      value = value.replace(/\D/g, '');
+      const cleanCep = value.replace(/\D/g, '');
+      setFormData(prev => ({ ...prev, cep: cleanCep }));
+      if (cleanCep.length === 8) {
+        fetchAddressByCEP(cleanCep);
+      }
+      return;
     }
     setFormData(prev => ({ ...prev, [field]: value }));
   };
