@@ -119,6 +119,7 @@ async function registerClickLifePatient(
 
 /**
  * Busca ou cria paciente na Communicare e retorna patientId
+ * Tenta múltiplos endpoints sequencialmente até encontrar o correto
  */
 async function getOrCreateCommunicarePatient(
   cpf: string,
@@ -157,25 +158,41 @@ async function getOrCreateCommunicarePatient(
   
   console.log('[Communicare] Criando/buscando paciente:', cpf);
   
-  const res = await fetch(`${COMMUNICARE_BASE}/v1/patients`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${jwt}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  // Tentar endpoints sequencialmente
+  const endpoints = [
+    '/v1/patients',
+    '/v1/patient',
+    '/v1/fhir/Patient'
+  ];
   
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error('[Communicare] Erro ao criar paciente:', res.status, errorText);
-    return { patientId: null, error: `HTTP ${res.status}` };
+  for (const endpoint of endpoints) {
+    console.log(`[Communicare] Tentando endpoint: ${endpoint}`);
+    
+    const res = await fetch(`${COMMUNICARE_BASE}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'api_token': jwt,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      console.log(`[Communicare] ✓ Sucesso em ${endpoint}, patientId:`, data.id);
+      return { patientId: data.id };
+    }
+    
+    if (res.status !== 404) {
+      const errorText = await res.text();
+      console.error(`[Communicare] Erro ${res.status} em ${endpoint}:`, errorText);
+    } else {
+      console.warn(`[Communicare] Endpoint ${endpoint} não encontrado (404), tentando próximo...`);
+    }
   }
   
-  const data = await res.json();
-  console.log('[Communicare] Paciente criado/encontrado:', data.id);
-  
-  return { patientId: data.id };
+  console.error('[Communicare] Falha em todos os endpoints de criação de paciente');
+  return { patientId: null, error: 'Nenhum endpoint de criação de paciente disponível' };
 }
 
 Deno.serve(async (req) => {
@@ -297,7 +314,10 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     `${API_BASE}/atendimentos/atendimentos`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${AUTH_TOKEN}`
+      },
       body: JSON.stringify(requestBody)
     }
   );
@@ -305,6 +325,12 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`[ClickLife] HTTP ${response.status}:`, errorText);
+    
+    if (response.status === 401) {
+      console.error('[ClickLife] ⚠️ Token inválido - Verifique CLICKLIFE_AUTH_TOKEN no ambiente');
+    } else if (response.status === 403) {
+      console.error('[ClickLife] ⚠️ Acesso negado - Verifique se o cadastro está ativo na plataforma');
+    }
     
     // Tentar parsear erro JSON
     try {
