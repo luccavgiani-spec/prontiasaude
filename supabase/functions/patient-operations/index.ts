@@ -265,7 +265,10 @@ serve(async (req) => {
         };
 
         // Call GAS API
-        const gasResponse = await fetch(`${gasBase}?path=site-register`, {
+        const gasTarget = `${gasBase}?path=site-register`;
+        console.log('[complete_profile] GAS Target:', gasTarget);
+        
+        const gasResponse = await fetch(gasTarget, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(gasPayload)
