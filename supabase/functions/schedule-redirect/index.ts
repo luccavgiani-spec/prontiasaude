@@ -61,6 +61,47 @@ interface SchedulePayload {
 }
 
 /**
+ * Login de paciente na ClickLife (CPF + Senha)
+ */
+async function loginClickLifePatient(cpf: string): Promise<{ success: boolean; authtoken?: string; error?: string }> {
+  const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
+  const PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD')!;
+  
+  const cpfClean = cpf.replace(/\D/g, '');
+  
+  console.log('[ClickLife] Tentando login do paciente CPF:', cpfClean);
+  
+  const res = await fetch(`${CLICKLIFE_API}/usuarios/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cpf: cpfClean, senha: PASSWORD })
+  });
+  
+  const resText = await res.text();
+  
+  if (!res.ok) {
+    console.error(`[ClickLife] Login falhou: ${res.status}`, resText);
+    return { success: false, error: `HTTP ${res.status}` };
+  }
+  
+  try {
+    const data = JSON.parse(resText);
+    const token = data.authtoken || data.auth_token;
+    
+    if (token) {
+      console.log('[ClickLife] ✓ Login bem-sucedido, authtoken obtido (primeiros 10 chars):', token.substring(0, 10));
+      return { success: true, authtoken: token };
+    } else {
+      console.error('[ClickLife] ⚠️ Login retornou 200 mas sem authtoken');
+      return { success: false, error: 'No authtoken in response' };
+    }
+  } catch (e) {
+    console.error('[ClickLife] Erro ao parsear resposta do login:', e);
+    return { success: false, error: 'Invalid JSON response' };
+  }
+}
+
+/**
  * Registra paciente na ClickLife antes de criar agendamento
  */
 async function registerClickLifePatient(
@@ -215,7 +256,6 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   console.log(`[ClickLife] Motivo: ${reason}`);
 
   const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
-  const AUTH_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
   const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!;
   const CUPOM_DEFAULT = Deno.env.get('CLICKLIFE_CUPOM_DEFAULT');
 
@@ -224,23 +264,70 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   
   console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
 
-  // Tentar cadastrar paciente antes de agendar
-  const registration = await registerClickLifePatient(
-    payload.cpf,
-    payload.nome,
-    payload.email,
-    payload.telefone,
-    planoId
-  );
+  // 1. TENTAR LOGIN DO PACIENTE
+  let loginResult = await loginClickLifePatient(payload.cpf);
+  
+  // 2. Se login falhou (401), cadastrar paciente e tentar login novamente
+  if (!loginResult.success) {
+    console.log('[ClickLife] Login inicial falhou, tentando cadastrar paciente...');
+    
+    const registration = await registerClickLifePatient(
+      payload.cpf,
+      payload.nome,
+      payload.email,
+      payload.telefone,
+      planoId
+    );
 
-  if (!registration.success && registration.error) {
-    console.warn('[ClickLife] Cadastro falhou, tentando agendar mesmo assim:', registration.error);
+    if (!registration.success) {
+      console.error('[ClickLife] Cadastro falhou:', registration.error);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          provider: 'clicklife',
+          error: `Falha no cadastro: ${registration.error}`,
+          details: {
+            reason: 'Não foi possível cadastrar o paciente',
+            endpoint: '/usuarios/usuarios'
+          }
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    // Tentar login novamente após cadastro
+    console.log('[ClickLife] Cadastro concluído, tentando login novamente...');
+    loginResult = await loginClickLifePatient(payload.cpf);
+    
+    if (!loginResult.success) {
+      console.error('[ClickLife] Login pós-cadastro falhou:', loginResult.error);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          provider: 'clicklife',
+          error: 'Não foi possível autenticar após cadastro',
+          details: {
+            reason: 'Login falhou mesmo após cadastro bem-sucedido',
+            endpoint: '/usuarios/login'
+          }
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
   }
 
-  // Usar token de integrador (cadastro não retorna authtoken acessível ainda)
+  // 3. CRIAR AGENDAMENTO COM AUTHTOKEN DO PACIENTE
+  const PATIENT_AUTH_TOKEN = loginResult.authtoken!;
+  
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: AUTH_TOKEN,
+    authtoken: PATIENT_AUTH_TOKEN, // ✅ Token do paciente (não integrador)
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
@@ -250,7 +337,10 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     console.log(`[ClickLife] Cupom adicionado: ${CUPOM_DEFAULT}`);
   }
 
-  console.log('[ClickLife] Request body:', requestBody);
+  console.log('[ClickLife] Request body (authtoken mascarado):', {
+    ...requestBody,
+    authtoken: `${PATIENT_AUTH_TOKEN.substring(0, 10)}...`
+  });
 
   const response = await fetch(
     `${API_BASE}/atendimentos/atendimentos`,
@@ -258,7 +348,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${AUTH_TOKEN}`
+        // ✅ SEM Authorization header (usando authtoken do paciente no body)
       },
       body: JSON.stringify(requestBody)
     }
@@ -453,6 +543,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
       ok: true,
       url: queueData.queueURL || `https://communicare.com.br/queue/${QUEUE_UUID}`,
       provider: 'communicare',
+      reason: 'commercial_hours', // ✅ Adicionar reason para testes
       queuePatientUUID: queueData.queuePatientUUID,
       queueData
     }),
