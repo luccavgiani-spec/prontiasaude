@@ -259,7 +259,7 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen py-8 px-4 sm:px-6 lg:px-8 bg-background">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -267,7 +267,7 @@ const AdminDashboard = () => {
               Painel Administrativo
             </h1>
             <p className="text-muted-foreground">
-              Gerencie o conteúdo do site
+              Gerencie o conteúdo do site e teste integrações
             </p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
@@ -276,7 +276,14 @@ const AdminDashboard = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Tabs defaultValue="conteudo" className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
+            <TabsTrigger value="testes">Testes de Roteamento</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="conteudo">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Content Creation Form */}
           <Card>
             <CardHeader>
@@ -528,7 +535,13 @@ const AdminDashboard = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="testes">
+            <TestesRoteamento />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
