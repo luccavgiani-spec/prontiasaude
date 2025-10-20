@@ -397,7 +397,25 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     );
 
     if (!ssoResponse.ok) {
-      throw new Error(`SSO failed: ${ssoResponse.status}`);
+      const errorText = await ssoResponse.text();
+      console.error(`[Communicare] SSO failed: ${ssoResponse.status}`, errorText);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          provider: 'communicare',
+          error: `SSO authentication failed: ${ssoResponse.status}`,
+          details: {
+            status_code: ssoResponse.status,
+            response_body: errorText,
+            reason: 'Falha na autenticação SSO',
+            endpoint: '/sso'
+          }
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
     }
 
     const ssoData = await ssoResponse.json();
@@ -456,7 +474,24 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   if (!queueResponse.ok) {
     const errorText = await queueResponse.text();
     console.error(`[Communicare] Queue error:`, errorText);
-    throw new Error(`Communicare queue failed: ${errorText}`);
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'communicare',
+        error: `Falha ao enfileirar paciente: ${queueResponse.status}`,
+        details: {
+          status_code: queueResponse.status,
+          response_body: errorText,
+          reason: 'Erro ao adicionar paciente na fila',
+          endpoint: '/v1/queue',
+          patient_id: patientResult.patientId
+        }
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 
   const queueData = await queueResponse.json();

@@ -358,25 +358,35 @@ const TestesRoteamento: React.FC = () => {
     } catch (error: any) {
       console.error('[QA Test] Erro:', error);
       
-      // Tentar extrair detalhes do erro da Edge Function
+      // Extrair detalhes do erro da Edge Function
       let errorDetails = error.message || 'Erro desconhecido';
       let errorContext = null;
       
-      // Se for FunctionsHttpError, tentar pegar contexto adicional
+      // Supabase FunctionsHttpError retorna context como Response object
+      // Precisamos ler assincronamente
       if (error.context) {
-        errorContext = error.context;
-      }
-      
-      // Tentar parsear mensagem de erro estruturada da Edge Function
-      if (error.message && error.message.includes('{')) {
         try {
-          const jsonMatch = error.message.match(/\{.*\}/s);
-          if (jsonMatch) {
-            errorContext = JSON.parse(jsonMatch[0]);
-            errorDetails = errorContext.error || errorDetails;
+          // Tentar ler como JSON primeiro
+          const contextClone = error.context.clone();
+          try {
+            errorContext = await contextClone.json();
+            console.log('[QA Test] Contexto parseado:', errorContext);
+            
+            // Se o contexto tiver um campo 'error', usar como mensagem principal
+            if (errorContext.error) {
+              errorDetails = errorContext.error;
+            }
+          } catch {
+            // Se falhar JSON, tentar text
+            const textContent = await error.context.text();
+            console.log('[QA Test] Contexto (text):', textContent);
+            errorContext = { raw: textContent };
+            if (textContent) {
+              errorDetails = textContent;
+            }
           }
-        } catch (parseError) {
-          console.warn('[QA Test] Não foi possível parsear erro JSON:', parseError);
+        } catch (contextError) {
+          console.error('[QA Test] Erro ao ler contexto:', contextError);
         }
       }
       
@@ -387,7 +397,7 @@ const TestesRoteamento: React.FC = () => {
         status: 'falhou',
         response_time: responseTime,
         request: testData,
-        response: errorContext, // Incluir contexto estruturado se disponível
+        response: errorContext, // Contexto estruturado da Edge Function
         error: errorDetails
       };
 
