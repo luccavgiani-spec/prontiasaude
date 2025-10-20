@@ -170,29 +170,20 @@ serve(async (req) => {
           throw authError;
         }
 
-        // Prepare GAS API payload
-        const gasPayload = {
-          first_name: name.split(' ')[0] || '',
-          last_name: name.split(' ').slice(1).join(' ') || '',
-          email,
-          phone: phone_e164
-        };
+        const userId = authData?.user?.id || null;
 
-        // Call GAS API
-        const gasResponse = await fetch(`${gasBase}?path=site-register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(gasPayload)
+        console.log('[upsert_patient] User created/exists:', { 
+          email, 
+          userId,
+          status: authData ? 'created' : 'already_exists'
         });
-
-        const gasResult = await gasResponse.text();
 
         return new Response(
           JSON.stringify({ 
             success: true, 
-            supabase: authData ? 'created' : 'exists', 
-            gas: gasResult,
-            gasStatus: gasResponse.status
+            user_id: userId,
+            status: authData ? 'created' : 'exists',
+            message: 'Usuário registrado. Complete o perfil para finalizar o cadastro.'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
