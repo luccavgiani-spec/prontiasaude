@@ -5,30 +5,25 @@ import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { Building2, User, Lock, HelpCircle, LogOut } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCNPJ } from '@/lib/validations';
-
 export default function EmpresaDashboard() {
-  const { company, loading } = useCompanyAuth();
+  const {
+    company,
+    loading
+  } = useCompanyAuth();
   const navigate = useNavigate();
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/empresa/login');
   };
-
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
+    return <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando...</p>
-      </div>
-    );
+      </div>;
   }
-
   if (!company) {
     return null;
   }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted">
+  return <div className="min-h-screen bg-gradient-to-br from-background to-muted">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -101,7 +96,7 @@ export default function EmpresaDashboard() {
                 </p>
                 <ul className="text-sm space-y-2">
                   <li>📧 Email: suporte@prontia.com.br</li>
-                  <li>📞 Telefone: (11) 1234-5678</li>
+                  <li>📞 Telefone: (11) 93335-9187</li>
                   <li>💬 Horário de atendimento: Segunda a Sexta, 9h às 18h</li>
                 </ul>
               </CardContent>
@@ -109,6 +104,5 @@ export default function EmpresaDashboard() {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 }
