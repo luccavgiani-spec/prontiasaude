@@ -351,26 +351,15 @@ const TestesRoteamento: React.FC = () => {
     // Guardar estado atual do force_clicklife
     const originalForce = forceClicklife;
     
+    // Desativar force_clicklife no início (para garantir testes limpos K2-K6)
+    await supabase.from('admin_settings').upsert({ 
+      key: 'force_clicklife', 
+      value: 'false',
+      updated_at: new Date().toISOString()
+    });
+    setForceClicklife(false);
+    
     const subcases = [
-      { 
-        id: 'K1', 
-        nome: 'Admin Override',
-        setup: async () => {
-          // Ativar force_clicklife temporariamente
-          await supabase.from('admin_settings').upsert({ 
-            key: 'force_clicklife', 
-            value: 'true',
-            updated_at: new Date().toISOString()
-          });
-        },
-        payload: {
-          especialidade: 'clinico geral',
-          sku: 'ITC6534',
-          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(), // Segunda 14h Brasília
-          plano_ativo: false
-        },
-        expected: { provider: 'clicklife', reason: 'admin_override' }
-      },
       {
         id: 'K2',
         nome: 'Plano Ativo + Clínico (863)',
@@ -426,10 +415,39 @@ const TestesRoteamento: React.FC = () => {
         },
         expected: { provider: 'clicklife', reason: 'specialty_unavailable' }
       },
+      { 
+        id: 'K1', 
+        nome: 'Admin Override',
+        setup: async () => {
+          // Ativar force_clicklife temporariamente
+          await supabase.from('admin_settings').upsert({ 
+            key: 'force_clicklife', 
+            value: 'true',
+            updated_at: new Date().toISOString()
+          });
+          setForceClicklife(true);
+        },
+        payload: {
+          especialidade: 'clinico geral',
+          sku: 'ITC6534',
+          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(), // Segunda 14h Brasília
+          plano_ativo: false
+        },
+        expected: { provider: 'clicklife', reason: 'admin_override' }
+      },
       {
         id: 'K7',
         nome: '🔐 Validação Token Integrador',
         isTokenTest: true, // Flag para tratamento especial
+        setup: async () => {
+          // Desativar force_clicklife antes do K7 (para não interferir no teste de token)
+          await supabase.from('admin_settings').upsert({ 
+            key: 'force_clicklife', 
+            value: 'false',
+            updated_at: new Date().toISOString()
+          });
+          setForceClicklife(false);
+        },
         payload: null, // Não usa payload padrão
         expected: null // Validação personalizada
       }
@@ -730,11 +748,12 @@ const TestesRoteamento: React.FC = () => {
                 )}
               </Button>
               <div className="mt-3 text-xs text-muted-foreground space-y-1">
-                <p>✓ Admin Override</p>
                 <p>✓ Plano Ativo (863 e 864)</p>
                 <p>✓ Horário Noturno</p>
                 <p>✓ Fim de Semana</p>
                 <p>✓ Especialidade Indisponível</p>
+                <p>✓ Admin Override</p>
+                <p>✓ Token Integrador</p>
               </div>
             </CardContent>
           </Card>
