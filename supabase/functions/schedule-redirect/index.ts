@@ -207,8 +207,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   console.log(`[ClickLife] Motivo: ${reason}`);
 
   const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
-  const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!;
-  const CUPOM_DEFAULT = Deno.env.get('CLICKLIFE_CUPOM_DEFAULT');
+  const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!
 
   // Determinar plano_id: 864 se plano ativo + especialista, senão 863
   const planoId = (payload.plano_ativo && ESPECIALISTA_SKUS.includes(payload.sku)) ? 864 : 863;
@@ -287,12 +286,6 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     senha: PATIENT_PASSWORD, // ✅ Senha padrão do paciente para autenticação
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
-
-  // Adicionar cupom se NÃO tiver plano ativo
-  if (!payload.plano_ativo && CUPOM_DEFAULT) {
-    requestBody.cupom = CUPOM_DEFAULT;
-    console.log(`[ClickLife] Cupom adicionado: ${CUPOM_DEFAULT}`);
-  }
 
   console.log('[ClickLife] Request body:', requestBody);
   console.log('[ClickLife] Auth via header (token mascarado):', `${INTEGRATOR_TOKEN.substring(0, 10)}...`);
