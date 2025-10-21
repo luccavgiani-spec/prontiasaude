@@ -71,6 +71,8 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
         contato_email: company.contato_email || '',
         contato_telefone: company.contato_telefone || '',
         temporaryPassword: '',
+        empresa_id_externo: (company as any).empresa_id_externo || 9083,
+        plano_id_externo: (company as any).plano_id_externo || 864,
       });
     }
   }, [company]);
@@ -181,6 +183,8 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
               contato_nome: formData.contato_nome,
               contato_email: formData.contato_email,
               contato_telefone: formData.contato_telefone,
+              empresa_id_externo: formData.empresa_id_externo,
+              plano_id_externo: formData.plano_id_externo,
             },
             temporaryPassword: password,
           },
@@ -341,6 +345,32 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
                   id="contato_telefone"
                   value={formData.contato_telefone}
                   onChange={(e) => setFormData(prev => ({ ...prev, contato_telefone: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 mt-4">
+            <h3 className="font-medium mb-3">IDs Externos (ClickLife)</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="empresa_id_externo">Empresa ID Externo</Label>
+                <Input
+                  id="empresa_id_externo"
+                  type="number"
+                  value={formData.empresa_id_externo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, empresa_id_externo: parseInt(e.target.value) || 9083 }))}
+                  placeholder="9083"
+                />
+              </div>
+              <div>
+                <Label htmlFor="plano_id_externo">Plano ID Externo</Label>
+                <Input
+                  id="plano_id_externo"
+                  type="number"
+                  value={formData.plano_id_externo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, plano_id_externo: parseInt(e.target.value) || 864 }))}
+                  placeholder="864"
                 />
               </div>
             </div>

@@ -16,6 +16,8 @@ import TestesRoteamento from "@/components/teste/TestesRoteamento";
 import SpecialtiesSelector from "@/components/admin/SpecialtiesSelector";
 import RedirectFlowMap from "@/components/admin/RedirectFlowMap";
 import CompanyManagement from "@/components/admin/CompanyManagement";
+import ReportsTab from "@/components/admin/ReportsTab";
+import UserRegistrationsTab from "@/components/admin/UserRegistrationsTab";
 
 interface ContentItem {
   id: string;
@@ -282,11 +284,13 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="conteudo" className="space-y-6">
-          <TabsList className="grid w-full max-w-4xl grid-cols-4">
+          <TabsList className="grid w-full max-w-6xl grid-cols-6">
             <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
-            <TabsTrigger value="testes">Testes de Roteamento</TabsTrigger>
+            <TabsTrigger value="testes">Testes</TabsTrigger>
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
             <TabsTrigger value="empresas">Empresas</TabsTrigger>
+            <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
+            <TabsTrigger value="cadastros">👥 Cadastros</TabsTrigger>
           </TabsList>
 
           <TabsContent value="conteudo">
@@ -558,6 +562,14 @@ const AdminDashboard = () => {
 
           <TabsContent value="empresas">
             <CompanyManagement />
+          </TabsContent>
+
+          <TabsContent value="relatorios">
+            <ReportsTab />
+          </TabsContent>
+
+          <TabsContent value="cadastros">
+            <UserRegistrationsTab />
           </TabsContent>
         </Tabs>
       </div>
