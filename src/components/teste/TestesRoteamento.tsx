@@ -11,31 +11,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { getServiceNameFromSKU } from '@/lib/sku-mapping';
-import { PlayCircle, CheckCircle, XCircle, ChevronDown, Clock, AlertCircle, ToggleLeft, ToggleRight } from 'lucide-react';
+import { PlayCircle, CheckCircle, XCircle, ChevronDown, Clock, AlertCircle, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface TestScenario {
-  id: string;
-  nome: string;
-  payload: {
-    cpf: string;
-    email: string;
-    nome: string;
-    telefone: string;
-    especialidade: string;
-    sku: string;
-    horario_iso: string;
-    plano_ativo: boolean;
-  };
-  expected: {
-    provider: 'clicklife' | 'communicare';
-    reason: string;
-    plano_id?: number;
-  };
-  observacao?: string;
-}
-
 interface TestResult {
+  suite_id?: string;
+  sub_id?: string;
   scenario_id: string;
   timestamp: string;
   status: 'passou' | 'falhou';
@@ -59,179 +40,50 @@ const SKU_OPTIONS = [
   { value: 'CCP1566', label: 'Ginecologista (CCP1566)' },
 ];
 
-const CENARIOS_TESTE: TestScenario[] = [
-  {
-    id: 'A1',
-    nome: 'Admin Override → ClickLife',
-    payload: {
-      cpf: '12345678900',
-      email: 'teste.a1@prontiasaude.com.br',
-      nome: 'Teste A1 Admin Override',
-      telefone: '+5511999999991',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 21, 14, 0).toISOString(), // segunda 14h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'admin_override'
-    },
-    observacao: 'Requer force_clicklife = true no admin_settings'
-  },
-  {
-    id: 'B1',
-    nome: 'Plano Ativo + Clínico Geral → ClickLife (863)',
-    payload: {
-      cpf: '404.166.998-71', // ✅ CPF válido
-      email: 'teste.b1@prontiasaude.com.br',
-      nome: 'Teste B1 Plano Ativo',
-      telefone: '+5511999999992',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 21, 14, 0).toISOString(),
-      plano_ativo: true
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'active_plan',
-      plano_id: 863
-    }
-  },
-  {
-    id: 'B2',
-    nome: 'Plano Ativo + Especialista → ClickLife (864)',
-    payload: {
-      cpf: '12345678902',
-      email: 'teste.b2@prontiasaude.com.br',
-      nome: 'Teste B2 Especialista',
-      telefone: '+5511999999993',
-      especialidade: 'Cardiologista',
-      sku: 'TQP5720',
-      horario_iso: new Date(2025, 9, 21, 14, 0).toISOString(),
-      plano_ativo: true
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'active_plan',
-      plano_id: 864
-    }
-  },
-  {
-    id: 'C1',
-    nome: 'Sem Plano + Horário Comercial + Clínico → Communicare',
-    payload: {
-      cpf: '404.166.998-71', // ✅ CPF válido (mesmo do B1 para simplificar)
-      email: 'teste.c1@prontiasaude.com.br',
-      nome: 'Teste C1 Communicare',
-      telefone: '+5511999999994',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 21, 14, 0).toISOString(), // segunda 14h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'communicare',
-      reason: 'commercial_hours'
-    }
-  },
-  {
-    id: 'C2',
-    nome: 'Sem Plano + Horário Comercial + Psicólogo → Communicare',
-    payload: {
-      cpf: '12345678904',
-      email: 'teste.c2@prontiasaude.com.br',
-      nome: 'Teste C2 Psicólogo',
-      telefone: '+5511999999995',
-      especialidade: 'psicologo_1',
-      sku: 'ZXW2165',
-      horario_iso: new Date(2025, 9, 21, 10, 0).toISOString(), // segunda 10h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'communicare',
-      reason: 'commercial_hours'
-    }
-  },
-  {
-    id: 'C3',
-    nome: 'Sem Plano + Especialidade Indisponível → ClickLife',
-    payload: {
-      cpf: '12345678905',
-      email: 'teste.c3@prontiasaude.com.br',
-      nome: 'Teste C3 Especialista',
-      telefone: '+5511999999996',
-      especialidade: 'Cardiologista',
-      sku: 'TQP5720',
-      horario_iso: new Date(2025, 9, 21, 14, 0).toISOString(),
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'specialty_unavailable'
-    }
-  },
-  {
-    id: 'D1',
-    nome: 'Sem Plano + Noturno → ClickLife',
-    payload: {
-      cpf: '279.248.818-24', // ✅ CPF válido diferente
-      email: 'teste.d1@prontiasaude.com.br',
-      nome: 'Teste D1 Noturno',
-      telefone: '+5511999999997',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 21, 21, 0).toISOString(), // segunda 21h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'nighttime'
-    }
-  },
-  {
-    id: 'D2',
-    nome: 'Sem Plano + Sábado → ClickLife',
-    payload: {
-      cpf: '12345678907',
-      email: 'teste.d2@prontiasaude.com.br',
-      nome: 'Teste D2 Sábado',
-      telefone: '+5511999999998',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 25, 14, 0).toISOString(), // sábado 14h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'weekend'
-    }
-  },
-  {
-    id: 'D3',
-    nome: 'Sem Plano + Domingo → ClickLife',
-    payload: {
-      cpf: '12345678908',
-      email: 'teste.d3@prontiasaude.com.br',
-      nome: 'Teste D3 Domingo',
-      telefone: '+5511999999999',
-      especialidade: 'clinico geral',
-      sku: 'ITC6534',
-      horario_iso: new Date(2025, 9, 26, 10, 0).toISOString(), // domingo 10h
-      plano_ativo: false
-    },
-    expected: {
-      provider: 'clicklife',
-      reason: 'weekend'
-    }
+// ========== UTILITÁRIOS ==========
+
+/**
+ * Gera CPF válido aleatório
+ */
+function generateValidCPF(): string {
+  const randomDigits = () => Math.floor(Math.random() * 10);
+  
+  // Gera 9 dígitos aleatórios
+  const digits = Array.from({ length: 9 }, randomDigits);
+  
+  // Calcula primeiro dígito verificador
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += digits[i] * (10 - i);
   }
-];
+  let firstCheck = 11 - (sum % 11);
+  if (firstCheck >= 10) firstCheck = 0;
+  digits.push(firstCheck);
+  
+  // Calcula segundo dígito verificador
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += digits[i] * (11 - i);
+  }
+  let secondCheck = 11 - (sum % 11);
+  if (secondCheck >= 10) secondCheck = 0;
+  digits.push(secondCheck);
+  
+  return digits.join('');
+}
+
+/**
+ * Gera email único com timestamp
+ */
+function uniqueEmail(prefix: string): string {
+  const timestamp = Date.now();
+  return `${prefix}+${timestamp}@prontiasaude.com.br`;
+}
 
 const TestesRoteamento: React.FC = () => {
-  const [selectedScenario, setSelectedScenario] = useState<string>('');
   const [testData, setTestData] = useState({
-    cpf: '12345678900',
-    email: 'teste@prontiasaude.com.br',
+    cpf: generateValidCPF(),
+    email: uniqueEmail('teste'),
     nome: 'Usuário Teste',
     telefone: '+5511999999999',
     especialidade: 'clinico geral',
@@ -245,6 +97,8 @@ const TestesRoteamento: React.FC = () => {
   const [showJson, setShowJson] = useState(false);
   const [forceClicklife, setForceClicklife] = useState(false);
   const [loadingOverride, setLoadingOverride] = useState(false);
+  const [isRunningCommunicare, setIsRunningCommunicare] = useState(false);
+  const [isRunningClicklife, setIsRunningClicklife] = useState(false);
 
   // Carregar status do force_clicklife ao montar
   useEffect(() => {
@@ -257,7 +111,7 @@ const TestesRoteamento: React.FC = () => {
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_clicklife')
-        .single();
+        .maybeSingle();
       
       setForceClicklife(data?.value === 'true');
     } catch (error) {
@@ -289,20 +143,12 @@ const TestesRoteamento: React.FC = () => {
     }
   };
 
-  const loadScenario = (scenarioId: string) => {
-    const scenario = CENARIOS_TESTE.find(s => s.id === scenarioId);
-    if (scenario) {
-      setSelectedScenario(scenarioId);
-      setTestData(scenario.payload);
-    }
-  };
-
   const executeTest = async () => {
     setIsExecuting(true);
     const startTime = Date.now();
 
     try {
-      console.log('[QA Test] Executando teste:', selectedScenario || 'Manual');
+      console.log('[QA Test] Executando teste manual');
       console.log('[QA Test] Request:', testData);
 
       const { data, error } = await supabase.functions.invoke('schedule-redirect', {
@@ -316,29 +162,10 @@ const TestesRoteamento: React.FC = () => {
       console.log('[QA Test] Response:', data);
       console.log(`[QA Test] Tempo de resposta: ${responseTime}ms`);
 
-      // Validar resultado
-      const scenario = CENARIOS_TESTE.find(s => s.id === selectedScenario);
-      let status: 'passou' | 'falhou' = 'passou';
-      
-      if (scenario) {
-        const providerMatch = data.provider === scenario.expected.provider;
-        const reasonMatch = data.reason === scenario.expected.reason;
-        const planoIdMatch = !scenario.expected.plano_id || data.plano_id === scenario.expected.plano_id;
-        
-        status = providerMatch && reasonMatch && planoIdMatch ? 'passou' : 'falhou';
-        
-        console.log('[QA Test] Validação:', {
-          providerMatch,
-          reasonMatch,
-          planoIdMatch,
-          status
-        });
-      }
-
       const result: TestResult = {
-        scenario_id: selectedScenario || 'Manual',
+        scenario_id: 'Manual',
         timestamp: new Date().toISOString(),
-        status,
+        status: 'passou',
         provider: data.provider,
         reason: data.reason,
         plano_id: data.plano_id,
@@ -348,38 +175,24 @@ const TestesRoteamento: React.FC = () => {
       };
 
       setCurrentResult(result);
-      setTestHistory(prev => [result, ...prev].slice(0, 10));
-
-      if (status === 'passou') {
-        toast.success('✅ Teste passou!');
-      } else {
-        toast.error('❌ Teste falhou - resultado divergente do esperado');
-      }
+      setTestHistory(prev => [result, ...prev].slice(0, 20));
+      toast.success('✅ Teste executado com sucesso!');
     } catch (error: any) {
       console.error('[QA Test] Erro:', error);
       
-      // Extrair detalhes do erro da Edge Function
       let errorDetails = error.message || 'Erro desconhecido';
       let errorContext = null;
       
-      // Supabase FunctionsHttpError retorna context como Response object
-      // Precisamos ler assincronamente
       if (error.context) {
         try {
-          // Tentar ler como JSON primeiro
           const contextClone = error.context.clone();
           try {
             errorContext = await contextClone.json();
-            console.log('[QA Test] Contexto parseado:', errorContext);
-            
-            // Se o contexto tiver um campo 'error', usar como mensagem principal
             if (errorContext.error) {
               errorDetails = errorContext.error;
             }
           } catch {
-            // Se falhar JSON, tentar text
             const textContent = await error.context.text();
-            console.log('[QA Test] Contexto (text):', textContent);
             errorContext = { raw: textContent };
             if (textContent) {
               errorDetails = textContent;
@@ -392,25 +205,339 @@ const TestesRoteamento: React.FC = () => {
       
       const responseTime = Date.now() - startTime;
       const result: TestResult = {
-        scenario_id: selectedScenario || 'Manual',
+        scenario_id: 'Manual',
         timestamp: new Date().toISOString(),
         status: 'falhou',
         response_time: responseTime,
         request: testData,
-        response: errorContext, // Contexto estruturado da Edge Function
+        response: errorContext,
         error: errorDetails
       };
 
       setCurrentResult(result);
-      setTestHistory(prev => [result, ...prev].slice(0, 10));
+      setTestHistory(prev => [result, ...prev].slice(0, 20));
       toast.error(`Erro: ${errorDetails}`);
     } finally {
       setIsExecuting(false);
     }
   };
 
-  const getScenarioDetails = () => {
-    return CENARIOS_TESTE.find(s => s.id === selectedScenario);
+  /**
+   * SUÍTE COMMUNICARE
+   * Testa especialidades disponíveis na Communicare durante horário comercial
+   */
+  const runCommunicareSuite = async () => {
+    setIsRunningCommunicare(true);
+    
+    const subcases = [
+      { id: 'C1', especialidade: 'clinico geral', sku: 'ITC6534', nome: 'Clínico Geral' },
+      { id: 'C2', especialidade: 'psicologo_1', sku: 'ZXW2165', nome: 'Psicólogo 1 sessão' },
+      { id: 'C3', especialidade: 'nutricionista', sku: 'VPN5132', nome: 'Nutricionista' },
+    ];
+    
+    // Segunda-feira 14:00 (horário comercial em Brasília UTC-3)
+    const commercialHour = new Date();
+    commercialHour.setHours(17, 0, 0, 0); // 14h Brasília = 17h UTC
+    const dayOfWeek = commercialHour.getDay();
+    if (dayOfWeek === 0) commercialHour.setDate(commercialHour.getDate() + 1); // Se domingo → segunda
+    if (dayOfWeek === 6) commercialHour.setDate(commercialHour.getDate() + 2); // Se sábado → segunda
+    
+    let passed = 0;
+    let failed = 0;
+    
+    for (const subcase of subcases) {
+      const cpf = generateValidCPF();
+      const email = uniqueEmail(`communicare_${subcase.id.toLowerCase()}`);
+      
+      const payload = {
+        cpf,
+        email,
+        nome: `Teste ${subcase.nome}`,
+        telefone: '+5511999999999',
+        especialidade: subcase.especialidade,
+        sku: subcase.sku,
+        horario_iso: commercialHour.toISOString(),
+        plano_ativo: false
+      };
+      
+      const startTime = Date.now();
+      
+      try {
+        console.log(`[Communicare Suite] Executando ${subcase.id}: ${subcase.nome}`);
+        
+        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+          body: payload
+        });
+        
+        const responseTime = Date.now() - startTime;
+        
+        if (error) throw error;
+        
+        // Validar resultado
+        const providerMatch = data.provider === 'communicare';
+        const reasonMatch = data.reason === 'commercial_hours';
+        const status = providerMatch && reasonMatch ? 'passou' : 'falhou';
+        
+        if (status === 'passou') {
+          passed++;
+        } else {
+          failed++;
+        }
+        
+        const result: TestResult = {
+          suite_id: 'COMMUNICARE',
+          sub_id: subcase.id,
+          scenario_id: `Communicare Suite - ${subcase.nome}`,
+          timestamp: new Date().toISOString(),
+          status,
+          provider: data.provider,
+          reason: data.reason,
+          response_time: responseTime,
+          request: payload,
+          response: data,
+          error: !providerMatch ? `Esperado: communicare, Recebido: ${data.provider}` : 
+                 !reasonMatch ? `Esperado reason: commercial_hours, Recebido: ${data.reason}` : undefined
+        };
+        
+        setTestHistory(prev => [result, ...prev].slice(0, 20));
+        
+      } catch (error: any) {
+        failed++;
+        
+        let errorDetails = error.message || 'Erro desconhecido';
+        let errorContext = null;
+        
+        if (error.context) {
+          try {
+            const contextClone = error.context.clone();
+            errorContext = await contextClone.json();
+            if (errorContext.error) errorDetails = errorContext.error;
+          } catch {}
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const result: TestResult = {
+          suite_id: 'COMMUNICARE',
+          sub_id: subcase.id,
+          scenario_id: `Communicare Suite - ${subcase.nome}`,
+          timestamp: new Date().toISOString(),
+          status: 'falhou',
+          response_time: responseTime,
+          request: payload,
+          response: errorContext,
+          error: errorDetails
+        };
+        
+        setTestHistory(prev => [result, ...prev].slice(0, 20));
+      }
+    }
+    
+    setIsRunningCommunicare(false);
+    
+    if (failed === 0) {
+      toast.success(`✅ Suíte Communicare: ${passed}/${subcases.length} testes passaram`);
+    } else {
+      toast.error(`❌ Suíte Communicare: ${failed}/${subcases.length} testes falharam`);
+    }
+  };
+
+  /**
+   * SUÍTE CLICKLIFE
+   * Testa: admin_override, plano_ativo (863/864), noturno, fim de semana, especialidade indisponível
+   */
+  const runClicklifeSuite = async () => {
+    setIsRunningClicklife(true);
+    
+    // Guardar estado atual do force_clicklife
+    const originalForce = forceClicklife;
+    
+    const subcases = [
+      { 
+        id: 'K1', 
+        nome: 'Admin Override',
+        setup: async () => {
+          // Ativar force_clicklife temporariamente
+          await supabase.from('admin_settings').upsert({ 
+            key: 'force_clicklife', 
+            value: 'true',
+            updated_at: new Date().toISOString()
+          });
+        },
+        payload: {
+          especialidade: 'clinico geral',
+          sku: 'ITC6534',
+          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(), // Segunda 14h Brasília
+          plano_ativo: false
+        },
+        expected: { provider: 'clicklife', reason: 'admin_override' }
+      },
+      {
+        id: 'K2',
+        nome: 'Plano Ativo + Clínico (863)',
+        payload: {
+          especialidade: 'clinico geral',
+          sku: 'ITC6534',
+          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
+          plano_ativo: true
+        },
+        expected: { provider: 'clicklife', reason: 'active_plan', plano_id: 863 }
+      },
+      {
+        id: 'K3',
+        nome: 'Plano Ativo + Especialista (864)',
+        payload: {
+          especialidade: 'Cardiologista',
+          sku: 'TQP5720',
+          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
+          plano_ativo: true
+        },
+        expected: { provider: 'clicklife', reason: 'active_plan', plano_id: 864 }
+      },
+      {
+        id: 'K4',
+        nome: 'Horário Noturno',
+        payload: {
+          especialidade: 'clinico geral',
+          sku: 'ITC6534',
+          horario_iso: new Date(2025, 9, 22, 3, 0).toISOString(), // 00:00 Brasília (03:00 UTC)
+          plano_ativo: false
+        },
+        expected: { provider: 'clicklife', reason: 'nighttime' }
+      },
+      {
+        id: 'K5',
+        nome: 'Fim de Semana (Sábado)',
+        payload: {
+          especialidade: 'clinico geral',
+          sku: 'ITC6534',
+          horario_iso: new Date(2025, 9, 25, 17, 0).toISOString(), // Sábado 14h
+          plano_ativo: false
+        },
+        expected: { provider: 'clicklife', reason: 'weekend' }
+      },
+      {
+        id: 'K6',
+        nome: 'Especialidade Indisponível',
+        payload: {
+          especialidade: 'Cardiologista',
+          sku: 'TQP5720',
+          horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
+          plano_ativo: false
+        },
+        expected: { provider: 'clicklife', reason: 'specialty_unavailable' }
+      }
+    ];
+    
+    let passed = 0;
+    let failed = 0;
+    
+    for (const subcase of subcases) {
+      // Setup (se houver)
+      if (subcase.setup) {
+        await subcase.setup();
+      }
+      
+      const cpf = generateValidCPF();
+      const email = uniqueEmail(`clicklife_${subcase.id.toLowerCase()}`);
+      
+      const payload = {
+        cpf,
+        email,
+        nome: `Teste ${subcase.nome}`,
+        telefone: '+5511999999999',
+        ...subcase.payload
+      };
+      
+      const startTime = Date.now();
+      
+      try {
+        console.log(`[ClickLife Suite] Executando ${subcase.id}: ${subcase.nome}`);
+        
+        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+          body: payload
+        });
+        
+        const responseTime = Date.now() - startTime;
+        
+        if (error) throw error;
+        
+        // Validar resultado
+        const providerMatch = data.provider === subcase.expected.provider;
+        const reasonMatch = data.reason === subcase.expected.reason;
+        const planoIdMatch = !subcase.expected.plano_id || data.plano_id === subcase.expected.plano_id;
+        const status = providerMatch && reasonMatch && planoIdMatch ? 'passou' : 'falhou';
+        
+        if (status === 'passou') {
+          passed++;
+        } else {
+          failed++;
+        }
+        
+        const result: TestResult = {
+          suite_id: 'CLICKLIFE',
+          sub_id: subcase.id,
+          scenario_id: `ClickLife Suite - ${subcase.nome}`,
+          timestamp: new Date().toISOString(),
+          status,
+          provider: data.provider,
+          reason: data.reason,
+          plano_id: data.plano_id,
+          response_time: responseTime,
+          request: payload,
+          response: data,
+          error: !providerMatch ? `Esperado: ${subcase.expected.provider}, Recebido: ${data.provider}` : 
+                 !reasonMatch ? `Esperado reason: ${subcase.expected.reason}, Recebido: ${data.reason}` :
+                 !planoIdMatch ? `Esperado plano_id: ${subcase.expected.plano_id}, Recebido: ${data.plano_id}` : undefined
+        };
+        
+        setTestHistory(prev => [result, ...prev].slice(0, 20));
+        
+      } catch (error: any) {
+        failed++;
+        
+        let errorDetails = error.message || 'Erro desconhecido';
+        let errorContext = null;
+        
+        if (error.context) {
+          try {
+            const contextClone = error.context.clone();
+            errorContext = await contextClone.json();
+            if (errorContext.error) errorDetails = errorContext.error;
+          } catch {}
+        }
+        
+        const responseTime = Date.now() - startTime;
+        const result: TestResult = {
+          suite_id: 'CLICKLIFE',
+          sub_id: subcase.id,
+          scenario_id: `ClickLife Suite - ${subcase.nome}`,
+          timestamp: new Date().toISOString(),
+          status: 'falhou',
+          response_time: responseTime,
+          request: payload,
+          response: errorContext,
+          error: errorDetails
+        };
+        
+        setTestHistory(prev => [result, ...prev].slice(0, 20));
+      }
+    }
+    
+    // Restaurar force_clicklife ao valor original
+    await supabase.from('admin_settings').upsert({ 
+      key: 'force_clicklife', 
+      value: originalForce.toString(),
+      updated_at: new Date().toISOString()
+    });
+    setForceClicklife(originalForce);
+    
+    setIsRunningClicklife(false);
+    
+    if (failed === 0) {
+      toast.success(`✅ Suíte ClickLife: ${passed}/${subcases.length} testes passaram`);
+    } else {
+      toast.error(`❌ Suíte ClickLife: ${failed}/${subcases.length} testes falharam`);
+    }
   };
 
   return (
@@ -452,51 +579,75 @@ const TestesRoteamento: React.FC = () => {
       </Card>
 
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Configuração do Teste */}
+        {/* Suítes Automatizadas */}
         <div className="space-y-4">
-          <Card>
+          <Card className="border-2 border-blue-500/20">
             <CardHeader>
-              <CardTitle>Cenário Pré-Configurado</CardTitle>
-              <CardDescription>Selecione um dos 12 cenários de teste</CardDescription>
+              <CardTitle className="text-blue-600">🔵 Suíte Communicare</CardTitle>
+              <CardDescription>
+                Testa especialidades disponíveis na Communicare durante horário comercial
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <Select value={selectedScenario} onValueChange={loadScenario}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um cenário..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {CENARIOS_TESTE.map(scenario => (
-                    <SelectItem key={scenario.id} value={scenario.id}>
-                      {scenario.id}: {scenario.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <CardContent>
+              <Button
+                onClick={runCommunicareSuite}
+                disabled={isRunningCommunicare || isRunningClicklife}
+                className="w-full"
+                size="lg"
+              >
+                {isRunningCommunicare ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Executando Suíte...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-5 w-5" />
+                    Rodar Suíte Communicare
+                  </>
+                )}
+              </Button>
+              <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                <p>✓ Clínico Geral (horário comercial)</p>
+                <p>✓ Psicólogo 1 sessão (horário comercial)</p>
+                <p>✓ Nutricionista (horário comercial)</p>
+              </div>
+            </CardContent>
+          </Card>
 
-              {getScenarioDetails() && (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Esperado:</strong>
-                    <br />
-                    Provider: {getScenarioDetails()!.expected.provider}
-                    <br />
-                    Reason: {getScenarioDetails()!.expected.reason}
-                    {getScenarioDetails()!.expected.plano_id && (
-                      <>
-                        <br />
-                        Plano ID: {getScenarioDetails()!.expected.plano_id}
-                      </>
-                    )}
-                    {getScenarioDetails()!.observacao && (
-                      <>
-                        <br />
-                        <span className="text-xs italic">{getScenarioDetails()!.observacao}</span>
-                      </>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
+          <Card className="border-2 border-green-500/20">
+            <CardHeader>
+              <CardTitle className="text-green-600">🟢 Suíte ClickLife</CardTitle>
+              <CardDescription>
+                Testa todas as regras de roteamento para ClickLife
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={runClicklifeSuite}
+                disabled={isRunningCommunicare || isRunningClicklife}
+                className="w-full"
+                size="lg"
+              >
+                {isRunningClicklife ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Executando Suíte...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-5 w-5" />
+                    Rodar Suíte ClickLife
+                  </>
+                )}
+              </Button>
+              <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                <p>✓ Admin Override</p>
+                <p>✓ Plano Ativo (863 e 864)</p>
+                <p>✓ Horário Noturno</p>
+                <p>✓ Fim de Semana</p>
+                <p>✓ Especialidade Indisponível</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -570,18 +721,18 @@ const TestesRoteamento: React.FC = () => {
 
               <Button
                 onClick={executeTest}
-                disabled={isExecuting}
+                disabled={isExecuting || isRunningCommunicare || isRunningClicklife}
                 className="w-full"
                 size="lg"
               >
                 <PlayCircle className="mr-2 h-5 w-5" />
-                {isExecuting ? 'Executando...' : 'Executar Teste'}
+                {isExecuting ? 'Executando...' : 'Executar Teste Manual'}
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Resultado */}
+        {/* Resultado e Histórico */}
         <div className="space-y-4">
           {currentResult && (
             <Card>
@@ -601,7 +752,6 @@ const TestesRoteamento: React.FC = () => {
                     <AlertDescription>
                       <strong>Erro:</strong> {currentResult.error}
                       
-                      {/* Mostrar contexto adicional se existir */}
                       {currentResult.response && (
                         <div className="mt-3 p-3 bg-destructive/10 rounded text-xs font-mono overflow-auto max-h-60">
                           <p className="font-semibold mb-1 font-sans">Detalhes do erro:</p>
@@ -669,7 +819,7 @@ const TestesRoteamento: React.FC = () => {
           {/* Histórico */}
           <Card>
             <CardHeader>
-              <CardTitle>Histórico (últimos 10 testes)</CardTitle>
+              <CardTitle>Histórico (últimos 20 testes)</CardTitle>
             </CardHeader>
             <CardContent>
               {testHistory.length === 0 ? (
@@ -677,36 +827,38 @@ const TestesRoteamento: React.FC = () => {
                   Nenhum teste executado ainda
                 </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>ID</TableHead>
-                      <TableHead>Horário</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Tempo</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {testHistory.map((test, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="font-mono text-xs">{test.scenario_id}</TableCell>
-                        <TableCell className="text-xs">
-                          {new Date(test.timestamp).toLocaleTimeString('pt-BR')}
-                        </TableCell>
-                        <TableCell>
+                <div className="space-y-2">
+                  {testHistory.map((test, idx) => (
+                    <div key={idx} className="border rounded p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
                           {test.status === 'passou' ? (
                             <Badge variant="default" className="text-xs">✅</Badge>
                           ) : (
                             <Badge variant="destructive" className="text-xs">❌</Badge>
                           )}
-                        </TableCell>
-                        <TableCell className="text-xs">{test.provider || '-'}</TableCell>
-                        <TableCell className="text-xs">{test.response_time}ms</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                          <span className="font-mono text-xs font-semibold">
+                            {test.suite_id ? `${test.suite_id}/${test.sub_id}` : test.scenario_id}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(test.timestamp).toLocaleTimeString('pt-BR')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{test.scenario_id}</p>
+                      {test.provider && (
+                        <div className="flex items-center gap-2 text-xs">
+                          <Badge variant="outline">{test.provider}</Badge>
+                          <span className="text-muted-foreground">{test.reason}</span>
+                          {test.plano_id && <Badge variant="secondary">Plano {test.plano_id}</Badge>}
+                        </div>
+                      )}
+                      {test.error && (
+                        <p className="text-xs text-destructive mt-1">⚠️ {test.error}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

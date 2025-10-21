@@ -136,7 +136,10 @@ async function registerClickLifePatient(
     
     const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'authtoken': INTEGRATOR_TOKEN // ✅ Token no header para ativação
+      },
       body: JSON.stringify(activationPayload)
     });
     
@@ -434,7 +437,22 @@ async function createCommunicarePatient(
   if (res.status === 201 || res.status === 409) {
     console.log('[Communicare Patients] ✓ Paciente criado ou já existente');
     
-    // ✅ OBTER patientId numérico via GET
+    // ✅ Tentar extrair patientId do POST response primeiro
+    let patientId: number | undefined;
+    
+    try {
+      const postData = JSON.parse(resText);
+      patientId = postData.id || postData.patientId;
+      
+      if (patientId) {
+        console.log('[Communicare Patients] ✓ patientId obtido do POST:', patientId);
+        return { success: true, patientId };
+      }
+    } catch (e) {
+      console.log('[Communicare Patients] POST response não contém ID, consultando via GET...');
+    }
+    
+    // ✅ Se não tiver ID no POST, fazer GET
     console.log('[Communicare Patients] Consultando patientId via GET...');
     const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
       method: 'GET',
@@ -442,14 +460,29 @@ async function createCommunicarePatient(
     });
     
     if (getRes.ok) {
-      const patients = await getRes.json();
-      const patientId = patients[0]?.id;
-      console.log('[Communicare Patients] ✓ patientId obtido:', patientId);
-      return { success: true, patientId: patientId };
-    } else {
-      console.warn('[Communicare Patients] ⚠️ Não foi possível obter patientId');
-      return { success: true }; // Não bloquear fluxo
+      const getBody = await getRes.text();
+      console.log('[Communicare Patients] GET Response body:', getBody);
+      
+      try {
+        const getData = JSON.parse(getBody);
+        // Pode ser array ou objeto
+        if (Array.isArray(getData)) {
+          patientId = getData[0]?.id;
+        } else {
+          patientId = getData.id;
+        }
+        
+        if (patientId) {
+          console.log('[Communicare Patients] ✓ patientId obtido via GET:', patientId);
+          return { success: true, patientId };
+        }
+      } catch (e) {
+        console.error('[Communicare Patients] Erro ao parsear GET response:', e);
+      }
     }
+    
+    console.warn('[Communicare Patients] ⚠️ Não foi possível obter patientId');
+    return { success: false, error: 'Paciente criado mas ID não obtido' };
   }
   
   console.error('[Communicare Patients] ⚠️ Erro ao criar paciente');
