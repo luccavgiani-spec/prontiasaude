@@ -123,7 +123,40 @@ async function registerClickLifePatient(
       // Resposta pode não ser JSON
     }
     
-    // ✅ PASSO 2: Fazer login para obter token do usuário
+    // ✅ PASSO 2: Ativar o usuário usando token do integrador
+    console.log('[ClickLife] Ativando usuário:', cpfClean);
+    
+    const activationPayload = {
+      authtoken: INTEGRATOR_TOKEN,
+      cpf: cpfClean,
+      empresaid: 9083,
+      planoid: planoId,
+      proposito: "Ativar"
+    };
+    
+    console.log('[ClickLife] Payload de ativação:', JSON.stringify({
+      ...activationPayload,
+      authtoken: INTEGRATOR_TOKEN.substring(0, 20) + '...' // Mascarar token nos logs
+    }));
+    
+    const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(activationPayload)
+    });
+    
+    if (!activationRes.ok) {
+      const activationError = await activationRes.text();
+      console.error('[ClickLife] Erro na ativação:', activationRes.status, activationError);
+      return { success: false, error: `Falha na ativação: HTTP ${activationRes.status}` };
+    }
+    
+    const activationData = await activationRes.json();
+    console.log('[ClickLife] ✓ Usuário ativado com sucesso:', activationData);
+    
+    // ✅ PASSO 3: Fazer login para obter token do usuário
     console.log('[ClickLife] Fazendo login do usuário:', cpfClean);
     
     const loginPayload = {
@@ -135,7 +168,6 @@ async function registerClickLifePatient(
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json'
-        // ❌ Não enviar authtoken no header do login
       },
       body: JSON.stringify(loginPayload)
     });
@@ -156,37 +188,6 @@ async function registerClickLifePatient(
     
     console.log('[ClickLife] ✓ Login bem-sucedido, token obtido');
     console.log('[ClickLife] Token do usuário (primeiros 20 chars):', userToken.substring(0, 20) + '...');
-    
-    // ✅ PASSO 3: Ativar o usuário usando o token dele
-    console.log('[ClickLife] Ativando usuário:', cpfClean);
-    
-    const activationPayload = {
-      authtoken: userToken,
-      cpf: cpfClean,
-      empresaid: 9083,
-      planoid: planoId,
-      proposito: "Ativar"
-    };
-    
-    console.log('[ClickLife] Payload de ativação:', JSON.stringify(activationPayload));
-    
-    const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-        // ✅ authtoken vai apenas no body
-      },
-      body: JSON.stringify(activationPayload)
-    });
-    
-    if (!activationRes.ok) {
-      const activationError = await activationRes.text();
-      console.error('[ClickLife] Erro na ativação:', activationRes.status, activationError);
-      return { success: false, error: `Falha na ativação: HTTP ${activationRes.status}` };
-    }
-    
-    const activationData = await activationRes.json();
-    console.log('[ClickLife] ✓ Usuário ativado com sucesso:', activationData);
     
     return { success: true };
   }
