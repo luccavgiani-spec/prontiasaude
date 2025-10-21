@@ -8,25 +8,30 @@ export interface PatientPlan {
 
 export const getPatientPlan = async (email: string): Promise<PatientPlan | null> => {
   try {
-    const { data, error } = await supabase.functions.invoke('appointments-manager', {
-      body: {
-        operation: 'get_patient_plan',
-        email: email
-      }
-    });
+    const { data, error } = await supabase
+      .from('patient_plans')
+      .select('plan_code, plan_expires_at, status')
+      .eq('email', email)
+      .eq('status', 'active')
+      .gte('plan_expires_at', new Date().toISOString())
+      .order('plan_expires_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (error) {
-      console.error('Error fetching patient plan:', error);
+      console.error('[patient-plan] Error fetching plan:', error);
       return null;
     }
 
-    if (data?.success && data?.plan) {
-      return data.plan;
+    if (!data) {
+      console.log('[patient-plan] No active plan found for:', email);
+      return null;
     }
 
-    return null;
+    console.log('[patient-plan] Active plan found:', data);
+    return data;
   } catch (error) {
-    console.error('Exception fetching patient plan:', error);
+    console.error('[patient-plan] Exception:', error);
     return null;
   }
 };

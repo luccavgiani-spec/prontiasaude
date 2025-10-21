@@ -281,6 +281,39 @@ export type Database = {
           },
         ]
       }
+      patient_plans: {
+        Row: {
+          created_at: string | null
+          email: string
+          id: string
+          plan_code: string
+          plan_expires_at: string
+          status: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          id?: string
+          plan_code: string
+          plan_expires_at: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          id?: string
+          plan_code?: string
+          plan_expires_at?: string
+          status?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       patients: {
         Row: {
           address_complement: string | null

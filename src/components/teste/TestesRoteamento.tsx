@@ -667,32 +667,29 @@ const TestesRoteamento: React.FC = () => {
         }
       };
       
-      // Chamar o webhook proxy
-      const response = await fetch('https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/mp-webhook-proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(mockPayload)
+      // Chamar via supabase.functions.invoke para evitar CORS
+      const { data, error } = await supabase.functions.invoke('mp-webhook', {
+        body: mockPayload
       });
       
       const responseTime = Date.now() - startTime;
-      const responseData = await response.text();
+      
+      if (error) throw error;
       
       const result: TestResult = {
         scenario_id: `Webhook MP - ${paymentMethod.toUpperCase()}`,
         timestamp: new Date().toISOString(),
-        status: response.ok ? 'passou' : 'falhou',
+        status: data?.success ? 'passou' : 'falhou',
         provider: 'mercadopago',
         response_time: responseTime,
         request: mockPayload,
-        response: { status: response.status, data: responseData },
-        error: !response.ok ? `HTTP ${response.status}: ${responseData}` : undefined
+        response: data,
+        error: !data?.success ? `Erro: ${data?.error || 'Webhook não retornou sucesso'}` : undefined
       };
       
       setTestHistory(prev => [result, ...prev].slice(0, 20));
       
-      if (response.ok) {
+      if (data?.success) {
         toast.success(`✅ Webhook MP ${paymentMethod.toUpperCase()} operante!`);
       } else {
         toast.error(`❌ Webhook MP ${paymentMethod.toUpperCase()} falhou!`);

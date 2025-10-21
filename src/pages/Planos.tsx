@@ -239,10 +239,13 @@ const Planos = () => {
     }
 
     // 3. Sem plano ativo: abrir modal de assinatura
+    // Calcular valor total = precoMensal × meses (em centavos)
+    const valorTotal = precoMensal * meses;
+    
     setSelectedPlan({
       sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
       name: plano.nome,
-      amount: precoMensal,
+      amount: valorTotal,
       recurring: true,
       frequency: meses,
       frequencyType: 'months',

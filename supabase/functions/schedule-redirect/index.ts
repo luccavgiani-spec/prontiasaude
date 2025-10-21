@@ -42,6 +42,40 @@ const ESPECIALISTA_SKUS = [
 ];
 
 /**
+ * Normaliza strings removendo acentos, convertendo para lowercase e trim
+ */
+function normalize(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+/**
+ * Mapa de nomes "pretty" para slugs (após normalização)
+ */
+const DISPLAY_TO_SLUG: Record<string, string> = {
+  'clinico geral': 'clinico-geral',
+  'psicologo - 1 sessao': 'psicologo',
+  'psicologo - 4 sessoes': 'psicologo',
+  'psicologo - 8 sessoes': 'psicologo',
+  'psicologo 1 sessao': 'psicologo',
+  'psicologo 4 sessoes': 'psicologo',
+  'psicologo 8 sessoes': 'psicologo',
+  'nutricionista': 'nutricionista',
+  'personal trainer': 'personal-trainer',
+  'geriatria': 'geriatria',
+  'nutrologo': 'nutrologo',
+  'infectologista': 'infectologista',
+  'neurologista': 'neurologista',
+  'reumatologista': 'reumatologista',
+  'solicitacao de exames': 'solicitacao-exames',
+  'renovacao de receitas': 'renovacao-receitas',
+  'laudos psicologicos': 'laudos'
+};
+
+/**
  * Busca especialidades Communicare do banco de dados
  */
 async function getCommunicareSpecialties(supabase: any): Promise<string[]> {
@@ -55,22 +89,22 @@ async function getCommunicareSpecialties(supabase: any): Promise<string[]> {
     try {
       const specialties = JSON.parse(data.value);
       if (Array.isArray(specialties)) {
-        console.log('[schedule-redirect] Especialidades Communicare (do banco):', specialties);
-        return specialties;
+        const normalized = specialties.map(s => normalize(s));
+        console.log('[schedule-redirect] Especialidades Communicare (normalizadas):', normalized);
+        return normalized;
       }
     } catch (e) {
       console.error('[schedule-redirect] Erro ao parsear especialidades:', e);
     }
   }
 
-  // Fallback para lista hardcoded
+  // Fallback já normalizado
   const fallback = [
-    'clinico geral', 'consulta', 'laudos', 'psicologo_8', 'psicologo_4',
-    'psicologo_1', 'geriatria', 'nutrologo', 'infectologista', 'neurologista',
-    'reumatologista', 'nutricionista', 'personal trainer', 'solicitacao_exames',
-    'renovacao_receitas'
+    'clinico-geral', 'psicologo', 'nutricionista', 'personal-trainer',
+    'geriatria', 'nutrologo', 'infectologista', 'neurologista',
+    'reumatologista', 'solicitacao-exames', 'renovacao-receitas', 'laudos'
   ];
-  console.log('[schedule-redirect] Usando especialidades fallback');
+  console.log('[schedule-redirect] Usando especialidades fallback (normalizadas)');
   return fallback;
 }
 
@@ -291,9 +325,20 @@ Deno.serve(async (req) => {
       return await redirectClickLife(payload, 'nighttime');
     }
 
-    // 5. Verificar disponibilidade na Communicare (buscar do banco)
+    // 5. Verificar disponibilidade na Communicare
     const communicareSpecialties = await getCommunicareSpecialties(supabase);
-    if (!communicareSpecialties.includes(especialidadeNorm)) {
+    
+    const especialidadeNormalized = normalize(payload.especialidade || '');
+    const especialidadeSlug = DISPLAY_TO_SLUG[especialidadeNormalized] || especialidadeNormalized;
+    
+    console.log('[schedule-redirect] Comparando:', {
+      original: payload.especialidade,
+      normalized: especialidadeNormalized,
+      slug: especialidadeSlug,
+      disponivel: communicareSpecialties
+    });
+    
+    if (!communicareSpecialties.includes(especialidadeSlug)) {
       console.log('[schedule-redirect] Especialidade indisponível na Communicare → ClickLife');
       return await redirectClickLife(payload, 'specialty_unavailable');
     }

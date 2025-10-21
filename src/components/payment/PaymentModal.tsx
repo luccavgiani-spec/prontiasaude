@@ -296,7 +296,7 @@ export function PaymentModal({
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
       
-      const paymentRequest = {
+      const paymentRequest: any = {
         items: [{
           id: sku,
           title: serviceName,
@@ -320,6 +320,16 @@ export function PaymentModal({
           schedulePayload
         }
       };
+
+      // Adicionar auto_recurring se for assinatura
+      if (recurring && frequency && frequencyType) {
+        paymentRequest.auto_recurring = {
+          frequency,
+          frequency_type: frequencyType,
+          transaction_amount: amount / 100,
+          currency_id: 'BRL'
+        };
+      }
 
       console.log('[handleCardSubmit] Payment request:', paymentRequest);
 
@@ -384,7 +394,7 @@ export function PaymentModal({
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
       
-      const paymentRequest = {
+      const paymentRequest: any = {
         items: [{
           id: sku,
           title: serviceName,
@@ -405,6 +415,16 @@ export function PaymentModal({
           schedulePayload
         }
       };
+
+      // Adicionar auto_recurring se for assinatura
+      if (recurring && frequency && frequencyType) {
+        paymentRequest.auto_recurring = {
+          frequency,
+          frequency_type: frequencyType,
+          transaction_amount: amount / 100,
+          currency_id: 'BRL'
+        };
+      }
 
       console.log('[handlePixSubmit] Payment request:', paymentRequest);
 
