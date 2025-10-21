@@ -95,7 +95,8 @@ Deno.serve(async (req) => {
 
     console.log('[mp-create-payment] Payment created successfully:', {
       payment_id: responseData.id,
-      status: responseData.status
+      status: responseData.status,
+      status_detail: responseData.status_detail
     });
 
     return new Response(
@@ -103,6 +104,8 @@ Deno.serve(async (req) => {
         success: true,
         payment_id: responseData.id,
         status: responseData.status,
+        status_detail: responseData.status_detail,
+        error_message: responseData.error?.message,
         qr_code: responseData.point_of_interaction?.transaction_data?.qr_code,
         qr_code_base64: responseData.point_of_interaction?.transaction_data?.qr_code_base64,
         ticket_url: responseData.point_of_interaction?.transaction_data?.ticket_url,

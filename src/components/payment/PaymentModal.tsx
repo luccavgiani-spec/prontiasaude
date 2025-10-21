@@ -199,12 +199,25 @@ export function PaymentModal({
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
 
+    // ✅ Validar dados antes de montar o Brick
+    if (!formData.email || !formData.cpf || !formData.name) {
+      setError('Preencha seus dados pessoais antes de adicionar o cartão');
+      return;
+    }
+
     try {
       const bricksBuilder = mpInstanceRef.current.bricks();
       
       const cardPaymentBrick = await bricksBuilder.create('cardPayment', 'cardPaymentBrick', {
         initialization: {
           amount: amount / 100,
+          payer: {  // ✅ Adicionar payer com email e CPF
+            email: formData.email,
+            identification: {
+              type: 'CPF',
+              number: formData.cpf.replace(/\D/g, '')
+            }
+          }
         },
         callbacks: {
           onReady: () => {
@@ -261,8 +274,6 @@ export function PaymentModal({
   };
 
   const handleCardSubmit = async (cardFormData: any) => {
-    if (!validateForm()) return;
-
     console.log('[handleCardSubmit] Card form data:', cardFormData);
     setPaymentStatus('processing');
     setError('');
@@ -306,22 +317,40 @@ export function PaymentModal({
 
       console.log('[handleCardSubmit] Payment creation response:', data);
 
-      console.log('[handleCardSubmit] Payment creation response:', data);
-
       if (data.status === 'approved') {
         setPaymentId(data.payment_id);
         toast.success('Pagamento aprovado!');
-        
-        // Chamar lovable-payment-notify para obter redirectUrl
         await notifyPaymentAndRedirect(data.payment_id, orderId, schedulePayload);
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
         toast.info('Pagamento em análise. Aguarde confirmação.');
-        // ✅ NÃO redirecionar - webhook do MP notificará o GAS quando aprovar
       } else {
         setPaymentStatus('rejected');
-        setError('Pagamento rejeitado. Verifique os dados do cartão.');
+        
+        // ✅ Mensagens específicas baseadas em status_detail
+        const rejectMessages: Record<string, string> = {
+          'cc_rejected_insufficient_amount': 'Cartão sem saldo suficiente',
+          'cc_rejected_bad_filled_security_code': 'Código de segurança (CVV) incorreto',
+          'cc_rejected_bad_filled_card_number': 'Número do cartão inválido',
+          'cc_rejected_call_for_authorize': 'Cartão bloqueado. Entre em contato com seu banco',
+          'cc_rejected_high_risk': 'Pagamento recusado por segurança. Use outro cartão',
+          'cc_rejected_invalid_installments': 'Número de parcelas inválido',
+          'cc_rejected_duplicated_payment': 'Pagamento duplicado detectado',
+          'cc_rejected_card_disabled': 'Cartão desabilitado. Entre em contato com seu banco'
+        };
+        
+        const userMessage = data.status_detail 
+          ? rejectMessages[data.status_detail] || 'Pagamento rejeitado. Verifique os dados do cartão.' 
+          : 'Pagamento rejeitado. Verifique os dados do cartão.';
+        
+        setError(userMessage);
+        
+        console.error('[CARD REJECTED]', {
+          status_detail: data.status_detail,
+          error_message: data.error_message,
+          payment_id: data.payment_id
+        });
       }
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
@@ -596,48 +625,51 @@ export function PaymentModal({
 
         {paymentStatus === 'idle' && (
           <div className="space-y-4">
-            {/* Formulário de dados do usuário (se necessário) */}
-            {(!isUserLoggedIn || !hasRequiredData) && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nome Completo</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Seu nome completo"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">E-mail</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="seu@email.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cpf">CPF</Label>
-                  <Input
-                    id="cpf"
-                    value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                    placeholder="000.000.000-00"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+55 11 99999-9999"
-                  />
-                </div>
+            {/* ✅ Sempre mostrar campos pessoais ANTES do Brick */}
+            <div className="space-y-4 bg-muted/30 p-4 rounded-lg">
+              <h3 className="font-semibold text-sm">Dados Pessoais</h3>
+              <div>
+                <Label htmlFor="name">Nome Completo</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Seu nome completo"
+                  required
+                />
               </div>
-            )}
+              <div>
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="cpf">CPF</Label>
+                <Input
+                  id="cpf"
+                  value={formData.cpf}
+                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                  placeholder="000.000.000-00"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Telefone</Label>
+                <Input
+                  id="phone"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  placeholder="+55 11 99999-9999"
+                  required
+                />
+              </div>
+            </div>
 
             {/* Seletor de método de pagamento */}
             <div className="flex gap-2 border-b pb-4">
@@ -660,7 +692,7 @@ export function PaymentModal({
               </Button>
             </div>
 
-            {/* Card Payment Brick (renderiza automaticamente quando método = cartão) */}
+            {/* Card Payment Brick */}
             {paymentMethod === 'card' && (
               <div id="cardPaymentBrick"></div>
             )}
