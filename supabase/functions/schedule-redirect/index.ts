@@ -266,9 +266,25 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     );
   }
 
-  // 3. CRIAR AGENDAMENTO COM TOKEN DO INTEGRADOR (VIA HEADER)
+  // 3. CRIAR AGENDAMENTO COM SENHA DO PACIENTE
+  const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+  if (!PATIENT_PASSWORD) {
+    console.error('[ClickLife] CLICKLIFE_PATIENT_DEFAULT_PASSWORD não configurado');
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: 'Configuração de senha do paciente ausente'
+      }),
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
+    senha: PATIENT_PASSWORD, // ✅ Senha padrão do paciente para autenticação
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
