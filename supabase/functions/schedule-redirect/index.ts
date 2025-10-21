@@ -131,7 +131,7 @@ async function registerClickLifePatient(
       senha: "Pr0ntia!2025"
     };
     
-    const loginRes = await fetch(`${CLICKLIFE_API}/usuarios/login`, {
+    const loginRes = await fetch(`${CLICKLIFE_API}/auth/login`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json'
