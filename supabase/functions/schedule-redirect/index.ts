@@ -466,6 +466,24 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   const SSO_API_KEY = Deno.env.get('COMMUNICARE_SSO_API_KEY')!;
   const SSO_CPF = Deno.env.get('COMMUNICARE_SSO_CPF')!;
   const QUEUE_UUID = Deno.env.get('COMMUNICARE_QUEUE_UUID')!;
+  const API_TOKEN = Deno.env.get('COMMUNICARE_API_TOKEN')!;
+  
+  if (!API_TOKEN) {
+    console.error('[Communicare] ⚠️ COMMUNICARE_API_TOKEN não configurado');
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'communicare',
+        error: 'Token da API Communicare não configurado'
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
+  }
+  
+  console.log('[Communicare] API Token (primeiros 20 chars):', API_TOKEN.substring(0, 20));
 
   // 1. OBTER JWT DINÂMICO (com cache de 20h)
   let jwt = await getCachedJWT(supabase);
@@ -525,8 +543,8 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     console.log('[Communicare] JWT (primeiros 30 chars):', jwt.substring(0, 30));
   }
 
-  // 2. CRIAR PACIENTE (se não existir)
-  const patientResult = await createCommunicarePatient(payload, jwt);
+  // 2. CRIAR PACIENTE (se não existir) usando API_TOKEN
+  const patientResult = await createCommunicarePatient(payload, API_TOKEN);
 
   if (!patientResult.success || !patientResult.patientId) {
     console.error('[Communicare] ⚠️ Erro crítico: paciente não criado ou ID não obtido');
@@ -563,7 +581,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_token': jwt, // ✅ JWT DINÂMICO (não token fixo)
+        'api_token': API_TOKEN, // ✅ Token da API Communicare
       },
       body: JSON.stringify(queuePayload)
     }
@@ -579,7 +597,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     // Log CURL para debug
     const curlQueue = `curl -X POST '${INTEGRATIONS_BASE}/v1/queue' \\
   -H 'Content-Type: application/json' \\
-  -H 'api_token: ${jwt.substring(0, 30)}...' \\
+  -H 'api_token: ${API_TOKEN.substring(0, 20)}...' \\
   -d '${JSON.stringify(queuePayload)}'`;
     console.log('[Communicare] CURL Queue:', curlQueue);
     
