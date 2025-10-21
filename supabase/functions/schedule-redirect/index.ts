@@ -108,8 +108,8 @@ async function registerClickLifePatient(
   const resText = await res.text();
   console.log('[ClickLife] Response status:', res.status);
   
-  // 200 = criado, 409 = já existe (ambos são sucesso)
-  if (res.status === 200 || res.status === 409) {
+  // 200 = atualizado, 201 = criado, 409 = já existe (todos são sucesso)
+  if (res.status === 200 || res.status === 201 || res.status === 409) {
     console.log('[ClickLife] ✓ Paciente cadastrado ou já existente');
     try {
       const data = JSON.parse(resText);
