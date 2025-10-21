@@ -161,10 +161,10 @@ async function registerClickLifePatient(
     console.log('[ClickLife] Ativando usuário:', cpfClean);
     
     const activationPayload = {
-      authtoken: userToken, // ✅ Token do usuário (não do integrador)
+      authtoken: userToken,
       cpf: cpfClean,
-      empresaId: 9083,      // ✅ camelCase + number
-      planoId: planoId,     // ✅ camelCase + number
+      empresaid: 9083,
+      planoid: planoId,
       proposito: "Ativar"
     };
     
