@@ -420,11 +420,13 @@ async function createCommunicarePatient(
   console.log('[Communicare Patients] Criando paciente CPF:', cpfClean);
   console.log('[Communicare Patients] Payload:', JSON.stringify(patientPayload, null, 2));
   
+  const API_TOKEN = Deno.env.get('COMMUNICARE_API_TOKEN')!;
+  
   const res = await fetch(`${PATIENTS_BASE}/v1/patient`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'api_token': jwt,
+      'api_token': API_TOKEN,
     },
     body: JSON.stringify(patientPayload)
   });
@@ -456,7 +458,7 @@ async function createCommunicarePatient(
     console.log('[Communicare Patients] Consultando patientId via GET...');
     const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
       method: 'GET',
-      headers: { 'api_token': jwt }
+      headers: { 'api_token': API_TOKEN }
     });
     
     if (getRes.ok) {
@@ -600,7 +602,6 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   // 3. ENFILEIRAR PACIENTE
   const queuePayload = {
     queueUUID: QUEUE_UUID,
-    queueName: "Fila Prontia", // ✅ Nome da fila (obrigatório)
     patientId: patientId, // ✅ ID numérico (não CPF)
   };
 
@@ -614,7 +615,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'api_token': API_TOKEN, // ✅ Token da API Communicare
+        'api_token': jwt, // ✅ JWT do SSO
       },
       body: JSON.stringify(queuePayload)
     }
