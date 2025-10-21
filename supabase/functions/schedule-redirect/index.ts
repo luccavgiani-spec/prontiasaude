@@ -64,8 +64,8 @@ interface SchedulePayload {
 // O cadastro via /usuarios/usuarios já retorna o authtoken diretamente
 
 /**
- * Registra paciente na ClickLife e retorna authtoken
- * O endpoint /usuarios/usuarios retorna authtoken diretamente na resposta
+ * Registra paciente na ClickLife
+ * Status 200 ou 409 (já cadastrado) são considerados sucesso
  */
 async function registerClickLifePatient(
   cpf: string,
@@ -73,7 +73,7 @@ async function registerClickLifePatient(
   email: string,
   telefone: string,
   planoId: number
-): Promise<{ success: boolean; error?: string; authtoken?: string }> {
+): Promise<{ success: boolean; error?: string }> {
   const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
   
   const cpfClean = cpf.replace(/\D/g, '');
@@ -106,55 +106,22 @@ async function registerClickLifePatient(
   });
   
   const resText = await res.text();
+  console.log('[ClickLife] Response status:', res.status);
   
-  if (!res.ok) {
-    if (res.status === 409) {
-      console.log('[ClickLife] Paciente já cadastrado (409)');
-      // Tentar fazer o cadastro novamente para obter authtoken
-      const retryRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      if (retryRes.ok) {
-        try {
-          const retryData = await retryRes.json();
-          if (retryData.authtoken || retryData.auth_token) {
-            const token = retryData.authtoken || retryData.auth_token;
-            console.log('[ClickLife] ✓ authtoken obtido do retry (primeiros 10 chars):', token.substring(0, 10));
-            return { success: true, authtoken: token };
-          }
-        } catch (e) {
-          console.warn('[ClickLife] Retry não retornou authtoken válido');
-        }
-      }
-      
-      // Se não conseguir token mesmo assim, retornar sucesso sem token
-      return { success: true };
+  // 200 = criado, 409 = já existe (ambos são sucesso)
+  if (res.status === 200 || res.status === 409) {
+    console.log('[ClickLife] ✓ Paciente cadastrado ou já existente');
+    try {
+      const data = JSON.parse(resText);
+      console.log('[ClickLife] Resposta:', JSON.stringify(data));
+    } catch (e) {
+      // Resposta pode não ser JSON
     }
-    
-    console.error('[ClickLife] Erro no cadastro:', res.status, resText);
-    return { success: false, error: `HTTP ${res.status}: ${resText}` };
-  }
-  
-  // Extrair authtoken da resposta
-  try {
-    const data = JSON.parse(resText);
-    console.log('[ClickLife] Resposta do cadastro:', JSON.stringify(data));
-    
-    const token = data.authtoken || data.auth_token;
-    if (token) {
-      console.log('[ClickLife] ✓ authtoken obtido (primeiros 10 chars):', token.substring(0, 10));
-      return { success: true, authtoken: token };
-    }
-    
-    console.warn('[ClickLife] ⚠️ Cadastro retornou sucesso mas sem authtoken');
-    return { success: true };
-  } catch (e) {
-    console.log('[ClickLife] Resposta não é JSON válido:', resText);
     return { success: true };
   }
+  
+  console.error('[ClickLife] Erro no cadastro:', res.status, resText);
+  return { success: false, error: `HTTP ${res.status}: ${resText}` };
 }
 
 
@@ -248,7 +215,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
   
   console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
 
-  // 1. CADASTRAR PACIENTE E OBTER AUTHTOKEN
+  // 1. CADASTRAR PACIENTE
   const registration = await registerClickLifePatient(
     payload.cpf,
     payload.nome,
@@ -276,31 +243,33 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     );
   }
 
-  if (!registration.authtoken) {
-    console.error('[ClickLife] ⚠️ Cadastro bem-sucedido mas authtoken não foi retornado');
+  console.log('[ClickLife] ✓ Paciente cadastrado, prosseguindo com criação de atendimento');
+
+  // 2. OBTER TOKEN DO INTEGRADOR
+  const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+  if (!INTEGRATOR_TOKEN) {
+    console.error('[ClickLife] ❌ CLICKLIFE_AUTH_TOKEN não configurado');
     return new Response(
-      JSON.stringify({
-        ok: false,
+      JSON.stringify({ 
+        ok: false, 
         provider: 'clicklife',
-        error: 'authtoken não retornado pela API',
+        error: 'Token de integração não configurado',
         details: {
-          reason: 'API não retornou authtoken após cadastro',
-          endpoint: '/usuarios/usuarios'
+          reason: 'CLICKLIFE_AUTH_TOKEN não encontrado no ambiente',
+          endpoint: 'N/A'
         }
       }),
       { 
-        status: 500,
+        status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
 
-  // 2. CRIAR AGENDAMENTO COM AUTHTOKEN DO PACIENTE
-  const PATIENT_AUTH_TOKEN = registration.authtoken;
-  
+  // 3. CRIAR AGENDAMENTO COM TOKEN DO INTEGRADOR
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: PATIENT_AUTH_TOKEN, // ✅ Token do paciente (não integrador)
+    authtoken: INTEGRATOR_TOKEN, // ✅ Token do integrador (CLICKLIFE_AUTH_TOKEN)
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
@@ -312,7 +281,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
 
   console.log('[ClickLife] Request body (authtoken mascarado):', {
     ...requestBody,
-    authtoken: `${PATIENT_AUTH_TOKEN.substring(0, 10)}...`
+    authtoken: `${INTEGRATOR_TOKEN.substring(0, 10)}...`
   });
 
   const response = await fetch(
