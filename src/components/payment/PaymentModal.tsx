@@ -179,6 +179,15 @@ export function PaymentModal({
     }
   }, [open, paymentMethod, mpInstanceRef.current]);
 
+  // Remontar Brick quando dados forem preenchidos
+  useEffect(() => {
+    if (open && paymentMethod === 'card' && formData.email && formData.cpf && formData.name) {
+      if (!isBrickMountedRef.current && mpInstanceRef.current) {
+        mountCardPaymentBrick();
+      }
+    }
+  }, [open, paymentMethod, formData.email, formData.cpf, formData.name]);
+
   // Retry automático para PIX (a cada 20s)
   useEffect(() => {
     if (!lastPaymentId || paymentStatus !== 'pending_pix') return;
@@ -199,10 +208,9 @@ export function PaymentModal({
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
 
-    // ✅ Validar dados antes de montar o Brick
+    // ✅ Avisar se dados incompletos, mas não bloquear
     if (!formData.email || !formData.cpf || !formData.name) {
-      setError('Preencha seus dados pessoais antes de adicionar o cartão');
-      return;
+      console.warn('[PaymentModal] Dados incompletos. Aguardando preenchimento...');
     }
 
     try {
@@ -225,6 +233,12 @@ export function PaymentModal({
             isBrickMountedRef.current = true;
           },
           onSubmit: async (brickSubmitData: any) => {
+            // ✅ Validar dados ANTES de processar
+            if (!validateForm()) {
+              setError('Preencha todos os campos antes de finalizar o pagamento');
+              return;
+            }
+
             // ✅ Resolver wrapper do Brick para obter token/payment_method_id
             const cardData = brickSubmitData?.getCardFormData
               ? await brickSubmitData.getCardFormData()
@@ -332,6 +346,19 @@ export function PaymentModal({
       }
 
       console.log('[handleCardSubmit] Payment request:', paymentRequest);
+      console.log('[PaymentModal] Enviando pagamento:', {
+        sku,
+        serviceName,
+        amount,
+        recurring,
+        frequency,
+        formData: { name: formData.name, email: formData.email, cpf: formData.cpf },
+        cardData: {
+          token: cardFormData.token,
+          payment_method_id: cardFormData.payment_method_id,
+          installments: cardFormData.installments
+        }
+      });
 
       const { data, error } = await supabase.functions.invoke('mp-create-payment', {
         body: paymentRequest
@@ -378,6 +405,11 @@ export function PaymentModal({
       }
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
+      console.error('[PaymentModal] Erro detalhado:', {
+        error: err,
+        response: err.response?.data,
+        status: err.response?.status
+      });
       setError(err.message || 'Erro ao processar pagamento');
       setPaymentStatus('idle');
     }

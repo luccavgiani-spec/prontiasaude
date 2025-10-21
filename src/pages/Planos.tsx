@@ -183,6 +183,14 @@ const Planos = () => {
     }
   ];
 
+  // Mapa de conversão de IDs para SKUs padronizados
+  const skuPrefixMap: Record<string, string> = {
+    'individual_com_especialistas': 'IND_COM_ESP',
+    'individual_sem_especialistas': 'IND_SEM_ESP',
+    'familiar_com_especialistas': 'FAM_COM_ESP',
+    'familiar_sem_especialistas': 'FAM_SEM_ESP',
+  };
+
   const handleAssinar = async (planoId: string) => {
     // 1. Verificar login PRIMEIRO
     const { data: { user } } = await supabase.auth.getUser();
@@ -220,7 +228,7 @@ const Planos = () => {
           email: user.email,
           nome: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
           telefone: patient.phone_e164 || '',
-          sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+          sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
           plano_ativo: true,
         };
 
@@ -241,10 +249,11 @@ const Planos = () => {
     // 3. Sem plano ativo: abrir modal de assinatura
     // Calcular valor total = precoMensal × meses (em centavos)
     const valorTotal = precoMensal * meses;
+    const duracaoLabel = duracaoSelecionada === '1' ? 'Mensal' : duracaoSelecionada === '6' ? 'Semestral' : 'Anual';
     
     setSelectedPlan({
-      sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
-      name: plano.nome,
+      sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
+      name: `${plano.nome} - ${duracaoLabel}`,
       amount: valorTotal,
       recurring: true,
       frequency: meses,

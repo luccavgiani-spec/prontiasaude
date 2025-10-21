@@ -195,6 +195,14 @@ export function PlanosSection() {
     }
   ];
 
+  // Mapa de conversão de IDs para SKUs padronizados
+  const skuPrefixMap: Record<string, string> = {
+    'individual_com_especialistas': 'IND_COM_ESP',
+    'individual_sem_especialistas': 'IND_SEM_ESP',
+    'familiar_com_especialistas': 'FAM_COM_ESP',
+    'familiar_sem_especialistas': 'FAM_SEM_ESP',
+  };
+
   const handleAssinar = async (planoId: string) => {
     if (planoId === "empresarial") {
       setShowEmpresarialForm(true);
@@ -245,7 +253,7 @@ export function PlanosSection() {
           email: user.email,
           nome: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
           telefone: patient.phone_e164 || '',
-          sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
+          sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
           plano_ativo: true as const,
         };
 
@@ -264,9 +272,10 @@ export function PlanosSection() {
     }
 
     // Sem plano ativo: abrir modal de assinatura
+    const duracaoLabel = duracaoSelecionada === '1' ? 'Mensal' : duracaoSelecionada === '6' ? 'Semestral' : 'Anual';
     setSelectedPlan({
-      sku: `PLANO_${planoId.toUpperCase()}_${duracaoSelecionada}M`,
-      name: plano.nome,
+      sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
+      name: `${plano.nome} - ${duracaoLabel}`,
       amount: precoMensal,
       recurring: true,
       frequency: meses,
