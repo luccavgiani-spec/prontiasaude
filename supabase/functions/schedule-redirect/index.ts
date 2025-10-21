@@ -682,44 +682,39 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
 }
 
 async function getCachedJWT(supabase: any): Promise<string | null> {
-  // 🔄 FORÇAR RENOVAÇÃO PARA DEBUG (remover após validar)
-  console.log('[JWT Cache] Forçando renovação do JWT para garantir token fresco');
-  return null;
-  
-  /* CÓDIGO ORIGINAL (DESCOMENTAR APÓS VALIDAR):
   const { data } = await supabase
     .from('admin_settings')
     .select('value')
-    .eq('key', 'communicare_jwt_cache')
+    .eq('key', 'communicare_jwt')
     .maybeSingle();
 
-  if (!data?.value) return null;
-
-  const { data: expiresData } = await supabase
-    .from('admin_settings')
-    .select('value')
-    .eq('key', 'communicare_jwt_expires_at')
-    .maybeSingle();
-
-  const expiresAt = new Date(expiresData?.value || 0);
-  if (expiresAt < new Date()) {
-    console.log('[JWT Cache] Expirado');
+  if (!data?.value) {
+    console.log('[JWT Cache] Cache vazio');
     return null;
   }
 
-  console.log('[JWT Cache] JWT válido encontrado');
+  // Decodificar payload do JWT para verificar expiração
+  const payload = JSON.parse(atob(data.value.split('.')[1]));
+  const expMs = payload.exp * 1000;
+  const nowMs = Date.now();
+
+  if (nowMs >= expMs) {
+    console.log('[JWT Cache] JWT expirado');
+    return null;
+  }
+
+  console.log('[JWT Cache] JWT válido encontrado, expira em:', new Date(expMs).toISOString());
   return data.value;
-  */
 }
 
 async function cacheJWT(jwt: string, supabase: any): Promise<void> {
-  const expiresAt = new Date();
-  expiresAt.setHours(expiresAt.getHours() + 20); // ✅ 20 horas (renovação diária)
+  const payload = JSON.parse(atob(jwt.split('.')[1]));
+  const expiresAt = new Date(payload.exp * 1000);
 
-  await supabase.from('admin_settings').upsert([
-    { key: 'communicare_jwt_cache', value: jwt },
-    { key: 'communicare_jwt_expires_at', value: expiresAt.toISOString() }
-  ]);
+  await supabase.from('admin_settings').upsert({
+    key: 'communicare_jwt',
+    value: jwt,
+  });
 
-  console.log(`[JWT Cache] Cacheado até ${expiresAt.toISOString()}`);
+  console.log('[JWT Cache] Cacheado até', expiresAt.toISOString());
 }
