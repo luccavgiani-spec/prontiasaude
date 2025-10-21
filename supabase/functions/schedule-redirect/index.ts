@@ -122,6 +122,33 @@ async function registerClickLifePatient(
     } catch (e) {
       // Resposta pode não ser JSON
     }
+    
+    // ✅ PASSO 2: Ativar o usuário recém-cadastrado
+    console.log('[ClickLife] Ativando usuário:', cpfClean);
+    
+    const activationPayload = {
+      authtoken: INTEGRATOR_TOKEN,
+      cpf: cpfClean,
+      empresaid: "9083",
+      planoid: String(planoId),
+      proposito: "Ativar"
+    };
+    
+    const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(activationPayload)
+    });
+    
+    if (!activationRes.ok) {
+      const activationError = await activationRes.text();
+      console.error('[ClickLife] Erro na ativação:', activationRes.status, activationError);
+      return { success: false, error: `Falha na ativação: HTTP ${activationRes.status}` };
+    }
+    
+    const activationData = await activationRes.json();
+    console.log('[ClickLife] ✓ Usuário ativado com sucesso:', activationData);
+    
     return { success: true };
   }
   
