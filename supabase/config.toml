@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.schedule-redirect]
 verify_jwt = false
+
+[functions.clicklife-token-test]
+verify_jwt = false

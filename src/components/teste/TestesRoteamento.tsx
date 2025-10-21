@@ -425,6 +425,13 @@ const TestesRoteamento: React.FC = () => {
           plano_ativo: false
         },
         expected: { provider: 'clicklife', reason: 'specialty_unavailable' }
+      },
+      {
+        id: 'K7',
+        nome: '🔐 Validação Token Integrador',
+        isTokenTest: true, // Flag para tratamento especial
+        payload: null, // Não usa payload padrão
+        expected: null // Validação personalizada
       }
     ];
     
@@ -437,6 +444,87 @@ const TestesRoteamento: React.FC = () => {
         await subcase.setup();
       }
       
+      // ✅ TESTE K7: Validação do Token do Integrador
+      if (subcase.isTokenTest) {
+        const startTime = Date.now();
+        
+        try {
+          console.log(`[ClickLife Suite] Executando ${subcase.id}: ${subcase.nome}`);
+          console.log('[ClickLife Suite] Chamando função clicklife-token-test...');
+          
+          const { data, error } = await supabase.functions.invoke('clicklife-token-test', {
+            body: {}
+          });
+          
+          const responseTime = Date.now() - startTime;
+          
+          if (error) throw error;
+          
+          // Validar se o token está válido
+          const tokenIsValid = data.valid === true;
+          const status = tokenIsValid ? 'passou' : 'falhou';
+          
+          if (status === 'passou') {
+            passed++;
+          } else {
+            failed++;
+          }
+          
+          const result: TestResult = {
+            suite_id: 'CLICKLIFE',
+            sub_id: subcase.id,
+            scenario_id: `ClickLife Suite - ${subcase.nome}`,
+            timestamp: new Date().toISOString(),
+            status,
+            response_time: responseTime,
+            request: { test: 'token_validation' },
+            response: data,
+            error: !tokenIsValid ? `❌ ${data.message} - ${data.recommendation}` : undefined
+          };
+          
+          setTestHistory(prev => [result, ...prev].slice(0, 20));
+          
+          // Se o token for inválido, mostrar toast de alerta
+          if (!tokenIsValid) {
+            toast.error(`🔴 Token do integrador INVÁLIDO! ${data.recommendation}`);
+          } else {
+            toast.success(`✅ Token do integrador VÁLIDO - Problema HTTP 401 NÃO está no token`);
+          }
+          
+        } catch (error: any) {
+          failed++;
+          
+          let errorDetails = error.message || 'Erro desconhecido';
+          let errorContext = null;
+          
+          if (error.context) {
+            try {
+              const contextClone = error.context.clone();
+              errorContext = await contextClone.json();
+              if (errorContext.error) errorDetails = errorContext.error;
+            } catch {}
+          }
+          
+          const responseTime = Date.now() - startTime;
+          const result: TestResult = {
+            suite_id: 'CLICKLIFE',
+            sub_id: subcase.id,
+            scenario_id: `ClickLife Suite - ${subcase.nome}`,
+            timestamp: new Date().toISOString(),
+            status: 'falhou',
+            response_time: responseTime,
+            request: { test: 'token_validation' },
+            response: errorContext,
+            error: errorDetails
+          };
+          
+          setTestHistory(prev => [result, ...prev].slice(0, 20));
+        }
+        
+        continue; // Pular para próximo teste
+      }
+      
+      // ✅ TESTES K1-K6: Fluxo normal de agendamento
       const cpf = generateValidCPF();
       const email = uniqueEmail(`clicklife_${subcase.id.toLowerCase()}`);
       
