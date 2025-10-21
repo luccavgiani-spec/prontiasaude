@@ -391,7 +391,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
 async function createCommunicarePatient(
   payload: SchedulePayload,
   jwt: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; patientId?: number; error?: string }> {
   const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
                         'https://api-patients-production.communicare.com.br';
   
@@ -408,8 +408,10 @@ async function createCommunicarePatient(
     mobileNumber: mobileNumber,
     email: payload.email,
     ddi: ddi,
-    birthDate: "", // Opcional - formato: "DDMMYYYY"
-    gender: "O", // O = Other (fallback seguro)
+    birthDate: "01011990", // Fallback: 1º/jan/1990 (DDMMYYYY)
+    gender: "M", // M = Masculino (M | F | I)
+    workingArea: "Outro", // Enum obrigatório
+    jogPosition: "Outro", // Enum obrigatório
   };
   
   console.log('[Communicare Patients] Criando paciente CPF:', cpfClean);
@@ -431,7 +433,23 @@ async function createCommunicarePatient(
   // 201 = criado, 409 = já existe (ambos são sucesso)
   if (res.status === 201 || res.status === 409) {
     console.log('[Communicare Patients] ✓ Paciente criado ou já existente');
-    return { success: true };
+    
+    // ✅ OBTER patientId numérico via GET
+    console.log('[Communicare Patients] Consultando patientId via GET...');
+    const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+      method: 'GET',
+      headers: { 'api_token': jwt }
+    });
+    
+    if (getRes.ok) {
+      const patients = await getRes.json();
+      const patientId = patients[0]?.id;
+      console.log('[Communicare Patients] ✓ patientId obtido:', patientId);
+      return { success: true, patientId: patientId };
+    } else {
+      console.warn('[Communicare Patients] ⚠️ Não foi possível obter patientId');
+      return { success: true }; // Não bloquear fluxo
+    }
   }
   
   console.error('[Communicare Patients] ⚠️ Erro ao criar paciente');
@@ -510,18 +528,29 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   // 2. CRIAR PACIENTE (se não existir)
   const patientResult = await createCommunicarePatient(payload, jwt);
 
-  if (!patientResult.success) {
-    console.warn('[Communicare] ⚠️ Paciente não foi criado:', patientResult.error);
-    console.log('[Communicare] Tentando enfileirar mesmo assim...');
-    // Não bloquear fluxo - tentar enfileirar de qualquer forma
+  if (!patientResult.success || !patientResult.patientId) {
+    console.error('[Communicare] ⚠️ Erro crítico: paciente não criado ou ID não obtido');
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'communicare',
+        error: patientResult.error || 'Não foi possível obter o ID do paciente'
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 
+  const patientId = patientResult.patientId;
+  console.log('[Communicare] ✓ Usando patientId:', patientId);
+
   // 3. ENFILEIRAR PACIENTE
-  const cpfClean = payload.cpf.replace(/\D/g, '');
-  
   const queuePayload = {
     queueUUID: QUEUE_UUID,
-    patientId: cpfClean, // Usar CPF como patientId
+    queueName: "Fila Prontia", // ✅ Nome da fila (obrigatório)
+    patientId: patientId, // ✅ ID numérico (não CPF)
   };
 
   console.log('[Communicare] Enfileirando paciente CPF:', payload.cpf);
