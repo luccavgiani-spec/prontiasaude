@@ -99,9 +99,14 @@ async function registerClickLifePatient(
   
   console.log('[ClickLife] Cadastrando paciente:', { cpf: cpfClean, planoId });
   
+  const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
+  
   const res = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'authtoken': INTEGRATOR_TOKEN
+    },
     body: JSON.stringify(payload)
   });
   
