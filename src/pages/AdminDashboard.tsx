@@ -13,6 +13,9 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import TestesRoteamento from "@/components/teste/TestesRoteamento";
+import SpecialtiesSelector from "@/components/admin/SpecialtiesSelector";
+import RedirectFlowMap from "@/components/admin/RedirectFlowMap";
+import CompanyManagement from "@/components/admin/CompanyManagement";
 
 interface ContentItem {
   id: string;

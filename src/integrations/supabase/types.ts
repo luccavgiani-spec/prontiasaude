@@ -32,6 +32,116 @@ export type Database = {
         }
         Relationships: []
       }
+      companies: {
+        Row: {
+          bairro: string | null
+          cep: string
+          cidade: string | null
+          cnpj: string
+          complemento: string | null
+          contato_email: string | null
+          contato_nome: string | null
+          contato_telefone: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          logradouro: string | null
+          n_funcionarios: number
+          numero: string | null
+          razao_social: string
+          status: string
+          uf: string | null
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          bairro?: string | null
+          cep: string
+          cidade?: string | null
+          cnpj: string
+          complemento?: string | null
+          contato_email?: string | null
+          contato_nome?: string | null
+          contato_telefone?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          logradouro?: string | null
+          n_funcionarios?: number
+          numero?: string | null
+          razao_social: string
+          status?: string
+          uf?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string
+          cidade?: string | null
+          cnpj?: string
+          complemento?: string | null
+          contato_email?: string | null
+          contato_nome?: string | null
+          contato_telefone?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          logradouro?: string | null
+          n_funcionarios?: number
+          numero?: string | null
+          razao_social?: string
+          status?: string
+          uf?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      company_credentials: {
+        Row: {
+          company_id: string
+          created_at: string | null
+          failed_login_attempts: number
+          id: string
+          last_failed_login_at: string | null
+          last_login_at: string | null
+          must_change_password: boolean
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string | null
+          failed_login_attempts?: number
+          id?: string
+          last_failed_login_at?: string | null
+          last_login_at?: string | null
+          must_change_password?: boolean
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string | null
+          failed_login_attempts?: number
+          id?: string
+          last_failed_login_at?: string | null
+          last_login_at?: string | null
+          must_change_password?: boolean
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_credentials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       patients: {
         Row: {
           address_complement: string | null
