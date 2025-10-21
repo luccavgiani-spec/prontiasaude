@@ -224,8 +224,17 @@ export function PaymentModal({
             console.log('Card Payment Brick pronto');
             isBrickMountedRef.current = true;
           },
-          onSubmit: async (formData: any) => {
-            await handleCardSubmit(formData);
+          onSubmit: async (brickSubmitData: any) => {
+            // ✅ Resolver wrapper do Brick para obter token/payment_method_id
+            const cardData = brickSubmitData?.getCardFormData
+              ? await brickSubmitData.getCardFormData()
+              : brickSubmitData;
+            
+            await handleCardSubmit({
+              token: cardData.token,
+              payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
+              installments: cardData.installments,
+            });
           },
           onError: (error: any) => {
             console.error('Erro no Card Payment Brick:', error);
@@ -279,6 +288,11 @@ export function PaymentModal({
     setError('');
 
     try {
+      // ✅ Garantir que temos os dados corretos do cartão
+      if (!cardFormData.token || !cardFormData.payment_method_id) {
+        throw new Error('Dados do cartão incompletos. Tente novamente.');
+      }
+
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
       
@@ -300,7 +314,7 @@ export function PaymentModal({
         },
         token: cardFormData.token,
         payment_method_id: cardFormData.payment_method_id,
-        installments: cardFormData.installments,
+        installments: cardFormData.installments || 1,
         metadata: {
           order_id: orderId,
           schedulePayload

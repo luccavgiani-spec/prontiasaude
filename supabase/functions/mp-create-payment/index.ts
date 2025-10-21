@@ -56,14 +56,23 @@ Deno.serve(async (req) => {
       notification_url: MP_NOTIFICATION_URL,
     };
 
-    // Add payment method details if provided (for card payments)
-    if (paymentRequest.token && paymentRequest.payment_method_id) {
+    // ✅ Determinar método de pagamento sem fallback silencioso
+    if (paymentRequest.payment_method_id === 'pix' || (!paymentRequest.token && !paymentRequest.payment_method_id)) {
+      // PIX payment (explícito ou quando não há dados de cartão)
+      paymentData.payment_method_id = 'pix';
+    } else if (paymentRequest.token && paymentRequest.payment_method_id) {
+      // Card payment (PRECISA ter token E payment_method_id)
       paymentData.token = paymentRequest.token;
       paymentData.payment_method_id = paymentRequest.payment_method_id;
       paymentData.installments = paymentRequest.installments || 1;
     } else {
-      // PIX payment
-      paymentData.payment_method_id = 'pix';
+      // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO
+      console.error('[mp-create-payment] Invalid card payment: missing token or payment_method_id', {
+        has_token: !!paymentRequest.token,
+        has_payment_method: !!paymentRequest.payment_method_id,
+        payment_method: paymentRequest.payment_method_id
+      });
+      throw new Error('Missing card token or payment_method_id for card payment');
     }
 
     // Generate idempotency key
