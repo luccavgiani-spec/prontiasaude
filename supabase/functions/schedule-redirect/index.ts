@@ -41,13 +41,38 @@ const ESPECIALISTA_SKUS = [
   'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186'
 ];
 
-// Especialidades disponíveis na Communicare
-const COMMUNICARE_SPECIALTIES = [
-  'clinico geral', 'consulta', 'laudos', 'psicologo_8', 'psicologo_4',
-  'psicologo_1', 'geriatria', 'nutrologo', 'infectologista', 'neurologista',
-  'reumatologista', 'nutricionista', 'personal trainer', 'solicitacao_exames',
-  'renovacao_receitas'
-];
+/**
+ * Busca especialidades Communicare do banco de dados
+ */
+async function getCommunicareSpecialties(supabase: any): Promise<string[]> {
+  const { data } = await supabase
+    .from('admin_settings')
+    .select('value')
+    .eq('key', 'communicare_specialties')
+    .maybeSingle();
+
+  if (data?.value) {
+    try {
+      const specialties = JSON.parse(data.value);
+      if (Array.isArray(specialties)) {
+        console.log('[schedule-redirect] Especialidades Communicare (do banco):', specialties);
+        return specialties;
+      }
+    } catch (e) {
+      console.error('[schedule-redirect] Erro ao parsear especialidades:', e);
+    }
+  }
+
+  // Fallback para lista hardcoded
+  const fallback = [
+    'clinico geral', 'consulta', 'laudos', 'psicologo_8', 'psicologo_4',
+    'psicologo_1', 'geriatria', 'nutrologo', 'infectologista', 'neurologista',
+    'reumatologista', 'nutricionista', 'personal trainer', 'solicitacao_exames',
+    'renovacao_receitas'
+  ];
+  console.log('[schedule-redirect] Usando especialidades fallback');
+  return fallback;
+}
 
 interface SchedulePayload {
   cpf: string;
@@ -227,13 +252,28 @@ Deno.serve(async (req) => {
       return await redirectClickLife(payload, 'admin_override');
     }
 
-    // 2. Verificar plano ativo
+    // 2. Verificar se é funcionário de empresa com plano ativo
+    const cpfClean = payload.cpf.replace(/\D/g, '');
+    const { data: employeeData } = await supabase
+      .from('company_employees')
+      .select('has_active_plan, empresa_id_externo, plano_id_externo')
+      .eq('cpf', cpfClean)
+      .maybeSingle();
+
+    if (employeeData?.has_active_plan) {
+      console.log('[schedule-redirect] Funcionário com plano ativo detectado → ClickLife');
+      // Enriquecer payload com IDs da empresa
+      payload.plano_ativo = true;
+      return await redirectClickLife(payload, 'employee_with_plan');
+    }
+
+    // 3. Verificar plano ativo (payload direto)
     if (payload.plano_ativo) {
       console.log('[schedule-redirect] Plano ativo detectado → ClickLife');
       return await redirectClickLife(payload, 'active_plan');
     }
 
-    // 3. Verificar horário e especialidade
+    // 4. Verificar horário e especialidade
     const horario = payload.horario_iso ? new Date(payload.horario_iso) : new Date();
     const especialidadeNorm = payload.especialidade?.toLowerCase() || '';
 
@@ -251,13 +291,14 @@ Deno.serve(async (req) => {
       return await redirectClickLife(payload, 'nighttime');
     }
 
-    // 4. Verificar disponibilidade na Communicare
-    if (!COMMUNICARE_SPECIALTIES.includes(especialidadeNorm)) {
+    // 5. Verificar disponibilidade na Communicare (buscar do banco)
+    const communicareSpecialties = await getCommunicareSpecialties(supabase);
+    if (!communicareSpecialties.includes(especialidadeNorm)) {
       console.log('[schedule-redirect] Especialidade indisponível na Communicare → ClickLife');
       return await redirectClickLife(payload, 'specialty_unavailable');
     }
 
-    // 5. Redirecionar para Communicare
+    // 6. Redirecionar para Communicare
     console.log('[schedule-redirect] Condições atendidas → Communicare');
     return await redirectCommunicare(payload, supabase);
 

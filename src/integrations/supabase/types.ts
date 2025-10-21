@@ -44,10 +44,12 @@ export type Database = {
           contato_telefone: string | null
           created_at: string | null
           created_by: string | null
+          empresa_id_externo: number
           id: string
           logradouro: string | null
           n_funcionarios: number
           numero: string | null
+          plano_id_externo: number
           razao_social: string
           status: string
           uf: string | null
@@ -65,10 +67,12 @@ export type Database = {
           contato_telefone?: string | null
           created_at?: string | null
           created_by?: string | null
+          empresa_id_externo?: number
           id?: string
           logradouro?: string | null
           n_funcionarios?: number
           numero?: string | null
+          plano_id_externo?: number
           razao_social: string
           status?: string
           uf?: string | null
@@ -86,10 +90,12 @@ export type Database = {
           contato_telefone?: string | null
           created_at?: string | null
           created_by?: string | null
+          empresa_id_externo?: number
           id?: string
           logradouro?: string | null
           n_funcionarios?: number
           numero?: string | null
+          plano_id_externo?: number
           razao_social?: string
           status?: string
           uf?: string | null
@@ -137,6 +143,139 @@ export type Database = {
             foreignKeyName: "company_credentials_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_employees: {
+        Row: {
+          bairro: string
+          cep: string
+          cidade: string
+          company_id: string
+          complemento: string | null
+          cpf: string
+          created_at: string | null
+          datanascimento: string
+          email: string
+          empresa_id_externo: number
+          estado: string
+          fotobase64: string | null
+          has_active_plan: boolean
+          id: string
+          logradouro: string
+          nome: string
+          numero: string
+          plano_id_externo: number
+          senha: string
+          sexo: string
+          telefone: string
+          updated_at: string | null
+        }
+        Insert: {
+          bairro: string
+          cep: string
+          cidade: string
+          company_id: string
+          complemento?: string | null
+          cpf: string
+          created_at?: string | null
+          datanascimento: string
+          email: string
+          empresa_id_externo?: number
+          estado: string
+          fotobase64?: string | null
+          has_active_plan?: boolean
+          id?: string
+          logradouro: string
+          nome: string
+          numero: string
+          plano_id_externo?: number
+          senha: string
+          sexo: string
+          telefone: string
+          updated_at?: string | null
+        }
+        Update: {
+          bairro?: string
+          cep?: string
+          cidade?: string
+          company_id?: string
+          complemento?: string | null
+          cpf?: string
+          created_at?: string | null
+          datanascimento?: string
+          email?: string
+          empresa_id_externo?: number
+          estado?: string
+          fotobase64?: string | null
+          has_active_plan?: boolean
+          id?: string
+          logradouro?: string
+          nome?: string
+          numero?: string
+          plano_id_externo?: number
+          senha?: string
+          sexo?: string
+          telefone?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_employees_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      metrics: {
+        Row: {
+          amount_cents: number | null
+          company_id: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          metric_type: string
+          patient_email: string | null
+          plan_code: string | null
+          platform: string | null
+          specialty: string | null
+          status: string | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_type: string
+          patient_email?: string | null
+          plan_code?: string | null
+          platform?: string | null
+          specialty?: string | null
+          status?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          company_id?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_type?: string
+          patient_email?: string | null
+          plan_code?: string | null
+          platform?: string | null
+          specialty?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "metrics_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },

@@ -232,6 +232,68 @@ Deno.serve(async (req) => {
       );
     }
 
+    // CREATE EMPLOYEE
+    if (req.method === 'POST' && operation === 'create-employee') {
+      const employeeData = await req.json();
+      
+      console.log('[company-operations] Creating employee:', { cpf: employeeData.cpf });
+
+      // Validações
+      if (!employeeData.company_id || !employeeData.nome || !employeeData.cpf || !employeeData.email) {
+        throw new Error('Missing required fields');
+      }
+
+      // Buscar empresa_id_externo e plano_id_externo
+      const { data: companyData, error: companyError } = await supabaseClient
+        .from('companies')
+        .select('empresa_id_externo, plano_id_externo')
+        .eq('id', employeeData.company_id)
+        .single();
+
+      if (companyError || !companyData) {
+        throw new Error('Company not found');
+      }
+
+      // Inserir funcionário
+      const { data: employee, error: employeeError } = await supabaseClient
+        .from('company_employees')
+        .insert({
+          company_id: employeeData.company_id,
+          nome: employeeData.nome,
+          cpf: employeeData.cpf.replace(/\D/g, ''),
+          email: employeeData.email,
+          telefone: employeeData.telefone,
+          senha: employeeData.senha,
+          datanascimento: employeeData.datanascimento,
+          sexo: employeeData.sexo,
+          fotobase64: employeeData.fotobase64 || null,
+          logradouro: employeeData.logradouro,
+          numero: employeeData.numero,
+          complemento: employeeData.complemento || null,
+          bairro: employeeData.bairro,
+          cep: employeeData.cep.replace(/\D/g, ''),
+          cidade: employeeData.cidade,
+          estado: employeeData.estado,
+          empresa_id_externo: companyData.empresa_id_externo,
+          plano_id_externo: companyData.plano_id_externo,
+          has_active_plan: true,
+        })
+        .select()
+        .single();
+
+      if (employeeError) {
+        console.error('[company-operations] Error creating employee:', employeeError);
+        throw new Error(`Failed to create employee: ${employeeError.message}`);
+      }
+
+      console.log('[company-operations] Employee created:', employee.id);
+
+      return new Response(
+        JSON.stringify({ success: true, employee }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 201 }
+      );
+    }
+
     // RESET PASSWORD
     if (req.method === 'POST' && path[path.length - 1] === 'reset-password') {
       const companyId = path[path.length - 2];

@@ -1,0 +1,294 @@
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { supabase } from '@/integrations/supabase/client';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { DollarSign, ShoppingCart, Users, Activity, Download } from 'lucide-react';
+
+interface MetricsData {
+  totalRevenue: number;
+  totalSales: number;
+  totalPatients: number;
+  totalAppointments: number;
+  revenueByMonth: Array<{ month: string; revenue: number }>;
+  appointmentsByPlatform: Array<{ platform: string; count: number }>;
+  salesByPlan: Array<{ plan: string; count: number }>;
+  registrationsByDate: Array<{ date: string; count: number }>;
+}
+
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--muted))'];
+
+export default function ReportsTab() {
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('30d');
+  const [platform, setPlatform] = useState('all');
+  const [metrics, setMetrics] = useState<MetricsData>({
+    totalRevenue: 0,
+    totalSales: 0,
+    totalPatients: 0,
+    totalAppointments: 0,
+    revenueByMonth: [],
+    appointmentsByPlatform: [],
+    salesByPlan: [],
+    registrationsByDate: [],
+  });
+
+  useEffect(() => {
+    loadMetrics();
+  }, [period, platform]);
+
+  const loadMetrics = async () => {
+    setLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Calcular datas
+      const endDate = new Date();
+      const startDate = new Date();
+      if (period === '7d') startDate.setDate(startDate.getDate() - 7);
+      else if (period === '30d') startDate.setDate(startDate.getDate() - 30);
+      else if (period === '90d') startDate.setDate(startDate.getDate() - 90);
+
+      const params = new URLSearchParams({
+        operation: 'read',
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+      });
+
+      if (platform !== 'all') {
+        params.append('platform', platform);
+      }
+
+      const { data, error } = await supabase.functions.invoke(`metrics-manager?${params.toString()}`);
+
+      if (error) throw error;
+
+      const metricsData = data.metrics || [];
+
+      // Processar métricas
+      const sales = metricsData.filter((m: any) => m.metric_type === 'sale');
+      const appointments = metricsData.filter((m: any) => m.metric_type === 'appointment');
+      const registrations = metricsData.filter((m: any) => m.metric_type === 'registration');
+
+      const totalRevenue = sales.reduce((acc: number, m: any) => acc + (m.amount_cents || 0), 0) / 100;
+      const totalSales = sales.length;
+      const totalAppointments = appointments.length;
+      const totalPatients = new Set(registrations.map((m: any) => m.patient_email)).size;
+
+      // Receita por mês
+      const revenueByMonth: Record<string, number> = {};
+      sales.forEach((m: any) => {
+        const month = new Date(m.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        revenueByMonth[month] = (revenueByMonth[month] || 0) + (m.amount_cents || 0) / 100;
+      });
+
+      // Atendimentos por plataforma
+      const appointmentsByPlatform: Record<string, number> = {};
+      appointments.forEach((m: any) => {
+        const plat = m.platform || 'unknown';
+        appointmentsByPlatform[plat] = (appointmentsByPlatform[plat] || 0) + 1;
+      });
+
+      // Vendas por plano
+      const salesByPlan: Record<string, number> = {};
+      sales.forEach((m: any) => {
+        const plan = m.plan_code || 'N/A';
+        salesByPlan[plan] = (salesByPlan[plan] || 0) + 1;
+      });
+
+      // Cadastros por data
+      const registrationsByDate: Record<string, number> = {};
+      registrations.forEach((m: any) => {
+        const date = new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+        registrationsByDate[date] = (registrationsByDate[date] || 0) + 1;
+      });
+
+      setMetrics({
+        totalRevenue,
+        totalSales,
+        totalPatients,
+        totalAppointments,
+        revenueByMonth: Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })),
+        appointmentsByPlatform: Object.entries(appointmentsByPlatform).map(([platform, count]) => ({ platform, count })),
+        salesByPlan: Object.entries(salesByPlan).map(([plan, count]) => ({ plan, count })),
+        registrationsByDate: Object.entries(registrationsByDate).map(([date, count]) => ({ date, count })),
+      });
+    } catch (error) {
+      console.error('Error loading metrics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const exportCSV = () => {
+    // Implementar exportação CSV
+    const csv = 'data:text/csv;charset=utf-8,Relatório de Métricas\n';
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csv));
+    link.setAttribute('download', `relatorio-${new Date().toISOString()}.csv`);
+    link.click();
+  };
+
+  if (loading) {
+    return <div className="p-8 text-center">Carregando métricas...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Filters */}
+      <div className="flex justify-between items-center">
+        <div className="flex gap-4">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Últimos 7 dias</SelectItem>
+              <SelectItem value="30d">Últimos 30 dias</SelectItem>
+              <SelectItem value="90d">Últimos 90 dias</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={platform} onValueChange={setPlatform}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas Plataformas</SelectItem>
+              <SelectItem value="clicklife">ClickLife</SelectItem>
+              <SelectItem value="communicare">Communicare</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button variant="outline" onClick={exportCSV}>
+          <Download className="h-4 w-4 mr-2" />
+          Exportar CSV
+        </Button>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Receita Total</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {metrics.totalRevenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total de Vendas</CardTitle>
+            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.totalSales}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Pacientes Ativos</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.totalPatients}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Atendimentos</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.totalAppointments}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Receita por Mês</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={metrics.revenueByMonth}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="revenue" stroke={COLORS[0]} name="Receita (R$)" />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Atendimentos por Plataforma</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={metrics.appointmentsByPlatform}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="platform" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="count" fill={COLORS[1]} name="Atendimentos" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Distribuição por Plano</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie data={metrics.salesByPlan} dataKey="count" nameKey="plan" cx="50%" cy="50%" outerRadius={80} label>
+                  {metrics.salesByPlan.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Novos Cadastros</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={metrics.registrationsByDate}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Area type="monotone" dataKey="count" stroke={COLORS[2]} fill={COLORS[2]} name="Cadastros" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}

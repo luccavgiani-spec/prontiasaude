@@ -54,6 +54,7 @@ import EmpresaDashboard from "./pages/empresa/Dashboard";
 import EmpresaPerfil from "./pages/empresa/Perfil";
 import EmpresaSeguranca from "./pages/empresa/Seguranca";
 import EmpresaTrocarSenha from "./pages/empresa/TrocarSenha";
+import EmpresaFuncionarios from "./pages/empresa/Funcionarios";
 
 const queryClient = new QueryClient();
 
@@ -132,6 +133,7 @@ const App = () => (
               <Route path="/empresa/perfil" element={<EmpresaPerfil />} />
               <Route path="/empresa/seguranca" element={<EmpresaSeguranca />} />
               <Route path="/empresa/trocar-senha" element={<EmpresaTrocarSenha />} />
+              <Route path="/empresa/funcionarios" element={<EmpresaFuncionarios />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

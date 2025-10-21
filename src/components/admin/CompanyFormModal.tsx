@@ -50,6 +50,8 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
     contato_email: '',
     contato_telefone: '',
     temporaryPassword: '',
+    empresa_id_externo: 9083,
+    plano_id_externo: 864,
   });
 
   useEffect(() => {
@@ -146,6 +148,8 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
             contato_nome: formData.contato_nome,
             contato_email: formData.contato_email,
             contato_telefone: formData.contato_telefone,
+            empresa_id_externo: formData.empresa_id_externo,
+            plano_id_externo: formData.plano_id_externo,
           })
           .eq('id', company.id);
 

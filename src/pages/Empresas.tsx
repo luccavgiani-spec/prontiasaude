@@ -114,9 +114,14 @@ const Empresas = () => {
             Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
             Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
-          <Button size="lg" onClick={() => setShowForm(true)} className="medical-button-primary text-lg px-8 py-4">
-            Solicitar Contato
-          </Button>
+          <div className="flex gap-4">
+            <Button size="lg" onClick={() => setShowForm(true)} className="medical-button-primary text-lg px-8 py-4">
+              Solicitar Contato
+            </Button>
+            <Button size="lg" variant="outline" onClick={() => window.location.href = '/empresa/login'} className="text-lg px-8 py-4">
+              Área da Empresa
+            </Button>
+          </div>
         </div>
       </section>
 
