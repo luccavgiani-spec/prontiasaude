@@ -142,7 +142,8 @@ async function registerClickLifePatient(
     const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'authtoken': INTEGRATOR_TOKEN
       },
       body: JSON.stringify(activationPayload)
     });
