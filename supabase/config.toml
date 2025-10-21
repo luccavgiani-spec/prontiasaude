@@ -1,9 +1,12 @@
 project_id = "ploqujuhpwutpcibedbr"
 
-[functions.mp-webhook-proxy]
+[functions.mp-webhook]
 verify_jwt = false
 
 [functions.mp-create-payment]
+verify_jwt = false
+
+[functions.appointments-manager]
 verify_jwt = false
 
 [functions.gas-proxy]
