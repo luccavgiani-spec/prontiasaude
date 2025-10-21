@@ -134,11 +134,15 @@ async function registerClickLifePatient(
       proposito: "Ativar"
     };
     
+    // 🔍 DEBUG: Log do token e payload antes da ativação
+    console.log('[ClickLife] Token (primeiros 30 chars):', INTEGRATOR_TOKEN.substring(0, 30) + '...');
+    console.log('[ClickLife] Payload de ativação:', JSON.stringify(activationPayload));
+    
     const activationRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'authtoken': INTEGRATOR_TOKEN // ✅ Token no header para ativação
+        'Content-Type': 'application/json'
+        // ✅ authtoken vai apenas no body (não duplicar no header)
       },
       body: JSON.stringify(activationPayload)
     });
