@@ -646,6 +646,77 @@ const TestesRoteamento: React.FC = () => {
     }
   };
 
+  /**
+   * TESTES DE WEBHOOK MERCADO PAGO
+   * Testa se o webhook está operante e respondendo corretamente
+   */
+  const [isTestingWebhook, setIsTestingWebhook] = useState(false);
+  
+  const testMercadoPagoWebhook = async (paymentMethod: 'card' | 'pix') => {
+    setIsTestingWebhook(true);
+    const startTime = Date.now();
+    
+    try {
+      console.log(`[Webhook Test] Testando webhook ${paymentMethod.toUpperCase()}`);
+      
+      // Simular notificação do Mercado Pago
+      const mockPayload = {
+        action: 'payment.updated',
+        data: {
+          id: `test_${Date.now()}_${paymentMethod}`
+        }
+      };
+      
+      // Chamar o webhook proxy
+      const response = await fetch('https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/mp-webhook-proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(mockPayload)
+      });
+      
+      const responseTime = Date.now() - startTime;
+      const responseData = await response.text();
+      
+      const result: TestResult = {
+        scenario_id: `Webhook MP - ${paymentMethod.toUpperCase()}`,
+        timestamp: new Date().toISOString(),
+        status: response.ok ? 'passou' : 'falhou',
+        provider: 'mercadopago',
+        response_time: responseTime,
+        request: mockPayload,
+        response: { status: response.status, data: responseData },
+        error: !response.ok ? `HTTP ${response.status}: ${responseData}` : undefined
+      };
+      
+      setTestHistory(prev => [result, ...prev].slice(0, 20));
+      
+      if (response.ok) {
+        toast.success(`✅ Webhook MP ${paymentMethod.toUpperCase()} operante!`);
+      } else {
+        toast.error(`❌ Webhook MP ${paymentMethod.toUpperCase()} falhou!`);
+      }
+      
+    } catch (error: any) {
+      const responseTime = Date.now() - startTime;
+      const result: TestResult = {
+        scenario_id: `Webhook MP - ${paymentMethod.toUpperCase()}`,
+        timestamp: new Date().toISOString(),
+        status: 'falhou',
+        response_time: responseTime,
+        request: { test: 'webhook', method: paymentMethod },
+        response: null,
+        error: error.message || 'Erro ao testar webhook'
+      };
+      
+      setTestHistory(prev => [result, ...prev].slice(0, 20));
+      toast.error(`❌ Erro ao testar webhook: ${error.message}`);
+    } finally {
+      setIsTestingWebhook(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -687,6 +758,57 @@ const TestesRoteamento: React.FC = () => {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Suítes Automatizadas */}
         <div className="space-y-4">
+          {/* Card de Testes de Webhook MP */}
+          <Card className="border-2 border-orange-500/20">
+            <CardHeader>
+              <CardTitle className="text-orange-600">🔔 Testes de Webhook MP</CardTitle>
+              <CardDescription>
+                Valida se os webhooks do Mercado Pago estão operantes
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => testMercadoPagoWebhook('card')}
+                disabled={isTestingWebhook || isRunningCommunicare || isRunningClicklife}
+                className="w-full"
+                variant="outline"
+              >
+                {isTestingWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testando...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    Testar Webhook Cartão
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => testMercadoPagoWebhook('pix')}
+                disabled={isTestingWebhook || isRunningCommunicare || isRunningClicklife}
+                className="w-full"
+                variant="outline"
+              >
+                {isTestingWebhook ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testando...
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    Testar Webhook PIX
+                  </>
+                )}
+              </Button>
+              <div className="mt-2 text-xs text-muted-foreground">
+                <p>✓ Valida resposta HTTP 200</p>
+                <p>✓ Simula notificação payment.updated</p>
+              </div>
+            </CardContent>
+          </Card>
           <Card className="border-2 border-blue-500/20">
             <CardHeader>
               <CardTitle className="text-blue-600">🔵 Suíte Communicare</CardTitle>

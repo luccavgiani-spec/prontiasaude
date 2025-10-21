@@ -639,51 +639,62 @@ export function PaymentModal({
 
         {paymentStatus === 'idle' && (
           <div className="space-y-4">
-            {/* ✅ Sempre mostrar campos pessoais ANTES do Brick */}
-            <div className="space-y-4 bg-muted/30 p-4 rounded-lg">
-              <h3 className="font-semibold text-sm">Dados Pessoais</h3>
-              <div>
-                <Label htmlFor="name">Nome Completo</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="Seu nome completo"
-                  required
-                />
+            {/* Dados Pessoais - Mostrar resumo se já carregados */}
+            {formData.email && formData.name ? (
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <h3 className="font-semibold text-sm mb-2">Pagando como:</h3>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">{formData.name}</p>
+                  <p className="text-sm text-muted-foreground">{formData.email}</p>
+                  <p className="text-sm text-muted-foreground">{formData.cpf}</p>
+                </div>
               </div>
-              <div>
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="seu@email.com"
-                  required
-                />
+            ) : (
+              <div className="space-y-4 bg-muted/30 p-4 rounded-lg">
+                <h3 className="font-semibold text-sm">Dados Pessoais</h3>
+                <div>
+                  <Label htmlFor="name">Nome Completo</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Seu nome completo"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">E-mail</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="seu@email.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="cpf">CPF</Label>
+                  <Input
+                    id="cpf"
+                    value={formData.cpf}
+                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                    placeholder="000.000.000-00"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="phone">Telefone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    placeholder="+55 11 99999-9999"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <Label htmlFor="cpf">CPF</Label>
-                <Input
-                  id="cpf"
-                  value={formData.cpf}
-                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                  placeholder="000.000.000-00"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+55 11 99999-9999"
-                  required
-                />
-              </div>
-            </div>
+            )}
 
             {/* Seletor de método de pagamento */}
             <div className="flex gap-2 border-b pb-4">

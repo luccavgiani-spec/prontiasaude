@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield } from 'lucide-react';
+import { getPatientPlan } from '@/lib/patient-plan';
 
 interface User {
   id: string;
@@ -25,6 +26,8 @@ interface User {
     profile_complete: boolean;
     intake_complete: boolean;
   };
+  activePlan?: boolean;
+  planCode?: string;
 }
 
 export default function UserRegistrationsTab() {
@@ -58,7 +61,27 @@ export default function UserRegistrationsTab() {
 
       if (error) throw error;
 
-      setUsers(data.users || []);
+      const usersWithPlans = await Promise.all(
+        (data.users || []).map(async (user: User) => {
+          try {
+            const plan = await getPatientPlan(user.email);
+            const now = new Date();
+            const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at) : null;
+            const isActive = expiresAt && expiresAt > now && plan?.status === 'active';
+            
+            return {
+              ...user,
+              activePlan: isActive,
+              planCode: plan?.plan_code,
+            };
+          } catch (error) {
+            console.error(`Error loading plan for ${user.email}:`, error);
+            return { ...user, activePlan: false };
+          }
+        })
+      );
+
+      setUsers(usersWithPlans);
     } catch (error) {
       console.error('Error loading users:', error);
       toast.error('Erro ao carregar usuários');
@@ -240,6 +263,7 @@ export default function UserRegistrationsTab() {
                     <TableHead>Role</TableHead>
                     <TableHead>Perfil</TableHead>
                     <TableHead>Intake</TableHead>
+                    <TableHead>Plano Ativo</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -290,6 +314,13 @@ export default function UserRegistrationsTab() {
                           <Badge variant="default">✓</Badge>
                         ) : (
                           <Badge variant="secondary">✗</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {user.activePlan ? (
+                          <Badge variant="default" className="bg-green-600">✓ Ativo</Badge>
+                        ) : (
+                          <Badge variant="secondary">✗ Sem plano</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
