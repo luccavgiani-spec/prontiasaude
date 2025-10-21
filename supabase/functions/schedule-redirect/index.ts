@@ -608,6 +608,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
   console.log('[Communicare] Enfileirando paciente CPF:', payload.cpf);
   console.log('[Communicare] Payload:', JSON.stringify(queuePayload, null, 2));
   console.log(`[Communicare] POST ${INTEGRATIONS_BASE}/v1/queue`);
+  console.log('[Communicare] JWT usado (primeiros 50 chars):', jwt.substring(0, 50) + '...');
 
   const queueResponse = await fetch(
     `${INTEGRATIONS_BASE}/v1/queue`,
@@ -631,7 +632,7 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
     // Log CURL para debug
     const curlQueue = `curl -X POST '${INTEGRATIONS_BASE}/v1/queue' \\
   -H 'Content-Type: application/json' \\
-  -H 'api_token: ${API_TOKEN.substring(0, 20)}...' \\
+  -H 'api_token: ${jwt.substring(0, 20)}...' \\
   -d '${JSON.stringify(queuePayload)}'`;
     console.log('[Communicare] CURL Queue:', curlQueue);
     
@@ -681,6 +682,11 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
 }
 
 async function getCachedJWT(supabase: any): Promise<string | null> {
+  // 🔄 FORÇAR RENOVAÇÃO PARA DEBUG (remover após validar)
+  console.log('[JWT Cache] Forçando renovação do JWT para garantir token fresco');
+  return null;
+  
+  /* CÓDIGO ORIGINAL (DESCOMENTAR APÓS VALIDAR):
   const { data } = await supabase
     .from('admin_settings')
     .select('value')
@@ -703,6 +709,7 @@ async function getCachedJWT(supabase: any): Promise<string | null> {
 
   console.log('[JWT Cache] JWT válido encontrado');
   return data.value;
+  */
 }
 
 async function cacheJWT(jwt: string, supabase: any): Promise<void> {
