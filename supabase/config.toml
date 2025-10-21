@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.clicklife-token-test]
 verify_jwt = false
+
+[functions.company-operations]
+verify_jwt = true

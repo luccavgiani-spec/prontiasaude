@@ -282,9 +282,11 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="conteudo" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsList className="grid w-full max-w-4xl grid-cols-4">
             <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
             <TabsTrigger value="testes">Testes de Roteamento</TabsTrigger>
+            <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+            <TabsTrigger value="empresas">Empresas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="conteudo">
@@ -545,6 +547,17 @@ const AdminDashboard = () => {
 
           <TabsContent value="testes">
             <TestesRoteamento />
+          </TabsContent>
+
+          <TabsContent value="configuracoes">
+            <div className="space-y-6">
+              <SpecialtiesSelector isAdmin={true} />
+              <RedirectFlowMap />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="empresas">
+            <CompanyManagement />
           </TabsContent>
         </Tabs>
       </div>

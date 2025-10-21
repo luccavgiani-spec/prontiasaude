@@ -48,6 +48,12 @@ import Privacidade from "./pages/Privacidade";
 // Admin pages
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
+// Empresa pages
+import EmpresaLogin from "./pages/empresa/Login";
+import EmpresaDashboard from "./pages/empresa/Dashboard";
+import EmpresaPerfil from "./pages/empresa/Perfil";
+import EmpresaSeguranca from "./pages/empresa/Seguranca";
+import EmpresaTrocarSenha from "./pages/empresa/TrocarSenha";
 
 const queryClient = new QueryClient();
 
@@ -120,6 +126,12 @@ const App = () => (
               {/* Admin routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* Empresa routes */}
+              <Route path="/empresa/login" element={<EmpresaLogin />} />
+              <Route path="/empresa" element={<EmpresaDashboard />} />
+              <Route path="/empresa/perfil" element={<EmpresaPerfil />} />
+              <Route path="/empresa/seguranca" element={<EmpresaSeguranca />} />
+              <Route path="/empresa/trocar-senha" element={<EmpresaTrocarSenha />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
