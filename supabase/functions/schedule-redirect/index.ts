@@ -266,10 +266,9 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     );
   }
 
-  // 3. CRIAR AGENDAMENTO COM TOKEN DO INTEGRADOR
+  // 3. CRIAR AGENDAMENTO COM TOKEN DO INTEGRADOR (VIA HEADER)
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: INTEGRATOR_TOKEN, // ✅ Token do integrador (CLICKLIFE_AUTH_TOKEN)
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
@@ -279,10 +278,8 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
     console.log(`[ClickLife] Cupom adicionado: ${CUPOM_DEFAULT}`);
   }
 
-  console.log('[ClickLife] Request body (authtoken mascarado):', {
-    ...requestBody,
-    authtoken: `${INTEGRATOR_TOKEN.substring(0, 10)}...`
-  });
+  console.log('[ClickLife] Request body:', requestBody);
+  console.log('[ClickLife] Auth via header (token mascarado):', `${INTEGRATOR_TOKEN.substring(0, 10)}...`);
 
   const response = await fetch(
     `${API_BASE}/atendimentos/atendimentos`,
@@ -290,7 +287,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // ✅ SEM Authorization header (usando authtoken do paciente no body)
+        'authtoken': INTEGRATOR_TOKEN, // ✅ Token do integrador enviado no header
       },
       body: JSON.stringify(requestBody)
     }
