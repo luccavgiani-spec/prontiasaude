@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
 
     if (forceData?.value === 'true') {
       console.log('[schedule-redirect] Admin override: Forçando ClickLife');
-      return await redirectClickLife(payload, 'admin_override');
+      return await redirectClickLife(payload, 'admin_override', corsHeaders);
     }
 
     // 2. Verificar se é funcionário de empresa com plano ativo
@@ -298,13 +298,13 @@ Deno.serve(async (req) => {
       console.log('[schedule-redirect] Funcionário com plano ativo detectado → ClickLife');
       // Enriquecer payload com IDs da empresa
       payload.plano_ativo = true;
-      return await redirectClickLife(payload, 'employee_with_plan');
+      return await redirectClickLife(payload, 'employee_with_plan', corsHeaders);
     }
 
     // 3. Verificar plano ativo (payload direto)
     if (payload.plano_ativo) {
       console.log('[schedule-redirect] Plano ativo detectado → ClickLife');
-      return await redirectClickLife(payload, 'active_plan');
+      return await redirectClickLife(payload, 'active_plan', corsHeaders);
     }
 
     // 4. Verificar horário e especialidade
@@ -317,12 +317,12 @@ Deno.serve(async (req) => {
 
     if (isWeekend) {
       console.log('[schedule-redirect] Fim de semana → ClickLife');
-      return await redirectClickLife(payload, 'weekend');
+      return await redirectClickLife(payload, 'weekend', corsHeaders);
     }
 
     if (isNighttime) {
       console.log('[schedule-redirect] Horário noturno → ClickLife');
-      return await redirectClickLife(payload, 'nighttime');
+      return await redirectClickLife(payload, 'nighttime', corsHeaders);
     }
 
     // 5. Verificar disponibilidade na Communicare
@@ -344,12 +344,12 @@ Deno.serve(async (req) => {
     // ✅ Comparar normalizados
     if (!communicareNormalized.includes(especialidadeNormalized)) {
       console.log('[schedule-redirect] Especialidade indisponível na Communicare → ClickLife');
-      return await redirectClickLife(payload, 'specialty_unavailable');
+      return await redirectClickLife(payload, 'specialty_unavailable', corsHeaders);
     }
 
     // 6. Redirecionar para Communicare
     console.log('[schedule-redirect] Condições atendidas → Communicare');
-    return await redirectCommunicare(payload, supabase);
+    return await redirectCommunicare(payload, supabase, corsHeaders);
 
   } catch (error) {
     console.error('[schedule-redirect] Error:', error);
@@ -366,7 +366,7 @@ Deno.serve(async (req) => {
   }
 });
 
-async function redirectClickLife(payload: SchedulePayload, reason: string) {
+async function redirectClickLife(payload: SchedulePayload, reason: string, corsHeaders: Record<string, string>) {
   console.log(`[ClickLife] Motivo: ${reason}`);
 
   const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
@@ -622,7 +622,7 @@ async function createCommunicarePatient(
   };
 }
 
-async function redirectCommunicare(payload: SchedulePayload, supabase: any) {
+async function redirectCommunicare(payload: SchedulePayload, supabase: any, corsHeaders: Record<string, string>) {
   console.log('[Communicare] Iniciando redirecionamento');
 
   const INTEGRATIONS_BASE = Deno.env.get('COMMUNICARE_INTEGRATIONS_BASE')!;
