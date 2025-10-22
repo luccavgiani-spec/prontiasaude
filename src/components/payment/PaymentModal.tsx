@@ -161,6 +161,14 @@ export function PaymentModal({
     document.body.appendChild(script);
   };
 
+  // Limpar erros ao trocar método de pagamento
+  useEffect(() => {
+    if (open && paymentStatus === 'idle') {
+      setError('');
+      setUserMessage('');
+    }
+  }, [paymentMethod, open, paymentStatus]);
+
   // Montar Card Payment Brick quando método = cartão
   useEffect(() => {
     if (
@@ -236,8 +244,19 @@ export function PaymentModal({
             });
           },
           onError: (error: any) => {
-            console.error('Erro no Card Payment Brick (não crítico):', error);
-            // NÃO exibir mensagem ao usuário - são erros internos do brick
+            console.error('[Card Payment Brick] Error:', error);
+            
+            // ✅ Exibir erros críticos ao usuário
+            if (error?.cause?.[0]?.code === 'E301' || error?.message?.includes('token')) {
+              setError('Erro ao processar dados do cartão. Verifique as informações e tente novamente.');
+              setPaymentStatus('idle');
+            } else if (error?.message?.includes('security_code')) {
+              setError('Código de segurança (CVV) inválido.');
+              setPaymentStatus('idle');
+            } else {
+              // Erros não críticos: apenas logar
+              console.warn('[Card Payment Brick] Non-critical error:', error);
+            }
           },
         },
       });
@@ -290,7 +309,10 @@ export function PaymentModal({
     try {
       // ✅ Garantir que temos os dados corretos do cartão
       if (!cardFormData.token || !cardFormData.payment_method_id) {
-        throw new Error('Dados do cartão incompletos. Tente novamente.');
+        setError('Não foi possível processar os dados do cartão. Verifique os campos e tente novamente.');
+        setPaymentStatus('idle');
+        toast.error('Erro ao processar dados do cartão');
+        return; // NÃO lançar erro, apenas retornar
       }
 
       const orderId = `order_${Date.now()}`;
@@ -616,7 +638,7 @@ export function PaymentModal({
           </p>
         </DialogHeader>
 
-        {userMessage && (
+        {userMessage && paymentStatus === 'rejected' && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
             <p className="text-red-600 text-sm">{userMessage}</p>
           </div>

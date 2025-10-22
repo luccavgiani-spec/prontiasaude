@@ -272,11 +272,14 @@ export function PlanosSection() {
     }
 
     // Sem plano ativo: abrir modal de assinatura
+    // ✅ CORRIGIDO: Para assinaturas semestrais/anuais, cobrar valor total HOJE
     const duracaoLabel = duracaoSelecionada === '1' ? 'Mensal' : duracaoSelecionada === '6' ? 'Semestral' : 'Anual';
+    const valorTotalPeriodo = precoMensal * meses; // Valor total do período
+    
     setSelectedPlan({
       sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
       name: `${plano.nome} - ${duracaoLabel}`,
-      amount: precoMensal,
+      amount: valorTotalPeriodo, // ✅ Cobrar valor total (ex: R$ 107,94 para 6 meses)
       recurring: true,
       frequency: meses,
       frequencyType: 'months',
@@ -374,9 +377,15 @@ export function PlanosSection() {
                       {formataPreco(precoMensal / 100)}
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Equivale a {formataPreco(precoDiario / 100)}/dia
-                    </div>
+                    {meses > 1 ? (
+                      <div className="text-xs text-muted-foreground">
+                        Cobrança de {formataPreco((precoMensal * meses) / 100)} a cada {meses} meses
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        Equivale a {formataPreco(precoDiario / 100)}/dia
+                      </div>
+                    )}
                   </div>
                 </CardHeader>
 
