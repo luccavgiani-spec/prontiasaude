@@ -325,14 +325,14 @@ const AdminDashboard = () => {
           </Button>
         </div>
 
-        <Tabs defaultValue="conteudo" className="space-y-6">
+        <Tabs defaultValue="relatorios" className="space-y-6">
           <TabsList className="grid w-full max-w-6xl grid-cols-6">
-            <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
-            <TabsTrigger value="testes">Testes</TabsTrigger>
-            <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
-            <TabsTrigger value="empresas">Empresas</TabsTrigger>
             <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
-            <TabsTrigger value="cadastros">👥 Cadastros</TabsTrigger>
+            <TabsTrigger value="empresas">Empresas</TabsTrigger>
+            <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
+            <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
+            <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+            <TabsTrigger value="testes">Testes</TabsTrigger>
           </TabsList>
 
           <TabsContent value="conteudo">
