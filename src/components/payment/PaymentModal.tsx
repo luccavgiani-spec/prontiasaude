@@ -68,6 +68,7 @@ export function PaymentModal({
   });
   const [pixData, setPixData] = useState<PixData | null>(null);
   const [error, setError] = useState<string>('');
+  const [userMessage, setUserMessage] = useState<string>('');
   const [paymentId, setPaymentId] = useState<string>('');
   const [lastPaymentId, setLastPaymentId] = useState<string>('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
@@ -88,6 +89,7 @@ export function PaymentModal({
       setPaymentStatus('idle');
       setPixData(null);
       setError('');
+      setUserMessage('');
       if (cardPaymentBrickRef.current) {
         cardPaymentBrickRef.current.unmount();
         cardPaymentBrickRef.current = null;
@@ -251,7 +253,7 @@ export function PaymentModal({
           },
           onError: (error: any) => {
             console.error('Erro no Card Payment Brick:', error);
-            setError('Erro ao processar pagamento. Tente novamente.');
+            setUserMessage('Erro ao carregar formulário de pagamento. Recarregue a página.');
           },
         },
       });
@@ -259,7 +261,7 @@ export function PaymentModal({
       cardPaymentBrickRef.current = cardPaymentBrick;
     } catch (err) {
       console.error('Erro ao montar brick:', err);
-      setError('Erro ao carregar formulário de pagamento');
+      setUserMessage('Erro ao carregar formulário de pagamento. Recarregue a página.');
     }
   };
 
@@ -299,6 +301,7 @@ export function PaymentModal({
     console.log('[handleCardSubmit] Card form data:', cardFormData);
     setPaymentStatus('processing');
     setError('');
+    setUserMessage('');
 
     try {
       // ✅ Garantir que temos os dados corretos do cartão
@@ -394,7 +397,8 @@ export function PaymentModal({
           ? rejectMessages[data.status_detail] || 'Pagamento rejeitado. Verifique os dados do cartão.' 
           : 'Pagamento rejeitado. Verifique os dados do cartão.';
         
-        setError(userMessage);
+        setUserMessage(userMessage);
+        setError('');
         
         console.error('[CARD REJECTED]', {
           status_detail: data.status_detail,
@@ -671,9 +675,9 @@ export function PaymentModal({
           </p>
         </DialogHeader>
 
-        {error && (
+        {userMessage && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-            <p className="text-red-600 text-sm">{error}</p>
+            <p className="text-red-600 text-sm">{userMessage}</p>
           </div>
         )}
 

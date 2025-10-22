@@ -1,13 +1,15 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
+import { PaymentModal } from "@/components/payment/PaymentModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
 interface Variante {
   valor: number;
   nome: string;
@@ -23,6 +25,8 @@ const ServicoDetalhe = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<string>("");
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const navigate = useNavigate();
   const {
     toast
   } = useToast();
@@ -78,18 +82,32 @@ const ServicoDetalhe = () => {
         </div>
       </div>;
   }
-  const handleAgendar = () => {
-    // Track Lead event with current price
+  const handleAgendar = async () => {
+    // Track Lead event
     trackLead({
-      value: getCurrentPrice(),
+      value: getTotalPrice() / 100,
       content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
     });
 
-    // Placeholder: pagamentos indisponíveis temporariamente
-    toast({
-      title: "Pagamentos Indisponíveis",
-      description: "Em breve novo gateway de pagamento! Entre em contato pelo WhatsApp.",
-    });
+    // Verificar se usuário está logado
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      // Salvar serviço pendente e redirecionar para login
+      const pendingService = {
+        sku: getCurrentSku(),
+        serviceName: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),
+        amount: getTotalPrice(),
+        especialidade: selectedVariant || servico.nome,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pendingService', JSON.stringify(pendingService));
+      navigate('/area-do-paciente');
+      return;
+    }
+
+    // Usuário logado: abrir modal de pagamento
+    setIsPaymentModalOpen(true);
   };
   return <>
       <div className="py-16">
@@ -386,6 +404,22 @@ const ServicoDetalhe = () => {
           </div>
         </div>
       </div>
+
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        sku={getCurrentSku() || ''}
+        serviceName={servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')}
+        amount={getTotalPrice()}
+        especialidade={selectedVariant || servico.nome}
+        onSuccess={() => {
+          setIsPaymentModalOpen(false);
+          toast({
+            title: "Sucesso!",
+            description: "Pagamento processado com sucesso"
+          });
+        }}
+      />
 
       <CadastroModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={handleAgendar} />
     </>;
