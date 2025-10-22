@@ -117,20 +117,23 @@ export default function UserRegistrationsTab() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
+      // Normalizar email
+      const normalizedEmail = email.trim().toLowerCase();
+
       // Calcular data de expiração: 30 dias a partir de hoje
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 30);
 
-      // Inserir na tabela patient_plans
+      // Upsert na tabela patient_plans
       const { error } = await supabase
         .from('patient_plans')
-        .insert({
+        .upsert({
           user_id: userId,
-          email: email,
+          email: normalizedEmail,
           plan_code: 'IND_COM_ESP_1M',
           plan_expires_at: expiresAt.toISOString(),
           status: 'active'
-        });
+        }, { onConflict: 'email' });
 
       if (error) throw error;
 

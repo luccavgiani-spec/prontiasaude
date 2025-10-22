@@ -31,10 +31,11 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
     }
     
     // PRIORIDADE 2: Buscar por email (fallback)
+    const normalizedEmail = (email || '').trim().toLowerCase();
     const { data, error } = await supabase
       .from('patient_plans')
       .select('plan_code, plan_expires_at, status')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .eq('status', 'active')
       .gte('plan_expires_at', new Date().toISOString())
       .order('plan_expires_at', { ascending: false })
