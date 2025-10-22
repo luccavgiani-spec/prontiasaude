@@ -83,7 +83,19 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     const path = url.pathname.split('/').filter(Boolean);
-    const operation = path[path.length - 1];
+    
+    // Ler operation do body para suportar invoke()
+    let bodyData: any = {};
+    if (req.method === 'POST' || req.method === 'PUT') {
+      try {
+        const text = await req.text();
+        bodyData = text ? JSON.parse(text) : {};
+      } catch {
+        bodyData = {};
+      }
+    }
+    
+    const operation = bodyData.operation || path[path.length - 1];
 
     // ============= CONTROLES DE ACESSO POR OPERAÇÃO =============
     
@@ -306,7 +318,7 @@ Deno.serve(async (req) => {
 
     // CREATE EMPLOYEE
     if (req.method === 'POST' && operation === 'create-employee') {
-      const employeeData = await req.json();
+      const employeeData = bodyData;
       
       console.log('[company-operations] Creating employee for company:', employeeData.company_id);
 

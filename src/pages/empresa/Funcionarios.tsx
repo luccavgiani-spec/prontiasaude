@@ -157,9 +157,9 @@ export default function EmpresaFuncionarios() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
-      const response = await supabase.functions.invoke('company-operations/create-employee', {
-        method: 'POST',
+      const response = await supabase.functions.invoke('company-operations', {
         body: {
+          operation: 'create-employee',
           ...formData,
           company_id: company?.id,
         },

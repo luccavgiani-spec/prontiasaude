@@ -109,8 +109,8 @@ Deno.serve(async (req) => {
         
         if (error) throw error;
         
-        authUsers = { users: data };
-        totalUsers = data.length;
+        authUsers = { users: data.users };
+        totalUsers = data.users.length;
       }
 
       const userIds = authUsers.users.map((u: any) => u.id);
