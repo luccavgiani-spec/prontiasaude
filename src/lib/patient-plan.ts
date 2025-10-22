@@ -39,6 +39,17 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
 export const formatPlanName = (planCode?: string): string => {
   if (!planCode) return 'Nenhum plano ativo';
   
+  // ✅ NOVO: Detectar planos empresariais
+  if (planCode.startsWith('EMPRESA_')) {
+    const companyName = planCode
+      .replace('EMPRESA_', '')
+      .replace(/_/g, ' ')
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+    
+    return `Plano Empresarial - ${companyName}`;
+  }
+  
   const planNames: Record<string, string> = {
     'BASIC': 'Plano Básico',
     'PREMIUM': 'Plano Premium',

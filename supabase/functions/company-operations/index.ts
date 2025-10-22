@@ -154,6 +154,32 @@ Deno.serve(async (req) => {
         throw new Error(`Failed to create credentials: ${credError.message}`);
       }
 
+      // ✅ NOVO: Criar plano empresarial automaticamente
+      const companyPlanCode = `EMPRESA_${company.razao_social.toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 30)}`;
+      const planExpiryDate = new Date();
+      planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100); // 100 anos (plano perpétuo)
+
+      const { error: planError } = await supabaseClient
+        .from('patient_plans')
+        .insert({
+          email: `empresa_${companyData.id}@prontiasaude.com.br`,
+          plan_code: companyPlanCode,
+          plan_expires_at: planExpiryDate.toISOString(),
+          status: 'active',
+          user_id: null,
+        });
+
+      if (planError) {
+        console.error('[company-operations] Failed to create company plan:', planError.message);
+        // Não bloqueia criação da empresa, apenas loga
+      }
+
+      console.log('[company-operations] Company plan created:', {
+        company_id: companyData.id,
+        plan_code: companyPlanCode,
+        expires_at: planExpiryDate.toISOString()
+      });
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -241,10 +267,10 @@ Deno.serve(async (req) => {
         throw new Error('Missing required fields');
       }
 
-      // Buscar empresa_id_externo e plano_id_externo
+      // Buscar empresa_id_externo, plano_id_externo E razao_social
       const { data: companyData, error: companyError } = await supabaseClient
         .from('companies')
-        .select('empresa_id_externo, plano_id_externo')
+        .select('empresa_id_externo, plano_id_externo, razao_social, id')
         .eq('id', employeeData.company_id)
         .single();
 
@@ -252,16 +278,38 @@ Deno.serve(async (req) => {
         throw new Error('Company not found');
       }
 
-      // Inserir funcionário
+      // Gerar plan_code da empresa (mesmo padrão da criação)
+      const companyPlanCode = `EMPRESA_${companyData.razao_social.toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 30)}`;
+
+      // ✅ NOVO: Criar usuário Supabase Auth
+      const tempPassword = crypto.randomUUID(); // Senha temporária aleatória
+      const { data: authUser, error: authError } = await supabaseClient.auth.admin.createUser({
+        email: employeeData.email,
+        password: tempPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: employeeData.nome,
+          cpf: employeeData.cpf.replace(/\D/g, ''),
+          company_id: employeeData.company_id,
+          role: 'employee'
+        }
+      });
+
+      if (authError || !authUser.user) {
+        console.error('[company-operations] Auth user creation failed:', authError?.message);
+        throw new Error(`Failed to create auth user: ${authError?.message}`);
+      }
+
+      // ✅ NOVO: Inserir funcionário com user_id (SEM senha)
       const { data: employee, error: employeeError } = await supabaseClient
         .from('company_employees')
         .insert({
+          user_id: authUser.user.id,
           company_id: employeeData.company_id,
           nome: employeeData.nome,
           cpf: employeeData.cpf.replace(/\D/g, ''),
           email: employeeData.email,
           telefone: employeeData.telefone,
-          senha: employeeData.senha,
           datanascimento: employeeData.datanascimento,
           sexo: employeeData.sexo,
           fotobase64: employeeData.fotobase64 || null,
@@ -280,14 +328,81 @@ Deno.serve(async (req) => {
         .single();
 
       if (employeeError) {
+        // Rollback: deletar usuário Auth se inserção falhou
+        await supabaseClient.auth.admin.deleteUser(authUser.user.id);
         console.error('[company-operations] Employee creation failed:', employeeError.message);
         throw new Error(`Failed to create employee: ${employeeError.message}`);
       }
 
-      console.log('[company-operations] Employee created successfully');
+      // ✅ NOVO: Criar patient record (para aparecer na /area-do-paciente)
+      const { error: patientError } = await supabaseClient
+        .from('patients')
+        .upsert({
+          id: authUser.user.id,
+          first_name: employeeData.nome.split(' ')[0],
+          last_name: employeeData.nome.split(' ').slice(1).join(' ') || '',
+          cpf: employeeData.cpf.replace(/\D/g, ''),
+          phone_e164: employeeData.telefone,
+          birth_date: employeeData.datanascimento,
+          gender: employeeData.sexo === 'M' ? 'male' : 'female',
+          cep: employeeData.cep.replace(/\D/g, ''),
+          address_line: employeeData.logradouro,
+          address_number: employeeData.numero,
+          address_complement: employeeData.complemento || null,
+          city: employeeData.cidade,
+          state: employeeData.estado,
+          source: 'empresa',
+          profile_complete: true,
+          intake_complete: false,
+          terms_accepted_at: new Date().toISOString(),
+        });
+
+      if (patientError) {
+        console.error('[company-operations] Patient creation failed:', patientError.message);
+        // Não bloqueia, apenas loga
+      }
+
+      // ✅ NOVO: Vincular funcionário ao plano da empresa
+      const planExpiryDate = new Date();
+      planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
+
+      const { error: planError } = await supabaseClient
+        .from('patient_plans')
+        .insert({
+          email: employeeData.email,
+          user_id: authUser.user.id,
+          plan_code: companyPlanCode,
+          plan_expires_at: planExpiryDate.toISOString(),
+          status: 'active',
+        });
+
+      if (planError) {
+        console.error('[company-operations] Failed to link employee to company plan:', planError.message);
+        // Não bloqueia criação
+      }
+
+      // ✅ NOVO: Enviar email de redefinição de senha
+      const { error: resetError } = await supabaseClient.auth.admin.generateLink({
+        type: 'recovery',
+        email: employeeData.email,
+      });
+
+      if (resetError) {
+        console.error('[company-operations] Password reset email failed:', resetError.message);
+      }
+
+      console.log('[company-operations] Employee created successfully:', {
+        employee_id: employee.id,
+        user_id: authUser.user.id,
+        plan_code: companyPlanCode
+      });
 
       return new Response(
-        JSON.stringify({ success: true, employee }),
+        JSON.stringify({ 
+          success: true, 
+          employee,
+          message: 'Funcionário criado. Email de definição de senha enviado.'
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 201 }
       );
     }

@@ -40,7 +40,6 @@ export default function EmpresaFuncionarios() {
     nome: '',
     cpf: '',
     email: '',
-    senha: '',
     datanascimento: '',
     sexo: 'M',
     telefone: '',
@@ -147,11 +146,6 @@ export default function EmpresaFuncionarios() {
       return;
     }
 
-    if (formData.senha.length < 8) {
-      toast.error('Senha deve ter no mínimo 8 caracteres');
-      return;
-    }
-
     if (!validateCEP(formData.cep)) {
       toast.error('CEP inválido');
       return;
@@ -173,13 +167,12 @@ export default function EmpresaFuncionarios() {
 
       if (response.error) throw response.error;
 
-      toast.success('Funcionário cadastrado com sucesso');
+      toast.success(`Funcionário cadastrado! Email com instruções enviado para ${formData.email}`);
       setShowForm(false);
       setFormData({
         nome: '',
         cpf: '',
         email: '',
-        senha: '',
         datanascimento: '',
         sexo: 'M',
         telefone: '',
@@ -287,28 +280,21 @@ export default function EmpresaFuncionarios() {
                     </div>
                   </div>
 
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="email">E-mail *</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                        required
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="senha">Senha *</Label>
-                      <Input
-                        id="senha"
-                        type="password"
-                        value={formData.senha}
-                        onChange={(e) => setFormData(prev => ({ ...prev, senha: e.target.value }))}
-                        placeholder="Mínimo 8 caracteres"
-                        required
-                      />
-                    </div>
+                  <div>
+                    <Label htmlFor="email">E-mail *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      required
+                    />
+                  </div>
+
+                  <div className="rounded-lg bg-blue-50 border border-blue-200 p-4">
+                    <p className="text-sm text-blue-700">
+                      <strong>ℹ️ Senha de Acesso:</strong> O funcionário receberá um email com link para criar sua própria senha. Ele poderá acessar sua área através de <strong>/area-do-paciente</strong> usando o mesmo login de pacientes.
+                    </p>
                   </div>
 
                   <div className="grid md:grid-cols-3 gap-4">

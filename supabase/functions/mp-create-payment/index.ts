@@ -2,6 +2,7 @@
 // Cria pagamentos no Mercado Pago usando ACCESS_TOKEN server-side
 
 import { getCorsHeaders } from '../common/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
 const corsHeaders = getCorsHeaders();
 
@@ -46,10 +47,64 @@ Deno.serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
     
-    // Prepare payment data for Mercado Pago API
+    // ✅ NOVO: Conectar ao Supabase para validar preço
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const sku = paymentRequest.items?.[0]?.id;
+    if (!sku) {
+      throw new Error('Missing SKU in payment request');
+    }
+
+    const clientAmount = paymentRequest.items.reduce(
+      (sum, item) => sum + (item.unit_price * item.quantity), 
+      0
+    );
+
+    // ✅ NOVO: Buscar preço validado do banco
+    const { data: service, error: serviceError } = await supabaseClient
+      .from('services')
+      .select('sku, name, price_cents, allows_recurring, recurring_frequency, recurring_frequency_type')
+      .eq('sku', sku)
+      .eq('active', true)
+      .maybeSingle();
+
+    if (serviceError || !service) {
+      console.error('[mp-create-payment] Invalid SKU:', {
+        sku,
+        error: serviceError?.message
+      });
+      throw new Error(`Invalid or inactive service SKU: ${sku}`);
+    }
+
+    const expectedAmount = service.price_cents / 100; // Converter para reais
+
+    // ✅ NOVO: Validar preço (tolerância de 1 centavo por arredondamento)
+    const priceDifference = Math.abs(clientAmount - expectedAmount);
+    if (priceDifference > 0.01) {
+      console.error('[mp-create-payment] Price mismatch detected:', {
+        sku,
+        client_sent: clientAmount,
+        expected: expectedAmount,
+        difference: priceDifference
+      });
+      throw new Error(
+        `Price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${clientAmount.toFixed(2)}`
+      );
+    }
+
+    console.log('[mp-create-payment] Validation passed:', {
+      sku,
+      name: service.name,
+      amount: expectedAmount
+    });
+
+    // ✅ Usar valores validados do DB (não do cliente)
     const paymentData: any = {
-      transaction_amount: paymentRequest.items.reduce((sum, item) => sum + (item.unit_price * item.quantity), 0),
-      description: paymentRequest.items.map(i => i.title).join(', '),
+      transaction_amount: expectedAmount, // Preço do DB
+      description: service.name, // Nome do DB
       payer: paymentRequest.payer,
       metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,

@@ -405,12 +405,22 @@ export function PaymentModal({
       }
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
-      console.error('[PaymentModal] Erro detalhado:', {
-        error: err,
-        response: err.response?.data,
-        status: err.response?.status
-      });
-      setError(err.message || 'Erro ao processar pagamento');
+      
+      // ✅ NOVO: Tratamento específico de erros
+      let errorMessage = 'Erro ao processar pagamento';
+      
+      if (err.message?.includes('Price validation failed')) {
+        errorMessage = 'Erro: Preço inválido detectado. Recarregue a página e tente novamente.';
+      } else if (err.message?.includes('Invalid SKU')) {
+        errorMessage = 'Erro: Serviço inválido. Entre em contato com o suporte.';
+      } else if (err.message?.includes('does not support recurring')) {
+        errorMessage = 'Este serviço não está disponível como assinatura.';
+      } else if (err.response?.status === 401) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
       setPaymentStatus('idle');
     }
   };
@@ -671,7 +681,7 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {serviceName}

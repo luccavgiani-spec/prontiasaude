@@ -168,10 +168,10 @@ export type Database = {
           nome: string
           numero: string
           plano_id_externo: number
-          senha: string
           sexo: string
           telefone: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           bairro: string
@@ -192,10 +192,10 @@ export type Database = {
           nome: string
           numero: string
           plano_id_externo?: number
-          senha: string
           sexo: string
           telefone: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           bairro?: string
@@ -216,10 +216,10 @@ export type Database = {
           nome?: string
           numero?: string
           plano_id_externo?: number
-          senha?: string
           sexo?: string
           telefone?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -404,6 +404,45 @@ export type Database = {
         }
         Relationships: []
       }
+      services: {
+        Row: {
+          active: boolean | null
+          allows_recurring: boolean | null
+          created_at: string | null
+          id: string
+          name: string
+          price_cents: number
+          recurring_frequency: number | null
+          recurring_frequency_type: string | null
+          sku: string
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          allows_recurring?: boolean | null
+          created_at?: string | null
+          id?: string
+          name: string
+          price_cents: number
+          recurring_frequency?: number | null
+          recurring_frequency_type?: string | null
+          sku: string
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          allows_recurring?: boolean | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          price_cents?: number
+          recurring_frequency?: number | null
+          recurring_frequency_type?: string | null
+          sku?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -437,10 +476,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      is_admin: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "user" | "company"
