@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       
       // Se for company, validar que está criando funcionário para sua própria empresa
       if (isCompany) {
-        const employeeData = await req.json();
+        // Usar bodyData já parseado (não chamar req.json() novamente)
         
         // Buscar company_id associado a este user_id
         const { data: companyCredential, error: credError } = await supabaseClient
@@ -128,16 +128,9 @@ Deno.serve(async (req) => {
           throw new Error('Forbidden: Company credentials not found');
         }
         
-        if (companyCredential.company_id !== employeeData.company_id) {
+        if (companyCredential.company_id !== bodyData.company_id) {
           throw new Error('Forbidden: Can only create employees for your own company');
         }
-        
-        // IMPORTANTE: Re-stringificar o body para o handler poder ler novamente
-        req = new Request(req.url, {
-          method: req.method,
-          headers: req.headers,
-          body: JSON.stringify(employeeData)
-        });
       }
     }
 

@@ -48,16 +48,15 @@ export default function UserRegistrationsTab() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const params = new URLSearchParams({
-        operation: 'list',
-        page: page.toString(),
-        limit: limit.toString(),
+      const { data, error } = await supabase.functions.invoke('user-management', {
+        body: {
+          operation: 'list',
+          page,
+          limit,
+          search: search || undefined,
+          role: roleFilter !== 'all' ? roleFilter : undefined,
+        },
       });
-
-      if (search) params.append('search', search);
-      if (roleFilter !== 'all') params.append('role', roleFilter);
-
-      const { data, error } = await supabase.functions.invoke(`user-management?${params.toString()}`);
 
       if (error) throw error;
 

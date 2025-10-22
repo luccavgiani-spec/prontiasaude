@@ -165,7 +165,14 @@ export default function EmpresaFuncionarios() {
         },
       });
 
-      if (response.error) throw response.error;
+      if (response.error) {
+        throw new Error(response.error.message || 'Erro ao cadastrar funcionário');
+      }
+
+      // Verificar se há erro na resposta data
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
 
       toast.success(`Funcionário cadastrado! Email com instruções enviado para ${formData.email}`);
       setShowForm(false);
@@ -188,12 +195,10 @@ export default function EmpresaFuncionarios() {
       setPhotoPreview(null);
       loadEmployees();
     } catch (error: any) {
-      // Don't log employee data
-      if (error.message?.includes('duplicate')) {
-        toast.error('CPF já cadastrado');
-      } else {
-        toast.error('Erro ao cadastrar funcionário');
-      }
+      // Exibir mensagem de erro real do Edge Function
+      const errorMessage = error?.message || 'Erro ao cadastrar funcionário';
+      console.error('[Funcionarios] Error:', errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -8,6 +8,29 @@ export interface PatientPlan {
 
 export const getPatientPlan = async (email: string): Promise<PatientPlan | null> => {
   try {
+    // Tentar buscar usuário logado primeiro
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    
+    // PRIORIDADE 1: Buscar por user_id (se logado)
+    if (userId) {
+      const { data: planByUserId, error: userIdError } = await supabase
+        .from('patient_plans')
+        .select('plan_code, plan_expires_at, status')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .gte('plan_expires_at', new Date().toISOString())
+        .order('plan_expires_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (!userIdError && planByUserId) {
+        console.log('[patient-plan] Active plan found by user_id:', planByUserId);
+        return planByUserId;
+      }
+    }
+    
+    // PRIORIDADE 2: Buscar por email (fallback)
     const { data, error } = await supabase
       .from('patient_plans')
       .select('plan_code, plan_expires_at, status')
@@ -19,7 +42,7 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
       .maybeSingle();
 
     if (error) {
-      console.error('[patient-plan] Error fetching plan:', error);
+      console.error('[patient-plan] Error fetching plan by email:', error);
       return null;
     }
 
@@ -28,7 +51,7 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
       return null;
     }
 
-    console.log('[patient-plan] Active plan found:', data);
+    console.log('[patient-plan] Active plan found by email:', data);
     return data;
   } catch (error) {
     console.error('[patient-plan] Exception:', error);

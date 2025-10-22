@@ -39,96 +39,69 @@ Deno.serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const operation = url.searchParams.get('operation') || 'list';
+    
+    // Ler parâmetros do BODY (se POST) ou QUERY (se GET)
+    let operation = 'list';
+    let page = 1;
+    let limit = 50;
+    let search = '';
+    let roleFilter: string | undefined;
+    
+    if (req.method === 'POST') {
+      const bodyText = await req.text();
+      const bodyData = bodyText ? JSON.parse(bodyText) : {};
+      operation = bodyData.operation || 'list';
+      page = bodyData.page || 1;
+      limit = bodyData.limit || 50;
+      search = bodyData.search || '';
+      roleFilter = bodyData.role;
+    } else {
+      operation = url.searchParams.get('operation') || 'list';
+      page = parseInt(url.searchParams.get('page') || '1');
+      limit = parseInt(url.searchParams.get('limit') || '50');
+      search = url.searchParams.get('search') || '';
+      roleFilter = url.searchParams.get('role') || undefined;
+    }
 
     // LIST USERS
     if (operation === 'list') {
-      const page = parseInt(url.searchParams.get('page') || '1');
-      const limit = parseInt(url.searchParams.get('limit') || '50');
-      const search = url.searchParams.get('search') || '';
-      const roleFilter = url.searchParams.get('role');
-      const statusFilter = url.searchParams.get('status');
-      const startDate = url.searchParams.get('start_date');
-      const endDate = url.searchParams.get('end_date');
+      console.log('[user-management] Listing users with filters:', { page, limit, search, roleFilter });
+
+      // ========== BUSCAR TODOS OS USUÁRIOS COM PAGINAÇÃO INTERNA ==========
+      const allUsers = [];
+      let currentPage = 1;
+      let hasMore = true;
       
-      console.log('[user-management] Listing users with filters:', { page, limit, search, roleFilter, statusFilter });
-
-      // ========== NOVA ESTRATÉGIA: BUSCA SERVER-SIDE ==========
-      let authUsers: any;
-      let totalUsers = 0;
-
-      if (search) {
-        // Se há busca, buscar TODOS os usuários e filtrar
-        const allUsers = [];
-        let currentPage = 1;
-        let hasMore = true;
-        
-        while (hasMore) {
-          const { data: batch, error } = await supabaseClient.auth.admin.listUsers({
-            page: currentPage,
-            perPage: 1000,
-          });
-          
-          if (error) throw error;
-          
-          allUsers.push(...batch.users);
-          hasMore = batch.users.length === 1000;
-          currentPage++;
-        }
-        
-        // Buscar TODOS os pacientes
-        const { data: allPatients } = await supabaseClient
-          .from('patients')
-          .select('*');
-        
-        // Filtrar por busca ANTES de paginar
-        const searchLower = search.toLowerCase();
-        const filtered = allUsers.filter(authUser => {
-          const patient = allPatients?.find(p => p.id === authUser.id);
-          return (
-            authUser.email?.toLowerCase().includes(searchLower) ||
-            patient?.first_name?.toLowerCase().includes(searchLower) ||
-            patient?.last_name?.toLowerCase().includes(searchLower) ||
-            patient?.cpf?.includes(search)
-          );
-        });
-        
-        totalUsers = filtered.length;
-        
-        // Aplicar paginação DEPOIS de filtrar
-        const start = (page - 1) * limit;
-        const end = start + limit;
-        authUsers = { users: filtered.slice(start, end) };
-        
-      } else {
-        // Sem busca: usar paginação normal
-        const { data, error } = await supabaseClient.auth.admin.listUsers({
-          page,
-          perPage: limit,
+      while (hasMore) {
+        const { data: batch, error } = await supabaseClient.auth.admin.listUsers({
+          page: currentPage,
+          perPage: 1000,
         });
         
         if (error) throw error;
         
-        authUsers = { users: data.users };
-        totalUsers = data.users.length;
+        allUsers.push(...batch.users);
+        hasMore = batch.users.length === 1000;
+        currentPage++;
       }
+      
+      console.log(`[user-management] Fetched ${allUsers.length} total users from auth`);
+      
+      // Buscar TODOS os pacientes e roles
+      const userIds = allUsers.map((u: any) => u.id);
 
-      const userIds = authUsers.users.map((u: any) => u.id);
-
-      // Get patient data
       const { data: patients } = await supabaseClient
         .from('patients')
         .select('*')
         .in('id', userIds);
 
-      // Get roles
       const { data: roles } = await supabaseClient
         .from('user_roles')
         .select('*')
         .in('user_id', userIds);
 
-      // Combine data
-      const enrichedUsers = authUsers.users.map((authUser: any) => {
+      // Enriquecer usuários
+      const enrichedUsers = allUsers.map((authUser: any) => {
         const patient = patients?.find(p => p.id === authUser.id);
         const userRoles = roles?.filter(r => r.user_id === authUser.id).map(r => r.role) || [];
 
@@ -144,26 +117,51 @@ Deno.serve(async (req) => {
         };
       });
 
-      // Apply role filter if needed
+      // Aplicar filtros
       let filteredUsers = enrichedUsers;
+      
+      // Filtro de busca
+      if (search) {
+        const searchLower = search.toLowerCase();
+        filteredUsers = filteredUsers.filter((u: any) => {
+          return (
+            u.email?.toLowerCase().includes(searchLower) ||
+            u.patient?.first_name?.toLowerCase().includes(searchLower) ||
+            u.patient?.last_name?.toLowerCase().includes(searchLower) ||
+            u.patient?.cpf?.includes(search)
+          );
+        });
+      }
+      
+      // Filtro de role
       if (roleFilter) {
         filteredUsers = filteredUsers.filter((u: any) => u.roles.includes(roleFilter));
       }
 
+      const totalUsers = filteredUsers.length;
+      
+      // Aplicar paginação DEPOIS de filtrar
+      const start = (page - 1) * limit;
+      const end = start + limit;
+      const paginatedUsers = filteredUsers.slice(start, end);
+      
+      console.log(`[user-management] Returning ${paginatedUsers.length} users (page ${page}, total ${totalUsers})`);
+
       return new Response(
         JSON.stringify({
           success: true,
-          users: filteredUsers,
+          users: paginatedUsers,
           pagination: {
             page,
             limit,
             total: totalUsers,
-            hasMore: filteredUsers.length === limit,
+            hasMore: end < totalUsers,
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     // GET USER DETAILS
     if (operation === 'get' && req.method === 'GET') {
