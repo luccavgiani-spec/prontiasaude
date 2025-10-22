@@ -1,10 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+import { getCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = getCorsHeaders();
 
 // Validation helpers
 const validateEmail = (email: string): boolean => {
@@ -167,14 +165,13 @@ serve(async (req) => {
         });
 
         if (authError && !authError.message.includes('already exists')) {
-          console.error('Supabase auth error:', authError);
+          console.error('[upsert_patient] Auth error:', authError.message);
           throw authError;
         }
 
         const userId = authData?.user?.id || null;
 
-        console.log('[upsert_patient] User created/exists:', { 
-          email, 
+        console.log('[upsert_patient] User registration:', { 
           userId,
           status: authData ? 'created' : 'already_exists'
         });
@@ -239,9 +236,8 @@ serve(async (req) => {
           );
         }
 
-        console.log('[complete_profile] Sending to GAS:', {
+        console.log('[complete_profile] Processing profile:', {
           user_id: profileData.user_id,
-          email: profileData.email,
           has_plano: profileData.plano
         });
         
@@ -266,7 +262,6 @@ serve(async (req) => {
 
         // Call GAS API
         const gasTarget = `${gasBase}?path=site-register`;
-        console.log('[complete_profile] GAS Target:', gasTarget);
         
         const gasResponse = await fetch(gasTarget, {
           method: 'POST',
@@ -276,10 +271,7 @@ serve(async (req) => {
 
         const gasResult = await gasResponse.text();
 
-        console.log('[complete_profile] GAS Response:', {
-          status: gasResponse.status,
-          body: gasResult
-        });
+        console.log('[complete_profile] GAS Response status:', gasResponse.status);
 
         return new Response(
           JSON.stringify({ 

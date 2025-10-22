@@ -10,7 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
 import { validateCPF } from '@/lib/cpf-validator';
-import { validateCEP } from '@/lib/validations';
+import { validateCEP, validateEmail } from '@/lib/validations';
 import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react';
 
 interface Employee {
@@ -74,7 +74,7 @@ export default function EmpresaFuncionarios() {
       if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
-      console.error('Error loading employees:', error);
+      // Don't log error details - may contain employee data
       toast.error('Erro ao carregar funcionários');
     } finally {
       setLoading(false);
@@ -103,7 +103,7 @@ export default function EmpresaFuncionarios() {
         estado: data.uf || '',
       }));
     } catch (error) {
-      console.error('Error fetching CEP:', error);
+      // Don't log CEP lookup errors
       toast.error('Erro ao buscar CEP');
     } finally {
       setLoadingCEP(false);
@@ -142,7 +142,7 @@ export default function EmpresaFuncionarios() {
       return;
     }
 
-    if (!formData.email.includes('@')) {
+    if (!validateEmail(formData.email)) {
       toast.error('E-mail inválido');
       return;
     }
@@ -195,7 +195,7 @@ export default function EmpresaFuncionarios() {
       setPhotoPreview(null);
       loadEmployees();
     } catch (error: any) {
-      console.error('Error creating employee:', error);
+      // Don't log employee data
       if (error.message?.includes('duplicate')) {
         toast.error('CPF já cadastrado');
       } else {
@@ -220,7 +220,7 @@ export default function EmpresaFuncionarios() {
       toast.success('Funcionário excluído');
       loadEmployees();
     } catch (error) {
-      console.error('Error deleting employee:', error);
+      // Don't log deletion errors
       toast.error('Erro ao excluir funcionário');
     }
   };

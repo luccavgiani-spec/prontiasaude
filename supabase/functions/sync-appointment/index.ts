@@ -1,9 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { getWebhookCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = getWebhookCorsHeaders(); // Webhooks need wildcard CORS
 
 serve(async (req) => {
   // Handle CORS preflight requests

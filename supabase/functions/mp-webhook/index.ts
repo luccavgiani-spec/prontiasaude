@@ -1,10 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getWebhookCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+const corsHeaders = getWebhookCorsHeaders(); // Webhooks need wildcard CORS
 
 Deno.serve(async (req) => {
   // Handle CORS preflight
@@ -14,7 +11,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    console.log('[mp-webhook] Webhook received:', body);
+    console.log('[mp-webhook] Webhook received - action:', body.action);
 
     // Apenas processar payment.updated
     if (body.action !== 'payment.updated') {
@@ -61,7 +58,7 @@ Deno.serve(async (req) => {
     }
 
     const payment = await paymentRes.json();
-    console.log('[mp-webhook] Payment details:', JSON.stringify(payment, null, 2));
+    console.log('[mp-webhook] Payment status:', payment.status, 'Payment ID:', payment.id);
 
     // Processar apenas pagamentos aprovados
     if (payment.status !== 'approved') {
@@ -82,7 +79,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('[mp-webhook] Schedule payload:', schedulePayload);
+    console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
 
     // Chamar gas-proxy com lovable-payment-notify
     const supabase = createClient(
@@ -105,7 +102,7 @@ Deno.serve(async (req) => {
       plano_ativo: schedulePayload.plano_ativo || false
     };
 
-    console.log('[mp-webhook] Notificando via gas-proxy:', notifyPayload);
+    console.log('[mp-webhook] Notifying gas-proxy - payment_id:', notifyPayload.payment_id);
 
     const { data: notifyData, error: notifyError } = await supabase.functions.invoke('gas-proxy', {
       body: {
@@ -115,9 +112,9 @@ Deno.serve(async (req) => {
     });
 
     if (notifyError) {
-      console.error('[mp-webhook] Erro ao notificar:', notifyError);
+      console.error('[mp-webhook] Notification error:', notifyError.message);
     } else {
-      console.log('[mp-webhook] Notificação enviada:', notifyData);
+      console.log('[mp-webhook] Notification sent successfully');
     }
 
     // Sempre retornar 200 OK para MP não retentar

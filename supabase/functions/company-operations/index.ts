@@ -1,9 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+import { getCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = getCorsHeaders();
 
 interface CompanyData {
   razao_social: string;
@@ -236,7 +234,7 @@ Deno.serve(async (req) => {
     if (req.method === 'POST' && operation === 'create-employee') {
       const employeeData = await req.json();
       
-      console.log('[company-operations] Creating employee:', { cpf: employeeData.cpf });
+      console.log('[company-operations] Creating employee for company:', employeeData.company_id);
 
       // Validações
       if (!employeeData.company_id || !employeeData.nome || !employeeData.cpf || !employeeData.email) {
@@ -282,11 +280,11 @@ Deno.serve(async (req) => {
         .single();
 
       if (employeeError) {
-        console.error('[company-operations] Error creating employee:', employeeError);
+        console.error('[company-operations] Employee creation failed:', employeeError.message);
         throw new Error(`Failed to create employee: ${employeeError.message}`);
       }
 
-      console.log('[company-operations] Employee created:', employee.id);
+      console.log('[company-operations] Employee created successfully');
 
       return new Response(
         JSON.stringify({ success: true, employee }),
@@ -357,7 +355,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in company-operations:', error);
+    console.error('[company-operations] Error:', error.message);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

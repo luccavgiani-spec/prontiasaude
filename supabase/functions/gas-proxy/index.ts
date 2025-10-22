@@ -1,9 +1,7 @@
 // supabase/functions/gas-proxy/index.ts
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+import { getCorsHeaders } from '../common/cors.ts';
+
+const corsHeaders = getCorsHeaders();
 
 const GAS_BASE = 'https://script.google.com/macros/s/AKfycbyEH4Wn4FEViaYtgbRpL1IKp8Yzz8Q-xZNzRKCeidrfRYqFlyl_rbyV3jXQk11Vmn4n/exec';
 

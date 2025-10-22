@@ -1,9 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const corsHeaders = getCorsHeaders();
 
 // Mapeamento SKU → especialidadeId ClickLife (padrão: 8 para todos)
 const SKU_TO_CLICKLIFE_ID: Record<string, number> = {
@@ -269,7 +267,7 @@ Deno.serve(async (req) => {
 
   try {
     const payload: SchedulePayload = await req.json();
-    console.log('[schedule-redirect] Request:', payload);
+    console.log('[schedule-redirect] Processing request for SKU:', payload.sku);
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,

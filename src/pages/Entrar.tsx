@@ -50,9 +50,7 @@ const Entrar = () => {
     });
 
     if (error) {
-      // Log error but only show user-friendly messages
-      console.error('Login error:', error);
-      
+      // Show user-friendly error messages only (don't log sensitive auth details)
       if (error.message === "Invalid login credentials") {
         toast({
           title: "Erro no login",
@@ -96,7 +94,7 @@ const Entrar = () => {
           });
 
           if (error) {
-            console.error('Erro ao autenticar com Google:', error);
+            // Production: don't log sensitive error details
             toast({
               title: "Erro no login",
               description: "Não foi possível fazer login com Google. Tente novamente.",
@@ -114,7 +112,7 @@ const Entrar = () => {
       // @ts-ignore
       google.accounts.id.prompt();
     } catch (error) {
-      console.error('Google login error:', error);
+      // Production: don't log detailed errors
       toast({
         title: "Erro no login",
         description: "Não foi possível fazer login com Google. Tente novamente.",
