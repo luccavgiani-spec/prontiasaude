@@ -111,6 +111,38 @@ export default function UserRegistrationsTab() {
     }
   };
 
+  const handleActivatePlan = async (userId: string, email: string, userName: string) => {
+    if (!confirm(`Ativar plano básico (Individual com Especialistas) para ${userName}?`)) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Calcular data de expiração: 30 dias a partir de hoje
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+
+      // Inserir na tabela patient_plans
+      const { error } = await supabase
+        .from('patient_plans')
+        .insert({
+          user_id: userId,
+          email: email,
+          plan_code: 'IND_COM_ESP_1M',
+          plan_expires_at: expiresAt.toISOString(),
+          status: 'active'
+        });
+
+      if (error) throw error;
+
+      toast.success(`Plano ativado com sucesso para ${userName}! Válido por 30 dias.`);
+      loadUsers(); // Recarregar lista
+    } catch (error: any) {
+      console.error('Error activating plan:', error);
+      toast.error(error.message || 'Erro ao ativar plano');
+    }
+  };
+
   const exportCSV = () => {
     const headers = ['Email', 'Nome', 'CPF', 'Telefone', 'Data Cadastro', 'Último Login', 'Status', 'Roles'];
     const rows = users.map(u => [
@@ -328,6 +360,24 @@ export default function UserRegistrationsTab() {
                           <Button variant="ghost" size="sm" title="Ver Detalhes">
                             <Eye className="h-4 w-4" />
                           </Button>
+                          
+                          {/* ✅ NOVO: Botão para ativar plano */}
+                          {!user.activePlan && user.patient && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleActivatePlan(
+                                user.id, 
+                                user.email, 
+                                `${user.patient.first_name} ${user.patient.last_name}`
+                              )}
+                              title="Ativar Plano Básico (30 dias)"
+                              className="text-green-600 hover:text-green-700"
+                            >
+                              <Shield className="h-4 w-4" />
+                            </Button>
+                          )}
+                          
                           <Button
                             variant="ghost"
                             size="sm"

@@ -506,49 +506,59 @@ export function PaymentModal({
   };
 
   const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
-    setPaymentStatus('processing');
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000; // 2 segundos
+    
+    setPaymentStatus('approved');
+    console.log('[notifyPaymentAndRedirect] Payload:', schedulePayload);
 
-    console.log('[notifyPaymentAndRedirect] Calling schedule-redirect for payment:', paymentId);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
-        body: schedulePayload
-      });
-
-      if (error) throw error;
-
-      console.log('[notifyPaymentAndRedirect] Response:', data);
-
-      if (data && data.ok && data.url) {
-        toast.success('Redirecionando para o atendimento...');
-        window.location.href = data.url;
-      } else {
-        // Fallback para /pagamento/confirmado
-        setPaymentStatus('idle');
-        const params = new URLSearchParams({
-          payment_id: paymentId,
-          order_id: orderId || '',
-          email: schedulePayload.email,
-          cpf: schedulePayload.cpf,
-          sku
+    // ========== RETRY LOGIC ==========
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        console.log(`[notifyPaymentAndRedirect] Tentativa ${attempt}/${MAX_RETRIES}`);
+        
+        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+          body: schedulePayload
         });
-        console.warn('[notifyPaymentAndRedirect] Failed, redirecting to /pagamento/confirmado', data);
-        toast.error(data?.error || 'Não foi possível obter o link de redirecionamento.');
-        window.location.href = `/pagamento/confirmado?${params.toString()}`;
+
+        if (error) throw error;
+
+        // ✅ Sucesso: redirecionar direto
+        if (data && data.ok && data.url) {
+          console.log('[notifyPaymentAndRedirect] Redirecting to:', data.url);
+          toast.success('Redirecionando para o atendimento...');
+          setTimeout(() => {
+            window.location.href = data.url;
+          }, 1500);
+          return; // Sair da função
+        }
+        
+        // ❌ Resposta sem URL: tentar novamente
+        console.warn(`[notifyPaymentAndRedirect] Attempt ${attempt} failed:`, data);
+        
+        if (attempt < MAX_RETRIES) {
+          toast.info(`Aguarde, processando... (tentativa ${attempt}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        }
+        
+      } catch (err) {
+        console.error(`[notifyPaymentAndRedirect] Attempt ${attempt} error:`, err);
+        
+        if (attempt < MAX_RETRIES) {
+          toast.info(`Erro na tentativa ${attempt}. Tentando novamente...`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+        }
       }
-    } catch (err) {
-      console.error('[notifyPaymentAndRedirect] Error:', err);
-      setPaymentStatus('idle');
-      const params = new URLSearchParams({
-        payment_id: paymentId,
-        order_id: orderId || '',
-        email: schedulePayload.email,
-        cpf: schedulePayload.cpf,
-        sku
-      });
-      toast.error('Erro ao processar redirecionamento.');
-      window.location.href = `/pagamento/confirmado?${params.toString()}`;
     }
+    
+    // ========== ERRO FINAL: Após 3 tentativas, exibir popup e fechar modal ==========
+    console.error('[notifyPaymentAndRedirect] All retries failed');
+    setPaymentStatus('idle');
+    setError('Erro ao redirecionar. Contate o suporte.');
+    toast.error('Erro ao redirecionar. Contate o suporte.', {
+      duration: 5000,
+    });
+    onOpenChange(false); // Fechar modal
   };
 
 

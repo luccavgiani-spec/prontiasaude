@@ -53,17 +53,67 @@ Deno.serve(async (req) => {
       
       console.log('[user-management] Listing users with filters:', { page, limit, search, roleFilter, statusFilter });
 
-      // Get auth users via admin API (paginated)
-      const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers({
-        page,
-        perPage: limit,
-      });
+      // ========== NOVA ESTRATÉGIA: BUSCA SERVER-SIDE ==========
+      let authUsers: any;
+      let totalUsers = 0;
 
-      if (authError) {
-        throw new Error(`Failed to list users: ${authError.message}`);
+      if (search) {
+        // Se há busca, buscar TODOS os usuários e filtrar
+        const allUsers = [];
+        let currentPage = 1;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: batch, error } = await supabaseClient.auth.admin.listUsers({
+            page: currentPage,
+            perPage: 1000,
+          });
+          
+          if (error) throw error;
+          
+          allUsers.push(...batch.users);
+          hasMore = batch.users.length === 1000;
+          currentPage++;
+        }
+        
+        // Buscar TODOS os pacientes
+        const { data: allPatients } = await supabaseClient
+          .from('patients')
+          .select('*');
+        
+        // Filtrar por busca ANTES de paginar
+        const searchLower = search.toLowerCase();
+        const filtered = allUsers.filter(authUser => {
+          const patient = allPatients?.find(p => p.id === authUser.id);
+          return (
+            authUser.email?.toLowerCase().includes(searchLower) ||
+            patient?.first_name?.toLowerCase().includes(searchLower) ||
+            patient?.last_name?.toLowerCase().includes(searchLower) ||
+            patient?.cpf?.includes(search)
+          );
+        });
+        
+        totalUsers = filtered.length;
+        
+        // Aplicar paginação DEPOIS de filtrar
+        const start = (page - 1) * limit;
+        const end = start + limit;
+        authUsers = { users: filtered.slice(start, end) };
+        
+      } else {
+        // Sem busca: usar paginação normal
+        const { data, error } = await supabaseClient.auth.admin.listUsers({
+          page,
+          perPage: limit,
+        });
+        
+        if (error) throw error;
+        
+        authUsers = { users: data.users };
+        totalUsers = data.users.length;
       }
 
-      const userIds = authUsers.users.map(u => u.id);
+      const userIds = authUsers.users.map((u: any) => u.id);
 
       // Get patient data
       const { data: patients } = await supabaseClient
@@ -78,7 +128,7 @@ Deno.serve(async (req) => {
         .in('user_id', userIds);
 
       // Combine data
-      const enrichedUsers = authUsers.users.map(authUser => {
+      const enrichedUsers = authUsers.users.map((authUser: any) => {
         const patient = patients?.find(p => p.id === authUser.id);
         const userRoles = roles?.filter(r => r.user_id === authUser.id).map(r => r.role) || [];
 
@@ -94,21 +144,10 @@ Deno.serve(async (req) => {
         };
       });
 
-      // Apply filters
+      // Apply role filter if needed
       let filteredUsers = enrichedUsers;
-
-      if (search) {
-        const searchLower = search.toLowerCase();
-        filteredUsers = filteredUsers.filter(u => 
-          u.email?.toLowerCase().includes(searchLower) ||
-          u.patient?.first_name?.toLowerCase().includes(searchLower) ||
-          u.patient?.last_name?.toLowerCase().includes(searchLower) ||
-          u.patient?.cpf?.includes(search)
-        );
-      }
-
       if (roleFilter) {
-        filteredUsers = filteredUsers.filter(u => u.roles.includes(roleFilter));
+        filteredUsers = filteredUsers.filter((u: any) => u.roles.includes(roleFilter));
       }
 
       return new Response(
@@ -118,7 +157,8 @@ Deno.serve(async (req) => {
           pagination: {
             page,
             limit,
-            total: authUsers.users.length,
+            total: totalUsers,
+            hasMore: filteredUsers.length === limit,
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
