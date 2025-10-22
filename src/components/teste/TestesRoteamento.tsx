@@ -229,11 +229,11 @@ const TestesRoteamento: React.FC = () => {
   const runCommunicareSuite = async () => {
     setIsRunningCommunicare(true);
     
-    const subcases = [
-      { id: 'C1', especialidade: 'clinico geral', sku: 'ITC6534', nome: 'Clínico Geral' },
-      { id: 'C2', especialidade: 'psicologo_1', sku: 'ZXW2165', nome: 'Psicólogo 1 sessão' },
-      { id: 'C3', especialidade: 'nutricionista', sku: 'VPN5132', nome: 'Nutricionista' },
-    ];
+      const subcases = [
+        { id: 'C1', especialidade: 'Clínico Geral', sku: 'ITC6534', nome: 'Clínico Geral' },
+        { id: 'C2', especialidade: 'Psicólogo - 1 sessão', sku: 'ZXW2165', nome: 'Psicólogo 1 sessão' },
+        { id: 'C3', especialidade: 'Nutricionista', sku: 'VPN5132', nome: 'Nutricionista' },
+      ];
     
     // Segunda-feira 14:00 (horário comercial em Brasília UTC-3)
     const commercialHour = new Date();

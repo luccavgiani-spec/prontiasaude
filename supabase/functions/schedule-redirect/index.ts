@@ -89,22 +89,24 @@ async function getCommunicareSpecialties(supabase: any): Promise<string[]> {
     try {
       const specialties = JSON.parse(data.value);
       if (Array.isArray(specialties)) {
-        const normalized = specialties.map(s => normalize(s));
-        console.log('[schedule-redirect] Especialidades Communicare (normalizadas):', normalized);
-        return normalized;
+        // ✅ Retornar RAW (sem normalize)
+        console.log('[schedule-redirect] Especialidades Communicare (RAW):', specialties);
+        return specialties;
       }
     } catch (e) {
       console.error('[schedule-redirect] Erro ao parsear especialidades:', e);
     }
   }
 
-  // Fallback já normalizado
+  // Fallback em formato Communicare (nomes "pretty")
   const fallback = [
-    'clinico-geral', 'psicologo', 'nutricionista', 'personal-trainer',
-    'geriatria', 'nutrologo', 'infectologista', 'neurologista',
-    'reumatologista', 'solicitacao-exames', 'renovacao-receitas', 'laudos'
+    'Clínico Geral',
+    'Psicólogo - 1 sessão',
+    'Psicólogo - 4 sessões',
+    'Psicólogo - 8 sessões',
+    'Nutricionista'
   ];
-  console.log('[schedule-redirect] Usando especialidades fallback (normalizadas)');
+  console.log('[schedule-redirect] Usando especialidades fallback');
   return fallback;
 }
 
@@ -328,17 +330,21 @@ Deno.serve(async (req) => {
     // 5. Verificar disponibilidade na Communicare
     const communicareSpecialties = await getCommunicareSpecialties(supabase);
     
+    // ✅ Normalizar payload.especialidade
     const especialidadeNormalized = normalize(payload.especialidade || '');
-    const especialidadeSlug = DISPLAY_TO_SLUG[especialidadeNormalized] || especialidadeNormalized;
+    
+    // ✅ Normalizar TODAS as especialidades Communicare
+    const communicareNormalized = communicareSpecialties.map(s => normalize(s));
     
     console.log('[schedule-redirect] Comparando:', {
-      original: payload.especialidade,
-      normalized: especialidadeNormalized,
-      slug: especialidadeSlug,
-      disponivel: communicareSpecialties
+      payload_original: payload.especialidade,
+      payload_normalized: especialidadeNormalized,
+      communicare_raw: communicareSpecialties,
+      communicare_normalized: communicareNormalized
     });
     
-    if (!communicareSpecialties.includes(especialidadeSlug)) {
+    // ✅ Comparar normalizados
+    if (!communicareNormalized.includes(especialidadeNormalized)) {
       console.log('[schedule-redirect] Especialidade indisponível na Communicare → ClickLife');
       return await redirectClickLife(payload, 'specialty_unavailable');
     }

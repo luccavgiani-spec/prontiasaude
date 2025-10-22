@@ -117,13 +117,8 @@ export default function RedirectFlowMap() {
                     </div>
                     <div className="flex-1 space-y-2">
                       <div className="font-medium">ESPECIALIDADE DISPONÍVEL NA COMMUNICARE?</div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-red-600" />
-                        <span className="text-sm">NÃO</span>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                        <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                          CLICKLIFE (planoId: 863)
-                        </Badge>
+                      <div className="text-xs text-muted-foreground mb-2">
+                        Comparação via <code>normalize()</code> entre payload e especialidades configuradas em <strong>Admin → Especialidades Communicare</strong>
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -131,6 +126,14 @@ export default function RedirectFlowMap() {
                         <ArrowRight className="h-4 w-4 text-muted-foreground" />
                         <Badge className="bg-blue-50 text-blue-900 border-blue-300">
                           COMMUNICARE (padrão)
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-red-600" />
+                        <span className="text-sm">NÃO (não configurada)</span>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <Badge className="bg-slate-100 text-slate-900 border-slate-300">
+                          CLICKLIFE (planoId: 863)
                         </Badge>
                       </div>
                     </div>

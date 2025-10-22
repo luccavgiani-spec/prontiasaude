@@ -73,6 +73,10 @@ export default function SpecialtiesSelector({
   return <Card>
       <CardHeader>
         <CardTitle>Especialidades aceitas Communicare (Roteamento)</CardTitle>
+        <p className="text-sm text-muted-foreground mt-2">
+          ℹ️ Use os <strong>nomes exatos</strong> do catálogo de serviços. Exemplo: "Psicólogo - 1 sessão", não "psicologo_1".
+          A comparação é feita após normalização (sem acentos, lowercase).
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Search */}
