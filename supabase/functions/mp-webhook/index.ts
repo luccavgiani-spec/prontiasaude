@@ -81,40 +81,31 @@ Deno.serve(async (req) => {
 
     console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
 
-    // Chamar gas-proxy com lovable-payment-notify
+    // Chamar schedule-redirect diretamente
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!
     );
 
-    const notifyPayload = {
-      payment_id: payment.id.toString(),
-      payment_status: payment.status,
-      sku: schedulePayload.sku,
-      amount: payment.transaction_amount,
-      currency: payment.currency_id,
-      cpf: schedulePayload.cpf,
-      email: schedulePayload.email,
-      nome: schedulePayload.nome,
-      telefone: schedulePayload.telefone,
-      especialidade: schedulePayload.especialidade || 'Clínico Geral',
-      horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
-      plano_ativo: schedulePayload.plano_ativo || false
-    };
+    console.log('[mp-webhook] Calling schedule-redirect for payment:', payment.id);
 
-    console.log('[mp-webhook] Notifying gas-proxy - payment_id:', notifyPayload.payment_id);
-
-    const { data: notifyData, error: notifyError } = await supabase.functions.invoke('gas-proxy', {
+    const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
       body: {
-        path: 'lovable-payment-notify',
-        ...notifyPayload
+        cpf: schedulePayload.cpf,
+        email: schedulePayload.email,
+        nome: schedulePayload.nome,
+        telefone: schedulePayload.telefone,
+        especialidade: schedulePayload.especialidade || 'Clínico Geral',
+        sku: schedulePayload.sku,
+        horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+        plano_ativo: schedulePayload.plano_ativo || false
       }
     });
 
-    if (notifyError) {
-      console.error('[mp-webhook] Notification error:', notifyError.message);
+    if (scheduleError) {
+      console.error('[mp-webhook] Schedule-redirect error:', scheduleError.message);
     } else {
-      console.log('[mp-webhook] Notification sent successfully');
+      console.log('[mp-webhook] Scheduled successfully:', scheduleData);
     }
 
     // Sempre retornar 200 OK para MP não retentar

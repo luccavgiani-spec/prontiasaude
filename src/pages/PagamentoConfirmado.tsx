@@ -3,23 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { transformToGASPayload } from '@/lib/payload-transform';
-
-const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-
-async function callNotifyViaProxy(path: string, payload: any) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/gas-proxy?path=${encodeURIComponent(path)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    mode: 'cors',
-    credentials: 'omit',
-  });
-
-  let data: any = null;
-  try { data = await res.json(); } catch {}
-  return { ok: res.ok, status: res.status, data };
-}
+import { supabase } from '@/integrations/supabase/client';
 
 export default function PagamentoConfirmado() {
   const [searchParams] = useSearchParams();
@@ -41,37 +25,32 @@ export default function PagamentoConfirmado() {
     setIsRetrying(true);
     
     try {
-      const body = transformToGASPayload({
-        payment_id,
-        payment_status: 'approved',
-        sku,
-        amount: 4390, // fallback genérico (43.90 * 100)
-        cpf,
-        email,
-        name: '', // não disponível via searchParams
-        phone: '', // não disponível via searchParams
+      const payload = {
+        cpf: cpf,
+        email: email,
+        nome: '',
+        telefone: '',
+        sku: sku,
         especialidade: 'Clínico Geral',
-        horario_iso: new Date().toISOString(),
-        plano_ativo: false
+        plano_ativo: false,
+        horario_iso: new Date().toISOString()
+      };
+
+      console.log('[handleRetry] Calling schedule-redirect:', payload);
+
+      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        body: payload
       });
 
-      console.log('[handleRetry] Request body:', body);
+      if (error) throw error;
 
-      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
-      console.log('[handleRetry] Response status/data:', status, data);
+      console.log('[handleRetry] Response:', data);
 
-      if (ok && data?.success && data?.redirectUrl) {
+      if (data && data.ok && data.url) {
         toast.success('Redirecionando...');
-        window.location.href = data.redirectUrl;
+        window.location.href = data.url;
       } else {
-        // ✅ Permanece na página mostrando erro
-        const errorMsg = data?.error || data?.message || 'Pagamento ainda não compensou. Tente novamente em instantes.';
-        console.error('[NOTIFY ERROR]', {
-          payment_id,
-          error: data?.error,
-          message: data?.message,
-          full_response: data
-        });
+        const errorMsg = data?.error || 'Pagamento ainda não compensou. Tente novamente em instantes.';
         toast.error(errorMsg);
         setIsRetrying(false);
       }

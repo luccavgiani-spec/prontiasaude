@@ -10,23 +10,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
 import { MP_PUBLIC_KEY } from '@/lib/constants';
-import { transformToGASPayload } from '@/lib/payload-transform';
-
-const SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-
-async function callNotifyViaProxy(path: string, payload: any) {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/gas-proxy?path=${encodeURIComponent(path)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    mode: 'cors',
-    credentials: 'omit',
-  });
-
-  let data: any = null;
-  try { data = await res.json(); } catch {}
-  return { ok: res.ok, status: res.status, data };
-}
 
 declare global {
   interface Window {
@@ -514,32 +497,23 @@ export function PaymentModal({
 
   const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
     setPaymentStatus('processing');
-    
-    const body = transformToGASPayload({
-      payment_id: paymentId,
-      payment_status: 'approved',
-      sku,
-      amount,
-      cpf: schedulePayload.cpf,
-      email: schedulePayload.email,
-      name: schedulePayload.nome,
-      phone: schedulePayload.telefone,
-      especialidade: schedulePayload.especialidade || 'Clínico Geral',
-      horario_iso: schedulePayload.horario_iso,
-      plano_ativo: schedulePayload.plano_ativo
-    });
 
-    console.log('[Card] notify body:', body);
+    console.log('[notifyPaymentAndRedirect] Calling schedule-redirect for payment:', paymentId);
 
     try {
-      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
-      console.log('[notifyPaymentAndRedirect] status/data:', status, data);
+      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        body: schedulePayload
+      });
 
-      if (ok && data?.success && data?.redirectUrl) {
+      if (error) throw error;
+
+      console.log('[notifyPaymentAndRedirect] Response:', data);
+
+      if (data && data.ok && data.url) {
         toast.success('Redirecionando para o atendimento...');
-        window.location.href = data.redirectUrl;
+        window.location.href = data.url;
       } else {
-        // ✅ Fallback para /pagamento/confirmado apenas se notify falhar
+        // Fallback para /pagamento/confirmado
         setPaymentStatus('idle');
         const params = new URLSearchParams({
           payment_id: paymentId,
@@ -549,7 +523,7 @@ export function PaymentModal({
           sku
         });
         console.warn('[notifyPaymentAndRedirect] Failed, redirecting to /pagamento/confirmado', data);
-        toast.error(data?.error || data?.message || 'Não foi possível obter o link de redirecionamento.');
+        toast.error(data?.error || 'Não foi possível obter o link de redirecionamento.');
         window.location.href = `/pagamento/confirmado?${params.toString()}`;
       }
     } catch (err) {
@@ -577,43 +551,33 @@ export function PaymentModal({
     
     const schedulePayload = buildSchedulePayload();
 
-    const body = transformToGASPayload({
-      payment_id: String(lastPaymentId),
-      payment_status: 'approved',
-      sku,
-      amount,
-      cpf: schedulePayload.cpf,
-      email: schedulePayload.email,
-      name: schedulePayload.nome,
-      phone: schedulePayload.telefone,
-      especialidade: schedulePayload.especialidade || 'Clínico Geral',
-      horario_iso: schedulePayload.horario_iso,
-      plano_ativo: schedulePayload.plano_ativo
-    });
-
-    console.log('[PIX CTA] notify body:', body);
+    console.log('[PIX CTA] Calling schedule-redirect for payment:', lastPaymentId);
 
     try {
-      const { ok, status, data } = await callNotifyViaProxy('lovable-payment-notify', body);
-      console.log('[pix CTA] notify response status/data:', status, data);
+      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        body: schedulePayload
+      });
 
-      if (ok && data?.success && data?.redirectUrl) {
+      if (error) throw error;
+
+      console.log('[PIX CTA] Response:', data);
+
+      if (data && data.ok && data.url) {
         toast.success('Redirecionando para o atendimento...');
-        window.location.href = data.redirectUrl;
+        window.location.href = data.url;
       } else {
-        // ✅ NÃO redirecionar - volta para tela QR Code
+        // Volta para tela QR Code
         setPaymentStatus('pending_pix');
-        const errorMsg = data?.error || data?.message || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
+        const errorMsg = data?.error || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
         console.error('[NOTIFY ERROR]', {
           payment_id: lastPaymentId,
           error: data?.error,
-          message: data?.message,
           full_response: data
         });
         toast.error(errorMsg);
       }
     } catch (err) {
-      console.error('[pix CTA] Error:', err);
+      console.error('[PIX CTA] Error:', err);
       setPaymentStatus('pending_pix');
       toast.error('Erro ao processar. Tente novamente.');
     }
