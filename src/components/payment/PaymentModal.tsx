@@ -89,6 +89,7 @@ export function PaymentModal({
   const [lastPaymentId, setLastPaymentId] = useState<string>('');
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [hasRequiredData, setHasRequiredData] = useState(false);
+  const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -113,6 +114,7 @@ export function PaymentModal({
   }, [open]);
 
   const loadUserData = async () => {
+    setIsLoadingUserData(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -150,6 +152,8 @@ export function PaymentModal({
       }
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
+    } finally {
+      setIsLoadingUserData(false);
     }
   };
 
@@ -174,10 +178,17 @@ export function PaymentModal({
 
   // Montar Card Payment Brick quando método = cartão
   useEffect(() => {
-    if (open && paymentMethod === 'card' && mpInstanceRef.current && !isBrickMountedRef.current) {
+    if (
+      open && 
+      paymentMethod === 'card' && 
+      mpInstanceRef.current && 
+      !isBrickMountedRef.current &&
+      !isLoadingUserData &&
+      (hasRequiredData || !isUserLoggedIn)
+    ) {
       mountCardPaymentBrick();
     }
-  }, [open, paymentMethod, mpInstanceRef.current]);
+  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn]);
 
   // Remontar Brick quando dados forem preenchidos
   useEffect(() => {
@@ -208,10 +219,15 @@ export function PaymentModal({
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
 
-    // ✅ Avisar se dados incompletos, mas não bloquear
-    if (!formData.email || !formData.cpf || !formData.name) {
-      console.warn('[PaymentModal] Dados incompletos. Aguardando preenchimento...');
+    // Se usuário logado mas dados incompletos, não montar brick
+    if (isUserLoggedIn && !hasRequiredData) {
+      console.warn('[PaymentModal] Aguardando dados do usuário...');
+      return;
     }
+
+    // Para usuários não logados ou com dados completos, usar valores disponíveis ou placeholders
+    const payerEmail = formData.email || 'placeholder@example.com';
+    const payerCPF = formData.cpf.replace(/\D/g, '') || '00000000000';
 
     try {
       const bricksBuilder = mpInstanceRef.current.bricks();
@@ -219,11 +235,11 @@ export function PaymentModal({
       const cardPaymentBrick = await bricksBuilder.create('cardPayment', 'cardPaymentBrick', {
         initialization: {
           amount: amount / 100,
-          payer: {  // ✅ Adicionar payer com email e CPF
-            email: formData.email,
+          payer: {
+            email: payerEmail,
             identification: {
               type: 'CPF',
-              number: formData.cpf.replace(/\D/g, '')
+              number: payerCPF
             }
           }
         },
@@ -701,8 +717,15 @@ export function PaymentModal({
 
         {paymentStatus === 'idle' && (
           <div className="space-y-4">
-            {/* Dados Pessoais - Mostrar resumo se já carregados */}
-            {formData.email && formData.name ? (
+            {isLoadingUserData ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+                <span className="text-muted-foreground">Carregando dados...</span>
+              </div>
+            ) : (
+              <>
+                {/* Dados Pessoais - Mostrar resumo se já carregados */}
+                {formData.email && formData.name ? (
               <div className="bg-muted/30 p-4 rounded-lg">
                 <h3 className="font-semibold text-sm mb-2">Pagando como:</h3>
                 <div className="space-y-1">
@@ -758,8 +781,8 @@ export function PaymentModal({
               </div>
             )}
 
-            {/* Seletor de método de pagamento */}
-            <div className="flex gap-2 border-b pb-4">
+                {/* Seletor de método de pagamento */}
+                <div className="flex gap-2 border-b pb-4">
               <Button
                 type="button"
                 variant={paymentMethod === 'card' ? 'default' : 'outline'}
@@ -779,16 +802,18 @@ export function PaymentModal({
               </Button>
             </div>
 
-            {/* Card Payment Brick */}
-            {paymentMethod === 'card' && (
-              <div id="cardPaymentBrick"></div>
-            )}
+                {/* Card Payment Brick */}
+                {paymentMethod === 'card' && (
+                  <div id="cardPaymentBrick"></div>
+                )}
 
-            {/* Botão PIX */}
-            {paymentMethod === 'pix' && (
-              <Button onClick={handlePixSubmit} className="w-full" size="lg">
-                Gerar QR Code PIX
-              </Button>
+                {/* Botão PIX */}
+                {paymentMethod === 'pix' && (
+                  <Button onClick={handlePixSubmit} className="w-full" size="lg">
+                    Gerar QR Code PIX
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}
