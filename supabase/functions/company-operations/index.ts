@@ -66,21 +66,68 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Verificar se usuário é admin
+    // Verificar se usuário é admin OU company
     const { data: roleData } = await supabaseClient
       .from('user_roles')
       .select('role')
       .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .single();
+      .in('role', ['admin', 'company'])
+      .maybeSingle();
 
     if (!roleData) {
-      throw new Error('Forbidden: Admin access required');
+      throw new Error('Forbidden: Access denied');
     }
+
+    const isAdmin = roleData.role === 'admin';
+    const isCompany = roleData.role === 'company';
 
     const url = new URL(req.url);
     const path = url.pathname.split('/').filter(Boolean);
     const operation = path[path.length - 1];
+
+    // ============= CONTROLES DE ACESSO POR OPERAÇÃO =============
+    
+    // Operações ADMIN-ONLY: criar empresas, listar empresas, atualizar empresas, resetar senhas
+    const adminOnlyOps = ['create', 'list', 'reset-password'];
+    const isAdminOnlyOp = adminOnlyOps.includes(operation) || (req.method === 'PUT' && !operation.includes('create-employee'));
+
+    if (isAdminOnlyOp && !isAdmin) {
+      throw new Error('Forbidden: Admin access required for this operation');
+    }
+
+    // Operação CREATE EMPLOYEE: permitir admin OU company (com validação de ownership)
+    if (req.method === 'POST' && operation === 'create-employee') {
+      if (!isAdmin && !isCompany) {
+        throw new Error('Forbidden: Admin or Company access required');
+      }
+      
+      // Se for company, validar que está criando funcionário para sua própria empresa
+      if (isCompany) {
+        const employeeData = await req.json();
+        
+        // Buscar company_id associado a este user_id
+        const { data: companyCredential, error: credError } = await supabaseClient
+          .from('company_credentials')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (credError || !companyCredential) {
+          throw new Error('Forbidden: Company credentials not found');
+        }
+        
+        if (companyCredential.company_id !== employeeData.company_id) {
+          throw new Error('Forbidden: Can only create employees for your own company');
+        }
+        
+        // IMPORTANTE: Re-stringificar o body para o handler poder ler novamente
+        req = new Request(req.url, {
+          method: req.method,
+          headers: req.headers,
+          body: JSON.stringify(employeeData)
+        });
+      }
+    }
 
     // CREATE COMPANY
     if (req.method === 'POST' && operation === 'create') {
