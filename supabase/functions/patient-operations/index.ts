@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 import { getCorsHeaders } from '../common/cors.ts';
+import { validateCPF as validateCPFChecksum, cleanCPF } from '../common/cpf-validator.ts';
 
 const corsHeaders = getCorsHeaders();
 
@@ -16,8 +17,8 @@ const validatePhone = (phone: string): boolean => {
 };
 
 const validateCPF = (cpf: string): boolean => {
-  const cpfRegex = /^\d{11}$/;
-  return cpfRegex.test(cpf);
+  const cleaned = cleanCPF(cpf);
+  return validateCPFChecksum(cleaned);
 };
 
 const validateString = (str: string, maxLength: number): boolean => {
@@ -213,9 +214,25 @@ serve(async (req) => {
           );
         }
         
-        if (!validateCPF(profileData.cpf)) {
+        const cpfClean = cleanCPF(profileData.cpf);
+        if (!validateCPF(cpfClean)) {
           return new Response(
             JSON.stringify({ error: 'CPF inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Check for duplicate CPF
+        const { data: existingPatient } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('cpf', cpfClean)
+          .neq('id', profileData.user_id)
+          .maybeSingle();
+
+        if (existingPatient) {
+          return new Response(
+            JSON.stringify({ error: 'CPF já cadastrado' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -248,7 +265,7 @@ serve(async (req) => {
           last_name: profileData.last_name.substring(0, 100),
           email: profileData.email.substring(0, 255),
           phone: profileData.phone,
-          cpf: profileData.cpf,
+          cpf: cpfClean,
           birth_date: profileData.birth_date,
           gender: profileData.gender ? profileData.gender.substring(0, 1) : '',
           cep: profileData.cep ? profileData.cep.substring(0, 10) : '',

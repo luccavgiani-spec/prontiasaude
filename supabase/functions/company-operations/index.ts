@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 import { getCorsHeaders } from '../common/cors.ts';
+import { validateCPF, cleanCPF } from '../common/cpf-validator.ts';
 
 const corsHeaders = getCorsHeaders();
 
@@ -267,6 +268,23 @@ Deno.serve(async (req) => {
         throw new Error('Missing required fields');
       }
 
+      // Validate CPF format and checksum
+      const cpfClean = cleanCPF(employeeData.cpf);
+      if (!validateCPF(cpfClean)) {
+        throw new Error('CPF inválido');
+      }
+
+      // Check for duplicate CPF
+      const { data: existingEmployee, error: checkError } = await supabaseClient
+        .from('company_employees')
+        .select('id, nome')
+        .eq('cpf', cpfClean)
+        .maybeSingle();
+
+      if (existingEmployee) {
+        throw new Error(`CPF já cadastrado para ${existingEmployee.nome}`);
+      }
+
       // Buscar empresa_id_externo, plano_id_externo E razao_social
       const { data: companyData, error: companyError } = await supabaseClient
         .from('companies')
@@ -307,7 +325,7 @@ Deno.serve(async (req) => {
           user_id: authUser.user.id,
           company_id: employeeData.company_id,
           nome: employeeData.nome,
-          cpf: employeeData.cpf.replace(/\D/g, ''),
+          cpf: cpfClean,
           email: employeeData.email,
           telefone: employeeData.telefone,
           datanascimento: employeeData.datanascimento,
@@ -341,7 +359,7 @@ Deno.serve(async (req) => {
           id: authUser.user.id,
           first_name: employeeData.nome.split(' ')[0],
           last_name: employeeData.nome.split(' ').slice(1).join(' ') || '',
-          cpf: employeeData.cpf.replace(/\D/g, ''),
+          cpf: cpfClean,
           phone_e164: employeeData.telefone,
           birth_date: employeeData.datanascimento,
           gender: employeeData.sexo === 'M' ? 'male' : 'female',

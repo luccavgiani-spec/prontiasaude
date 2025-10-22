@@ -87,22 +87,40 @@ const AdminDashboard = () => {
     checkAdminAccess();
   }, [navigate, toast]);
 
-  const loadPublishedContent = () => {
-    const destinations = ['saude-mental-content', 'livros-content', 'playlists-content', 'receitas-content'];
-    const allContent: ContentItem[] = [];
+  const loadPublishedContent = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_content')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    destinations.forEach(dest => {
-      const content = localStorage.getItem(dest);
-      if (content) {
-        const parsed = JSON.parse(content);
-        allContent.push(...parsed.map((item: any) => ({
-          ...item,
-          destination: dest.replace('-content', '').replace('-', ' ')
-        })));
-      }
-    });
+      if (error) throw error;
 
-    setPublishedContent(allContent);
+      const formattedContent: ContentItem[] = (data || []).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        description: item.description || '',
+        type: item.content_type === 'livro' ? 'pdf' : 
+              item.content_type === 'playlist' ? 'video' : 
+              item.external_link ? 'link' : 'post',
+        url: item.url || '',
+        content: item.content || '',
+        fileUrl: item.file_url || '',
+        destination: item.destination,
+        blogCategory: item.blog_category || '',
+        externalLink: item.external_link || '',
+        createdAt: new Date(item.created_at)
+      }));
+
+      setPublishedContent(formattedContent);
+    } catch (error) {
+      console.error('Error loading content:', error);
+      toast({
+        title: "Erro ao carregar conteúdo",
+        description: "Não foi possível carregar o conteúdo publicado.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -127,7 +145,7 @@ const AdminDashboard = () => {
     setContentForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     if (!contentForm.title || !contentForm.description || !contentForm.destination) {
       toast({
         title: "Campos obrigatórios",
@@ -188,31 +206,40 @@ const AdminDashboard = () => {
       createdAt: new Date()
     };
 
-    // Save to appropriate destination
-    let storageKey = '';
-    switch (contentForm.destination) {
-      case 'saude-mental':
-        storageKey = 'saude-mental-content';
-        break;
-      case 'livros':
-        storageKey = 'livros-content';
-        break;
-      case 'playlists':
-        storageKey = 'playlists-content';
-        break;
-      case 'receitas-saudaveis':
-        storageKey = 'receitas-saudaveis-content';
-        break;
-      case 'blog':
-        storageKey = 'blog-content';
-        break;
-    }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Erro",
+          description: "Você precisa estar autenticado.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    if (storageKey) {
-      const existingContent = localStorage.getItem(storageKey);
-      const contentArray = existingContent ? JSON.parse(existingContent) : [];
-      contentArray.push(newContent);
-      localStorage.setItem(storageKey, JSON.stringify(contentArray));
+      // Map content type
+      let contentType = 'blog';
+      if (contentForm.destination === 'livros') contentType = 'livro';
+      else if (contentForm.destination === 'playlists') contentType = 'playlist';
+      else if (contentForm.destination === 'receitas-saudaveis') contentType = 'receita';
+
+      const { error } = await supabase
+        .from('admin_content')
+        .insert({
+          title: contentForm.title,
+          description: contentForm.description,
+          content_type: contentType,
+          url: contentForm.url || null,
+          content: contentForm.content || null,
+          file_url: contentForm.fileUrl || null,
+          destination: contentForm.destination,
+          blog_category: contentForm.blogCategory || null,
+          external_link: contentForm.externalLink || null,
+          created_by: session.user.id,
+          updated_by: session.user.id
+        });
+
+      if (error) throw error;
 
       toast({
         title: "Conteúdo publicado!",
@@ -235,23 +262,38 @@ const AdminDashboard = () => {
 
       // Reload content
       loadPublishedContent();
+    } catch (error) {
+      console.error('Error publishing content:', error);
+      toast({
+        title: "Erro ao publicar",
+        description: "Não foi possível publicar o conteúdo.",
+        variant: "destructive"
+      });
     }
   };
 
-  const handleDeleteContent = (id: string, destination: string) => {
-    let storageKey = `${destination.replace(' ', '-')}-content`;
-    const existingContent = localStorage.getItem(storageKey);
-    if (existingContent) {
-      const contentArray = JSON.parse(existingContent);
-      const filteredContent = contentArray.filter((item: ContentItem) => item.id !== id);
-      localStorage.setItem(storageKey, JSON.stringify(filteredContent));
-      
+  const handleDeleteContent = async (id: string, destination: string) => {
+    try {
+      const { error } = await supabase
+        .from('admin_content')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
       toast({
         title: "Conteúdo removido",
         description: "O conteúdo foi removido com sucesso."
       });
-      
+
       loadPublishedContent();
+    } catch (error) {
+      console.error('Error deleting content:', error);
+      toast({
+        title: "Erro ao remover",
+        description: "Não foi possível remover o conteúdo.",
+        variant: "destructive"
+      });
     }
   };
 

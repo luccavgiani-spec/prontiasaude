@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_content: {
+        Row: {
+          blog_category: string | null
+          content: string | null
+          content_type: string
+          created_at: string
+          created_by: string
+          description: string | null
+          destination: string
+          external_link: string | null
+          file_url: string | null
+          id: string
+          title: string
+          updated_at: string
+          updated_by: string
+          url: string | null
+        }
+        Insert: {
+          blog_category?: string | null
+          content?: string | null
+          content_type: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          destination: string
+          external_link?: string | null
+          file_url?: string | null
+          id?: string
+          title: string
+          updated_at?: string
+          updated_by: string
+          url?: string | null
+        }
+        Update: {
+          blog_category?: string | null
+          content?: string | null
+          content_type?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          destination?: string
+          external_link?: string | null
+          file_url?: string | null
+          id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
       admin_settings: {
         Row: {
           key: string
