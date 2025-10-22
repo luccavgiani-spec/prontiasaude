@@ -1,8 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../common/cors.ts';
 
-const corsHeaders = getCorsHeaders();
-
 // Mapeamento SKU → especialidadeId ClickLife (padrão: 8 para todos)
 const SKU_TO_CLICKLIFE_ID: Record<string, number> = {
   'ITC6534': 8, // Clínico Geral
@@ -261,6 +259,8 @@ async function registerClickLifePatient(
 // A Communicare cria o paciente automaticamente ao enfileirar
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req.headers.get('origin'));
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
