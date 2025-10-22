@@ -184,22 +184,6 @@ export function PaymentModal({
     }
   }, [open, paymentMethod, formData.email, formData.cpf, formData.name]);
 
-  // Retry automático para PIX (a cada 20s)
-  useEffect(() => {
-    if (!lastPaymentId || paymentStatus !== 'pending_pix') return;
-    
-    console.log('[PIX Auto-retry] Starting interval for payment_id:', lastPaymentId);
-    
-    const interval = setInterval(() => {
-      console.log('[PIX Auto-retry] Attempting notify call...');
-      handlePixAccess();
-    }, 20000); // 20 segundos
-    
-    return () => {
-      console.log('[PIX Auto-retry] Clearing interval');
-      clearInterval(interval);
-    };
-  }, [lastPaymentId, paymentStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
@@ -252,16 +236,16 @@ export function PaymentModal({
             });
           },
           onError: (error: any) => {
-            console.error('Erro no Card Payment Brick:', error);
-            setUserMessage('Erro ao carregar formulário de pagamento. Recarregue a página.');
+            console.error('Erro no Card Payment Brick (não crítico):', error);
+            // NÃO exibir mensagem ao usuário - são erros internos do brick
           },
         },
       });
 
       cardPaymentBrickRef.current = cardPaymentBrick;
     } catch (err) {
-      console.error('Erro ao montar brick:', err);
-      setUserMessage('Erro ao carregar formulário de pagamento. Recarregue a página.');
+      console.error('Erro ao montar brick (não crítico):', err);
+      // NÃO exibir mensagem ao usuário - brick pode funcionar mesmo com erros de setup
     }
   };
 
@@ -545,47 +529,6 @@ export function PaymentModal({
     }
   };
 
-  const handlePixAccess = async () => {
-    if (!lastPaymentId) {
-      toast.error('ID do pagamento não encontrado');
-      return;
-    }
-
-    setPaymentStatus('processing');
-    
-    const schedulePayload = buildSchedulePayload();
-
-    console.log('[PIX CTA] Calling schedule-redirect for payment:', lastPaymentId);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
-        body: schedulePayload
-      });
-
-      if (error) throw error;
-
-      console.log('[PIX CTA] Response:', data);
-
-      if (data && data.ok && data.url) {
-        toast.success('Redirecionando para o atendimento...');
-        window.location.href = data.url;
-      } else {
-        // Volta para tela QR Code
-        setPaymentStatus('pending_pix');
-        const errorMsg = data?.error || 'Pagamento ainda não compensou. Aguarde alguns instantes e tente novamente.';
-        console.error('[NOTIFY ERROR]', {
-          payment_id: lastPaymentId,
-          error: data?.error,
-          full_response: data
-        });
-        toast.error(errorMsg);
-      }
-    } catch (err) {
-      console.error('[PIX CTA] Error:', err);
-      setPaymentStatus('pending_pix');
-      toast.error('Erro ao processar. Tente novamente.');
-    }
-  };
 
   const handleTryAgain = () => {
     setPaymentStatus('idle');
@@ -654,8 +597,6 @@ export function PaymentModal({
           qrCode={pixData.qrCode}
           qrCodeBase64={pixData.qrCodeBase64}
           onCancel={handleTryAgain}
-          onAccessAttendance={handlePixAccess}
-          isProcessing={false}
         />
       );
     }

@@ -247,14 +247,14 @@ const Planos = () => {
     }
 
     // 3. Sem plano ativo: abrir modal de assinatura
-    // Calcular valor total = precoMensal × meses (em centavos)
-    const valorTotal = precoMensal * meses;
+    // ✅ Para assinaturas recorrentes, amount = valor mensal (em centavos)
+    // ✅ A frequency define quantos meses, não o amount
     const duracaoLabel = duracaoSelecionada === '1' ? 'Mensal' : duracaoSelecionada === '6' ? 'Semestral' : 'Anual';
     
     setSelectedPlan({
       sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
       name: `${plano.nome} - ${duracaoLabel}`,
-      amount: valorTotal,
+      amount: precoMensal,
       recurring: true,
       frequency: meses,
       frequencyType: 'months',
