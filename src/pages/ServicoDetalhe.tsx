@@ -458,7 +458,7 @@ const ServicoDetalhe = () => {
         onOpenChange={setIsPaymentModalOpen}
         sku={getCurrentSku() || ''}
         serviceName={servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')}
-        amount={getTotalPrice()}
+        amount={Math.round(getTotalPrice() * 100)}
         especialidade={selectedVariant || servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);

@@ -269,6 +269,27 @@ Deno.serve(async (req) => {
     const payload: SchedulePayload = await req.json();
     console.log('[schedule-redirect] Processing request for SKU:', payload.sku);
 
+    // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp
+    const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {
+      'RZP5755': 'https://wa.me/5511933359187?text=Quero%20renovar%20minha%20receita!',
+      'ULT3571': 'https://wa.me/5511933359187?text=Quero%20agendar%20um%20exame!'
+    };
+
+    if (WHATSAPP_REDIRECT_SKUS[payload.sku]) {
+      console.log(`[schedule-redirect] ✓ Redirecionando SKU ${payload.sku} para WhatsApp`);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          url: WHATSAPP_REDIRECT_SKUS[payload.sku],
+          provider: 'whatsapp'
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!

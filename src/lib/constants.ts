@@ -81,7 +81,7 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "renovacao_receitas", 
     nome: "Renovação de receitas", 
-    precoBase: 34.90, 
+    precoBase: 9.99, 
     sku: "RZP5755",
     descricao: "Renove suas receitas médicas de forma prática e rápida. Após a confirmação do pagamento, você poderá anexar sua receita atual válida (até 3 meses) e encaminhar para análise. Um médico avaliará e emitirá a renovação em documento digital",
     tempo: "Atendimento imediato",
