@@ -142,10 +142,24 @@ export function PaymentModal({
 
       if (planStatus.canBypassPayment) {
         toast.info('Você já tem um plano ativo! Redirecionando...');
-        onOpenChange(false); // Fecha modal
-        setTimeout(() => {
-          window.location.href = '/area-do-paciente';
-        }, 1500);
+        onOpenChange(false);
+        
+        // Agendar direto com plano ativo
+        const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+        const result = await scheduleWithActivePlan({
+          cpf: patient?.cpf || '',
+          email: user.email!,
+          nome: patient ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '',
+          telefone: patient?.phone_e164 || '',
+          sku: sku,
+          plano_ativo: true
+        });
+        
+        if (result.ok && result.url) {
+          window.location.href = result.url;
+        } else {
+          toast.error(result.error || 'Erro ao agendar');
+        }
         return;
       }
     } catch (err) {

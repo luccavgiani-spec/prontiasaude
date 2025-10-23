@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PaymentModal } from "@/components/payment/PaymentModal";
 import { supabase } from "@/integrations/supabase/client";
+import { checkPatientPlanActive } from "@/lib/patient-plan";
+import { scheduleWithActivePlan } from "@/lib/schedule-service";
+import { toast } from "sonner";
 import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
@@ -23,6 +26,37 @@ export function HeroSection() {
       return;
     }
     
+    // Verificar plano ativo
+    const planStatus = await checkPatientPlanActive(user.email!);
+    
+    if (planStatus.canBypassPayment) {
+      // Tem plano ativo: buscar dados e agendar direto
+      toast('Redirecionando para agendamento...', { duration: 2000 });
+      
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      const result = await scheduleWithActivePlan({
+        cpf: patient?.cpf || '',
+        email: user.email!,
+        nome: patient ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '',
+        telefone: patient?.phone_e164 || '',
+        sku: 'ITC6534',
+        plano_ativo: true
+      });
+      
+      if (result.ok && result.url) {
+        window.location.href = result.url;
+      } else {
+        toast.error(result.error || 'Erro ao agendar');
+      }
+      return;
+    }
+    
+    // Sem plano: abrir checkout
     setIsPaymentModalOpen(true);
   };
   

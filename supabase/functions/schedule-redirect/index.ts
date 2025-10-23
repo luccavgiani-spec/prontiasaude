@@ -274,9 +274,20 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Enriquecer payload se campos estiverem vazios
+    // 1. Normalizar campos (remover caracteres especiais/espaços)
+    payload.cpf = (payload.cpf || '').replace(/\D/g, '').trim();
+    payload.telefone = (payload.telefone || '').replace(/\D/g, '').trim();
+    payload.nome = (payload.nome || '').trim();
+
+    console.log('[schedule-redirect] Dados após normalização:', {
+      cpf: payload.cpf ? `${payload.cpf.substring(0, 3)}***` : 'vazio',
+      telefone: payload.telefone ? `${payload.telefone.substring(0, 4)}***` : 'vazio',
+      nome: payload.nome || 'vazio'
+    });
+
+    // 2. Enriquecer payload se campos estiverem vazios após normalização
     if (!payload.cpf || !payload.nome || !payload.telefone) {
-      console.log('[schedule-redirect] Campos vazios detectados, buscando na tabela patients...');
+      console.log('[schedule-redirect] Dados incompletos (raw), buscando na tabela patients...');
       
       try {
         const { data: { user } } = await supabase.auth.admin.getUserByEmail(payload.email);
@@ -289,9 +300,9 @@ Deno.serve(async (req) => {
             .maybeSingle();
           
           if (patientData) {
-            payload.cpf = payload.cpf || patientData.cpf || '';
+            payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
             payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
-            payload.telefone = payload.telefone || patientData.phone_e164 || '';
+            payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
             
             console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
           } else {
@@ -303,9 +314,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Validar se dados essenciais estão presentes
+    // 3. Validar se dados essenciais estão presentes após normalização e enriquecimento
     if (!payload.cpf || !payload.nome || !payload.telefone) {
-      console.error('[schedule-redirect] Dados incompletos após enriquecimento:', {
+      console.error('[schedule-redirect] Dados ainda incompletos:', {
         cpf: !!payload.cpf,
         nome: !!payload.nome,
         telefone: !!payload.telefone
