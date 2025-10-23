@@ -99,30 +99,35 @@ export function ServicoCard({
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: agendar diretamente via schedule-redirect
+      // Tem plano ativo: buscar dados completos do paciente
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+        toast('Complete seu cadastro antes de agendar');
+        navigate('/completar-perfil');
+        return;
+      }
+
       toast('Redirecionando para agendamento...', { duration: 2000 });
       
       const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
-        cpf: '', // será preenchido pelo edge function via patients table
+        cpf: patient.cpf,
         email: user.email!,
-        nome: '', // será preenchido pelo edge function
-        telefone: '', // será preenchido pelo edge function
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
         sku: servico.sku,
         plano_ativo: true
       });
 
       if (result.ok && result.url) {
-        window.location.href = result.url; // Redirect externo
+        window.location.href = result.url;
       } else {
-        const errorMsg = result.error || 'Erro ao agendar';
-        
-        if (errorMsg.includes('Complete seu cadastro') || errorMsg.includes('incompletos')) {
-          toast('Complete seu cadastro antes de agendar');
-          setTimeout(() => navigate('/completar-perfil'), 2000);
-        } else {
-          toast(errorMsg);
-        }
+        toast(result.error || 'Erro ao agendar');
       }
       return;
     }

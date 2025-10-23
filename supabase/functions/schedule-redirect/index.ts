@@ -290,24 +290,21 @@ Deno.serve(async (req) => {
       console.log('[schedule-redirect] Dados incompletos (raw), buscando na tabela patients...');
       
       try {
-        const { data: { user } } = await supabase.auth.admin.getUserByEmail(payload.email);
+        // Buscar patient pelo email usando query direta
+        const { data: patientData, error: patientError } = await supabase
+          .from('patients')
+          .select('id, cpf, first_name, last_name, phone_e164')
+          .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
+          .maybeSingle();
         
-        if (user) {
-          const { data: patientData, error: patientError } = await supabase
-            .from('patients')
-            .select('cpf, first_name, last_name, phone_e164')
-            .eq('id', user.id)
-            .maybeSingle();
+        if (patientData) {
+          payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
+          payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+          payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
           
-          if (patientData) {
-            payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
-            payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
-            payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
-            
-            console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
-          } else {
-            console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
-          }
+          console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
+        } else {
+          console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
         }
       } catch (enrichError) {
         console.error('[schedule-redirect] Erro ao enriquecer dados:', enrichError);
