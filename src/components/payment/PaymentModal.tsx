@@ -135,6 +135,19 @@ export function PaymentModal({
           });
         }
       }
+
+      // Verificar plano ativo antes de permitir checkout
+      const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+      const planStatus = await checkPatientPlanActive(user.email!);
+
+      if (planStatus.canBypassPayment) {
+        toast.info('Você já tem um plano ativo! Redirecionando...');
+        onOpenChange(false); // Fecha modal
+        setTimeout(() => {
+          window.location.href = '/area-do-paciente';
+        }, 1500);
+        return;
+      }
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
     } finally {

@@ -6,6 +6,7 @@ import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
 import { trackLead } from "@/lib/meta-tracking";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
 interface Servico {
   slug: string;
@@ -92,8 +93,34 @@ export function ServicoCard({
       navigate('/area-do-paciente');
       return;
     }
+
+    // Verificar se tem plano ativo
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+    const planStatus = await checkPatientPlanActive(user.email!);
+
+    if (planStatus.canBypassPayment) {
+      // Tem plano ativo: agendar diretamente via schedule-redirect
+      toast('Redirecionando para agendamento...', { duration: 2000 });
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+      const result = await scheduleWithActivePlan({
+        cpf: '', // será preenchido pelo edge function via patients table
+        email: user.email!,
+        nome: '', // será preenchido pelo edge function
+        telefone: '', // será preenchido pelo edge function
+        sku: servico.sku,
+        plano_ativo: true
+      });
+
+      if (result.ok && result.url) {
+        window.location.href = result.url; // Redirect externo
+      } else {
+        toast(result.error || 'Erro ao agendar');
+      }
+      return;
+    }
     
-    // Track Lead event when user clicks to schedule
+    // Não tem plano: fluxo normal de pagamento
     trackLead({
       value: precoComDesconto,
       content_name: servico.nome

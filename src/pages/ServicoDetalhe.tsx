@@ -106,7 +106,40 @@ const ServicoDetalhe = () => {
       return;
     }
 
-    // Usuário logado: abrir modal de pagamento
+    // Verificar plano ativo
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+    const planStatus = await checkPatientPlanActive(user.email!);
+
+    if (planStatus.canBypassPayment) {
+      // Plano ativo: agendar diretamente
+      toast({
+        description: 'Redirecionando para agendamento...',
+        duration: 2000
+      });
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+      const result = await scheduleWithActivePlan({
+        cpf: '',
+        email: user.email!,
+        nome: '',
+        telefone: '',
+        especialidade: selectedVariant || servico.nome,
+        sku: getCurrentSku(),
+        plano_ativo: true
+      });
+
+      if (result.ok && result.url) {
+        window.location.href = result.url;
+      } else {
+        toast({
+          description: result.error || 'Erro ao agendar',
+          variant: 'destructive'
+        });
+      }
+      return;
+    }
+
+    // Usuário logado sem plano: abrir modal de pagamento
     setIsPaymentModalOpen(true);
   };
   return <>
