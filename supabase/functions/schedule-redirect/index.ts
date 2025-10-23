@@ -274,6 +274,60 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // Enriquecer payload se campos estiverem vazios
+    if (!payload.cpf || !payload.nome || !payload.telefone) {
+      console.log('[schedule-redirect] Campos vazios detectados, buscando na tabela patients...');
+      
+      try {
+        const { data: { user } } = await supabase.auth.admin.getUserByEmail(payload.email);
+        
+        if (user) {
+          const { data: patientData, error: patientError } = await supabase
+            .from('patients')
+            .select('cpf, first_name, last_name, phone_e164')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (patientData) {
+            payload.cpf = payload.cpf || patientData.cpf || '';
+            payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+            payload.telefone = payload.telefone || patientData.phone_e164 || '';
+            
+            console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
+          } else {
+            console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
+          }
+        }
+      } catch (enrichError) {
+        console.error('[schedule-redirect] Erro ao enriquecer dados:', enrichError);
+      }
+    }
+
+    // Validar se dados essenciais estão presentes
+    if (!payload.cpf || !payload.nome || !payload.telefone) {
+      console.error('[schedule-redirect] Dados incompletos após enriquecimento:', {
+        cpf: !!payload.cpf,
+        nome: !!payload.nome,
+        telefone: !!payload.telefone
+      });
+      
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Complete seu cadastro antes de agendar',
+          missing: {
+            cpf: !payload.cpf,
+            nome: !payload.nome,
+            telefone: !payload.telefone
+          }
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     // 1. Verificar override do admin
     const { data: forceData } = await supabase
       .from('admin_settings')

@@ -131,10 +131,20 @@ const ServicoDetalhe = () => {
       if (result.ok && result.url) {
         window.location.href = result.url;
       } else {
-        toast({
-          description: result.error || 'Erro ao agendar',
-          variant: 'destructive'
-        });
+        const errorMsg = result.error || 'Erro ao agendar';
+        
+        if (errorMsg.includes('Complete seu cadastro') || errorMsg.includes('incompletos')) {
+          toast({
+            description: 'Complete seu cadastro antes de agendar',
+            variant: 'destructive'
+          });
+          setTimeout(() => navigate('/completar-perfil'), 2000);
+        } else {
+          toast({
+            description: errorMsg,
+            variant: 'destructive'
+          });
+        }
       }
       return;
     }

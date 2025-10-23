@@ -115,7 +115,14 @@ export function ServicoCard({
       if (result.ok && result.url) {
         window.location.href = result.url; // Redirect externo
       } else {
-        toast(result.error || 'Erro ao agendar');
+        const errorMsg = result.error || 'Erro ao agendar';
+        
+        if (errorMsg.includes('Complete seu cadastro') || errorMsg.includes('incompletos')) {
+          toast('Complete seu cadastro antes de agendar');
+          setTimeout(() => navigate('/completar-perfil'), 2000);
+        } else {
+          toast(errorMsg);
+        }
       }
       return;
     }
