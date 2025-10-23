@@ -111,7 +111,22 @@ const ServicoDetalhe = () => {
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      // Plano ativo: agendar diretamente
+      // Tem plano ativo: buscar dados completos do paciente
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+        toast({
+          description: 'Complete seu cadastro antes de agendar',
+          variant: 'destructive'
+        });
+        navigate('/completar-perfil');
+        return;
+      }
+
       toast({
         description: 'Redirecionando para agendamento...',
         duration: 2000
@@ -119,10 +134,10 @@ const ServicoDetalhe = () => {
       
       const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
-        cpf: '',
+        cpf: patient.cpf,
         email: user.email!,
-        nome: '',
-        telefone: '',
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
         especialidade: selectedVariant || servico.nome,
         sku: getCurrentSku(),
         plano_ativo: true
@@ -131,20 +146,10 @@ const ServicoDetalhe = () => {
       if (result.ok && result.url) {
         window.location.href = result.url;
       } else {
-        const errorMsg = result.error || 'Erro ao agendar';
-        
-        if (errorMsg.includes('Complete seu cadastro') || errorMsg.includes('incompletos')) {
-          toast({
-            description: 'Complete seu cadastro antes de agendar',
-            variant: 'destructive'
-          });
-          setTimeout(() => navigate('/completar-perfil'), 2000);
-        } else {
-          toast({
-            description: errorMsg,
-            variant: 'destructive'
-          });
-        }
+        toast({
+          description: result.error || 'Erro ao agendar',
+          variant: 'destructive'
+        });
       }
       return;
     }
