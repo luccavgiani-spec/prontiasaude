@@ -13,9 +13,7 @@ const Entrar = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showReset, setShowReset] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -123,40 +121,6 @@ const Entrar = () => {
     setIsLoading(false);
   };
 
-  const handlePasswordReset = async () => {
-    if (!validateEmail(resetEmail)) {
-      toast({
-        title: "Email inválido",
-        description: "Por favor, informe um email válido.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsLoading(true);
-    
-    const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-      redirectTo: `${window.location.origin}/nova-senha`
-    });
-
-    if (error) {
-      toast({
-        title: "Erro",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Email enviado",
-        description: "Verifique sua caixa de entrada para redefinir sua senha.",
-      });
-      setShowReset(false);
-      setResetEmail("");
-    }
-    
-    setIsLoading(false);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
       <Card className="w-full max-w-md">
@@ -167,9 +131,7 @@ const Entrar = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {!showReset ? (
-            <>
-              <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <div className="relative">
@@ -242,13 +204,12 @@ const Entrar = () => {
               </Button>
               
               <div className="text-center space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setShowReset(true)}
-                  className="text-sm text-primary hover:underline"
+                <Link 
+                  to="/esqueci-senha"
+                  className="text-sm text-muted-foreground hover:text-primary block"
                 >
                   Esqueci minha senha
-                </button>
+                </Link>
                 <p className="text-sm text-muted-foreground">
                   Não tem uma conta?{" "}
                   <Link to="/cadastrar" className="text-primary hover:underline">
@@ -256,35 +217,6 @@ const Entrar = () => {
                   </Link>
                 </p>
               </div>
-            </>
-          ) : (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="resetEmail">Email para recuperação</Label>
-                <Input
-                  id="resetEmail"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={resetEmail}
-                  onChange={(e) => setResetEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={handlePasswordReset} disabled={isLoading} className="flex-1">
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Enviar
-                </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowReset(false)}
-                  className="flex-1"
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

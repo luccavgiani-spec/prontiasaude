@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 // Auth pages
 import Entrar from "./pages/Entrar";
 import Cadastrar from "./pages/Cadastrar";
+import EsqueciSenha from "./pages/EsqueciSenha";
 import AuthCallback from "./pages/auth/Callback";
 import ResetPassword from "./pages/auth/Reset";
 import NovaSenha from "./pages/NovaSenha";
@@ -105,6 +106,7 @@ const App = () => (
               {/* Auth routes */}
               <Route path="/entrar" element={<Entrar />} />
               <Route path="/cadastrar" element={<Cadastrar />} />
+              <Route path="/esqueci-senha" element={<EsqueciSenha />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
               <Route path="/auth/reset" element={<ResetPassword />} />
               <Route path="/nova-senha" element={<NovaSenha />} />
