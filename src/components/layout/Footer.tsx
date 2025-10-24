@@ -118,15 +118,15 @@ export function Footer() {
             <span className="text-xs text-muted-foreground">Plataforma Verificada</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <div className="w-2 h-2 bg-[#9b87f5] rounded-full"></div>
             <span className="text-xs text-muted-foreground">Communicare</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
-            <div className="w-2 h-2 bg-accent rounded-full"></div>
+            <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
             <span className="text-xs text-muted-foreground">Clicklife Saúde</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
+            <div className="w-2 h-2 bg-[#009EE3] rounded-full"></div>
             <span className="text-xs text-muted-foreground">Mercado Pago</span>
           </div>
         </div>
