@@ -247,14 +247,15 @@ export default function ReportsTab() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={metrics.appointmentsByPlatform}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="platform" />
-                <YAxis />
+              <PieChart>
+                <Pie data={metrics.appointmentsByPlatform} dataKey="count" nameKey="platform" cx="50%" cy="50%" outerRadius={80} label>
+                  {metrics.appointmentsByPlatform.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="count" fill={COLORS[1]} name="Atendimentos" />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
