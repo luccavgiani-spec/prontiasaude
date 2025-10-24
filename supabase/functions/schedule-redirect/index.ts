@@ -584,10 +584,14 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const data = await response.json();
   console.log('[ClickLife] Response:', data);
 
+  // ✅ Usar URL retornada pela API (com token JWT de login automático)
+  const redirectUrl = data.url || REDIRECT_URL;
+  console.log('[ClickLife] Redirect URL:', redirectUrl);
+
   return new Response(
     JSON.stringify({
       ok: true,
-      url: REDIRECT_URL,
+      url: redirectUrl,
       provider: 'clicklife',
       reason,
       plano_id: planoId

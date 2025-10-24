@@ -23,6 +23,8 @@ interface TestResult {
   provider?: string;
   reason?: string;
   plano_id?: number;
+  redirect_url?: string;
+  has_auto_login?: boolean;
   response_time: number;
   request: any;
   response: any;
@@ -162,6 +164,8 @@ const TestesRoteamento: React.FC = () => {
       console.log('[QA Test] Response:', data);
       console.log(`[QA Test] Tempo de resposta: ${responseTime}ms`);
 
+      const hasAutoLoginToken = data.url && (data.url.includes('token=') || data.url.includes('whatsapp'));
+      
       const result: TestResult = {
         scenario_id: 'Manual',
         timestamp: new Date().toISOString(),
@@ -169,6 +173,8 @@ const TestesRoteamento: React.FC = () => {
         provider: data.provider,
         reason: data.reason,
         plano_id: data.plano_id,
+        redirect_url: data.url,
+        has_auto_login: hasAutoLoginToken,
         response_time: responseTime,
         request: testData,
         response: data
@@ -571,7 +577,11 @@ const TestesRoteamento: React.FC = () => {
         const providerMatch = data.provider === subcase.expected.provider;
         const reasonMatch = data.reason === subcase.expected.reason;
         const planoIdMatch = !subcase.expected.plano_id || data.plano_id === subcase.expected.plano_id;
-        const status = providerMatch && reasonMatch && planoIdMatch ? 'passou' : 'falhou';
+        
+        // ✅ Validar se a URL contém token de auto-login
+        const hasAutoLoginToken = data.url && (data.url.includes('token=') || data.url.includes('whatsapp'));
+        
+        const status = providerMatch && reasonMatch && planoIdMatch && hasAutoLoginToken ? 'passou' : 'falhou';
         
         if (status === 'passou') {
           passed++;
@@ -588,12 +598,15 @@ const TestesRoteamento: React.FC = () => {
           provider: data.provider,
           reason: data.reason,
           plano_id: data.plano_id,
+          redirect_url: data.url,
+          has_auto_login: hasAutoLoginToken,
           response_time: responseTime,
           request: payload,
           response: data,
           error: !providerMatch ? `Esperado: ${subcase.expected.provider}, Recebido: ${data.provider}` : 
                  !reasonMatch ? `Esperado reason: ${subcase.expected.reason}, Recebido: ${data.reason}` :
-                 !planoIdMatch ? `Esperado plano_id: ${subcase.expected.plano_id}, Recebido: ${data.plano_id}` : undefined
+                 !planoIdMatch ? `Esperado plano_id: ${subcase.expected.plano_id}, Recebido: ${data.plano_id}` :
+                 !hasAutoLoginToken ? '❌ URL sem token de login automático' : undefined
         };
         
         setTestHistory(prev => [result, ...prev].slice(0, 20));
