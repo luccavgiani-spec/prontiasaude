@@ -42,21 +42,11 @@ export function Footer() {
                     to={`/servicos/${servico.slug}`} 
                     className="text-muted-foreground hover:text-primary transition-colors"
                   >
-                    {servico.nome}
-                  </Link>
-                </li>
-              ))}
-              <li>
-                <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
-                  Trabalhe Conosco
-                </Link>
-              </li>
-              <li>
-                <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
-                  Parcerias
-                </Link>
-              </li>
-            </ul>
+              {servico.nome}
+            </Link>
+          </li>
+        ))}
+      </ul>
           </div>
 
           {/* Institucional */}
@@ -83,12 +73,22 @@ export function Footer() {
                   Quem Somos
                 </Link>
               </li>
-              <li>
-                <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
-                  Blog
-                </Link>
-              </li>
-            </ul>
+          <li>
+            <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
+              Blog
+            </Link>
+          </li>
+          <li>
+            <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
+              Trabalhe Conosco
+            </Link>
+          </li>
+          <li>
+            <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
+              Parcerias
+            </Link>
+          </li>
+        </ul>
           </div>
         </div>
 
