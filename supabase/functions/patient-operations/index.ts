@@ -176,6 +176,24 @@ serve(async (req) => {
           status: authData ? 'created' : 'already_exists'
         });
 
+        // ✅ Gravar métrica de cadastro (apenas se for novo usuário)
+        if (authData?.user) {
+          try {
+            await supabase
+              .from('metrics')
+              .insert({
+                metric_type: 'registration',
+                patient_email: email,
+                platform: 'site',
+                status: 'completed',
+                metadata: { user_id: userId, phone: phone_e164 }
+              });
+            console.log('[upsert_patient] ✅ Métrica de cadastro gravada');
+          } catch (metricError) {
+            console.error('[upsert_patient] Erro ao gravar métrica:', metricError);
+          }
+        }
+
         return new Response(
           JSON.stringify({ 
             success: true, 

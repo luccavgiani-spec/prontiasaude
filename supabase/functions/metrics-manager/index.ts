@@ -89,13 +89,26 @@ Deno.serve(async (req) => {
     }
 
     // READ METRICS
-    if (req.method === 'GET' && operation === 'read') {
-      const metricType = url.searchParams.get('metric_type');
-      const platform = url.searchParams.get('platform');
-      const status = url.searchParams.get('status');
-      const startDate = url.searchParams.get('start_date');
-      const endDate = url.searchParams.get('end_date');
-      const limit = parseInt(url.searchParams.get('limit') || '1000');
+    if ((req.method === 'GET' || req.method === 'POST') && operation === 'read') {
+      let metricType, platform, status, startDate, endDate, limit;
+
+      // ✅ Aceitar params via body (POST) ou query string (GET)
+      if (req.method === 'POST') {
+        const body = await req.json();
+        metricType = body.metric_type;
+        platform = body.platform;
+        status = body.status;
+        startDate = body.start_date;
+        endDate = body.end_date;
+        limit = body.limit || 1000;
+      } else {
+        metricType = url.searchParams.get('metric_type');
+        platform = url.searchParams.get('platform');
+        status = url.searchParams.get('status');
+        startDate = url.searchParams.get('start_date');
+        endDate = url.searchParams.get('end_date');
+        limit = parseInt(url.searchParams.get('limit') || '1000');
+      }
 
       console.log('[metrics-manager] Reading metrics with filters:', {
         metricType,

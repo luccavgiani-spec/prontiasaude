@@ -108,6 +108,26 @@ Deno.serve(async (req) => {
       console.log('[mp-webhook] Scheduled successfully:', scheduleData);
     }
 
+    // ✅ Gravar métrica de venda
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    await supabaseAdmin
+      .from('metrics')
+      .insert({
+        metric_type: 'sale',
+        amount_cents: Math.round(payment.transaction_amount * 100),
+        plan_code: schedulePayload.sku || 'UNKNOWN',
+        platform: scheduleData?.provider || 'unknown',
+        status: 'approved',
+        patient_email: payment.payer?.email || schedulePayload.email,
+        metadata: { payment_id: payment.id, mp_status: payment.status }
+      });
+
+    console.log('[mp-webhook] ✅ Métrica de venda gravada');
+
     // Sempre retornar 200 OK para MP não retentar
     return new Response(JSON.stringify({ success: true, payment_id: paymentId }), {
       status: 200,

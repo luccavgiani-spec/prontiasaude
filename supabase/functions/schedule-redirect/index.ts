@@ -588,6 +588,24 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const redirectUrl = data.url || REDIRECT_URL;
   console.log('[ClickLife] Redirect URL:', redirectUrl);
 
+  // ✅ Gravar métrica de agendamento
+  try {
+    await supabaseAdmin
+      .from('metrics')
+      .insert({
+        metric_type: 'appointment',
+        plan_code: planoId.toString(),
+        specialty: especialidade,
+        platform: 'clicklife',
+        status: 'scheduled',
+        patient_email: email,
+        metadata: { cpf: cpf.slice(0, 3) + '***', atendimento_id: data.atendimento }
+      });
+    console.log('[ClickLife] ✅ Métrica de agendamento gravada');
+  } catch (metricError) {
+    console.error('[ClickLife] Erro ao gravar métrica:', metricError);
+  }
+
   return new Response(
     JSON.stringify({
       ok: true,
@@ -597,7 +615,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
       plano_id: planoId
     }),
     { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     }
   );
 }
