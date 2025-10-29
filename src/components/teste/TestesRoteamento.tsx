@@ -263,7 +263,8 @@ const TestesRoteamento: React.FC = () => {
         especialidade: subcase.especialidade,
         sku: subcase.sku,
         horario_iso: commercialHour.toISOString(),
-        plano_ativo: false
+        plano_ativo: false,
+        sexo: 'M'
       };
       
       const startTime = Date.now();
@@ -373,7 +374,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'clinico geral',
           sku: 'ITC6534',
           horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
-          plano_ativo: true
+          plano_ativo: true,
+          sexo: 'M'
         },
         expected: { provider: 'clicklife', reason: 'active_plan', plano_id: 863 }
       },
@@ -384,7 +386,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'Cardiologista',
           sku: 'TQP5720',
           horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
-          plano_ativo: true
+          plano_ativo: true,
+          sexo: 'F'
         },
         expected: { provider: 'clicklife', reason: 'active_plan', plano_id: 864 }
       },
@@ -395,7 +398,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'clinico geral',
           sku: 'ITC6534',
           horario_iso: new Date(2025, 9, 22, 3, 0).toISOString(), // 00:00 Brasília (03:00 UTC)
-          plano_ativo: false
+          plano_ativo: false,
+          sexo: 'M'
         },
         expected: { provider: 'clicklife', reason: 'nighttime' }
       },
@@ -406,7 +410,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'clinico geral',
           sku: 'ITC6534',
           horario_iso: new Date(2025, 9, 25, 17, 0).toISOString(), // Sábado 14h
-          plano_ativo: false
+          plano_ativo: false,
+          sexo: 'F'
         },
         expected: { provider: 'clicklife', reason: 'weekend' }
       },
@@ -417,7 +422,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'Cardiologista',
           sku: 'TQP5720',
           horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(),
-          plano_ativo: false
+          plano_ativo: false,
+          sexo: 'M'
         },
         expected: { provider: 'clicklife', reason: 'specialty_unavailable' }
       },
@@ -437,7 +443,8 @@ const TestesRoteamento: React.FC = () => {
           especialidade: 'clinico geral',
           sku: 'ITC6534',
           horario_iso: new Date(2025, 9, 21, 17, 0).toISOString(), // Segunda 14h Brasília
-          plano_ativo: false
+          plano_ativo: false,
+          sexo: 'M'
         },
         expected: { provider: 'clicklife', reason: 'admin_override' }
       },
