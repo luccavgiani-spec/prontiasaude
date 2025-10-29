@@ -477,13 +477,6 @@ export function PaymentModal({
   };
 
   const handlePixSubmit = async () => {
-    // Formatar telefone para E.164 ANTES de validar
-    const { formatPhoneE164 } = await import('@/lib/validations');
-    setFormData(prev => ({ ...prev, phone: formatPhoneE164(prev.phone) }));
-
-    // Aguardar um ciclo para garantir que o estado atualizou
-    await new Promise(resolve => setTimeout(resolve, 0));
-
     if (!validateForm()) return;
 
     console.log('[handlePixSubmit] Starting PIX generation');
@@ -491,8 +484,22 @@ export function PaymentModal({
     setError('');
 
     try {
+      // Formatar telefone localmente ANTES de usar
+      const { formatPhoneE164, validatePhoneE164 } = await import('@/lib/validations');
+      const formattedPhone = formatPhoneE164(formData.phone);
+
+      // Validar o telefone formatado
+      if (!validatePhoneE164(formattedPhone)) {
+        setError('Telefone inválido. Use o formato (11) 91234-5678');
+        setPaymentStatus('idle');
+        return;
+      }
+
       const orderId = `order_${Date.now()}`;
-      const schedulePayload = buildSchedulePayload();
+      const schedulePayload = {
+        ...buildSchedulePayload(),
+        telefone: formattedPhone // Usar telefone formatado localmente
+      };
       
       const paymentRequest: any = {
         items: [{
