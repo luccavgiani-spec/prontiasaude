@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from './supabase-wrapper';
 import type { DirectSchedulePayload, DirectScheduleResponse } from './types/plan';
 
 /**
@@ -11,7 +11,7 @@ export async function scheduleWithActivePlan(
   try {
     console.log('[Schedule] Direct scheduling with active plan:', payload.sku);
     
-    const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+    const { data, error } = await invokeEdgeFunction('schedule-redirect', {
       body: payload,
     });
 

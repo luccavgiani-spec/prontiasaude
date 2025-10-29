@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Clock, AlertCircle, ExternalLink } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/supabase-wrapper";
 const WHATSAPP_LINK = "https://api.whatsapp.com/send/?phone=5511933359187&text=Ol%C3%A1%21&type=phone_number&app_absent=0";
 
 export default function Confirmacao() {
@@ -81,7 +81,7 @@ export default function Confirmacao() {
       
       console.log('[Schedule-Redirect] Calling schedule-redirect:', payload);
 
-      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+      const { data, error } = await invokeEdgeFunction('schedule-redirect', {
         body: payload
       });
 

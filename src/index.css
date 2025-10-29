@@ -310,4 +310,23 @@
     height: 0 !important;
     overflow: hidden !important;
   }
+
+  /* Esconder toasts de erro genéricos do Supabase */
+  [data-sonner-toast]:has([data-title*="Edge function"]),
+  [data-sonner-toast]:has([data-title*="FunctionsRelayError"]),
+  [data-sonner-toast]:has([data-title*="FunctionsHttpError"]),
+  [data-sonner-toast]:has([data-description*="Edge function"]),
+  [data-sonner-toast]:has([data-description*="FunctionsRelayError"]),
+  [data-sonner-toast]:has([data-description*="FunctionsHttpError"]),
+  [data-sonner-toast]:has([data-description*="non-2xx status code"]) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
 }
