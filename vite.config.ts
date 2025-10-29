@@ -13,8 +13,10 @@ function cacheHeadersPlugin(): Plugin {
         
         // Assets com hash (imutáveis) - cache de 1 ano
         if (/\.(js|css|jpg|jpeg|png|svg|webp|woff2|woff)$/.test(url)) {
+          const hash = url.match(/[a-f0-9]{8,}/)?.[0] || Date.now().toString();
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-          res.setHeader('ETag', `"${Date.now()}"`);
+          res.setHeader('ETag', `"${hash}"`);
+          res.setHeader('Vary', 'Accept-Encoding');
         }
         // HTML (sempre revalidar)
         else if (url.endsWith('.html') || url === '/') {

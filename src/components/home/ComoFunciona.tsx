@@ -102,6 +102,7 @@ export function ComoFunciona() {
                 height="800"
                 loading="lazy"
                 decoding="async"
+                style={{ aspectRatio: '3/2' }}
                 className="w-full h-auto object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-primary/30 via-transparent to-transparent" />

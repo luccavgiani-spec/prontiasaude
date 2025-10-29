@@ -359,7 +359,7 @@ export function PaymentModal({
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
       
-      // Buscar preço oficial no DB para alinhar com a validação do Edge Function
+      // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
       const { data: service, error: serviceError } = await supabase
         .from('services')
         .select('price_cents, name')
@@ -367,11 +367,11 @@ export function PaymentModal({
         .eq('active', true)
         .maybeSingle();
 
-      if (serviceError) {
-        console.warn('[handleCardSubmit] Erro ao buscar serviço:', serviceError);
+      if (serviceError || !service) {
+        throw new Error(`Serviço ${sku} não encontrado ou inativo`);
       }
 
-      const dbUnitPrice = service?.price_cents ? service.price_cents / 100 : amount / 100;
+      const dbUnitPrice = service.price_cents / 100;
       
       const paymentRequest: any = {
         items: [{
@@ -515,7 +515,7 @@ export function PaymentModal({
         telefone: formattedPhone // Usar telefone formatado localmente
       };
       
-      // Buscar preço oficial no DB para alinhar com a validação do Edge Function
+      // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
       const { data: service, error: serviceError } = await supabase
         .from('services')
         .select('price_cents, name')
@@ -523,11 +523,11 @@ export function PaymentModal({
         .eq('active', true)
         .maybeSingle();
 
-      if (serviceError) {
-        console.warn('[handlePixSubmit] Erro ao buscar serviço:', serviceError);
+      if (serviceError || !service) {
+        throw new Error(`Serviço ${sku} não encontrado ou inativo`);
       }
 
-      const dbUnitPrice = service?.price_cents ? service.price_cents / 100 : amount / 100;
+      const dbUnitPrice = service.price_cents / 100;
       
       const paymentRequest: any = {
         items: [{
@@ -569,6 +569,11 @@ export function PaymentModal({
       });
 
       if (error) throw error;
+
+      // ✅ Validar resposta PIX antes de usar
+      if (!data.success || !data.qr_code || !data.qr_code_base64) {
+        throw new Error(data.error || 'Falha ao gerar código PIX');
+      }
 
       console.log('[handlePixSubmit] PIX creation response:', data);
 

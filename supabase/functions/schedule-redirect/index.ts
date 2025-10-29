@@ -461,7 +461,12 @@ Deno.serve(async (req) => {
 
     // 3. Verificar plano ativo (payload direto)
     if (payload.plano_ativo) {
-      console.log('[schedule-redirect] Plano ativo detectado → ClickLife');
+      console.log('[schedule-redirect] ✓ Plano ativo detectado → ClickLife', {
+        sku: payload.sku,
+        email: payload.email,
+        cpf: payload.cpf?.substring(0, 3) + '***',
+        especialidade: payload.especialidade
+      });
       return await redirectClickLife(payload, 'active_plan', corsHeaders);
     }
 
