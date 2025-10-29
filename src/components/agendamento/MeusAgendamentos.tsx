@@ -282,6 +282,18 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                 )}
               </div>
 
+              {appointment.redirect_url && <div className="pt-2 border-t">
+                  <div className="flex items-center gap-2 mb-3">
+                    <VideoIcon className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Link de Acesso Disponível</span>
+                  </div>
+                  <Button asChild variant="default" size="sm" className="w-full">
+                    <a href={appointment.redirect_url} target="_blank" rel="noopener noreferrer">
+                      Acessar Consulta
+                    </a>
+                  </Button>
+                </div>}
+
               {appointment.created_at && <div className="text-xs text-muted-foreground">
                   Realizada em: {formatDateTime(appointment.start_at_local)}
                 </div>}

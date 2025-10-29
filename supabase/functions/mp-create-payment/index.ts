@@ -132,6 +132,28 @@ Deno.serve(async (req) => {
       paymentData.token = paymentRequest.token;
       paymentData.payment_method_id = paymentRequest.payment_method_id;
       paymentData.installments = paymentRequest.installments || 1;
+      
+      // ✅ NOVO: Normalização server-side para cartão + binary_mode
+      const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
+      const payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
+      
+      paymentData.payer = {
+        ...paymentRequest.payer,
+        email: payerEmail,
+        identification: {
+          type: 'CPF',
+          number: payerCPF
+        }
+      };
+      
+      // ✅ binary_mode: true força resposta approved/rejected (evita in_process)
+      paymentData.binary_mode = true;
+      
+      console.log('[mp-create-payment] Card payment normalized:', {
+        email: payerEmail,
+        cpf: payerCPF ? `${payerCPF.substring(0, 3)}***` : 'AUSENTE',
+        binary_mode: true
+      });
     } else {
       // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO
       console.error('[mp-create-payment] Invalid card payment: missing token or payment_method_id', {

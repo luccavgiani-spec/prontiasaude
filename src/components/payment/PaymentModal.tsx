@@ -684,14 +684,25 @@ export function PaymentModal({
           console.log('[Realtime] Received appointment:', payload);
           const appointment = payload.new as any;
 
-          if (appointment.redirect_url) {
-            console.log('[Realtime] Redirecting to:', appointment.redirect_url);
+          // 🔍 Verificar se é o appointment deste pagamento específico
+          if (appointment.redirect_url && appointment.order_id && appointment.order_id === currentOrderId) {
+            console.log('[Realtime] ✅ Appointment CORRETO detectado:', {
+              appointment_id: appointment.appointment_id,
+              order_id: appointment.order_id,
+              redirect_url: appointment.redirect_url
+            });
+            
             setRedirectUrl(appointment.redirect_url);
             toast.success('Agendamento confirmado! Redirecionando...');
             
             setTimeout(() => {
               window.location.href = appointment.redirect_url;
             }, 1500);
+          } else {
+            console.log('[Realtime] Appointment ignorado (order_id diferente):', {
+              received_order_id: appointment.order_id,
+              expected_order_id: currentOrderId
+            });
           }
         }
       )

@@ -98,7 +98,9 @@ Deno.serve(async (req) => {
         especialidade: schedulePayload.especialidade || 'Clínico Geral',
         sku: schedulePayload.sku,
         horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
-        plano_ativo: schedulePayload.plano_ativo || false
+        plano_ativo: schedulePayload.plano_ativo || false,
+        order_id: payment.metadata?.order_id,
+        payment_id: payment.id
       }
     });
 
@@ -131,7 +133,11 @@ Deno.serve(async (req) => {
         platform: scheduleData?.provider || 'unknown',
         status: 'approved',
         patient_email: payment.payer?.email || schedulePayload.email,
-        metadata: { payment_id: payment.id, mp_status: payment.status }
+        metadata: { 
+          payment_id: payment.id, 
+          mp_status: payment.status,
+          order_id: payment.metadata?.order_id
+        }
       });
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');

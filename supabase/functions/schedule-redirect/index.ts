@@ -116,6 +116,8 @@ interface SchedulePayload {
   horario_iso?: string;
   plano_ativo: boolean;
   sexo?: string;
+  order_id?: string;
+  payment_id?: string;
 }
 
 // Função loginClickLifePatient removida - ClickLife não suporta login via API
@@ -315,9 +317,13 @@ async function saveAppointment(
       provider: provider,
       redirect_url: redirectUrl,
       teams_join_url: redirectUrl, // Por enquanto, usar redirect_url como join_url
+      order_id: payload.order_id
     };
     
-    console.log('[saveAppointment] Salvando appointment:', appointmentData);
+    console.log('[saveAppointment] Salvando appointment:', {
+      ...appointmentData,
+      order_id: payload.order_id || 'AUSENTE'
+    });
     
     const { error } = await supabase
       .from('appointments')
