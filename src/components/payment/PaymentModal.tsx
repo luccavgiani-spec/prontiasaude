@@ -7,6 +7,7 @@ import { Loader2, CheckCircle2, AlertCircle, CreditCard } from 'lucide-react';
 import { validateCPF } from '@/lib/cpf-validator';
 import { validatePhoneE164 } from '@/lib/validations';
 import { supabase } from '@/integrations/supabase/client';
+import { getAppointments } from '@/lib/appointments';
 import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
 import { MP_PUBLIC_KEY } from '@/lib/constants';
@@ -76,6 +77,8 @@ export function PaymentModal({
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
   const [patientGender, setPatientGender] = useState<string>('');
   const [redirectUrl, setRedirectUrl] = useState<string>('');
+  const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
+  const [isPollingPayment, setIsPollingPayment] = useState(false);
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -346,6 +349,48 @@ export function PaymentModal({
     return payload;
   };
 
+  const pollPaymentStatus = async (paymentId: string) => {
+    setIsPollingPayment(true);
+    const maxAttempts = 60; // 5 minutos (5s x 60)
+    let attempts = 0;
+    
+    const interval = setInterval(async () => {
+      attempts++;
+      
+      try {
+        // Buscar appointments do usuário
+        const result = await getAppointments(formData.email);
+        
+        if (result.success && result.appointments) {
+          // Procurar appointment com redirect_url
+          const appointment = result.appointments.find(
+            apt => apt.status === 'confirmed' && apt.redirect_url
+          );
+          
+          if (appointment?.redirect_url) {
+            clearInterval(interval);
+            setIsPollingPayment(false);
+            
+            toast.success('✅ Pagamento aprovado! Redirecionando para sua consulta...');
+            
+            setTimeout(() => {
+              window.location.href = appointment.redirect_url!;
+            }, 1500);
+          }
+        }
+        
+        if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          setIsPollingPayment(false);
+          
+          toast.info('Aguardando confirmação do pagamento. Acesse "Minhas Consultas" em alguns instantes.');
+        }
+      } catch (error) {
+        console.error('[pollPaymentStatus] Erro ao verificar status:', error);
+      }
+    }, 5000); // 5 segundos
+  };
+
   const handleCardSubmit = async (cardFormData: any) => {
     console.log('[handleCardSubmit] Card form data:', cardFormData);
     setPaymentStatus('processing');
@@ -589,7 +634,11 @@ export function PaymentModal({
       });
       setPaymentId(data.payment_id);
       setLastPaymentId(data.payment_id);
+      setPixPaymentId(data.payment_id);
       setPaymentStatus('pending_pix');
+      
+      // Iniciar polling para detectar aprovação automaticamente
+      pollPaymentStatus(data.payment_id);
       
       // Usuário paga PIX, webhook notifica GAS em background
       toast.info('Aguardando pagamento do PIX...');
@@ -830,9 +879,22 @@ export function PaymentModal({
 
                 {/* Botão PIX */}
                 {paymentMethod === 'pix' && (
-                  <Button onClick={handlePixSubmit} className="w-full" size="lg">
-                    Gerar QR Code PIX
-                  </Button>
+                  <>
+                    <Button onClick={handlePixSubmit} className="w-full" size="lg">
+                      Gerar QR Code PIX
+                    </Button>
+                    
+                    {isPollingPayment && (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm text-blue-800">
+                            Aguardando confirmação do pagamento...
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

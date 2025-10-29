@@ -5,12 +5,15 @@ export interface AppointmentData {
   appointment_id?: string;
   email: string;
   service_code: string;
+  service_name?: string;
   start_at_local: string; // ISO 8601 com offset: 2025-09-03T16:00:00-03:00
   duration_min: number;
   status?: string;
   order_id?: string;
   teams_join_url?: string;
   teams_meeting_id?: string;
+  redirect_url?: string;
+  provider?: string;
   created_at?: string;
 }
 

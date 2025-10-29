@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { getAppointments, AppointmentData } from '@/lib/appointments';
+import { getServiceNameFromSKU } from '@/lib/sku-mapping';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, ClockIcon, VideoIcon, RefreshCwIcon, CopyIcon } from 'lucide-react';
 interface MeusAgendamentosProps {
@@ -107,14 +108,6 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
         {statusInfo.label}
       </Badge>;
   };
-  const getServiceName = (serviceCode: string) => {
-    const serviceNames = {
-      'CONSULTA_CLINICA': 'Consulta Clínica Geral',
-      'CONSULTA_PEDIATRICA': 'Consulta Pediátrica',
-      'CONSULTA_CARDIOLOGICA': 'Consulta Cardiológica'
-    };
-    return serviceNames[serviceCode as keyof typeof serviceNames] || serviceCode;
-  };
 
   // Separar consultas próximas e anteriores
   const now = new Date();
@@ -158,7 +151,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                 <div className="flex justify-between items-start">
                   <div>
                     <CardTitle className="text-lg">
-                      {getServiceName(appointment.service_code)}
+                      {getServiceNameFromSKU(appointment.service_code)}
                     </CardTitle>
                     <CardDescription>
                       ID: {appointment.appointment_id}
@@ -210,6 +203,18 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                     </div>
                   </div>}
 
+                {appointment.redirect_url && !appointment.teams_join_url && <div className="pt-2 border-t">
+                    <div className="flex items-center gap-2 mb-3">
+                      <VideoIcon className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Link de Acesso Disponível</span>
+                    </div>
+                    <Button asChild variant="default" size="sm" className="w-full">
+                      <a href={appointment.redirect_url} target="_blank" rel="noopener noreferrer">
+                        Acessar Consulta
+                      </a>
+                    </Button>
+                  </div>}
+
                 {appointment.status === 'confirmed' && !appointment.teams_join_url && <div className="pt-2 border-t">
                     <div className="bg-muted/20 rounded-lg p-3">
                       <div className="flex items-center justify-between">
@@ -242,7 +247,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
               <div className="flex justify-between items-start">
                 <div>
                   <CardTitle className="text-lg">
-                    {getServiceName(appointment.service_code)}
+                    {getServiceNameFromSKU(appointment.service_code)}
                   </CardTitle>
                   <CardDescription>
                     ID: {appointment.appointment_id}

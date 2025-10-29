@@ -106,6 +106,14 @@ Deno.serve(async (req) => {
       console.error('[mp-webhook] Schedule-redirect error:', scheduleError.message);
     } else {
       console.log('[mp-webhook] Scheduled successfully:', scheduleData);
+      
+      if (scheduleData) {
+        console.log('[mp-webhook] Appointment details:', {
+          appointment_id: scheduleData.appointment_id,
+          redirect_url: scheduleData.url,
+          provider: scheduleData.provider
+        });
+      }
     }
 
     // ✅ Gravar métrica de venda
