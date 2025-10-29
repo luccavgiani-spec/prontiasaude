@@ -359,11 +359,25 @@ export function PaymentModal({
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
       
+      // Buscar preço oficial no DB para alinhar com a validação do Edge Function
+      const { data: service, error: serviceError } = await supabase
+        .from('services')
+        .select('price_cents, name')
+        .eq('sku', sku)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (serviceError) {
+        console.warn('[handleCardSubmit] Erro ao buscar serviço:', serviceError);
+      }
+
+      const dbUnitPrice = service?.price_cents ? service.price_cents / 100 : amount / 100;
+      
       const paymentRequest: any = {
         items: [{
           id: sku,
           title: serviceName,
-          unit_price: amount / 100,
+          unit_price: dbUnitPrice,
           quantity: 1
         }],
         payer: {
@@ -389,7 +403,7 @@ export function PaymentModal({
         paymentRequest.auto_recurring = {
           frequency,
           frequency_type: frequencyType,
-          transaction_amount: amount / 100,
+          transaction_amount: dbUnitPrice,
           currency_id: 'BRL'
         };
       }
