@@ -97,7 +97,11 @@ export function ComoFunciona() {
             <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl hover:scale-105 transition-all duration-700">
               <img 
                 src={consultaImage} 
-                alt="Consulta médica online profissional" 
+                alt="Consulta médica online profissional"
+                width="1200"
+                height="800"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-auto object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-primary/30 via-transparent to-transparent" />

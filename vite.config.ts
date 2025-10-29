@@ -44,30 +44,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            // React core
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-vendor';
-            }
-            // Supabase (usado em muitas páginas)
-            if (id.includes('@supabase') || id.includes('@tanstack')) {
-              return 'supabase-vendor';
-            }
-            // Radix UI (componentes)
-            if (id.includes('@radix-ui')) {
-              return 'ui-vendor';
-            }
-            // Ícones (lucide-react)
-            if (id.includes('lucide-react')) {
-              return 'icons-vendor';
-            }
-          }
-        },
-      },
-    },
+    rollupOptions: {},
     chunkSizeWarningLimit: 500,
     minify: 'esbuild',
     target: 'esnext',
