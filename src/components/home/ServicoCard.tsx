@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentModal } from "@/components/payment/PaymentModal";
+import { PackageSelectionModal } from "@/components/payment/PackageSelectionModal";
 import { formataPreco } from "@/lib/utils";
 import { trackLead } from "@/lib/meta-tracking";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +38,8 @@ export function ServicoCard({
   showDesconto = false
 }: ServicoCardProps) {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<{ sku: string; nome: string; valor: number } | null>(null);
   const navigate = useNavigate();
 
   // Cálculo do desconto baseado no tipo de contratação
@@ -76,6 +79,12 @@ export function ServicoCard({
     }
   };
   const handleAgendar = async () => {
+    // Se for psicóloga, abrir modal de seleção de pacote primeiro
+    if (servico.slug === "psicologa" && servico.variantes) {
+      setIsPackageModalOpen(true);
+      return;
+    }
+
     // Verificar se usuário está logado
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -136,6 +145,75 @@ export function ServicoCard({
     trackLead({
       value: precoComDesconto,
       content_name: servico.nome
+    });
+
+    // Abre modal de pagamento
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePackageSelect = async (pkg: { sku: string; nome: string; valor: number }) => {
+    setSelectedPackage(pkg);
+    
+    // Verificar se usuário está logado
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      // Salvar returnUrl no localStorage
+      const returnUrl = window.location.pathname + window.location.search;
+      localStorage.setItem('returnUrl', returnUrl);
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: pkg.sku,
+        name: `${servico.nome} - ${pkg.nome}`,
+        amount: Math.round(pkg.valor * 100)
+      }));
+      
+      // Redirecionar para /area-do-paciente
+      navigate('/area-do-paciente');
+      return;
+    }
+
+    // Verificar se tem plano ativo
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+    const planStatus = await checkPatientPlanActive(user.email!);
+
+    if (planStatus.canBypassPayment) {
+      // Tem plano ativo: buscar dados completos do paciente
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+        toast('Complete seu cadastro antes de agendar');
+        navigate('/completar-perfil');
+        return;
+      }
+
+      toast('Redirecionando para agendamento...', { duration: 2000 });
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+      const result = await scheduleWithActivePlan({
+        cpf: patient.cpf,
+        email: user.email!,
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
+        sku: pkg.sku,
+        plano_ativo: true
+      });
+
+      if (result.ok && result.url) {
+        window.location.href = result.url;
+      } else {
+        toast(result.error || 'Erro ao agendar');
+      }
+      return;
+    }
+    
+    // Não tem plano: fluxo normal de pagamento
+    trackLead({
+      value: pkg.valor,
+      content_name: `${servico.nome} - ${pkg.nome}`
     });
 
     // Abre modal de pagamento
@@ -228,15 +306,25 @@ export function ServicoCard({
         </div>
       </div>
 
+      {/* Package Selection Modal (Psicóloga) */}
+      {servico.slug === "psicologa" && servico.variantes && (
+        <PackageSelectionModal
+          open={isPackageModalOpen}
+          onOpenChange={setIsPackageModalOpen}
+          packages={servico.variantes}
+          onPackageSelect={handlePackageSelect}
+        />
+      )}
+
       {/* Payment Modal */}
       <PaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        sku={servico.sku}
-        serviceName={servico.nome}
-        amount={Math.round(precoComDesconto * 100)} // em centavos
+        sku={selectedPackage?.sku || servico.sku}
+        serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome}
+        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(precoComDesconto * 100)}
         onSuccess={() => {
-          navigate(`/confirmacao/${servico.sku}`);
+          navigate(`/confirmacao/${selectedPackage?.sku || servico.sku}`);
         }}
       />
     </>;

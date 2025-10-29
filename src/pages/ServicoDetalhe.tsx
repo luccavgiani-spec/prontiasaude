@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CadastroModal } from "@/components/modais/CadastroModal";
 import { PaymentModal } from "@/components/payment/PaymentModal";
+import { PackageSelectionModal } from "@/components/payment/PackageSelectionModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -26,6 +27,8 @@ const ServicoDetalhe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<string>("");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<{ sku: string; nome: string; valor: number } | null>(null);
   const navigate = useNavigate();
   const {
     toast
@@ -83,6 +86,12 @@ const ServicoDetalhe = () => {
       </div>;
   }
   const handleAgendar = async () => {
+    // Se for psicóloga, abrir modal de seleção de pacote primeiro
+    if (servico.slug === "psicologa" && servico.variantes) {
+      setIsPackageModalOpen(true);
+      return;
+    }
+
     // Track Lead event
     trackLead({
       value: getTotalPrice() / 100,
@@ -140,6 +149,84 @@ const ServicoDetalhe = () => {
         telefone: patient.phone_e164,
         especialidade: selectedVariant || servico.nome,
         sku: getCurrentSku(),
+        plano_ativo: true
+      });
+
+      if (result.ok && result.url) {
+        window.location.href = result.url;
+      } else {
+        toast({
+          description: result.error || 'Erro ao agendar',
+          variant: 'destructive'
+        });
+      }
+      return;
+    }
+
+    // Usuário logado sem plano: abrir modal de pagamento
+    setIsPaymentModalOpen(true);
+  };
+
+  const handlePackageSelect = async (pkg: { sku: string; nome: string; valor: number }) => {
+    setSelectedPackage(pkg);
+    
+    // Track Lead event
+    trackLead({
+      value: pkg.valor,
+      content_name: `${servico.nome} - ${pkg.nome}`
+    });
+
+    // Verificar se usuário está logado
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      // Salvar serviço pendente e redirecionar para login
+      const pendingService = {
+        sku: pkg.sku,
+        serviceName: `${servico.nome} - ${pkg.nome}`,
+        amount: pkg.valor * 100,
+        especialidade: pkg.nome,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pendingService', JSON.stringify(pendingService));
+      navigate('/area-do-paciente');
+      return;
+    }
+
+    // Verificar plano ativo
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+    const planStatus = await checkPatientPlanActive(user.email!);
+
+    if (planStatus.canBypassPayment) {
+      // Tem plano ativo: buscar dados completos do paciente
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+        toast({
+          description: 'Complete seu cadastro antes de agendar',
+          variant: 'destructive'
+        });
+        navigate('/completar-perfil');
+        return;
+      }
+
+      toast({
+        description: 'Redirecionando para agendamento...',
+        duration: 2000
+      });
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+      const result = await scheduleWithActivePlan({
+        cpf: patient.cpf,
+        email: user.email!,
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
+        especialidade: pkg.nome,
+        sku: pkg.sku,
         plano_ativo: true
       });
 
@@ -385,10 +472,10 @@ const ServicoDetalhe = () => {
             {/* Card de agendamento */}
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
-                {/* Dropdown for variants */}
-                {servico.variantes && servico.variantes.length > 0 && servico.slug !== "solicitacao_exames" && <div className="mb-4">
+                {/* Dropdown for variants - APENAS para médicos especialistas e exames */}
+                {servico.variantes && servico.variantes.length > 0 && servico.slug !== "solicitacao_exames" && servico.slug !== "psicologa" && <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">
-                      {servico.slug === "psicologa" ? "Selecione o plano:" : "Selecione a especialidade:"}
+                      Selecione a especialidade:
                     </label>
                     <Select value={selectedVariant} onValueChange={setSelectedVariant}>
                       <SelectTrigger className="w-full bg-background">
@@ -396,17 +483,8 @@ const ServicoDetalhe = () => {
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50">
                         {servico.variantes.map(variante => {
-                      const isPsychologist = servico.slug === "psicologa";
-                      const consultas = variante.consultas || 1;
                       return <SelectItem key={variante.nome} value={variante.nome}>
-                              {isPsychologist && consultas > 1 ? <>
-                                  {variante.nome}
-                                  <span className="text-muted-foreground text-xs ml-1">
-                                    (Total: {formataPreco(variante.valor)})
-                                  </span>
-                                </> : <>
                                   {variante.nome} - {formataPreco(variante.valor)}
-                                </>}
                             </SelectItem>;
                     })}
                       </SelectContent>
@@ -453,13 +531,23 @@ const ServicoDetalhe = () => {
         </div>
       </div>
 
+      {/* Package Selection Modal (Psicóloga) */}
+      {servico.slug === "psicologa" && servico.variantes && (
+        <PackageSelectionModal
+          open={isPackageModalOpen}
+          onOpenChange={setIsPackageModalOpen}
+          packages={servico.variantes}
+          onPackageSelect={handlePackageSelect}
+        />
+      )}
+
       <PaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        sku={getCurrentSku() || ''}
-        serviceName={servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')}
-        amount={Math.round(getTotalPrice() * 100)}
-        especialidade={selectedVariant || servico.nome}
+        sku={selectedPackage?.sku || getCurrentSku() || ''}
+        serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')}
+        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(getTotalPrice() * 100)}
+        especialidade={selectedPackage?.nome || selectedVariant || servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);
           toast({
