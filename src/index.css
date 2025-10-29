@@ -299,16 +299,42 @@
     background: transparent !important;
   }
 
-  /* Esconder erro visual do Mercado Pago no modo cartão */
+  /* Esconder erro visual do Mercado Pago no modo cartão - REGRAS EXPANDIDAS */
+  /* Por ID e classe do container */
+  .mp-brick-container h1,
+  #cardPaymentBrick h1,
+  [id*="cardPayment"] h1,
+  div[id^="mp-"] h1,
+  
+  /* Por classes específicas do Mercado Pago */
+  h1[class*="mp-"],
+  h1[class*="cho-"],
+  h1[class*="brick"],
   .mp-brick-container h1[class*="mp-checkout-bricks__padding"],
   #cardPaymentBrick h1[class*="mp-checkout-bricks__padding"],
   [class*="mp-checkout-bricks"] h1[class*="extra-large"],
-  div[class*="mp-checkout-bricks"] > h1 {
+  div[class*="mp-checkout-bricks"] > h1,
+  
+  /* Por posicionamento (primeiro h1 dentro do brick) */
+  #cardPaymentBrick > h1:first-child,
+  .mp-brick-container > h1:first-child,
+  div[id*="mp-"] > h1:first-child,
+  
+  /* Containers de erro dentro do brick */
+  #cardPaymentBrick div[class*="error"],
+  #cardPaymentBrick div[class*="alert"],
+  .mp-brick-container div[class*="error"],
+  .mp-brick-container div[class*="alert"] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
     height: 0 !important;
+    max-height: 0 !important;
     overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
   }
 
   /* Esconder toasts de erro genéricos do Supabase */
