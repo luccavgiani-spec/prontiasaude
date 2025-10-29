@@ -83,6 +83,63 @@ export type Database = {
         }
         Relationships: []
       }
+      appointments: {
+        Row: {
+          appointment_id: string
+          created_at: string
+          duration_min: number
+          email: string
+          id: string
+          order_id: string | null
+          provider: string | null
+          redirect_url: string | null
+          service_code: string
+          service_name: string | null
+          start_at_local: string
+          status: string
+          teams_join_url: string | null
+          teams_meeting_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          appointment_id: string
+          created_at?: string
+          duration_min?: number
+          email: string
+          id?: string
+          order_id?: string | null
+          provider?: string | null
+          redirect_url?: string | null
+          service_code: string
+          service_name?: string | null
+          start_at_local: string
+          status?: string
+          teams_join_url?: string | null
+          teams_meeting_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          appointment_id?: string
+          created_at?: string
+          duration_min?: number
+          email?: string
+          id?: string
+          order_id?: string | null
+          provider?: string | null
+          redirect_url?: string | null
+          service_code?: string
+          service_name?: string | null
+          start_at_local?: string
+          status?: string
+          teams_join_url?: string | null
+          teams_meeting_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           bairro: string | null

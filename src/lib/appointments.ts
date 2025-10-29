@@ -114,10 +114,23 @@ export async function getAppointments(email: string): Promise<{
   try {
     console.log('Fetching appointments for:', email);
     
-    // TODO: Implementar busca real quando tabela appointments estiver configurada
+    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
+      body: {
+        operation: 'get_appointments',
+        email
+      }
+    });
+
+    if (error) {
+      console.error('Error fetching appointments:', error);
+      throw error;
+    }
+    
+    console.log(`Found ${result?.appointments?.length || 0} appointments`);
+    
     return {
       success: true,
-      appointments: []
+      appointments: result?.appointments || []
     };
   } catch (error) {
     console.error('Error in getAppointments:', error);

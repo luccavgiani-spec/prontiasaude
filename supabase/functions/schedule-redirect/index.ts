@@ -258,6 +258,79 @@ async function registerClickLifePatient(
 // Função removida: getOrCreateCommunicarePatient
 // A Communicare cria o paciente automaticamente ao enfileirar
 
+/**
+ * Salva o appointment no banco de dados Supabase
+ */
+async function saveAppointment(
+  payload: SchedulePayload,
+  provider: string,
+  redirectUrl: string,
+  supabase: any
+): Promise<void> {
+  try {
+    const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Mapeamento de SKU para nome do serviço
+    const SERVICE_NAMES: Record<string, string> = {
+      'ITC6534': 'Clínico Geral',
+      'ZXW2165': 'Psicólogo - 1 sessão',
+      'HXR8516': 'Psicólogo - 4 sessões',
+      'YME9025': 'Psicólogo - 8 sessões',
+      'BIR7668': 'Personal Trainer',
+      'VPN5132': 'Nutricionista',
+      'TQP5720': 'Cardiologista',
+      'HGG3503': 'Dermatologista',
+      'VHH8883': 'Endocrinologista',
+      'TSB0751': 'Gastroenterologista',
+      'CCP1566': 'Ginecologista',
+      'FKS5964': 'Oftalmologista',
+      'TVQ5046': 'Ortopedista',
+      'HMG9544': 'Pediatra',
+      'HME8366': 'Otorrinolaringologista',
+      'DYY8522': 'Médico da Família',
+      'QOP1101': 'Psiquiatra',
+      'LZF3879': 'Nutrólogo',
+      'YZD9932': 'Geriatria',
+      'UDH3250': 'Reumatologista',
+      'PKS9388': 'Neurologista',
+      'MYX5186': 'Infectologista',
+      'OVM9892': 'Laudos Psicológicos',
+      'RZP5755': 'Renovação de Receitas',
+      'ULT3571': 'Solicitação de Exames',
+    };
+    
+    const serviceName = SERVICE_NAMES[payload.sku] || payload.sku;
+    const startAt = payload.horario_iso || new Date().toISOString();
+    
+    const appointmentData = {
+      appointment_id: appointmentId,
+      email: payload.email,
+      service_code: payload.sku,
+      service_name: serviceName,
+      start_at_local: startAt,
+      duration_min: 30,
+      status: 'confirmed',
+      provider: provider,
+      redirect_url: redirectUrl,
+      teams_join_url: redirectUrl, // Por enquanto, usar redirect_url como join_url
+    };
+    
+    console.log('[saveAppointment] Salvando appointment:', appointmentData);
+    
+    const { error } = await supabase
+      .from('appointments')
+      .insert(appointmentData);
+    
+    if (error) {
+      console.error('[saveAppointment] Erro ao salvar:', error);
+    } else {
+      console.log('[saveAppointment] ✓ Appointment salvo com sucesso:', appointmentId);
+    }
+  } catch (error) {
+    console.error('[saveAppointment] Erro inesperado:', error);
+  }
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
   
@@ -588,6 +661,13 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const redirectUrl = data.url || REDIRECT_URL;
   console.log('[ClickLife] Redirect URL:', redirectUrl);
 
+  // ✅ Salvar appointment no banco
+  const supabaseInstance = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+  await saveAppointment(payload, 'clicklife', redirectUrl, supabaseInstance);
+
   // ✅ Gravar métrica de agendamento
   try {
     await supabaseAdmin
@@ -899,10 +979,15 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any, cors
 
   console.log('[Communicare] ✓ Paciente enfileirado com sucesso');
 
+  const finalUrl = queueData.queueURL || `https://communicare.com.br/queue/${QUEUE_UUID}`;
+
+  // ✅ Salvar appointment no banco
+  await saveAppointment(payload, 'communicare', finalUrl, supabase);
+
   return new Response(
     JSON.stringify({
       ok: true,
-      url: queueData.queueURL || `https://communicare.com.br/queue/${QUEUE_UUID}`,
+      url: finalUrl,
       provider: 'communicare',
       reason: 'commercial_hours', // ✅ Adicionar reason para testes
       queuePatientUUID: queueData.queuePatientUUID,
