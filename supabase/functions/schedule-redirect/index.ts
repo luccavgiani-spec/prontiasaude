@@ -129,12 +129,22 @@ async function registerClickLifePatient(
   nome: string,
   email: string,
   telefone: string,
-  planoId: number
+  planoId: number,
+  supabase: any
 ): Promise<{ success: boolean; error?: string }> {
   const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
   
   const cpfClean = cpf.replace(/\D/g, '');
   const phoneClean = telefone.replace(/\D/g, '').replace(/^\+55/, '');
+  
+  // Buscar gênero real do paciente
+  const { data: patientData } = await supabase
+    .from('patients')
+    .select('gender')
+    .eq('email', email.toLowerCase())
+    .maybeSingle();
+
+  const sexo = patientData?.gender === 'M' ? 'M' : patientData?.gender === 'F' ? 'F' : 'O';
   
   const payload = {
     nome,
@@ -142,7 +152,7 @@ async function registerClickLifePatient(
     email,
     senha: "Pr0ntia!2025",
     datanascimento: "01-01-1990",
-    sexo: "O",
+    sexo,
     telefone: phoneClean,
     logradouro: "Rua Exemplo",
     numero: "123",
@@ -539,7 +549,8 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     payload.nome,
     payload.email,
     payload.telefone,
-    planoId
+    planoId,
+    supabase
   );
 
   if (!registration.success) {
