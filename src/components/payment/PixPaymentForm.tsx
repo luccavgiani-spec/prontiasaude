@@ -6,10 +6,11 @@ import { toast } from 'sonner';
 interface PixPaymentFormProps {
   qrCode: string;
   qrCodeBase64: string;
+  redirectUrl?: string;
   onCancel: () => void;
 }
 
-export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel }: PixPaymentFormProps) {
+export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel }: PixPaymentFormProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyCode = async () => {
@@ -86,6 +87,17 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, onCancel }: PixPaymentFor
         </p>
       </div>
 
+      {/* Botão Acessar Atendimento - Apenas quando redirectUrl existir */}
+      {redirectUrl && (
+        <Button
+          type="button"
+          onClick={() => window.location.href = redirectUrl}
+          className="w-full"
+          size="lg"
+        >
+          Acessar Atendimento
+        </Button>
+      )}
 
       {/* Cancel */}
       <Button

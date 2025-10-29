@@ -74,6 +74,8 @@ export function PaymentModal({
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(false);
   const [hasRequiredData, setHasRequiredData] = useState(false);
   const [isLoadingUserData, setIsLoadingUserData] = useState(true);
+  const [patientGender, setPatientGender] = useState<string>('');
+  const [redirectUrl, setRedirectUrl] = useState<string>('');
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -125,6 +127,7 @@ export function PaymentModal({
         );
 
         setHasRequiredData(hasData);
+        setPatientGender(patient.gender || '');
 
         if (hasData) {
           setFormData({
@@ -196,42 +199,46 @@ export function PaymentModal({
     }
   }, [paymentMethod, open, paymentStatus]);
 
-  // Montar Card Payment Brick quando método = cartão
+  // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos
   useEffect(() => {
-    if (
-      open && 
-      paymentMethod === 'card' && 
-      mpInstanceRef.current && 
-      !isBrickMountedRef.current &&
-      !isLoadingUserData &&
-      (hasRequiredData || !isUserLoggedIn)
-    ) {
-      mountCardPaymentBrick();
+    if (!open || paymentMethod !== 'card' || !mpInstanceRef.current || isLoadingUserData) {
+      return;
     }
-  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn]);
 
-  // Remontar Brick quando dados forem preenchidos
-  useEffect(() => {
-    if (open && paymentMethod === 'card' && formData.email && formData.cpf && formData.name) {
-      if (!isBrickMountedRef.current && mpInstanceRef.current) {
+    // Verifica se tem dados mínimos: email válido + CPF com 11 dígitos
+    const emailValid = formData.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+    const cpfValid = formData.cpf && formData.cpf.replace(/\D/g, '').length === 11;
+    const hasMinimalPayerData = emailValid && cpfValid;
+
+    // Se usuário logado, só montar se hasRequiredData
+    // Se não logado, só montar se hasMinimalPayerData
+    if ((isUserLoggedIn && hasRequiredData) || (!isUserLoggedIn && hasMinimalPayerData)) {
+      if (!isBrickMountedRef.current) {
         mountCardPaymentBrick();
       }
+    } else {
+      // Se perdeu dados mínimos, desmontar brick
+      if (isBrickMountedRef.current && cardPaymentBrickRef.current) {
+        cardPaymentBrickRef.current.unmount();
+        cardPaymentBrickRef.current = null;
+        isBrickMountedRef.current = false;
+      }
     }
-  }, [open, paymentMethod, formData.email, formData.cpf, formData.name]);
+  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf]);
 
 
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
 
-    // Se usuário logado mas dados incompletos, não montar brick
-    if (isUserLoggedIn && !hasRequiredData) {
-      console.warn('[PaymentModal] Aguardando dados do usuário...');
+    // CRITICAL: Só usar dados REAIS (não placeholders)
+    const payerEmail = formData.email;
+    const payerCPF = formData.cpf.replace(/\D/g, '');
+
+    // Validação final antes de montar
+    if (!payerEmail || !payerCPF || payerCPF.length !== 11) {
+      console.warn('[PaymentModal] Dados insuficientes para montar Brick:', { payerEmail, payerCPF });
       return;
     }
-
-    // Para usuários não logados ou com dados completos, usar valores disponíveis ou placeholders
-    const payerEmail = formData.email || 'placeholder@example.com';
-    const payerCPF = formData.cpf.replace(/\D/g, '') || '00000000000';
 
     try {
       const bricksBuilder = mpInstanceRef.current.bricks();
@@ -315,7 +322,7 @@ export function PaymentModal({
   };
 
   const buildSchedulePayload = () => {
-    return {
+    const payload: any = {
       email: formData.email,
       cpf: (formData.cpf || '').replace(/\D/g, ''),
       nome: formData.name,
@@ -325,6 +332,13 @@ export function PaymentModal({
       plano_ativo: false,
       horario_iso: new Date().toISOString()
     };
+
+    // Adicionar sexo se disponível (M ou F)
+    if (patientGender) {
+      payload.sexo = patientGender === 'male' ? 'M' : patientGender === 'female' ? 'F' : patientGender;
+    }
+
+    return payload;
   };
 
   const handleCardSubmit = async (cardFormData: any) => {
@@ -405,8 +419,9 @@ export function PaymentModal({
 
       if (data.status === 'approved') {
         setPaymentId(data.payment_id);
-        toast.success('Pagamento aprovado!');
-        await notifyPaymentAndRedirect(data.payment_id, orderId, schedulePayload);
+        setPaymentStatus('approved');
+        toast.success('Pagamento aprovado! Aguardando confirmação...');
+        // Realtime listener será ativado via useEffect
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
@@ -462,6 +477,13 @@ export function PaymentModal({
   };
 
   const handlePixSubmit = async () => {
+    // Formatar telefone para E.164 ANTES de validar
+    const { formatPhoneE164 } = await import('@/lib/validations');
+    setFormData(prev => ({ ...prev, phone: formatPhoneE164(prev.phone) }));
+
+    // Aguardar um ciclo para garantir que o estado atualizou
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     if (!validateForm()) return;
 
     console.log('[handlePixSubmit] Starting PIX generation');
@@ -532,61 +554,45 @@ export function PaymentModal({
     }
   };
 
-  const notifyPaymentAndRedirect = async (paymentId: string, orderId: string, schedulePayload: any) => {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY = 2000; // 2 segundos
-    
-    setPaymentStatus('approved');
-    console.log('[notifyPaymentAndRedirect] Payload:', schedulePayload);
-
-    // ========== RETRY LOGIC ==========
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        console.log(`[notifyPaymentAndRedirect] Tentativa ${attempt}/${MAX_RETRIES}`);
-        
-        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
-          body: schedulePayload
-        });
-
-        if (error) throw error;
-
-        // ✅ Sucesso: redirecionar direto
-        if (data && data.ok && data.url) {
-          console.log('[notifyPaymentAndRedirect] Redirecting to:', data.url);
-          toast.success('Redirecionando para o atendimento...');
-          setTimeout(() => {
-            window.location.href = data.url;
-          }, 1500);
-          return; // Sair da função
-        }
-        
-        // ❌ Resposta sem URL: tentar novamente
-        console.warn(`[notifyPaymentAndRedirect] Attempt ${attempt} failed:`, data);
-        
-        if (attempt < MAX_RETRIES) {
-          toast.info(`Aguarde, processando... (tentativa ${attempt}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        }
-        
-      } catch (err) {
-        console.error(`[notifyPaymentAndRedirect] Attempt ${attempt} error:`, err);
-        
-        if (attempt < MAX_RETRIES) {
-          toast.info(`Erro na tentativa ${attempt}. Tentando novamente...`);
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
-        }
-      }
+  // Listener Supabase Realtime para redirect_url após pagamento aprovado
+  useEffect(() => {
+    if (!open || (paymentStatus !== 'approved' && paymentStatus !== 'pending_pix')) {
+      return;
     }
-    
-    // ========== ERRO FINAL: Após 3 tentativas, exibir popup e fechar modal ==========
-    console.error('[notifyPaymentAndRedirect] All retries failed');
-    setPaymentStatus('idle');
-    setError('Erro ao redirecionar. Contate o suporte.');
-    toast.error('Erro ao redirecionar. Contate o suporte.', {
-      duration: 5000,
-    });
-    onOpenChange(false); // Fechar modal
-  };
+
+    console.log('[Realtime] Subscribing to appointments for email:', formData.email);
+
+    const channel = supabase
+      .channel('appointment-redirect')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'appointments',
+          filter: `email=eq.${formData.email}`
+        },
+        (payload) => {
+          console.log('[Realtime] Received appointment:', payload);
+          const appointment = payload.new as any;
+
+          if (appointment.redirect_url) {
+            console.log('[Realtime] Redirecting to:', appointment.redirect_url);
+            setRedirectUrl(appointment.redirect_url);
+            toast.success('Agendamento confirmado! Redirecionando...');
+            
+            setTimeout(() => {
+              window.location.href = appointment.redirect_url;
+            }, 1500);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [open, paymentStatus, formData.email]);
 
 
   const handleTryAgain = () => {
@@ -655,6 +661,7 @@ export function PaymentModal({
         <PixPaymentForm
           qrCode={pixData.qrCode}
           qrCodeBase64={pixData.qrCodeBase64}
+          redirectUrl={redirectUrl}
           onCancel={handleTryAgain}
         />
       );
