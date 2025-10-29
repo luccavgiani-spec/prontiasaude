@@ -114,8 +114,14 @@ const Empresas = () => {
             Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
             Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
-          <div className="flex gap-4">
-            <Button size="lg" onClick={() => setShowForm(true)} className="medical-button-primary text-lg px-8 py-4">
+          <div className="flex gap-4 justify-center">
+            <Button size="lg" onClick={() => {
+              setShowForm(true);
+              setTimeout(() => {
+                const formSection = document.querySelector('section:has(form)');
+                formSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 100);
+            }} className="medical-button-primary text-lg px-8 py-4">
               Solicitar Contato
             </Button>
             <Button size="lg" variant="outline" onClick={() => window.location.href = '/empresa/login'} className="text-lg px-8 py-4">
@@ -208,7 +214,13 @@ const Empresas = () => {
                 Pronto para transformar a saúde da sua equipe?
               </h2>
               <p className="text-lg text-muted-foreground mb-8">Receba uma proposta personalizada e eleve sua empresa a um novo patamar.</p>
-              <Button size="lg" onClick={() => setShowForm(true)} className="medical-button-primary text-lg px-8 py-4">
+              <Button size="lg" onClick={() => {
+                setShowForm(true);
+                setTimeout(() => {
+                  const formSection = document.querySelector('section:has(form)');
+                  formSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+              }} className="medical-button-primary text-lg px-8 py-4">
                 Solicitar Contato
               </Button>
             </div> : <Card>
@@ -319,7 +331,13 @@ const Empresas = () => {
 
       {/* Fixed Mobile CTA */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
-        <Button onClick={() => setShowForm(true)} className="w-full medical-button-primary py-3">
+        <Button onClick={() => {
+          setShowForm(true);
+          setTimeout(() => {
+            const formSection = document.querySelector('section:has(form)');
+            formSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }} className="w-full medical-button-primary py-3">
           Solicitar contato
         </Button>
       </div>
