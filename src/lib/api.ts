@@ -75,30 +75,6 @@ export async function upsertPatient(data: UpsertPatientRequest): Promise<{ succe
   }
 }
 
-// Criar sessão de checkout
-export async function criarCheckout(data: CheckoutRequest): Promise<CheckoutResponse> {
-  try {
-    console.log('Creating checkout via Supabase Edge Function:', data);
-    
-    const { data: result, error } = await supabase.functions.invoke('stripe-checkout', {
-      body: data
-    });
-
-    if (error) {
-      console.error('Edge function error:', error);
-      throw new Error(error.message);
-    }
-
-    console.log('Checkout created successfully:', result);
-    return result;
-  } catch (error) {
-    console.error('Erro ao criar checkout:', error);
-    return { 
-      error: error instanceof Error ? error.message : 'Erro desconhecido'
-    };
-  }
-}
-
 // Buscar resumo do paciente
 export async function buscarResumosPaciente(email: string): Promise<PatientSummaryResponse | null> {
   try {
@@ -127,16 +103,5 @@ export async function buscarResumosPaciente(email: string): Promise<PatientSumma
   } catch (error) {
     console.error('Erro ao buscar resumo do paciente:', error);
     return null;
-  }
-}
-
-// Redirecionar para checkout do Stripe
-export function redirecionarParaCheckout(checkoutData: CheckoutResponse): void {
-  if (checkoutData.url) {
-    // Always open in new tab for better UX
-    window.open(checkoutData.url, '_blank');
-  } else {
-    console.error('Dados de checkout inválidos:', checkoutData);
-    throw new Error(checkoutData.error || 'Erro ao processar checkout');
   }
 }

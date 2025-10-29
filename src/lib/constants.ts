@@ -239,18 +239,6 @@ export const PLANOS = [
   }
 ];
 
-// Mapa de Price IDs do Stripe
-export const PRICE_MAP = {
-  consulta: "price_1S0SpxENBHjf6SQJYKfzA6xs",
-  renovacao: "price_1S0T9pENBHjf6SQJIQjyGiaG",
-  psicologa: "price_1S0TAbENBHjf6SQJXFN80i1D",
-  psiquiatria: "price_1S0TAzENBHjf6SQJRC8ZpnT5",
-  laudo_bariatrica: "price_1S0TCsENBHjf6SQJpeAo8Nvr",
-  laudo_laq_vas: "price_1S0TCNENBHjf6SQJIRlNoofO",
-  plano_individual: "price_1S0TDYENBHjf6SQJiNZLlkw4",
-  plano_familiar: "price_1S0TFBENBHjf6SQJVvKMb076"
-};
-
 // Descontos visuais por duração (apenas UI)
 export const DESCONTOS_PLANO_VISUAL = {
   "1": 0,

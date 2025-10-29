@@ -29,7 +29,22 @@ export default function ComoFuncionaStepper() {
 
         {/* manter exatamente a mesma imagem da seção atual */}
         <div className="order-first md:order-none">
-          <img src={consultaImage} alt="Consulta médica online profissional" className="w-full rounded-3xl shadow-xl" />
+          <picture>
+            <source 
+              srcSet="/assets/medical-team-realistic-600.webp 600w, 
+                      /assets/medical-team-realistic-1200.webp 1200w"
+              type="image/webp"
+              sizes="(max-width: 768px) 100vw, 600px"
+            />
+            <img 
+              src={consultaImage} 
+              alt="Equipe médica profissional em consulta online" 
+              width="600"
+              height="400"
+              loading="lazy"
+              className="w-full rounded-3xl shadow-xl"
+            />
+          </picture>
         </div>
       </div>
     </section>

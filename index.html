@@ -17,8 +17,15 @@
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
-    <!-- Meta Pixel Code -->
+    <!-- Pré-conexões otimizadas para recursos críticos -->
+    <link rel="preconnect" href="https://connect.facebook.net">
+    <link rel="preconnect" href="https://accounts.google.com">
+    <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co">
+    <link rel="dns-prefetch" href="https://sgtm.prontiasaude.com.br">
+
+    <!-- Meta Pixel Code - Lazy Loading -->
     <script>
+      window.__fbq_defer = true; // Flag para inicialização tardia
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -27,12 +34,9 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1489396668966676');
+      // Não inicializa imediatamente - será feito via meta-tracking.ts
     </script>
     <!-- End Meta Pixel Code -->
-
-    <!-- Stripe.js -->
-    <script src="https://js.stripe.com/v3/"></script>
     
     <!-- Google Identity Services -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>

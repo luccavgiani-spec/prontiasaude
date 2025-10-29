@@ -362,11 +362,27 @@ export function trackPurchase(data: {
   sendToGTMServer(event);
 }
 
-// Initialize tracking on page load
+// Initialize tracking on page load (lazy loaded)
 export function initMetaTracking(): void {
-  // Don't track initial PageView here - it's already tracked by fbq('init') in index.html
-  // This prevents duplicate PageView events
-  
+  if (typeof window === 'undefined') return;
+
+  // ✅ Inicializar apenas após idle ou timeout
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(() => {
+      initializeTracking();
+    }, { timeout: 2000 });
+  } else {
+    setTimeout(initializeTracking, 2000);
+  }
+}
+
+function initializeTracking() {
+  // Inicializar Facebook Pixel tardiamente
+  if (typeof window !== 'undefined' && typeof (window as any).fbq === 'function') {
+    (window as any).fbq('init', '1489396668966676');
+    trackPageView();
+  }
+
   // Track subsequent page views on navigation
   let lastUrl = window.location.href;
   const observer = new MutationObserver(() => {
@@ -376,10 +392,13 @@ export function initMetaTracking(): void {
     }
   });
   
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  const titleElement = document.querySelector('title');
+  if (titleElement) {
+    observer.observe(titleElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
 }
 
 // Debug helper: Set fallback URL at runtime

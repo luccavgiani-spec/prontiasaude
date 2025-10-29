@@ -170,9 +170,12 @@
     transition: var(--transition-smooth);
   }
 
+  .medical-card {
+    will-change: box-shadow, border-color;
+  }
+
   .medical-card:hover {
     box-shadow: var(--shadow-xl);
-    transform: translateY(-4px);
     border-color: hsl(var(--primary) / 0.2);
   }
 
@@ -272,12 +275,30 @@
   }
 
   .pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite alternate;
+    position: relative;
+    animation: pulse-glow-scale 2s ease-in-out infinite alternate;
   }
 
-  @keyframes pulse-glow {
-    from { box-shadow: 0 0 20px hsl(var(--primary) / 0.4); }
-    to { box-shadow: 0 0 30px hsl(var(--primary) / 0.8), 0 0 40px hsl(var(--primary) / 0.4); }
+  .pulse-glow::after {
+    content: '';
+    position: absolute;
+    inset: -10px;
+    border-radius: inherit;
+    background: radial-gradient(circle, hsl(var(--primary) / 0.5) 0%, transparent 70%);
+    filter: blur(20px);
+    animation: pulse-glow-opacity 2s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: -1;
+  }
+
+  @keyframes pulse-glow-scale {
+    from { transform: scale(1); }
+    to { transform: scale(1.02); }
+  }
+
+  @keyframes pulse-glow-opacity {
+    from { opacity: 0.6; }
+    to { opacity: 1; }
   }
 
   /* Mercado Pago Card Form Styles */

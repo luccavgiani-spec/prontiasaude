@@ -18,7 +18,7 @@ const AuthCallback = () => {
         console.error('ensurePatientRow error:', e);
       }
 
-      // Check if this is a successful payment redirect (from Stripe)
+      // Check if this is a successful payment redirect (from Mercado Pago)
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('session_id');
       const purchaseType = urlParams.get('purchase_type'); // 'servico' or 'plano'

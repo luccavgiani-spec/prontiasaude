@@ -173,62 +173,6 @@ export async function getAppointment(appointment_id: string): Promise<{
 }
 
 /**
- * Cria checkout com agendamento (fluxo completo)
- * 1. Cria o agendamento no sistema
- * 2. Cria a sessão de checkout no Stripe com metadata
- */
-export async function createCheckoutWithAppointment(data: CheckoutWithAppointmentRequest): Promise<{ 
-  success: boolean; 
-  url?: string; 
-  appointment_id?: string; 
-  error?: string; 
-}> {
-  try {
-    // 1. Primeiro cria o agendamento se os dados foram fornecidos
-    let appointmentId = data.appointment_id;
-    
-    if (!appointmentId && data.service_code && data.start_at_local && data.duration_min) {
-      const appointmentResult = await createAppointment({
-        email: data.email,
-        service_code: data.service_code,
-        start_at_local: data.start_at_local,
-        duration_min: data.duration_min,
-        status: 'scheduled',
-        order_id: data.order_id
-      });
-
-      if (!appointmentResult.success) {
-        throw new Error(appointmentResult.error || 'Failed to create appointment');
-      }
-
-      appointmentId = appointmentResult.appointment_id;
-    }
-
-    // 2. Cria a sessão de checkout com metadata do agendamento
-    const { data: result, error } = await supabase.functions.invoke('stripe-checkout', {
-      body: {
-        ...data,
-        appointment_id: appointmentId
-      }
-    });
-
-    if (error) throw error;
-    
-    return {
-      success: true,
-      url: result.url,
-      appointment_id: appointmentId
-    };
-  } catch (error) {
-    console.error('Error creating checkout with appointment:', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error' 
-    };
-  }
-}
-
-/**
  * Formatar data/hora para timezone de São Paulo (America/Sao_Paulo)
  */
 export function formatDateTimeForBrazil(date: Date): string {

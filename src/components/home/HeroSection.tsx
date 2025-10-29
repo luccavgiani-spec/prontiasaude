@@ -133,7 +133,23 @@ export function HeroSection() {
               {/* Modern doctor image container */}
               <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1">
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10" />
-                <img src={heroImage} alt="Médico especialista em consulta online" className="w-full max-w-lg h-auto object-cover" />
+                <picture>
+                  <source 
+                    srcSet="/assets/hero-doctor-realistic-600.webp 600w, 
+                            /assets/hero-doctor-realistic-1200.webp 1200w"
+                    type="image/webp"
+                    sizes="(max-width: 768px) 100vw, 512px"
+                  />
+                  <img 
+                    src={heroImage}
+                    alt="Médico especialista em telemedicina realizando consulta online"
+                    width="512"
+                    height="682"
+                    loading="eager"
+                    fetchPriority="high"
+                    className="w-full max-w-lg h-auto object-cover"
+                  />
+                </picture>
               </div>
               
               {/* Modern floating badges */}
