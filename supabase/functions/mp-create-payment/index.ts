@@ -63,6 +63,11 @@ Deno.serve(async (req) => {
       0
     );
 
+    console.log('[mp-create-payment] Items received:', {
+      items_count: paymentRequest.items?.length || 0,
+      client_amount: clientAmount
+    });
+
     // ✅ NOVO: Buscar preço validado do banco
     const { data: service, error: serviceError } = await supabaseClient
       .from('services')
@@ -81,18 +86,26 @@ Deno.serve(async (req) => {
 
     const expectedAmount = service.price_cents / 100; // Converter para reais
 
-    // ✅ NOVO: Validar preço (tolerância de 1 centavo por arredondamento)
-    const priceDifference = Math.abs(clientAmount - expectedAmount);
-    if (priceDifference > 0.01) {
-      console.error('[mp-create-payment] Price mismatch detected:', {
+    // ✅ CORRIGIDO: Tolerar clientAmount ausente/zero (usar apenas preço do DB)
+    if (clientAmount === 0 || !paymentRequest.items || paymentRequest.items.length === 0) {
+      console.log('[mp-create-payment] Client amount missing or zero, using DB price:', {
         sku,
-        client_sent: clientAmount,
-        expected: expectedAmount,
-        difference: priceDifference
+        expected: expectedAmount
       });
-      throw new Error(
-        `Price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${clientAmount.toFixed(2)}`
-      );
+    } else {
+      // Se cliente enviou amount, validar com tolerância de 1 centavo
+      const priceDifference = Math.abs(clientAmount - expectedAmount);
+      if (priceDifference > 0.01) {
+        console.error('[mp-create-payment] Price mismatch detected:', {
+          sku,
+          client_sent: clientAmount,
+          expected: expectedAmount,
+          difference: priceDifference
+        });
+        throw new Error(
+          `Price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${clientAmount.toFixed(2)}`
+        );
+      }
     }
 
     console.log('[mp-create-payment] Validation passed:', {

@@ -123,6 +123,7 @@ export function PaymentModal({
           patient.last_name &&
           patient.cpf &&
           patient.phone_e164 &&
+          patient.gender &&
           user.email
         );
 
@@ -147,6 +148,9 @@ export function PaymentModal({
         toast.info('Você já tem um plano ativo! Redirecionando...');
         onOpenChange(false);
         
+        // Mapear gender para 'M' ou 'F'
+        const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
+
         // Agendar direto com plano ativo
         const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
         const result = await scheduleWithActivePlan({
@@ -155,7 +159,8 @@ export function PaymentModal({
           nome: patient ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '',
           telefone: patient?.phone_e164 || '',
           sku: sku,
-          plano_ativo: true
+          plano_ativo: true,
+          sexo: mapSexo(patient?.gender)
         });
         
         if (result.ok && result.url) {

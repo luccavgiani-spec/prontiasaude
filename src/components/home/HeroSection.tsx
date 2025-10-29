@@ -30,22 +30,32 @@ export function HeroSection() {
     const planStatus = await checkPatientPlanActive(user.email!);
     
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados e agendar direto
-      toast('Redirecionando para agendamento...', { duration: 2000 });
-      
+      // Tem plano ativo: buscar dados completos do paciente
       const { data: patient } = await supabase
         .from('patients')
-        .select('cpf, first_name, last_name, phone_e164')
+        .select('cpf, first_name, last_name, phone_e164, gender')
         .eq('id', user.id)
         .maybeSingle();
+
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
+        toast.error('Complete seu cadastro antes de agendar');
+        navigate('/completar-perfil');
+        return;
+      }
+
+      // Mapear gender para 'M' ou 'F'
+      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
+
+      toast('Redirecionando para agendamento...', { duration: 2000 });
       
       const result = await scheduleWithActivePlan({
-        cpf: patient?.cpf || '',
+        cpf: patient.cpf,
         email: user.email!,
-        nome: patient ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '',
-        telefone: patient?.phone_e164 || '',
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
         sku: 'ITC6534',
-        plano_ativo: true
+        plano_ativo: true,
+        sexo: mapSexo(patient.gender)
       });
       
       if (result.ok && result.url) {

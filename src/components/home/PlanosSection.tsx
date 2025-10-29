@@ -237,24 +237,29 @@ export function PlanosSection() {
         // Buscar dados do paciente
         const { data: patient } = await supabase
           .from('patients')
-          .select('*')
+          .select('cpf, first_name, last_name, phone_e164, gender')
           .eq('id', user.id)
           .single();
 
-        if (!patient) {
-          sonnerToast.error('Dados do paciente não encontrados');
+        if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
+          sonnerToast.error('Complete seu cadastro antes de agendar');
+          navigate('/completar-perfil');
           return;
         }
+
+        // Mapear gender para 'M' ou 'F'
+        const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
 
         sonnerToast.loading('Redirecionando para atendimento...');
 
         const schedulePayload = {
-          cpf: patient.cpf || '',
+          cpf: patient.cpf,
           email: user.email,
-          nome: `${patient.first_name || ''} ${patient.last_name || ''}`.trim(),
-          telefone: patient.phone_e164 || '',
+          nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+          telefone: patient.phone_e164,
           sku: `${skuPrefixMap[planoId]}_${duracaoSelecionada}M`,
           plano_ativo: true as const,
+          sexo: mapSexo(patient.gender)
         };
 
         const result = await scheduleWithActivePlan(schedulePayload);

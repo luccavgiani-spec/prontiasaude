@@ -123,11 +123,11 @@ const ServicoDetalhe = () => {
       // Tem plano ativo: buscar dados completos do paciente
       const { data: patient } = await supabase
         .from('patients')
-        .select('cpf, first_name, last_name, phone_e164')
+        .select('cpf, first_name, last_name, phone_e164, gender')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
           variant: 'destructive'
@@ -135,6 +135,9 @@ const ServicoDetalhe = () => {
         navigate('/completar-perfil');
         return;
       }
+
+      // Mapear gender para 'M' ou 'F'
+      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
 
       toast({
         description: 'Redirecionando para agendamento...',
@@ -149,7 +152,8 @@ const ServicoDetalhe = () => {
         telefone: patient.phone_e164,
         especialidade: selectedVariant || servico.nome,
         sku: getCurrentSku(),
-        plano_ativo: true
+        plano_ativo: true,
+        sexo: mapSexo(patient.gender)
       });
 
       if (result.ok && result.url) {
@@ -201,11 +205,11 @@ const ServicoDetalhe = () => {
       // Tem plano ativo: buscar dados completos do paciente
       const { data: patient } = await supabase
         .from('patients')
-        .select('cpf, first_name, last_name, phone_e164')
+        .select('cpf, first_name, last_name, phone_e164, gender')
         .eq('id', user.id)
         .maybeSingle();
 
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164) {
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
           variant: 'destructive'
@@ -213,6 +217,9 @@ const ServicoDetalhe = () => {
         navigate('/completar-perfil');
         return;
       }
+
+      // Mapear gender para 'M' ou 'F'
+      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
 
       toast({
         description: 'Redirecionando para agendamento...',
@@ -227,7 +234,8 @@ const ServicoDetalhe = () => {
         telefone: patient.phone_e164,
         especialidade: pkg.nome,
         sku: pkg.sku,
-        plano_ativo: true
+        plano_ativo: true,
+        sexo: mapSexo(patient.gender)
       });
 
       if (result.ok && result.url) {

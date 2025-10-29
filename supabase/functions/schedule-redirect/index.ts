@@ -460,15 +460,25 @@ Deno.serve(async (req) => {
     }
 
     // 3. Verificar plano ativo (payload direto)
-    if (payload.plano_ativo) {
-      console.log('[schedule-redirect] ✓ Plano ativo detectado → ClickLife', {
-        sku: payload.sku,
-        email: payload.email,
-        cpf: payload.cpf?.substring(0, 3) + '***',
-        especialidade: payload.especialidade
+  if (payload.plano_ativo) {
+    console.log('[schedule-redirect] ✓ Plano ativo detectado → ClickLife', {
+      sku: payload.sku,
+      email: payload.email,
+      cpf: payload.cpf?.substring(0, 3) + '***',
+      especialidade: payload.especialidade,
+      sexo: payload.sexo || 'AUSENTE'
+    });
+
+    // ✅ Validação adicional: alertar se sexo ausente/inválido
+    if (!payload.sexo || (payload.sexo !== 'M' && payload.sexo !== 'F')) {
+      console.warn('[schedule-redirect] ⚠️ Campo sexo ausente ou inválido:', {
+        sexo_recebido: payload.sexo,
+        cpf: payload.cpf?.substring(0, 3) + '***'
       });
-      return await redirectClickLife(payload, 'active_plan', corsHeaders);
     }
+
+    return await redirectClickLife(payload, 'active_plan', corsHeaders);
+  }
 
     // 4. Verificar horário e especialidade
     const horario = payload.horario_iso ? new Date(payload.horario_iso) : new Date();
