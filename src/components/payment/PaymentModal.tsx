@@ -79,6 +79,7 @@ export function PaymentModal({
   const [redirectUrl, setRedirectUrl] = useState<string>('');
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const [isPollingPayment, setIsPollingPayment] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -349,8 +350,11 @@ export function PaymentModal({
     return payload;
   };
 
-  const pollPaymentStatus = async (paymentId: string) => {
+  const pollPaymentStatus = async (paymentId: string, orderId: string) => {
     setIsPollingPayment(true);
+    setCurrentOrderId(orderId);
+    console.log('[pollPaymentStatus] Aguardando appointment com order_id:', orderId);
+    
     const maxAttempts = 60; // 5 minutos (5s x 60)
     let attempts = 0;
     
@@ -362,14 +366,22 @@ export function PaymentModal({
         const result = await getAppointments(formData.email);
         
         if (result.success && result.appointments) {
-          // Procurar appointment com redirect_url
+          // 🔍 Procurar appointment ESPECÍFICO deste pagamento (filtrar por order_id)
           const appointment = result.appointments.find(
-            apt => apt.status === 'confirmed' && apt.redirect_url
+            apt => apt.order_id === orderId && 
+                   apt.status === 'confirmed' && 
+                   apt.redirect_url
           );
           
           if (appointment?.redirect_url) {
             clearInterval(interval);
             setIsPollingPayment(false);
+            
+            console.log('[pollPaymentStatus] ✅ Appointment encontrado:', {
+              order_id: appointment.order_id,
+              redirect_url: appointment.redirect_url,
+              provider: appointment.provider
+            });
             
             toast.success('✅ Pagamento aprovado! Redirecionando para sua consulta...');
             
@@ -638,7 +650,8 @@ export function PaymentModal({
       setPaymentStatus('pending_pix');
       
       // Iniciar polling para detectar aprovação automaticamente
-      pollPaymentStatus(data.payment_id);
+      console.log('[handlePixSubmit] Iniciando polling para order_id:', orderId);
+      pollPaymentStatus(data.payment_id, orderId);
       
       // Usuário paga PIX, webhook notifica GAS em background
       toast.info('Aguardando pagamento do PIX...');

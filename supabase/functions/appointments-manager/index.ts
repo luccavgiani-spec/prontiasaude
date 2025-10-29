@@ -248,6 +248,8 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[appointments-manager] Found ${data?.length || 0} appointments for ${email}`);
+      console.log('[appointments-manager] Appointments with redirect_url:', data?.filter(a => a.redirect_url).length || 0);
+      
       return new Response(
         JSON.stringify({ success: true, appointments: data || [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
