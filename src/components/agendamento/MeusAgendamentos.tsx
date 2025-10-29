@@ -35,6 +35,20 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
         });
         return;
       }
+      // Log detalhado para debug
+      console.log('[MeusAgendamentos] Raw appointments data:', result.appointments);
+      result.appointments?.forEach((apt, idx) => {
+        console.log(`[MeusAgendamentos] Appointment ${idx}:`, {
+          id: apt.appointment_id,
+          service: apt.service_code,
+          redirect_url: apt.redirect_url,
+          teams_join_url: apt.teams_join_url,
+          provider: apt.provider,
+          has_redirect: !!apt.redirect_url,
+          has_teams: !!apt.teams_join_url
+        });
+      });
+      
       setAppointments(result.appointments || []);
     } catch (error) {
       console.error('Exception loading appointments:', error);
@@ -114,15 +128,38 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
   const upcomingAppointments = appointments.filter(apt => {
     if (!apt.start_at_local) return false;
     const appointmentDate = new Date(apt.start_at_local);
-    return appointmentDate >= now && ['scheduled', 'confirmed'].includes(apt.status || '');
+    const isPast = appointmentDate < now;
+    
+    // Log de comparação de datas
+    console.log('[MeusAgendamentos] Date comparison:', {
+      appointment_id: apt.appointment_id,
+      now: now.toISOString(),
+      appointment_date: appointmentDate.toISOString(),
+      is_past: isPast,
+      status: apt.status
+    });
+    
+    return !isPast && ['scheduled', 'confirmed'].includes(apt.status || '');
   }).sort((a, b) => new Date(a.start_at_local).getTime() - new Date(b.start_at_local).getTime());
+  
   const pastAppointments = appointments.filter(apt => {
     if (!apt.start_at_local) return false;
     const appointmentDate = new Date(apt.start_at_local);
     return appointmentDate < now;
   }).sort((a, b) => new Date(b.start_at_local).getTime() - new Date(a.start_at_local).getTime());
   return <div className="w-full space-y-6">
-      
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-xl font-semibold">Minhas Consultas</h3>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={refreshAppointments}
+          disabled={loading}
+        >
+          <RefreshCwIcon className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Atualizar Consultas
+        </Button>
+      </div>
 
       {appointments.length === 0 && !loading && <Card>
           <CardContent className="text-center py-12">

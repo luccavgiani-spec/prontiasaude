@@ -130,6 +130,7 @@ export async function getAppointments(email: string): Promise<{
     }
     
     console.log(`Found ${result?.appointments?.length || 0} appointments`);
+    console.log('[getAppointments] First appointment structure:', result?.appointments?.[0]);
     
     return {
       success: true,
