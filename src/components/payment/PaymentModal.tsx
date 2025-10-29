@@ -772,7 +772,7 @@ export function PaymentModal({
 
                 {/* Card Payment Brick */}
                 {paymentMethod === 'card' && (
-                  <div id="cardPaymentBrick"></div>
+                  <div id="cardPaymentBrick" className="mp-brick-container"></div>
                 )}
 
                 {/* Botão PIX */}

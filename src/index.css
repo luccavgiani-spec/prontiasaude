@@ -298,4 +298,16 @@
     border-radius: 0.5rem;
     background: transparent !important;
   }
+
+  /* Esconder erro visual do Mercado Pago no modo cartão */
+  .mp-brick-container h1[class*="mp-checkout-bricks__padding"],
+  #cardPaymentBrick h1[class*="mp-checkout-bricks__padding"],
+  [class*="mp-checkout-bricks"] h1[class*="extra-large"],
+  div[class*="mp-checkout-bricks"] > h1 {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
 }
