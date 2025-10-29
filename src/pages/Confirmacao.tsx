@@ -70,13 +70,17 @@ export default function Confirmacao() {
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
+      const auth = await requireAuth();
+      const patient = auth ? await getPatient(auth.user.id) : null;
+      
       const payload = {
         sku: sku || '',
         cpf: cpf,
         email: email,
         nome: `${firstName} ${lastName}`,
         telefone: '',
-        plano_ativo: false
+        plano_ativo: false,
+        sexo: patient?.gender || 'O'
       };
       
       console.log('[Schedule-Redirect] Calling schedule-redirect:', payload);

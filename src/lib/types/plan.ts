@@ -47,6 +47,7 @@ export interface DirectSchedulePayload {
   sku: string;
   horario_iso?: string;
   plano_ativo: true;
+  sexo?: string;
 }
 
 export interface DirectScheduleResponse {

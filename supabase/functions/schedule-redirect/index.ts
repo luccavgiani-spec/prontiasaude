@@ -115,6 +115,7 @@ interface SchedulePayload {
   sku: string;
   horario_iso?: string;
   plano_ativo: boolean;
+  sexo?: string;
 }
 
 // Função loginClickLifePatient removida - ClickLife não suporta login via API
@@ -130,21 +131,12 @@ async function registerClickLifePatient(
   email: string,
   telefone: string,
   planoId: number,
-  supabase: any
+  sexo: string
 ): Promise<{ success: boolean; error?: string }> {
   const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
   
   const cpfClean = cpf.replace(/\D/g, '');
   const phoneClean = telefone.replace(/\D/g, '').replace(/^\+55/, '');
-  
-  // Buscar gênero real do paciente
-  const { data: patientData } = await supabase
-    .from('patients')
-    .select('gender')
-    .eq('email', email.toLowerCase())
-    .maybeSingle();
-
-  const sexo = patientData?.gender === 'M' ? 'M' : patientData?.gender === 'F' ? 'F' : 'O';
   
   const payload = {
     nome,
@@ -550,7 +542,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     payload.email,
     payload.telefone,
     planoId,
-    supabase
+    payload.sexo || 'O'
   );
 
   if (!registration.success) {
