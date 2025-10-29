@@ -114,17 +114,17 @@ const Empresas = () => {
             Um programa de saúde corporativa bem estruturado traz benefícios tanto para a empresa quanto para os colaboradores. 
             Ele atua na prevenção, acompanhamento e bem-estar dos funcionários, o que impacta diretamente em produtividade e custos.
           </p>
-          <div className="flex gap-4 justify-center">
-            <Button size="lg" onClick={() => {
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center items-center max-w-sm sm:max-w-none mx-auto">
+            <Button onClick={() => {
               setShowForm(true);
               setTimeout(() => {
                 const formSection = document.querySelector('section:has(form)');
                 formSection?.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }, 100);
-            }} className="medical-button-primary text-lg px-8 py-4">
+            }} className="medical-button-primary w-full sm:w-auto text-sm sm:text-lg px-4 py-2 sm:px-8 sm:py-4">
               Solicitar Contato
             </Button>
-            <Button size="lg" variant="outline" onClick={() => window.location.href = '/empresa/login'} className="text-lg px-8 py-4">
+            <Button variant="outline" onClick={() => window.location.href = '/empresa/login'} className="w-full sm:w-auto text-sm sm:text-lg px-4 py-2 sm:px-8 sm:py-4">
               Área da Empresa
             </Button>
           </div>
