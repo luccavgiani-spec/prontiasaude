@@ -131,14 +131,16 @@ export function HeroSection() {
               <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
               
               {/* Modern doctor image container */}
-              <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1">
+              <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1" style={{ aspectRatio: '512/682' }}>
                 <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10" />
                 <img 
                   src={heroImage}
+                  srcSet={`${heroImage} 1x`}
                   alt="Médico especialista em telemedicina realizando consulta online"
                   width="512"
                   height="682"
                   loading="eager"
+                  decoding="async"
                   className="w-full max-w-lg h-auto object-cover"
                 />
               </div>

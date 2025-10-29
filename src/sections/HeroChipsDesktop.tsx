@@ -48,7 +48,7 @@ export default function HeroChipsDesktop() {
         </div>
       </div>
       
-      <div style={{ minHeight: logoHeight }}>
+      <div style={{ minHeight: '56px' }}>
         <LogoLoop
           logos={logos}
           speed={120}        // 1,5x

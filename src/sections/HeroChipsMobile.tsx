@@ -49,7 +49,7 @@ export default function HeroChipsMobile() {
         </div>
       </div>
       
-      <div style={{ minHeight: logoHeight }}>
+      <div style={{ minHeight: '56px' }}>
         <LogoLoop
           logos={logos}
           speed={48}             // 2,5x velocidade no mobile
