@@ -378,6 +378,7 @@ export type Database = {
           comorbidities: string | null
           cpf: string | null
           created_at: string | null
+          email: string | null
           first_name: string | null
           gender: string | null
           has_allergies: boolean | null
@@ -407,6 +408,7 @@ export type Database = {
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
+          email?: string | null
           first_name?: string | null
           gender?: string | null
           has_allergies?: boolean | null
@@ -436,6 +438,7 @@ export type Database = {
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
+          email?: string | null
           first_name?: string | null
           gender?: string | null
           has_allergies?: boolean | null

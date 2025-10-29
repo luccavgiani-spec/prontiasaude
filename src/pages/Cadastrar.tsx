@@ -29,6 +29,7 @@ const Cadastrar = () => {
     phone_display: "",
     phone_e164: "",
     birth_date: "",
+    gender: "",
     terms_accepted: false,
     marketing_opt_in: false
   });
@@ -139,6 +140,10 @@ const Cadastrar = () => {
       toast({ title: "Erro", description: "Data de nascimento inválida.", variant: "destructive" });
       return false;
     }
+    if (!formData.gender) {
+      toast({ title: "Erro", description: "Gênero é obrigatório.", variant: "destructive" });
+      return false;
+    }
     if (!formData.terms_accepted) {
       toast({ title: "Erro", description: "Você deve aceitar os termos de uso.", variant: "destructive" });
       return false;
@@ -163,6 +168,23 @@ const Cadastrar = () => {
 
     setIsLoading(true);
     
+    // Verificar se CPF já existe
+    const { data: existingPatient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('cpf', formData.cpf)
+      .maybeSingle();
+    
+    if (existingPatient) {
+      toast({
+        title: "CPF já cadastrado",
+        description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
     const { error } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
@@ -173,15 +195,14 @@ const Cadastrar = () => {
           last_name: formData.last_name,
           address_line: formData.address_line,
           cep: formData.cep,
-          logradouro: formData.logradouro,
-          numero: formData.numero,
-          complemento: formData.complemento,
-          bairro: formData.bairro,
-          cidade: formData.cidade,
-          uf: formData.uf,
+          city: formData.cidade,
+          state: formData.uf,
+          address_number: formData.numero,
+          address_complement: formData.complemento,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
+          gender: formData.gender,
           terms_accepted_at: new Date().toISOString(),
           marketing_opt_in: formData.marketing_opt_in
         }
@@ -210,6 +231,23 @@ const Cadastrar = () => {
 
     setIsLoading(true);
     
+    // Verificar se CPF já existe
+    const { data: existingPatient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('cpf', formData.cpf)
+      .maybeSingle();
+    
+    if (existingPatient) {
+      toast({
+        title: "CPF já cadastrado",
+        description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
     // First create user with password then send magic link
     const { error: signUpError } = await supabase.auth.signUp({
       email: formData.email,
@@ -221,15 +259,14 @@ const Cadastrar = () => {
           last_name: formData.last_name,
           address_line: formData.address_line,
           cep: formData.cep,
-          logradouro: formData.logradouro,
-          numero: formData.numero,
-          complemento: formData.complemento,
-          bairro: formData.bairro,
-          cidade: formData.cidade,
-          uf: formData.uf,
+          city: formData.cidade,
+          state: formData.uf,
+          address_number: formData.numero,
+          address_complement: formData.complemento,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
+          gender: formData.gender,
           terms_accepted_at: new Date().toISOString(),
           marketing_opt_in: formData.marketing_opt_in
         }
@@ -477,6 +514,22 @@ const Cadastrar = () => {
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gender">Gênero *</Label>
+              <select
+                id="gender"
+                value={formData.gender}
+                onChange={(e) => handleInputChange('gender', e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                required
+              >
+                <option value="">Selecione</option>
+                <option value="masculino">Masculino</option>
+                <option value="feminino">Feminino</option>
+                <option value="outro">Outro</option>
+              </select>
             </div>
             
             <div className="space-y-4">
