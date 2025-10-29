@@ -18,6 +18,7 @@ import RedirectFlowMap from "@/components/admin/RedirectFlowMap";
 import CompanyManagement from "@/components/admin/CompanyManagement";
 import ReportsTab from "@/components/admin/ReportsTab";
 import UserRegistrationsTab from "@/components/admin/UserRegistrationsTab";
+import SalesTab from "@/components/admin/SalesTab";
 
 interface ContentItem {
   id: string;
@@ -326,8 +327,9 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="relatorios" className="space-y-6">
-          <TabsList className="grid w-full max-w-6xl grid-cols-6">
+          <TabsList className="grid w-full max-w-6xl grid-cols-7">
             <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
+            <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
             <TabsTrigger value="empresas">Empresas</TabsTrigger>
             <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
             <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
@@ -608,6 +610,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="relatorios">
             <ReportsTab />
+          </TabsContent>
+
+          <TabsContent value="vendas">
+            <SalesTab />
           </TabsContent>
 
           <TabsContent value="cadastros">
