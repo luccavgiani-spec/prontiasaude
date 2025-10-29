@@ -185,6 +185,9 @@
     transition: var(--transition-bounce);
     border-radius: calc(var(--radius) * 1.25);
     box-shadow: var(--button-shadow);
+    min-height: 48px;
+    min-width: 48px;
+    will-change: transform, box-shadow;
   }
 
   .medical-button-primary:hover {
@@ -198,6 +201,9 @@
     transition: var(--transition-bounce);
     border-radius: calc(var(--radius) * 1.25);
     box-shadow: 0 4px 14px 0 hsl(var(--secondary), 0.39);
+    min-height: 48px;
+    min-width: 48px;
+    will-change: transform, box-shadow;
   }
 
   .medical-button-secondary:hover {
@@ -205,7 +211,7 @@
     transform: translateY(-2px) scale(1.02);
   }
 
-  /* Mobile optimizations */
+  /* Mobile optimizations - Performance e Acessibilidade */
   @media (max-width: 768px) {
     body {
       font-size: 14px;
@@ -227,6 +233,33 @@
     
     .medical-card {
       padding: 1rem;
+    }
+    
+    /* Área de toque mínima para mobile */
+    button, a[role="button"], [role="button"] {
+      min-height: 48px;
+      min-width: 48px;
+    }
+    
+    /* Otimizar animações para mobile */
+    .floating-animation, .pulse-glow {
+      animation-duration: 4s;
+    }
+  }
+  
+  /* Reduzir animações para dispositivos com preferência */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    
+    .floating-animation,
+    .pulse-glow {
+      animation: none !important;
     }
   }
 

@@ -46,29 +46,60 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Vendor splitting estratégico para reduzir bundle principal
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'ui-vendor': [
-            '@radix-ui/react-dialog', 
-            '@radix-ui/react-select', 
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-accordion'
-          ],
-          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
-          'payment-vendor': ['@mercadopago/sdk-react'],
-          'supabase-vendor': ['@supabase/supabase-js', '@tanstack/react-query'],
+        manualChunks(id) {
+          // Vendor splitting mais granular para reduzir bundle principal
+          if (id.includes('node_modules')) {
+            // React core
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) {
+              return 'react-vendor';
+            }
+            // Radix UI components - separar por uso
+            if (id.includes('@radix-ui/react-dialog') || id.includes('@radix-ui/react-select')) {
+              return 'ui-vendor-critical';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'ui-vendor-lazy';
+            }
+            // Form libraries
+            if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) {
+              return 'form-vendor';
+            }
+            // Payment - lazy load
+            if (id.includes('@mercadopago')) {
+              return 'payment-vendor';
+            }
+            // Supabase
+            if (id.includes('@supabase') || id.includes('@tanstack/react-query')) {
+              return 'supabase-vendor';
+            }
+            // Lucide icons - separar
+            if (id.includes('lucide-react')) {
+              return 'icons-vendor';
+            }
+            // Outros vendors
+            return 'vendor';
+          }
         },
       },
     },
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 500,
     minify: mode === 'production' ? 'terser' : 'esbuild',
     terserOptions: mode === 'production' ? {
       compress: {
         drop_console: true,
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info'],
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+        passes: 2,
+      },
+      mangle: {
+        safari10: true,
+      },
+      format: {
+        comments: false,
       },
     } : undefined,
+    target: 'es2015',
+    cssCodeSplit: true,
+    reportCompressedSize: false,
   },
 }));

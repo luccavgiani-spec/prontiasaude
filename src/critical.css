@@ -1,0 +1,81 @@
+/* Critical CSS - Carregado inline para melhor LCP */
+
+/* Reset mínimo */
+*,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}
+html{line-height:1.5;-webkit-text-size-adjust:100%;font-family:system-ui,sans-serif}
+body{margin:0;line-height:inherit}
+
+/* Design tokens críticos */
+:root{
+  --background:0 0% 100%;
+  --foreground:222.2 84% 4.9%;
+  --primary:142 69% 35%;
+  --primary-light:142 69% 92%;
+  --primary-glow:142 69% 45%;
+  --primary-foreground:0 0% 100%;
+  --secondary:0 84% 60%;
+  --secondary-foreground:0 0% 100%;
+  --accent:48 96% 53%;
+  --muted:210 40% 98%;
+  --muted-foreground:215.4 16.3% 46.9%;
+  --border:214.3 31.8% 91.4%;
+  --radius:0.75rem;
+  --shadow-button:0 4px 14px 0 hsl(142,69%,35%,0.39);
+  --transition-smooth:all 0.3s cubic-bezier(0.4,0,0.2,1);
+  --gradient-primary:linear-gradient(135deg,hsl(142,69%,35%) 0%,hsl(142,69%,45%) 100%);
+}
+
+/* Layout crítico */
+body{
+  background:hsl(var(--background));
+  color:hsl(var(--foreground));
+  font-feature-settings:"rlig" 1,"calt" 1;
+}
+
+#root{
+  min-height:100vh;
+  width:100%;
+}
+
+/* Container */
+.container{
+  width:100%;
+  max-width:1280px;
+  margin:0 auto;
+  padding:0 1rem;
+}
+
+/* Hero Section Crítico */
+.hero-gradient{
+  background:var(--gradient-primary);
+}
+
+/* Botões críticos - área de toque mínima */
+button,a[role="button"]{
+  min-height:48px;
+  min-width:48px;
+  -webkit-tap-highlight-color:transparent;
+}
+
+/* Loading placeholder para imagem hero */
+.hero-image-placeholder{
+  aspect-ratio:512/682;
+  background:hsl(var(--muted));
+  animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite;
+}
+
+@keyframes pulse{
+  0%,100%{opacity:1}
+  50%{opacity:0.5}
+}
+
+/* Performance */
+img{
+  content-visibility:auto;
+}
+
+/* Mobile first */
+@media(max-width:768px){
+  html{font-size:14px}
+  .container{padding:0 1rem}
+}

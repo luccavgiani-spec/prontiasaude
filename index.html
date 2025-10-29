@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,28 +18,73 @@
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
     <!-- Pré-conexões otimizadas para recursos críticos -->
+    <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co" crossorigin>
     <link rel="preconnect" href="https://connect.facebook.net">
     <link rel="preconnect" href="https://accounts.google.com">
-    <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co">
     <link rel="dns-prefetch" href="https://sgtm.prontiasaude.com.br">
+    <link rel="dns-prefetch" href="https://gtm-cloud-image-65513519072.southamerica-east1.run.app">
+    
+    <!-- Preload imagem hero crítica para LCP -->
+    <link rel="preload" as="image" href="/assets/hero-doctor-realistic-1200.webp" fetchpriority="high" type="image/webp">
+    
+    <!-- CSS Crítico Inline -->
+    <style>
+      /* Critical CSS - Carregado inline para melhor LCP */
+      *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}
+      html{line-height:1.5;-webkit-text-size-adjust:100%;font-family:system-ui,sans-serif}
+      body{margin:0;line-height:inherit}
+      :root{--background:0 0% 100%;--foreground:222.2 84% 4.9%;--primary:142 69% 35%;--primary-light:142 69% 92%;--primary-glow:142 69% 45%;--primary-foreground:0 0% 100%;--secondary:0 84% 60%;--secondary-foreground:0 0% 100%;--accent:48 96% 53%;--muted:210 40% 98%;--muted-foreground:215.4 16.3% 46.9%;--border:214.3 31.8% 91.4%;--radius:0.75rem;--shadow-button:0 4px 14px 0 hsl(142,69%,35%,0.39);--transition-smooth:all 0.3s cubic-bezier(0.4,0,0.2,1);--gradient-primary:linear-gradient(135deg,hsl(142,69%,35%) 0%,hsl(142,69%,45%) 100%)}
+      body{background:hsl(var(--background));color:hsl(var(--foreground));font-feature-settings:"rlig" 1,"calt" 1}
+      #root{min-height:100vh;width:100%}
+      .container{width:100%;max-width:1280px;margin:0 auto;padding:0 1rem}
+      button,a[role="button"]{min-height:48px;min-width:48px;-webkit-tap-highlight-color:transparent}
+      img{content-visibility:auto}
+      @media(max-width:768px){html{font-size:14px}.container{padding:0 1rem}}
+    </style>
 
-    <!-- Meta Pixel Code - Lazy Loading -->
+    <!-- Meta Pixel Code - Carregamento otimizado -->
     <script>
-      window.__fbq_defer = true; // Flag para inicialização tardia
+      window.__fbq_defer = true;
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
       if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t,s)}(window, document,'script',
-      'https://connect.facebook.net/en_US/fbevents.js');
-      // Não inicializa imediatamente - será feito via meta-tracking.ts
+      n.queue=[];
+      // Carregar após window load para não bloquear renderização
+      if(document.readyState === 'complete'){
+        t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s);
+      } else {
+        window.addEventListener('load', function(){
+          t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
+          s.parentNode.insertBefore(t,s);
+        });
+      }
+      }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
     </script>
     <!-- End Meta Pixel Code -->
     
-    <!-- Google Identity Services -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <!-- Google Identity Services - Carregamento otimizado -->
+    <script>
+      // Carregar GSI após interação ou após load
+      (function() {
+        var loaded = false;
+        function loadGSI() {
+          if (loaded) return;
+          loaded = true;
+          var script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        }
+        // Carregar após 3 segundos ou após primeira interação
+        setTimeout(loadGSI, 3000);
+        ['scroll', 'mousemove', 'touchstart'].forEach(function(event) {
+          document.addEventListener(event, loadGSI, { once: true, passive: true });
+        });
+      })();
+    </script>
   </head>
 
   <body>
