@@ -14,22 +14,11 @@ const QuemSomos = () => {
         <div className="mb-16">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
-              <picture>
-                <source 
-                  srcSet="/assets/quem-somos-hero-600.webp 600w, 
-                          /assets/quem-somos-hero-1200.webp 1200w"
-                  type="image/webp"
-                  sizes="(max-width: 768px) 100vw, 600px"
-                />
-                <img 
-                  src={quemSomosHero} 
-                  alt="Equipe médica Prontia Saúde - Cuidado humanizado e acessível" 
-                  width="600"
-                  height="400"
-                  loading="lazy"
-                  className="rounded-2xl shadow-lg w-full"
-                />
-              </picture>
+              <img 
+                src={quemSomosHero} 
+                alt="Equipe médica Prontia Saúde - Cuidado humanizado e acessível" 
+                className="rounded-2xl shadow-lg w-full"
+              />
             </div>
             <div className="my-[32px]">
               
