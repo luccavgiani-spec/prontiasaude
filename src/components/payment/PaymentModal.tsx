@@ -496,8 +496,25 @@ export function PaymentModal({
       if (data.status === 'approved') {
         setPaymentId(data.payment_id);
         setPaymentStatus('approved');
-        toast.success('Pagamento aprovado! Aguardando confirmação...');
-        // Realtime listener será ativado via useEffect
+        toast.success('Pagamento aprovado! Criando agendamento...');
+        
+        // Chamar schedule-redirect imediatamente após pagamento aprovado
+        const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
+          body: schedulePayload
+        });
+        
+        if (scheduleError || !scheduleData?.ok) {
+          console.error('[Card Payment] Erro ao criar agendamento:', scheduleError || scheduleData);
+          toast.error('Pagamento aprovado, mas houve erro no agendamento. Entre em contato.');
+          return;
+        }
+        
+        if (scheduleData.url) {
+          toast.success('✅ Pagamento aprovado! Redirecionando...');
+          setTimeout(() => {
+            window.location.href = scheduleData.url;
+          }, 1500);
+        }
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
