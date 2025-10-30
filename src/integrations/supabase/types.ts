@@ -432,6 +432,9 @@ export type Database = {
           cep: string | null
           chronic_meds: string | null
           city: string | null
+          clubeben_last_sync: string | null
+          clubeben_retry_count: number | null
+          clubeben_status: string | null
           comorbidities: string | null
           cpf: string | null
           created_at: string | null
@@ -450,6 +453,8 @@ export type Database = {
           profile_complete: boolean | null
           source: string | null
           state: string | null
+          status_email: number | null
+          status_sms: number | null
           terms_accepted_at: string | null
           updated_at: string | null
         }
@@ -462,6 +467,9 @@ export type Database = {
           cep?: string | null
           chronic_meds?: string | null
           city?: string | null
+          clubeben_last_sync?: string | null
+          clubeben_retry_count?: number | null
+          clubeben_status?: string | null
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
@@ -480,6 +488,8 @@ export type Database = {
           profile_complete?: boolean | null
           source?: string | null
           state?: string | null
+          status_email?: number | null
+          status_sms?: number | null
           terms_accepted_at?: string | null
           updated_at?: string | null
         }
@@ -492,6 +502,9 @@ export type Database = {
           cep?: string | null
           chronic_meds?: string | null
           city?: string | null
+          clubeben_last_sync?: string | null
+          clubeben_retry_count?: number | null
+          clubeben_status?: string | null
           comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
@@ -510,6 +523,8 @@ export type Database = {
           profile_complete?: boolean | null
           source?: string | null
           state?: string | null
+          status_email?: number | null
+          status_sms?: number | null
           terms_accepted_at?: string | null
           updated_at?: string | null
         }
