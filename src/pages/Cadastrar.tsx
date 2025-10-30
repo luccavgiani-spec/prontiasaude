@@ -151,6 +151,13 @@ const Cadastrar = () => {
     return true;
   };
 
+  const toDbGender = (gender: string): string => {
+    if (gender === 'masculino') return 'M';
+    if (gender === 'feminino') return 'F';
+    if (gender === 'outro') return 'I';
+    return gender;
+  };
+
   const handleSignUpWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -202,7 +209,7 @@ const Cadastrar = () => {
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
-          gender: formData.gender,
+          gender: toDbGender(formData.gender),
           terms_accepted_at: new Date().toISOString(),
           marketing_opt_in: formData.marketing_opt_in
         }
@@ -232,7 +239,7 @@ const Cadastrar = () => {
             cpf: formData.cpf,
             phone_e164: formData.phone_e164,
             birth_date: formData.birth_date,
-            gender: formData.gender,
+            gender: toDbGender(formData.gender),
             cep: formData.cep,
             address_line: formData.address_line,
             address_number: formData.numero,
@@ -303,7 +310,7 @@ const Cadastrar = () => {
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
-          gender: formData.gender,
+          gender: toDbGender(formData.gender),
           terms_accepted_at: new Date().toISOString(),
           marketing_opt_in: formData.marketing_opt_in
         }
