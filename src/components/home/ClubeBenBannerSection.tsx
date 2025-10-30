@@ -1,10 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Gift, Pill, Stethoscope, Dumbbell, Apple, ArrowRight } from "lucide-react";
-
 export const ClubeBenBannerSection = () => {
-  return (
-    <section className="py-16 bg-gradient-to-br from-primary/5 via-secondary/5 to-primary/10">
+  return <section className="py-16 bg-gradient-to-br from-primary/5 via-secondary/5 to-primary/10">
       <div className="container mx-auto px-4">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col md:flex-row items-center gap-8">
@@ -15,9 +13,7 @@ export const ClubeBenBannerSection = () => {
                 <span className="text-sm font-medium text-primary">Benefício Exclusivo</span>
               </div>
               
-              <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Descontos exclusivos para quem é Prontia
-              </h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">Descontos exclusivos para quem é Prontìa</h2>
               
               <p className="text-lg text-muted-foreground mb-6">
                 Farmácias, exames, fitness e bem-estar com vantagens reais. 
@@ -104,6 +100,5 @@ export const ClubeBenBannerSection = () => {
           </div>
         </div>
       </div>
-    </section>
-  );
+    </section>;
 };
