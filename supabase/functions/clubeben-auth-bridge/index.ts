@@ -1,5 +1,4 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
-import { sign } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -24,6 +23,27 @@ async function generateClubeBenJWT(payload: ClubeBenPayload): Promise<string> {
   const secret = Deno.env.get('CLUBEBEN_JWT_SECRET');
   if (!secret) throw new Error('CLUBEBEN_JWT_SECRET not configured');
 
+  // Helper: Base64URL encode (padrão JWT)
+  const base64url = (data: Uint8Array): string => {
+    const base64 = btoa(String.fromCharCode(...data));
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  };
+
+  // 1. Header JWT padrão
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const encodedHeader = base64url(new TextEncoder().encode(JSON.stringify(header)));
+
+  // 2. Payload com expiração (10 minutos)
+  const payloadWithExp = {
+    ...payload,
+    exp: Math.floor(Date.now() / 1000) + 600
+  };
+  const encodedPayload = base64url(new TextEncoder().encode(JSON.stringify(payloadWithExp)));
+
+  // 3. Dados a assinar: header.payload
+  const dataToSign = `${encodedHeader}.${encodedPayload}`;
+
+  // 4. Importar chave HMAC
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
@@ -32,7 +52,18 @@ async function generateClubeBenJWT(payload: ClubeBenPayload): Promise<string> {
     ['sign']
   );
 
-  return await sign({ ...payload, exp: Math.floor(Date.now() / 1000) + 600 }, key, 'HS256');
+  // 5. Assinar com HMAC-SHA256
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(dataToSign)
+  );
+
+  // 6. Codificar assinatura em Base64URL
+  const encodedSignature = base64url(new Uint8Array(signature));
+
+  // 7. Retornar JWT completo
+  return `${dataToSign}.${encodedSignature}`;
 }
 
 Deno.serve(async (req) => {
