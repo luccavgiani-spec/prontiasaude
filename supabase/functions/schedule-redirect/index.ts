@@ -320,6 +320,7 @@ async function saveAppointment(
       order_id: payload.order_id
     };
     
+    console.log('[saveAppointment] order_id recebido:', payload.order_id || 'AUSENTE');
     console.log('[saveAppointment] Salvando appointment:', {
       ...appointmentData,
       order_id: payload.order_id || 'AUSENTE'
@@ -694,7 +695,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
 
   // ✅ Gravar métrica de agendamento
   try {
-    await supabaseAdmin
+    await supabaseInstance
       .from('metrics')
       .insert({
         metric_type: 'appointment',
