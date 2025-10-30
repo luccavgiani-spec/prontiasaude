@@ -319,17 +319,38 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                 )}
               </div>
 
-              {appointment.redirect_url && <div className="pt-2 border-t">
-                  <div className="flex items-center gap-2 mb-3">
-                    <VideoIcon className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">Link de Acesso Disponível</span>
+              {appointment.redirect_url && (() => {
+                const createdDate = appointment.created_at ? new Date(appointment.created_at) : null;
+                const now = new Date();
+                const hoursSinceCreated = createdDate 
+                  ? (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)
+                  : 999;
+                const isExpired = hoursSinceCreated > 24;
+
+                return (
+                  <div className="pt-2 border-t">
+                    <div className="flex items-center gap-2 mb-3">
+                      <VideoIcon className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium">Link de Acesso Disponível</span>
+                    </div>
+                    <Button 
+                      asChild={!isExpired}
+                      variant="default" 
+                      size="sm" 
+                      className="w-full"
+                      disabled={isExpired}
+                    >
+                      {isExpired ? (
+                        <span className="text-muted-foreground">Link expirado (válido por 24h)</span>
+                      ) : (
+                        <a href={appointment.redirect_url} target="_blank" rel="noopener noreferrer">
+                          Acessar Consulta
+                        </a>
+                      )}
+                    </Button>
                   </div>
-                  <Button asChild variant="default" size="sm" className="w-full">
-                    <a href={appointment.redirect_url} target="_blank" rel="noopener noreferrer">
-                      Acessar Consulta
-                    </a>
-                  </Button>
-                </div>}
+                );
+              })()}
 
               {appointment.created_at && <div className="text-xs text-muted-foreground">
                   Realizada em: {formatDateTime(appointment.start_at_local)}

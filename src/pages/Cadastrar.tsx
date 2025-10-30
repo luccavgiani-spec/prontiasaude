@@ -185,7 +185,7 @@ const Cadastrar = () => {
       return;
     }
     
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: formData.email,
       password: formData.password,
       options: {
@@ -215,13 +215,50 @@ const Cadastrar = () => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Cadastro realizado",
-        description: "Verifique seu email para confirmar a conta.",
-      });
-      navigate('/entrar');
+      setIsLoading(false);
+      return;
     }
+
+    // Sincronizar dados com tabela patients (fallback caso trigger não funcione)
+    if (signUpData?.user?.id) {
+      try {
+        const { error: insertError } = await supabase
+          .from('patients')
+          .insert({
+            id: signUpData.user.id,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            email: formData.email,
+            cpf: formData.cpf,
+            phone_e164: formData.phone_e164,
+            birth_date: formData.birth_date,
+            gender: formData.gender,
+            cep: formData.cep,
+            address_line: formData.address_line,
+            address_number: formData.numero,
+            address_complement: formData.complemento,
+            city: formData.cidade,
+            state: formData.uf,
+            terms_accepted_at: new Date().toISOString(),
+            marketing_opt_in: formData.marketing_opt_in,
+            profile_complete: true,
+            intake_complete: false
+          });
+
+        if (insertError && insertError.code !== '23505') {
+          // 23505 = duplicate key (ignore se já existe)
+          console.error('[Cadastro] Erro ao criar paciente:', insertError);
+        }
+      } catch (syncError) {
+        console.error('[Cadastro] Exceção ao sincronizar paciente:', syncError);
+      }
+    }
+
+    toast({
+      title: "Cadastro realizado",
+      description: "Verifique seu email para confirmar a conta.",
+    });
+    navigate('/entrar');
     
     setIsLoading(false);
   };

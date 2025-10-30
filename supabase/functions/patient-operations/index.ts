@@ -96,6 +96,7 @@ serve(async (req) => {
   try {
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const gasBase = Deno.env.get('GAS_BASE');
 
     if (!supabaseServiceRoleKey || !supabaseUrl) {
       throw new Error('Missing required environment variables');
