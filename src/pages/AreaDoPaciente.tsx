@@ -133,7 +133,7 @@ const AreaDoPaciente = () => {
       if (error) throw error;
 
       if (data?.redirect_url) {
-        window.open(data.redirect_url, '_blank');
+        window.location.href = data.redirect_url;
         toast({
           title: "Redirecionando",
           description: "Você está sendo direcionado ao Clube de Benefícios.",
