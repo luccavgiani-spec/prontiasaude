@@ -6,18 +6,69 @@ import { validateCPF as validateCPFChecksum, cleanCPF } from '../common/cpf-vali
 const corsHeaders = getCorsHeaders();
 
 // Validation helpers
+const TEMP_EMAIL_DOMAINS = [
+  '10minutemail.com', 'guerrillamail.com', 'mailinator.com', 'tempmail.com',
+  'throwaway.email', 'maildrop.cc', 'temp-mail.org', 'getnada.com',
+  'yopmail.com', 'mailnesia.com', 'trashmail.com', 'sharklasers.com'
+];
+
+const VALID_DDDS = [
+  11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38,
+  41, 42, 43, 44, 45, 46, 47, 48, 49, 51, 53, 54, 55, 61, 62, 64, 63, 65, 66, 67, 68,
+  69, 71, 73, 74, 75, 77, 79, 81, 87, 82, 83, 84, 85, 88, 86, 89, 91, 93, 94, 92, 97,
+  95, 96, 98, 99
+];
+
 const validateEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 255;
+  if (!email || email.length > 255) return false;
+  
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) return false;
+  
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return false;
+  
+  // Rejeitar domínios temporários
+  if (TEMP_EMAIL_DOMAINS.some(temp => domain.includes(temp))) return false;
+  
+  // Rejeitar emails obviamente falsos
+  if (/^(test|fake|exemplo|asdf|qwerty|admin|noreply)@/.test(email.toLowerCase())) {
+    return false;
+  }
+  
+  return true;
 };
 
 const validatePhone = (phone: string): boolean => {
-  const phoneRegex = /^\+[1-9]\d{1,14}$/;
-  return phoneRegex.test(phone);
+  if (!phone) return false;
+  
+  // Validar formato E.164 brasileiro
+  if (!/^\+55\d{10,11}$/.test(phone)) return false;
+  
+  const cleanPhone = phone.replace(/\D/g, '');
+  const ddd = parseInt(cleanPhone.substring(2, 4));
+  const number = cleanPhone.substring(4);
+  
+  // Validar DDD
+  if (!VALID_DDDS.includes(ddd)) return false;
+  
+  // Rejeitar números sequenciais
+  if (/^(\d)\1+$/.test(number)) return false;
+  if (/^(0123456789|9876543210)/.test(number)) return false;
+  
+  return true;
 };
 
 const validateCPF = (cpf: string): boolean => {
+  if (!cpf) return false;
+  
   const cleaned = cleanCPF(cpf);
+  if (cleaned.length !== 11) return false;
+  
+  // Rejeitar CPFs com todos dígitos iguais
+  if (/^(\d)\1{10}$/.test(cleaned)) return false;
+  
+  // Validar checksum matemático
   return validateCPFChecksum(cleaned);
 };
 

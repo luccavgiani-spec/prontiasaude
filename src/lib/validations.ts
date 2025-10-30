@@ -1,6 +1,18 @@
+import { validateCPF as validateCPFWithChecksum } from './cpf-validator';
+
 export const validateCPF = (cpf: string): boolean => {
+  if (!cpf) return false;
+  
   const cleanCPF = cpf.replace(/\D/g, '');
-  return cleanCPF.length === 11 && /^\d{11}$/.test(cleanCPF);
+  
+  // Validar comprimento
+  if (cleanCPF.length !== 11) return false;
+  
+  // Rejeitar CPFs com todos dígitos iguais
+  if (/^(\d)\1{10}$/.test(cleanCPF)) return false;
+  
+  // Validar checksum usando biblioteca cpf-check
+  return validateCPFWithChecksum(cpf);
 };
 
 export const formatCPF = (cpf: string): string => {
@@ -54,8 +66,64 @@ export const formatCNPJ = (cnpj: string): string => {
   return cleanCNPJ.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
 };
 
+// DDDs válidos do Brasil (principais capitais e regiões)
+const VALID_DDDS = [
+  11, 12, 13, 14, 15, 16, 17, 18, 19, // SP
+  21, 22, 24, // RJ
+  27, 28, // ES
+  31, 32, 33, 34, 35, 37, 38, // MG
+  41, 42, 43, 44, 45, 46, // PR
+  47, 48, 49, // SC
+  51, 53, 54, 55, // RS
+  61, // DF
+  62, 64, // GO
+  63, // TO
+  65, 66, // MT
+  67, // MS
+  68, // AC
+  69, // RO
+  71, 73, 74, 75, 77, // BA
+  79, // SE
+  81, 87, // PE
+  82, // AL
+  83, // PB
+  84, // RN
+  85, 88, // CE
+  86, 89, // PI
+  91, 93, 94, // PA
+  92, 97, // AM
+  95, // RR
+  96, // AP
+  98, 99, // MA
+];
+
 export const validatePhoneE164 = (phone: string): boolean => {
-  return /^\+55\d{10,11}$/.test(phone);
+  if (!phone) return false;
+  
+  // Validar formato E.164
+  if (!/^\+55\d{10,11}$/.test(phone)) return false;
+  
+  const cleanPhone = phone.replace(/\D/g, '');
+  const ddd = parseInt(cleanPhone.substring(2, 4));
+  const number = cleanPhone.substring(4);
+  
+  // Validar DDD
+  if (!VALID_DDDS.includes(ddd)) return false;
+  
+  // Rejeitar números sequenciais óbvios
+  if (/^(\d)\1+$/.test(number)) return false;
+  if (/^(0123456789|9876543210)/.test(number)) return false;
+  
+  // Validar padrão de celular (9 dígitos começando com 9) ou fixo (8 dígitos)
+  if (number.length === 11) {
+    // Celular: deve começar com 9
+    return number[2] === '9';
+  } else if (number.length === 10) {
+    // Fixo: não deve começar com 9
+    return number[2] !== '9';
+  }
+  
+  return false;
 };
 
 export const formatPhoneE164 = (phone: string): string => {
@@ -104,8 +172,46 @@ export const formatCEP = (cep: string): string => {
   return cleanCEP.replace(/(\d{5})(\d{3})/, '$1-$2');
 };
 
+// Domínios temporários conhecidos para rejeitar
+const TEMP_EMAIL_DOMAINS = [
+  '10minutemail.com', 'guerrillamail.com', 'mailinator.com', 'tempmail.com',
+  'throwaway.email', 'maildrop.cc', 'temp-mail.org', 'getnada.com',
+  'yopmail.com', 'mailnesia.com', 'trashmail.com', 'sharklasers.com'
+];
+
+// TLDs válidos comuns
+const VALID_TLDS = [
+  'com', 'com.br', 'net', 'org', 'edu', 'gov', 'br', 'io', 'co', 'app',
+  'dev', 'tech', 'info', 'biz', 'me', 'site', 'online', 'store', 'club'
+];
+
 export const validateEmail = (email: string): boolean => {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (!email) return false;
+  
+  // Validação básica de formato
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) return false;
+  
+  const domain = email.split('@')[1]?.toLowerCase();
+  if (!domain) return false;
+  
+  // Rejeitar domínios temporários conhecidos
+  if (TEMP_EMAIL_DOMAINS.some(temp => domain.includes(temp))) return false;
+  
+  // Validar TLD
+  const tld = domain.split('.').slice(-2).join('.');
+  const hasValidTLD = VALID_TLDS.some(validTld => 
+    tld === validTld || tld.endsWith('.' + validTld)
+  );
+  
+  if (!hasValidTLD) return false;
+  
+  // Rejeitar padrões obviamente falsos
+  if (/^(test|fake|exemplo|asdf|qwerty|admin|noreply)@/.test(email.toLowerCase())) {
+    return false;
+  }
+  
+  return true;
 };
 
 export const validateBirthDate = (date: string): boolean => {
