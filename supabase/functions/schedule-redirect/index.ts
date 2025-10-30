@@ -49,6 +49,27 @@ function normalize(str: string): string {
 }
 
 /**
+ * Mapeia valores de gênero para formato ClickLife ('M' ou 'F')
+ */
+function mapGender(value: string | undefined): 'M' | 'F' | null {
+  if (!value) return null;
+  
+  const normalized = normalize(value);
+  
+  // Masculino
+  if (['m', 'masculino', 'male', 'masc', 'homem'].includes(normalized)) {
+    return 'M';
+  }
+  
+  // Feminino
+  if (['f', 'feminino', 'female', 'fem', 'mulher'].includes(normalized)) {
+    return 'F';
+  }
+  
+  return null;
+}
+
+/**
  * Mapa de nomes "pretty" para slugs (após normalização)
  */
 const DISPLAY_TO_SLUG: Record<string, string> = {
@@ -389,14 +410,14 @@ Deno.serve(async (req) => {
     });
 
     // 2. Enriquecer payload se campos estiverem vazios após normalização
-    if (!payload.cpf || !payload.nome || !payload.telefone) {
+    if (!payload.cpf || !payload.nome || !payload.telefone || !payload.sexo) {
       console.log('[schedule-redirect] Dados incompletos (raw), buscando na tabela patients...');
       
       try {
         // Buscar patient pelo email usando query direta
         const { data: patientData, error: patientError } = await supabase
           .from('patients')
-          .select('id, cpf, first_name, last_name, phone_e164')
+          .select('id, cpf, first_name, last_name, phone_e164, gender')
           .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
           .maybeSingle();
         
@@ -405,6 +426,19 @@ Deno.serve(async (req) => {
           payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
           payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
           
+          // ✅ Enriquecer gênero se ausente
+          if (!payload.sexo && patientData.gender) {
+            const mappedGender = mapGender(patientData.gender);
+            if (mappedGender) {
+              payload.sexo = mappedGender;
+              console.log('[schedule-redirect] ✓ Gênero obtido de patients:', {
+                raw: patientData.gender,
+                normalized: mappedGender,
+                fonte: 'patients_table'
+              });
+            }
+          }
+          
           console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
         } else {
           console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
@@ -412,6 +446,33 @@ Deno.serve(async (req) => {
       } catch (enrichError) {
         console.error('[schedule-redirect] Erro ao enriquecer dados:', enrichError);
       }
+    }
+    
+    // ✅ Normalizar gênero do payload se presente
+    if (payload.sexo) {
+      const originalSexo = payload.sexo;
+      const mappedSexo = mapGender(payload.sexo);
+      
+      if (mappedSexo) {
+        payload.sexo = mappedSexo;
+        console.log('[schedule-redirect] ✓ Gênero normalizado:', {
+          raw: originalSexo,
+          normalized: mappedSexo,
+          fonte: 'payload'
+        });
+      } else {
+        console.warn('[schedule-redirect] ⚠️ Gênero inválido no payload:', originalSexo);
+      }
+    }
+    
+    // ✅ Aplicar fallback se gênero ainda ausente
+    if (!payload.sexo) {
+      payload.sexo = 'F';
+      console.warn('[schedule-redirect] ⚠️ Gênero ausente - usando fallback "F":', {
+        order_id: payload.order_id || 'N/A',
+        email: payload.email?.substring(0, 3) + '***',
+        fonte: 'default_fallback'
+      });
     }
 
     // 3. Validar se dados essenciais estão presentes após normalização e enriquecimento
@@ -473,16 +534,9 @@ Deno.serve(async (req) => {
       email: payload.email,
       cpf: payload.cpf?.substring(0, 3) + '***',
       especialidade: payload.especialidade,
-      sexo: payload.sexo || 'AUSENTE'
+      sexo: payload.sexo,
+      sexo_fonte: payload.sexo === 'F' && !payload.order_id ? 'fallback' : 'payload_or_patients'
     });
-
-    // ✅ Validação adicional: alertar se sexo ausente/inválido
-    if (!payload.sexo || (payload.sexo !== 'M' && payload.sexo !== 'F')) {
-      console.warn('[schedule-redirect] ⚠️ Campo sexo ausente ou inválido:', {
-        sexo_recebido: payload.sexo,
-        cpf: payload.cpf?.substring(0, 3) + '***'
-      });
-    }
 
     return await redirectClickLife(payload, 'active_plan', corsHeaders);
   }
@@ -557,6 +611,21 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   
   console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
 
+  // ✅ Garantir que sexo seja 'M' ou 'F'
+  const sexoFinal = payload.sexo && (payload.sexo === 'M' || payload.sexo === 'F') 
+    ? payload.sexo 
+    : 'F';
+    
+  if (sexoFinal !== payload.sexo) {
+    console.warn('[ClickLife] ⚠️ Sexo corrigido:', {
+      original: payload.sexo,
+      corrigido: sexoFinal,
+      cpf: payload.cpf?.substring(0, 3) + '***'
+    });
+  }
+
+  console.log('[ClickLife] Sexo enviado para cadastro:', sexoFinal);
+
   // 1. CADASTRAR PACIENTE
   const registration = await registerClickLifePatient(
     payload.cpf,
@@ -564,7 +633,7 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     payload.email,
     payload.telefone,
     planoId,
-    payload.sexo || 'O'
+    sexoFinal
   );
 
   if (!registration.success) {
