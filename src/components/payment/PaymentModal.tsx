@@ -269,22 +269,43 @@ export function PaymentModal({
             isBrickMountedRef.current = true;
           },
           onSubmit: async (brickSubmitData: any) => {
-            // ✅ Validar dados ANTES de processar
-            if (!validateForm()) {
-              setError('Preencha todos os campos antes de finalizar o pagamento');
-              return;
-            }
+            try {
+              console.log('[Brick onSubmit] Received data:', brickSubmitData);
+              
+              // ✅ Validar dados ANTES de processar
+              if (!validateForm()) {
+                setError('Preencha todos os campos antes de finalizar o pagamento');
+                setPaymentStatus('idle');
+                return;
+              }
 
-            // ✅ Resolver wrapper do Brick para obter token/payment_method_id
-            const cardData = brickSubmitData?.getCardFormData
-              ? await brickSubmitData.getCardFormData()
-              : brickSubmitData;
-            
-            await handleCardSubmit({
-              token: cardData.token,
-              payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
-              installments: cardData.installments,
-            });
+              // ✅ Resolver wrapper do Brick para obter token/payment_method_id
+              const cardData = brickSubmitData?.getCardFormData
+                ? await brickSubmitData.getCardFormData()
+                : brickSubmitData;
+              
+              console.log('[Brick onSubmit] Card data resolved:', cardData);
+              
+              // ✅ NOVO: Validar se cardData tem os campos obrigatórios
+              if (!cardData || !cardData.token || !cardData.payment_method_id) {
+                console.error('[Brick onSubmit] Invalid card data:', cardData);
+                setError('Erro ao processar dados do cartão. Tente novamente.');
+                setPaymentStatus('idle');
+                toast.error('Dados do cartão inválidos');
+                return;
+              }
+              
+              await handleCardSubmit({
+                token: cardData.token,
+                payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
+                installments: cardData.installments || 1,
+              });
+            } catch (error) {
+              console.error('[Brick onSubmit] Uncaught error:', error);
+              setError('Erro ao processar pagamento. Tente novamente.');
+              setPaymentStatus('idle');
+              toast.error('Erro ao processar pagamento');
+            }
           },
           onError: (error: any) => {
             console.error('[Card Payment Brick] Error:', error);
@@ -404,7 +425,10 @@ export function PaymentModal({
   };
 
   const handleCardSubmit = async (cardFormData: any) => {
-    console.log('[handleCardSubmit] Card form data:', cardFormData);
+    console.log('[handleCardSubmit] START - Card form data:', cardFormData);
+    console.log('[handleCardSubmit] formData:', formData);
+    console.log('[handleCardSubmit] SKU:', sku, 'Amount:', amount);
+    
     setPaymentStatus('processing');
     setError('');
     setUserMessage('');
@@ -412,10 +436,11 @@ export function PaymentModal({
     try {
       // ✅ Garantir que temos os dados corretos do cartão
       if (!cardFormData.token || !cardFormData.payment_method_id) {
+        console.error('[handleCardSubmit] Missing card data:', cardFormData);
         setError('Não foi possível processar os dados do cartão. Verifique os campos e tente novamente.');
         setPaymentStatus('idle');
         toast.error('Erro ao processar dados do cartão');
-        return; // NÃO lançar erro, apenas retornar
+        return;
       }
 
       const orderId = `order_${Date.now()}`;
@@ -485,9 +510,13 @@ export function PaymentModal({
         }
       });
 
+      console.log('[handleCardSubmit] Invoking mp-create-payment with:', paymentRequest);
+
       const { data, error } = await supabase.functions.invoke('mp-create-payment', {
         body: paymentRequest
       });
+      
+      console.log('[handleCardSubmit] Response:', { data, error });
 
       if (error) throw error;
 
@@ -566,6 +595,11 @@ export function PaymentModal({
       setError(errorMessage);
       toast.error(errorMessage);
       setPaymentStatus('idle');
+    } finally {
+      // ✅ Garantir que sempre reseta o status em caso de erro não tratado
+      if (paymentStatus === 'processing') {
+        setPaymentStatus('idle');
+      }
     }
   };
 
@@ -808,7 +842,7 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {serviceName}
@@ -818,16 +852,17 @@ export function PaymentModal({
           </p>
         </DialogHeader>
 
-        {userMessage && paymentStatus === 'rejected' && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-            <p className="text-red-600 text-sm">{userMessage}</p>
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto">
+          {userMessage && paymentStatus === 'rejected' && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p className="text-red-600 text-sm">{userMessage}</p>
+            </div>
+          )}
 
-        {renderStatus()}
+          {renderStatus()}
 
-        {paymentStatus === 'idle' && (
-          <div className="space-y-4">
+          {paymentStatus === 'idle' && (
+            <div className="space-y-4">
             {isLoadingUserData ? (
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
@@ -913,34 +948,35 @@ export function PaymentModal({
               </Button>
             </div>
 
-                {/* Card Payment Brick */}
-                {paymentMethod === 'card' && (
-                  <div id="cardPaymentBrick" className="mp-brick-container"></div>
-                )}
+                 {/* Card Payment Brick */}
+                 {paymentMethod === 'card' && (
+                   <div id="cardPaymentBrick" className="mp-brick-container min-h-[400px]"></div>
+                 )}
 
-                {/* Botão PIX */}
-                {paymentMethod === 'pix' && (
-                  <>
-                    <Button onClick={handlePixSubmit} className="w-full" size="lg">
-                      Gerar QR Code PIX
-                    </Button>
-                    
-                    {isPollingPayment && (
-                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                          <span className="text-sm text-blue-800">
-                            Aguardando confirmação do pagamento...
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                 {/* Botão PIX */}
+                 {paymentMethod === 'pix' && (
+                   <>
+                     <Button onClick={handlePixSubmit} className="w-full" size="lg">
+                       Gerar QR Code PIX
+                     </Button>
+                     
+                     {isPollingPayment && (
+                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                         <div className="flex items-center gap-2">
+                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                           <span className="text-sm text-blue-800">
+                             Aguardando confirmação do pagamento...
+                           </span>
+                         </div>
+                       </div>
+                     )}
+                   </>
+                 )}
               </>
             )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
