@@ -115,12 +115,12 @@ export const validatePhoneE164 = (phone: string): boolean => {
   if (/^(0123456789|9876543210)/.test(number)) return false;
   
   // Validar padrão de celular (9 dígitos começando com 9) ou fixo (8 dígitos)
-  if (number.length === 11) {
+  if (number.length === 9) {
     // Celular: deve começar com 9
-    return number[2] === '9';
-  } else if (number.length === 10) {
+    return number[0] === '9';
+  } else if (number.length === 8) {
     // Fixo: não deve começar com 9
-    return number[2] !== '9';
+    return number[0] !== '9';
   }
   
   return false;

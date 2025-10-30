@@ -56,7 +56,16 @@ const validatePhone = (phone: string): boolean => {
   if (/^(\d)\1+$/.test(number)) return false;
   if (/^(0123456789|9876543210)/.test(number)) return false;
   
-  return true;
+  // Validar padrão de celular (9 dígitos começando com 9) ou fixo (8 dígitos)
+  if (number.length === 9) {
+    // Celular: deve começar com 9
+    return number[0] === '9';
+  } else if (number.length === 8) {
+    // Fixo: não deve começar com 9
+    return number[0] !== '9';
+  }
+  
+  return false;
 };
 
 const validateCPF = (cpf: string): boolean => {
