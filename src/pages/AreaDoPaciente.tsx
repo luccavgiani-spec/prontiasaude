@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink } from "lucide-react";
+import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
@@ -92,35 +92,61 @@ const AreaDoPaciente = () => {
   };
 
   const handleAccessClubeBen = async () => {
-    setAccessingClub(true);
-    
-    // Verificar campos obrigatórios
-    if (!patient?.cpf || !patient?.birth_date) {
-      toast({
-        title: "Complete seu cadastro",
-        description: "Precisamos do seu CPF e data de nascimento para continuar.",
-        variant: "destructive"
-      });
-      navigate('/completar-perfil?from=clubeben');
-      return;
-    }
-    
     try {
-      const { data, error } = await supabase.functions.invoke('clubeben-auth-bridge', {
-        body: { user_id: currentUser.id }
-      });
-      
-      if (error || !data?.redirect_url) {
-        throw new Error('Falha ao gerar acesso');
+      setAccessingClub(true);
+
+      // ✅ GARANTIR SYNC ANTES DE REDIRECIONAR
+      // Se usuário tem plano mas clubeben_status != 'active', disparar sync
+      if (patientPlan && patient?.clubeben_status !== 'active') {
+        console.log('[ClubeBen] User has plan but not synced yet, triggering sync...');
+        
+        const { data: syncData, error: syncError } = await supabase.functions.invoke(
+          'clubeben-sync',
+          {
+            body: {
+              user_id: currentUser?.id,
+              user_email: currentUser?.email,
+              trigger_source: 'area_do_paciente_access',
+            },
+          }
+        );
+
+        if (syncError) {
+          console.error('[ClubeBen] Sync error:', syncError);
+          toast({
+            title: "Ativação em andamento",
+            description: "Seu acesso está sendo preparado. Tente novamente em alguns instantes.",
+            variant: "default",
+          });
+          return;
+        }
       }
-      
-      // Redirecionar para ClubeBen
-      window.location.href = data.redirect_url;
+
+      // Gerar JWT e redirecionar
+      const { data, error } = await supabase.functions.invoke(
+        'clubeben-auth-bridge',
+        {
+          body: { user_id: currentUser?.id },
+        }
+      );
+
+      if (error) throw error;
+
+      if (data?.redirect_url) {
+        window.open(data.redirect_url, '_blank');
+        toast({
+          title: "Redirecionando",
+          description: "Você está sendo direcionado ao Clube de Benefícios.",
+        });
+      } else {
+        throw new Error('URL de redirecionamento não recebida');
+      }
     } catch (error) {
+      console.error('[ClubeBen] Access error:', error);
       toast({
         title: "Erro ao acessar",
-        description: "Tente novamente em instantes.",
-        variant: "destructive"
+        description: "Não foi possível acessar o Clube de Benefícios. Tente novamente.",
+        variant: "destructive",
       });
     } finally {
       setAccessingClub(false);
@@ -289,11 +315,8 @@ const AreaDoPaciente = () => {
               <CardTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-primary" />
                 Clube de Benefícios
-                {patient?.clubeben_status === 'active' && (
-                  <Badge variant="default">Ativo</Badge>
-                )}
-                {patient?.clubeben_status === 'pending' && (
-                  <Badge variant="secondary">Ativando...</Badge>
+                {patientPlan && (
+                  <Badge variant="default">Disponível</Badge>
                 )}
               </CardTitle>
               <CardDescription>
@@ -301,11 +324,24 @@ const AreaDoPaciente = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {patient?.clubeben_status === 'active' ? (
+              {patientPlan ? (
+                // ✅ USUÁRIO TEM PLANO ATIVO
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Seu acesso ao ClubeBen está ativo! Aproveite descontos em centenas de parceiros.
+                    Como assinante Prontia, você tem acesso gratuito ao ClubeBen com descontos em centenas de parceiros.
                   </p>
+                  
+                  {/* Mostrar status de sincronização se estiver pendente */}
+                  {patient?.clubeben_status === 'pending' && (
+                    <Alert className="border-blue-200 bg-blue-50">
+                      <AlertCircle className="h-4 w-4 text-blue-600" />
+                      <AlertDescription className="text-blue-800 text-sm">
+                        Seu acesso está sendo ativado. Pode levar alguns minutos.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Botão idêntico ao da /clubeben */}
                   <Button 
                     onClick={handleAccessClubeBen} 
                     className="w-full"
@@ -316,30 +352,77 @@ const AreaDoPaciente = () => {
                     ) : (
                       <>
                         <ExternalLink className="h-4 w-4 mr-2" />
-                        Acessar Clube de Benefícios
+                        Acessar Clube
                       </>
                     )}
                   </Button>
                 </>
-              ) : patient?.clubeben_status === 'pending' ? (
-                <p className="text-sm text-muted-foreground">
-                  Sua ativação está em andamento. Em breve você receberá acesso.
-                </p>
               ) : (
+                // ❌ USUÁRIO NÃO TEM PLANO - RENDERIZAR BANNER PROMOCIONAL
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    Assine um plano para ter acesso aos benefícios exclusivos.
-                  </p>
-                  <Button asChild variant="outline" className="w-full">
-                    <Link to="/planos">
-                      Ver Planos
-                    </Link>
-                  </Button>
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
+                      <Gift className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-medium text-primary">Benefício Exclusivo</span>
+                    </div>
+                    
+                    <h3 className="text-lg font-semibold">
+                      Descontos exclusivos para quem é Prontia
+                    </h3>
+                    
+                    <p className="text-sm text-muted-foreground">
+                      Farmácias, exames, fitness e bem-estar com vantagens reais. 
+                      Centenas de parceiros em todo o Brasil.
+                    </p>
+
+                    {/* Grid de ícones de benefícios */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Pill className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Farmácias</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Stethoscope className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Exames</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Dumbbell className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Fitness</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Apple className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Alimentação</span>
+                      </div>
+                    </div>
+
+                    {/* CTAs */}
+                    <div className="flex flex-col gap-2 pt-2">
+                      <Button asChild size="sm">
+                        <Link to="/planos">
+                          <ArrowRight className="h-4 w-4 mr-2" />
+                          Assinar Plano
+                        </Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/clubeben">
+                          Conheça o Clube
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
                 </>
               )}
-              <Link to="/clubeben" className="text-sm text-primary hover:underline block">
-                Saiba mais sobre o Clube →
-              </Link>
             </CardContent>
           </Card>
 
