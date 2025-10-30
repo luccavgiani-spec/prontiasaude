@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed } from "lucide-react";
+import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
@@ -17,6 +17,7 @@ const AreaDoPaciente = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [patientPlan, setPatientPlan] = useState<PatientPlan | null>(null);
+  const [accessingClub, setAccessingClub] = useState(false);
   const {
     toast
   } = useToast();
@@ -89,6 +90,43 @@ const AreaDoPaciente = () => {
     });
     navigate('/entrar');
   };
+
+  const handleAccessClubeBen = async () => {
+    setAccessingClub(true);
+    
+    // Verificar campos obrigatórios
+    if (!patient?.cpf || !patient?.birth_date) {
+      toast({
+        title: "Complete seu cadastro",
+        description: "Precisamos do seu CPF e data de nascimento para continuar.",
+        variant: "destructive"
+      });
+      navigate('/completar-perfil?from=clubeben');
+      return;
+    }
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('clubeben-auth-bridge', {
+        body: { user_id: currentUser.id }
+      });
+      
+      if (error || !data?.redirect_url) {
+        throw new Error('Falha ao gerar acesso');
+      }
+      
+      // Redirecionar para ClubeBen
+      window.location.href = data.redirect_url;
+    } catch (error) {
+      toast({
+        title: "Erro ao acessar",
+        description: "Tente novamente em instantes.",
+        variant: "destructive"
+      });
+    } finally {
+      setAccessingClub(false);
+    }
+  };
+
   const getPregnancyStatusText = (status?: string) => {
     switch (status) {
       case 'never':
@@ -242,6 +280,66 @@ const AreaDoPaciente = () => {
                   Editar perfil
                 </Link>
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Clube de Benefícios */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-primary" />
+                Clube de Benefícios
+                {patient?.clubeben_status === 'active' && (
+                  <Badge variant="default">Ativo</Badge>
+                )}
+                {patient?.clubeben_status === 'pending' && (
+                  <Badge variant="secondary">Ativando...</Badge>
+                )}
+              </CardTitle>
+              <CardDescription>
+                Descontos exclusivos em farmácias, exames e muito mais
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {patient?.clubeben_status === 'active' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Seu acesso ao ClubeBen está ativo! Aproveite descontos em centenas de parceiros.
+                  </p>
+                  <Button 
+                    onClick={handleAccessClubeBen} 
+                    className="w-full"
+                    disabled={accessingClub}
+                  >
+                    {accessingClub ? (
+                      <>Redirecionando...</>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Acessar Clube de Benefícios
+                      </>
+                    )}
+                  </Button>
+                </>
+              ) : patient?.clubeben_status === 'pending' ? (
+                <p className="text-sm text-muted-foreground">
+                  Sua ativação está em andamento. Em breve você receberá acesso.
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Assine um plano para ter acesso aos benefícios exclusivos.
+                  </p>
+                  <Button asChild variant="outline" className="w-full">
+                    <Link to="/planos">
+                      Ver Planos
+                    </Link>
+                  </Button>
+                </>
+              )}
+              <Link to="/clubeben" className="text-sm text-primary hover:underline block">
+                Saiba mais sobre o Clube →
+              </Link>
             </CardContent>
           </Card>
 

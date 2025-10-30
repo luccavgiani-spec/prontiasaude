@@ -27,6 +27,11 @@ export interface Patient {
   comorbidities?: string;
   has_chronic_meds?: boolean;
   chronic_meds?: string;
+  clubeben_status?: string;
+  clubeben_last_sync?: string;
+  clubeben_retry_count?: number;
+  status_email?: number;
+  status_sms?: number;
   created_at: string;
   updated_at: string;
 }

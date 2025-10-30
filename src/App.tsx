@@ -56,6 +56,8 @@ import EmpresaPerfil from "./pages/empresa/Perfil";
 import EmpresaSeguranca from "./pages/empresa/Seguranca";
 import EmpresaTrocarSenha from "./pages/empresa/TrocarSenha";
 import EmpresaFuncionarios from "./pages/empresa/Funcionarios";
+import ClubeBen from "./pages/ClubeBen";
+import ClubeBenAuth from "./pages/ClubeBenAuth";
 
 const queryClient = new QueryClient();
 
@@ -119,6 +121,10 @@ const App = () => (
               <Route path="/livros" element={<Livros />} />
               <Route path="/playlists" element={<Playlists />} />
               <Route path="/receitas-saudaveis" element={<ReceitasSaudaveis />} />
+              
+              {/* ClubeBen routes */}
+              <Route path="/clubeben" element={<ClubeBen />} />
+              <Route path="/auth" element={<ClubeBenAuth />} />
               
               {/* Footer pages */}
               <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />

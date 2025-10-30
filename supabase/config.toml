@@ -1,5 +1,11 @@
 project_id = "ploqujuhpwutpcibedbr"
 
+[functions.clubeben-sync]
+verify_jwt = false
+
+[functions.clubeben-auth-bridge]
+verify_jwt = false
+
 [functions.mp-webhook]
 verify_jwt = false
 

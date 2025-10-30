@@ -142,6 +142,17 @@ Deno.serve(async (req) => {
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
 
+    // ✅ Sincronizar com ClubeBen (fire-and-forget)
+    if (schedulePayload.email || schedulePayload.cpf) {
+      console.log('[mp-webhook] Iniciando sincronização ClubeBen');
+      supabase.functions.invoke('clubeben-sync', {
+        body: {
+          user_email: schedulePayload.email,
+          trigger_source: 'payment_approved'
+        }
+      }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
+    }
+
     // Sempre retornar 200 OK para MP não retentar
     return new Response(JSON.stringify({ success: true, payment_id: paymentId }), {
       status: 200,
