@@ -14,7 +14,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "Como funciona o laudo psicológico?",
-    answer: "Depois da primeira consulta, o psicólogo avalia quantas sessões serão necessárias. • Vasectomia ou laqueadura: 2 a 3 consultas • Cirurgia bariátrica: 4 a 10 consultas"
+    answer: "Após a primeira consulta, o psicólogo avaliará quantas sessões serão necessárias para a emissão do laudo. Em média, são necessárias 2 a 3 consultas para laudos de vasectomia ou laqueadura, e 4 a 10 consultas para laudos de cirurgia bariátrica."
   },
   {
     question: "Quais especialidades estão disponíveis?",
