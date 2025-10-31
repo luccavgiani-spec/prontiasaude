@@ -22,7 +22,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "As consultas são confidenciais?",
-    answer: "Sim. Seguimos todas as normas e leis brasileiras: • CFM – Resolução 2.314/2022 (consultas e acompanhamento remoto, com registro em prontuário) • LGPD – Lei 13.709/2018 (proteção de dados pessoais e de saúde) • Código de Ética Médica (sigilo, responsabilidade e ética)"
+    answer: "Sim. Nossa plataforma segue todas as normas e leis brasileiras, garantindo atendimento confiável e sigiloso.\nCFM – Resolução 2.314/2022: Consultas e acompanhamento remoto com registro completo no prontuário.\nLGPD – Lei 13.709/2018: Proteção de todos os dados pessoais e de saúde.\nCódigo de Ética Médica: Sigilo, responsabilidade e ética em todos os atendimentos."
   },
   {
     question: "O que está incluso no valor da consulta médica?",
