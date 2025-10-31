@@ -100,6 +100,18 @@ export function PaymentModal({
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Reset de segurança: liberar flag após 10 segundos (caso algo dê errado)
+  useEffect(() => {
+    if (isSubmittingRef.current) {
+      const timeout = setTimeout(() => {
+        console.warn('[Safety] Resetting isSubmittingRef after 10s timeout');
+        isSubmittingRef.current = false;
+      }, 10000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [paymentStatus]);
+
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
     if (open) {
@@ -323,8 +335,12 @@ export function PaymentModal({
     }
 
     // Não mexer no Brick durante processamento
-    if (paymentStatus === 'processing' || paymentStatus === 'in_process') {
-      console.log('[Brick Mount Effect] Skipping (payment in progress)');
+    if (
+      paymentStatus === 'processing' || 
+      paymentStatus === 'in_process' ||
+      isSubmittingRef.current
+    ) {
+      console.log('[Brick Mount Effect] Skipping (payment in progress or submitting)');
       return;
     }
 
@@ -785,7 +801,16 @@ export function PaymentModal({
   };
 
   const handlePixSubmit = async () => {
+    // Prevenir múltiplos submits
+    if (isSubmittingRef.current || paymentStatus === 'processing') {
+      console.warn('[handlePixSubmit] Submit already in progress, ignoring');
+      return;
+    }
+
     if (!validateForm()) return;
+
+    // Setar flag ANTES de iniciar
+    isSubmittingRef.current = true;
 
     console.log('[handlePixSubmit] Starting PIX generation');
     setPaymentStatus('processing');
@@ -892,6 +917,11 @@ export function PaymentModal({
       console.error('[handlePixSubmit] PIX generation error:', err);
       setError(err.message || 'Erro ao gerar PIX');
       setPaymentStatus('idle');
+    } finally {
+      // Liberar flag após 2 segundos
+      setTimeout(() => {
+        isSubmittingRef.current = false;
+      }, 2000);
     }
   };
 
@@ -1259,7 +1289,218 @@ export function PaymentModal({
                 {/* Botão PIX */}
                 {paymentMethod === 'pix' && (
                   <>
-                    <Button onClick={handlePixSubmit} className="w-full" size="lg">
+                    <Button 
+                      onClick={handlePixSubmit} 
+                      className="w-full" 
+                      size="lg"
+                    >
+                      Gerar QR Code PIX
+                    </Button>
+                    
+                    {isPollingPayment && (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          <span className="text-sm text-blue-800">
+                            Aguardando confirmação do pagamento...
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  // Versão com componentes Radix para produção
+  const modalBodyRadix = (
+    <>
+      {renderStatus()}
+      
+      {(paymentStatus === 'processing' || paymentStatus === 'in_process') && (
+        <>
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                {paymentStatus === 'processing' ? 'Processando pagamento...' : 'Aguardando confirmação...'}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+      
+      <DialogHeader>
+        <DialogTitle>
+          {showSummary ? 'Finalizar Compra' : serviceName}
+        </DialogTitle>
+        <DialogDescription id="payment-desc">
+          Complete seu pagamento com segurança.
+        </DialogDescription>
+        {!showSummary && (
+          <p className="text-2xl font-bold text-primary">
+            R$ {(amount / 100).toFixed(2).replace('.', ',')}
+          </p>
+        )}
+      </DialogHeader>
+
+      <div className="flex-1 overflow-y-auto">
+        {userMessage && paymentStatus === 'rejected' && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+            <p className="text-red-600 text-sm">{userMessage}</p>
+          </div>
+        )}
+
+        {renderStatus()}
+
+        {/* Resumo da compra - tela inicial */}
+        {paymentStatus === 'idle' && showSummary && (
+          <>
+            {console.log('[UI] Renderizando resumo:', { showSummary, isLoadingUserData, paymentStatus })}
+            
+            {/* Indicador de carregamento */}
+            {isLoadingUserData && (
+              <div className="flex items_center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-muted-foreground">Carregando seus dados...</span>
+              </div>
+            )}
+            
+            <PaymentSummary
+              serviceName={serviceName}
+              amount={amount}
+              formData={formData}
+              recurring={recurring}
+              frequency={frequency}
+              frequencyType={frequencyType}
+              onSelectPaymentMethod={handlePaymentMethodSelect}
+            />
+          </>
+        )}
+
+        {paymentStatus === 'idle' && !showSummary && (
+          <div className="space-y-4">
+            {/* Botão Voltar */}
+            <Button
+              onClick={handleBackToSummary}
+              variant="ghost"
+              size="sm"
+              className="mb-2"
+            >
+              ← Voltar para resumo
+            </Button>
+
+            {isLoadingUserData ? (
+              <div className="flex items-center justify-center p-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+                <span className="text-muted-foreground">Carregando dados...</span>
+              </div>
+            ) : (
+              <>
+                {/* Dados Pessoais - Mostrar resumo se já carregados */}
+                {formData.email && formData.name ? (
+                  <div className="bg-muted/30 p-4 rounded-lg">
+                    <h3 className="font-semibold text-sm mb-2">Pagando como:</h3>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{formData.name}</p>
+                      <p className="text-sm text-muted-foreground">{formData.email}</p>
+                      <p className="text-sm text-muted-foreground">{formData.cpf}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4 bg-muted/30 p-4 rounded-lg">
+                    <h3 className="font-semibold text_sm">Dados Pessoais</h3>
+                    <div>
+                      <Label htmlFor="name">Nome Completo</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Seu nome completo"
+                        autoComplete="name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="email">E-mail</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="seu@email.com"
+                        autoComplete="email"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cpf">CPF</Label>
+                      <Input
+                        id="cpf"
+                        value={formData.cpf}
+                        onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                        placeholder="000.000.000-00"
+                        autoComplete="off"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="phone">Telefone</Label>
+                      <Input
+                        id="phone"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="+55 11 99999-9999"
+                        autoComplete="tel"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Seletor de método de pagamento */}
+                <div className="flex gap-2 border-b pb-4">
+                  <Button
+                    type="button"
+                    variant={paymentMethod === 'card' ? 'default' : 'outline'}
+                    onClick={() => setPaymentMethod('card')}
+                    className="flex-1"
+                  >
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Cartão
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={paymentMethod === 'pix' ? 'default' : 'outline'}
+                    onClick={() => setPaymentMethod('pix')}
+                    className="flex-1"
+                  >
+                    PIX
+                  </Button>
+                </div>
+
+                {/* Card Payment Brick */}
+                {paymentMethod === 'card' && (
+                  <div 
+                    key={`brick-${paymentMethod}`}
+                    id="cardPaymentBrick" 
+                    className="mp-brick-container min-h-[400px]"
+                  ></div>
+                )}
+
+                {/* Botão PIX */}
+                {paymentMethod === 'pix' && (
+                  <>
+                    <Button 
+                      onClick={handlePixSubmit} 
+                      className="w-full" 
+                      size="lg"
+                    >
                       Gerar QR Code PIX
                     </Button>
                     
@@ -1291,7 +1532,17 @@ export function PaymentModal({
     console.log('[PaymentModal] Inline fallback ativo');
     return (
       <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100]">
-        <div className="absolute inset-0 bg-black/80" onClick={() => onOpenChange(false)} />
+        <div 
+          className="absolute inset-0 bg-black/80" 
+          onClick={(e) => {
+            // Não fechar se estiver processando
+            if (paymentStatus === 'processing' || paymentStatus === 'in_process') {
+              e.preventDefault();
+              return;
+            }
+            onOpenChange(false);
+          }} 
+        />
         <div className="fixed left-1/2 top-1/2 z-[100] w-full max-w-[500px] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 border bg-background p-4 sm:p-6 shadow-lg sm:rounded-lg flex flex-col overflow-hidden">
           {modalBody}
         </div>
@@ -1301,8 +1552,8 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative z-[60]" aria-describedby="payment-desc">
-        {modalBody}
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby="payment-desc">
+        {modalBodyRadix}
       </DialogContent>
     </Dialog>
   );
