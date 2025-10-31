@@ -26,7 +26,7 @@ export const faqData: FAQ[] = [
   },
   {
     question: "O que está incluso no valor da consulta médica?",
-    answer: "Consulta por videochamada, receita digital, emissão de atestados e laudos digitais, registro seguro no prontuário eletrônico, suporte e orientação do profissional."
+    answer: "Consulta completa via videochamada, receita digital de medicamentos, emissão de atestados e laudos digitais, registro seguro no prontuário eletrônico, suporte e orientação do profissional"
   },
   {
     question: "Existe coparticipação ou carência no plano?",
