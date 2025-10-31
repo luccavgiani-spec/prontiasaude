@@ -717,10 +717,8 @@ export function PaymentModal({
         if (data.three_d_secure_info?.external_resource_url) {
           setThreeDSecureUrl(data.three_d_secure_info.external_resource_url);
           setPaymentStatus('in_process');
-          toast.info('Autenticação adicional necessária. Redirecionando...');
-          
-          // Abrir URL de challenge em nova aba
-          window.open(data.three_d_secure_info.external_resource_url, '_blank');
+          setPaymentId(data.payment_id);
+          toast.info('Autenticação adicional necessária');
         }
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
@@ -1041,11 +1039,27 @@ export function PaymentModal({
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
           </div>
           <div>
-            <p className="text-lg font-medium mb-2">Pagamento em análise...</p>
-            <p className="text-sm text-muted-foreground">
-              Aguarde enquanto validamos seu pagamento. Você será notificado quando o pagamento for aprovado.
+            <p className="text-lg font-medium mb-2">
+              {threeDSecureUrl ? 'Autenticação Necessária' : 'Pagamento em análise...'}
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {threeDSecureUrl 
+                ? 'Complete a autenticação do seu banco para finalizar o pagamento.'
+                : 'Aguarde enquanto validamos seu pagamento. Você será notificado quando o pagamento for aprovado.'
+              }
             </p>
           </div>
+          
+          {threeDSecureUrl && (
+            <Button 
+              onClick={() => window.location.href = threeDSecureUrl} 
+              className="w-full max-w-xs mx-auto"
+              size="lg"
+            >
+              Continuar Autenticação
+            </Button>
+          )}
+          
           <Button onClick={handleTryAgain} variant="outline">
             Voltar
           </Button>
@@ -1069,17 +1083,20 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative" aria-describedby="payment-desc">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative z-[60]" aria-describedby="payment-desc">
         {/* Overlay de loading durante processamento */}
-        {open && (paymentStatus === 'processing' || (isPollingPayment && paymentStatus !== 'idle')) && (
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                {paymentStatus === 'processing' ? 'Processando pagamento...' : 'Aguardando confirmação...'}
-              </p>
+        {open && (paymentStatus === 'processing' || paymentStatus === 'in_process') && (
+          <>
+            {console.log('[Overlay] Rendering overlay:', { paymentStatus })}
+            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+              <div className="text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  {paymentStatus === 'processing' ? 'Processando pagamento...' : 'Aguardando confirmação...'}
+                </p>
+              </div>
             </div>
-          </div>
+          </>
         )}
         
         <DialogHeader>
