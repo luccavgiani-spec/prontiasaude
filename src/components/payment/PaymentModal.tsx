@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { getAppointments } from '@/lib/appointments';
 import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
+import { PaymentSummary } from './PaymentSummary';
 import { MP_PUBLIC_KEY } from '@/lib/constants';
 
 declare global {
@@ -60,7 +61,8 @@ export function PaymentModal({
   frequencyType = 'months',
   onSuccess
 }: PaymentModalProps) {
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
+  const [showSummary, setShowSummary] = useState(true); // Começa mostrando resumo
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | undefined>(undefined);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('idle');
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -101,11 +103,15 @@ export function PaymentModal({
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
     if (open) {
+      setShowSummary(true); // Reset para resumo ao abrir
+      setPaymentMethod(undefined); // Reset método de pagamento
       loadUserData();
       loadMercadoPagoSDK();
       captureDeviceId();
     } else {
       // Reset ao fechar
+      setShowSummary(true);
+      setPaymentMethod(undefined);
       setPaymentStatus('idle');
       setPixData(null);
       setError('');
@@ -296,10 +302,11 @@ export function PaymentModal({
     }
   }, [paymentMethod]);
 
-  // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos
+  // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos E showSummary === false
   useEffect(() => {
     console.log('[Brick Mount Effect] Triggered with:', {
       open,
+      showSummary,
       paymentMethod,
       paymentStatus,
       isLoadingUserData,
@@ -308,6 +315,12 @@ export function PaymentModal({
       isUserLoggedIn,
       isBrickMounted: isBrickMountedRef.current
     });
+
+    // ✅ Só montar se não estiver mostrando o resumo
+    if (showSummary) {
+      console.log('[Brick Mount Effect] Skipping (showing summary)');
+      return;
+    }
 
     // Não mexer no Brick durante processamento
     if (paymentStatus === 'processing' || paymentStatus === 'in_process') {
@@ -349,7 +362,7 @@ export function PaymentModal({
         }
       }
     }
-  }, [open, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
+  }, [open, showSummary, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
 
   const mountCardPaymentBrick = async () => {
@@ -943,6 +956,8 @@ export function PaymentModal({
 
 
   const handleTryAgain = () => {
+    setShowSummary(true); // Voltar para o resumo
+    setPaymentMethod(undefined);
     setPaymentStatus('idle');
     setError('');
     setPixData(null);
@@ -950,6 +965,27 @@ export function PaymentModal({
       cardPaymentBrickRef.current.unmount();
       cardPaymentBrickRef.current = null;
       isBrickMountedRef.current = false;
+    }
+  };
+
+  const handlePaymentMethodSelect = (method: 'card' | 'pix') => {
+    setPaymentMethod(method);
+    setShowSummary(false); // Transicionar para tela de pagamento
+  };
+
+  const handleBackToSummary = () => {
+    setShowSummary(true);
+    setPaymentMethod(undefined);
+    // Desmontar Brick se montado
+    if (cardPaymentBrickRef.current) {
+      try {
+        cardPaymentBrickRef.current.unmount();
+      } catch (err) {
+        console.warn('[handleBackToSummary] Erro ao desmontar brick:', err);
+      } finally {
+        cardPaymentBrickRef.current = null;
+        isBrickMountedRef.current = false;
+      }
     }
   };
 
@@ -1054,11 +1090,13 @@ export function PaymentModal({
         
         <DialogHeader>
           <DialogTitle>
-            {serviceName}
+            {showSummary ? 'Finalizar Compra' : serviceName}
           </DialogTitle>
-          <p className="text-2xl font-bold text-primary">
-            R$ {(amount / 100).toFixed(2).replace('.', ',')}
-          </p>
+          {!showSummary && (
+            <p className="text-2xl font-bold text-primary">
+              R$ {(amount / 100).toFixed(2).replace('.', ',')}
+            </p>
+          )}
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto">
@@ -1070,8 +1108,31 @@ export function PaymentModal({
 
           {renderStatus()}
 
-          {paymentStatus === 'idle' && (
+          {/* Mostrar resumo ou formulário de pagamento */}
+          {paymentStatus === 'idle' && showSummary && !isLoadingUserData && (
+            <PaymentSummary
+              serviceName={serviceName}
+              amount={amount}
+              formData={formData}
+              recurring={recurring}
+              frequency={frequency}
+              frequencyType={frequencyType}
+              onSelectPaymentMethod={handlePaymentMethodSelect}
+            />
+          )}
+
+          {paymentStatus === 'idle' && !showSummary && (
             <div className="space-y-4">
+            {/* Botão Voltar */}
+            <Button
+              onClick={handleBackToSummary}
+              variant="ghost"
+              size="sm"
+              className="mb-2"
+            >
+              ← Voltar para resumo
+            </Button>
+
             {isLoadingUserData ? (
               <div className="flex items-center justify-center p-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
