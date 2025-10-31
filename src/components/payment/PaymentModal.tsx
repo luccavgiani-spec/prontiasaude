@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -349,17 +349,11 @@ export function PaymentModal({
         mountCardPaymentBrick();
       }
     } else {
-      // Só desmontar se realmente perdeu dados críticos E não está no método cartão
-      if (isBrickMountedRef.current && cardPaymentBrickRef.current && paymentMethod === 'card') {
-        console.log('[PaymentModal] Desmontando brick (dados insuficientes)');
-        try {
-          cardPaymentBrickRef.current.unmount();
-        } catch (err) {
-          console.warn('[PaymentModal] Erro ao desmontar brick:', err);
-        } finally {
-          cardPaymentBrickRef.current = null;
-          isBrickMountedRef.current = false;
-        }
+      // Desmontar quando não estiver no método cartão
+      if (isBrickMountedRef.current && cardPaymentBrickRef.current && paymentMethod !== 'card') {
+        console.log('[Brick Mount Effect] Unmounting: payment method changed from card');
+        cardPaymentBrickRef.current.unmount();
+        isBrickMountedRef.current = false;
       }
     }
   }, [open, showSummary, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
@@ -1075,7 +1069,7 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative" aria-describedby="payment-desc">
         {/* Overlay de loading durante processamento */}
         {open && (paymentStatus === 'processing' || (isPollingPayment && paymentStatus !== 'idle')) && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
@@ -1092,6 +1086,9 @@ export function PaymentModal({
           <DialogTitle>
             {showSummary ? 'Finalizar Compra' : serviceName}
           </DialogTitle>
+          <DialogDescription id="payment-desc" className="sr-only">
+            Complete seu pagamento com segurança.
+          </DialogDescription>
           {!showSummary && (
             <p className="text-2xl font-bold text-primary">
               R$ {(amount / 100).toFixed(2).replace('.', ',')}
@@ -1108,17 +1105,29 @@ export function PaymentModal({
 
           {renderStatus()}
 
-          {/* Mostrar resumo ou formulário de pagamento */}
-          {paymentStatus === 'idle' && showSummary && !isLoadingUserData && (
-            <PaymentSummary
-              serviceName={serviceName}
-              amount={amount}
-              formData={formData}
-              recurring={recurring}
-              frequency={frequency}
-              frequencyType={frequencyType}
-              onSelectPaymentMethod={handlePaymentMethodSelect}
-            />
+          {/* Resumo da compra - tela inicial */}
+          {paymentStatus === 'idle' && showSummary && (
+            <>
+              {console.log('[UI] Renderizando resumo:', { showSummary, isLoadingUserData, paymentStatus })}
+              
+              {/* Indicador de carregamento */}
+              {isLoadingUserData && (
+                <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Carregando seus dados...</span>
+                </div>
+              )}
+              
+              <PaymentSummary
+                serviceName={serviceName}
+                amount={amount}
+                formData={formData}
+                recurring={recurring}
+                frequency={frequency}
+                frequencyType={frequencyType}
+                onSelectPaymentMethod={handlePaymentMethodSelect}
+              />
+            </>
           )}
 
           {paymentStatus === 'idle' && !showSummary && (
