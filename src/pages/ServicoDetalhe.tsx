@@ -428,8 +428,8 @@ const ServicoDetalhe = () => {
                           1
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                          <p className="text-muted-foreground">Realize o pagamento e agende sua consulta</p>
+                          <h3 className="font-semibold text-foreground mb-1">Pagamento</h3>
+                          <p className="text-muted-foreground">Realize o pagamento do serviço desejado.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -438,7 +438,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
-                          <p className="text-muted-foreground">Receba o link da videochamada no seu WhatsApp</p>
+                          <p className="text-muted-foreground">Após recebermos a confirmação do pagamento, você será redirecionado automaticamente para uma de nossas plataformas parceiras.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -447,7 +447,16 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                          <p className="text-muted-foreground">Conecte-se no horário agendado com o profissional</p>
+                          <p className="text-muted-foreground">Após entrar na fila de atendimento, um médico responsável te chamará para ouvir suas necessidades.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          4
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Pós consulta</h3>
+                          <p className="text-muted-foreground">Você receberá pedido de exames, receitas e atestados por WhatsApp, prontos para usar em qualquer lugar do território nacional.</p>
                         </div>
                       </div>
                     </>}
