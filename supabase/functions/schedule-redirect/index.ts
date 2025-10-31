@@ -372,19 +372,41 @@ Deno.serve(async (req) => {
     const payload: SchedulePayload = await req.json();
     console.log('[schedule-redirect] Processing request for SKU:', payload.sku);
 
-    // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp
+    // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp (SOMENTE SEM PLANO)
     const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {
       'RZP5755': 'https://wa.me/5511933359187?text=Quero%20renovar%20minha%20receita!',
       'ULT3571': 'https://wa.me/5511933359187?text=Quero%20agendar%20um%20exame!'
     };
 
-    if (WHATSAPP_REDIRECT_SKUS[payload.sku]) {
-      console.log(`[schedule-redirect] ✓ Redirecionando SKU ${payload.sku} para WhatsApp`);
+    if (WHATSAPP_REDIRECT_SKUS[payload.sku] && !payload.plano_ativo) {
+      console.log(`[schedule-redirect] ✓ SKU ${payload.sku} SEM plano ativo → WhatsApp`);
       return new Response(
         JSON.stringify({
           ok: true,
           url: WHATSAPP_REDIRECT_SKUS[payload.sku],
           provider: 'whatsapp'
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // ✅ EXCEÇÃO: Receitas/Exames COM PLANO ATIVO → ClickLife (como Pronto Atendimento)
+    if ((payload.sku === 'RZP5755' || payload.sku === 'ULT3571') && payload.plano_ativo) {
+      console.log(`[schedule-redirect] ✓ SKU ${payload.sku} COM plano ativo → ClickLife`);
+      // Continuar fluxo normal para ClickLife (não retornar aqui)
+    }
+
+    // ✅ EXCEÇÃO: Médicos Especialistas → WhatsApp Suporte ClickLife (0800)
+    if (ESPECIALISTA_SKUS.includes(payload.sku)) {
+      console.log(`[schedule-redirect] ✓ Médico especialista (${payload.sku}) → WhatsApp Suporte 0800`);
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          url: 'https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista',
+          provider: 'whatsapp_specialist'
         }),
         {
           status: 200,
