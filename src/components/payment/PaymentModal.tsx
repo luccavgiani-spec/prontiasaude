@@ -1098,19 +1098,19 @@ export function PaymentModal({
         </>
       )}
       
-      <DialogHeader>
-        <DialogTitle>
+      <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+        <h2 className="text-lg font-semibold leading-none tracking-tight">
           {showSummary ? 'Finalizar Compra' : serviceName}
-        </DialogTitle>
-        <DialogDescription id="payment-desc" className="sr-only">
+        </h2>
+        <span id="payment-desc" className="sr-only">
           Complete seu pagamento com segurança.
-        </DialogDescription>
+        </span>
         {!showSummary && (
           <p className="text-2xl font-bold text-primary">
             R$ {(amount / 100).toFixed(2).replace('.', ',')}
           </p>
         )}
-      </DialogHeader>
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         {userMessage && paymentStatus === 'rejected' && (
