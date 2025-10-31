@@ -94,6 +94,9 @@ export function PaymentModal({
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
   const isBrickMountedRef = useRef(false);
+  const deviceIdIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isSubmittingRef = useRef(false);
+  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
@@ -110,6 +113,19 @@ export function PaymentModal({
       setDeviceId(null);
       setPatientAddress(null);
       setThreeDSecureUrl(null);
+      isSubmittingRef.current = false;
+      
+      // Limpar intervals e timeouts
+      if (deviceIdIntervalRef.current) {
+        clearInterval(deviceIdIntervalRef.current);
+        deviceIdIntervalRef.current = null;
+      }
+      
+      if (validationTimeoutRef.current) {
+        clearTimeout(validationTimeoutRef.current);
+        validationTimeoutRef.current = null;
+      }
+      
       if (cardPaymentBrickRef.current) {
         cardPaymentBrickRef.current.unmount();
         cardPaymentBrickRef.current = null;
@@ -119,20 +135,30 @@ export function PaymentModal({
   }, [open]);
 
   const captureDeviceId = () => {
-    // Aguardar até 5 segundos pela geração do Device ID
+    // Limpar interval anterior se existir
+    if (deviceIdIntervalRef.current) {
+      clearInterval(deviceIdIntervalRef.current);
+    }
+
     const maxAttempts = 10;
     let attempts = 0;
 
-    const intervalId = setInterval(() => {
+    deviceIdIntervalRef.current = setInterval(() => {
       if (window.MP_DEVICE_SESSION_ID) {
         console.log('[Device ID] Captured:', window.MP_DEVICE_SESSION_ID);
         setDeviceId(window.MP_DEVICE_SESSION_ID);
-        clearInterval(intervalId);
+        if (deviceIdIntervalRef.current) {
+          clearInterval(deviceIdIntervalRef.current);
+          deviceIdIntervalRef.current = null;
+        }
       } else {
         attempts++;
         if (attempts >= maxAttempts) {
           console.warn('[Device ID] Not captured after 5 seconds, proceeding without it');
-          clearInterval(intervalId);
+          if (deviceIdIntervalRef.current) {
+            clearInterval(deviceIdIntervalRef.current);
+            deviceIdIntervalRef.current = null;
+          }
         }
       }
     }, 500);
@@ -268,6 +294,11 @@ export function PaymentModal({
 
   // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos
   useEffect(() => {
+    // Não mexer no Brick durante processamento
+    if (paymentStatus === 'processing' || paymentStatus === 'in_process') {
+      return;
+    }
+
     if (!open || paymentMethod !== 'card' || !mpInstanceRef.current || isLoadingUserData) {
       return;
     }
@@ -297,7 +328,7 @@ export function PaymentModal({
         }
       }
     }
-  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf]);
+  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
 
   const mountCardPaymentBrick = async () => {
@@ -343,24 +374,31 @@ export function PaymentModal({
             isBrickMountedRef.current = true;
           },
           onSubmit: async (brickSubmitData: any) => {
+            // Prevenir múltiplos submits simultâneos
+            if (isSubmittingRef.current) {
+              console.warn('[Brick onSubmit] Submit already in progress, ignoring');
+              return;
+            }
+
+            isSubmittingRef.current = true;
+
             try {
               console.log('[Brick onSubmit] Received data:', brickSubmitData);
               
-              // ✅ Validar dados ANTES de processar
+              // Validar dados ANTES de processar
               if (!validateForm()) {
                 setError('Preencha todos os campos antes de finalizar o pagamento');
                 setPaymentStatus('idle');
                 return;
               }
 
-              // ✅ Resolver wrapper do Brick para obter token/payment_method_id
+              // Resolver wrapper do Brick
               const cardData = brickSubmitData?.getCardFormData
                 ? await brickSubmitData.getCardFormData()
                 : brickSubmitData;
               
               console.log('[Brick onSubmit] Card data resolved:', cardData);
               
-              // ✅ NOVO: Validar se cardData tem os campos obrigatórios
               if (!cardData || !cardData.token || !cardData.payment_method_id) {
                 console.error('[Brick onSubmit] Invalid card data:', cardData);
                 setError('Erro ao processar dados do cartão. Tente novamente.');
@@ -379,6 +417,11 @@ export function PaymentModal({
               setError('Erro ao processar pagamento. Tente novamente.');
               setPaymentStatus('idle');
               toast.error('Erro ao processar pagamento');
+            } finally {
+              // Liberar flag após 2 segundos (prevenir double-click)
+              setTimeout(() => {
+                isSubmittingRef.current = false;
+              }, 2000);
             }
           },
           onError: (error: any) => {
@@ -975,7 +1018,18 @@ export function PaymentModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative">
+        {(paymentStatus === 'processing' || isPollingPayment) && (
+          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">
+                {paymentStatus === 'processing' ? 'Processando pagamento...' : 'Aguardando confirmação...'}
+              </p>
+            </div>
+          </div>
+        )}
+        
         <DialogHeader>
           <DialogTitle>
             {serviceName}
