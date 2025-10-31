@@ -114,6 +114,8 @@ export function PaymentModal({
       setPatientAddress(null);
       setThreeDSecureUrl(null);
       isSubmittingRef.current = false;
+      setIsLoadingUserData(false);
+      setIsPollingPayment(false);
       
       // Limpar intervals e timeouts
       if (deviceIdIntervalRef.current) {
@@ -165,6 +167,7 @@ export function PaymentModal({
   };
 
   const loadUserData = async () => {
+    console.log('[loadUserData] Starting...');
     setIsLoadingUserData(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -246,6 +249,7 @@ export function PaymentModal({
     } catch (err) {
       console.error('Erro ao carregar dados:', err);
     } finally {
+      console.log('[loadUserData] Finished, setting isLoadingUserData = false');
       setIsLoadingUserData(false);
     }
   };
@@ -294,12 +298,30 @@ export function PaymentModal({
 
   // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos
   useEffect(() => {
+    console.log('[Brick Mount Effect] Triggered with:', {
+      open,
+      paymentMethod,
+      paymentStatus,
+      isLoadingUserData,
+      hasMPInstance: !!mpInstanceRef.current,
+      hasRequiredData,
+      isUserLoggedIn,
+      isBrickMounted: isBrickMountedRef.current
+    });
+
     // Não mexer no Brick durante processamento
     if (paymentStatus === 'processing' || paymentStatus === 'in_process') {
+      console.log('[Brick Mount Effect] Skipping (payment in progress)');
       return;
     }
 
-    if (!open || paymentMethod !== 'card' || !mpInstanceRef.current || isLoadingUserData) {
+    // Verificar se mpInstanceRef está pronto
+    if (!mpInstanceRef.current) {
+      console.log('[Brick Mount Effect] MP Instance não está pronta ainda');
+      return;
+    }
+
+    if (!open || paymentMethod !== 'card' || isLoadingUserData) {
       return;
     }
 
@@ -328,7 +350,7 @@ export function PaymentModal({
         }
       }
     }
-  }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
+  }, [open, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
 
   const mountCardPaymentBrick = async () => {
@@ -1019,7 +1041,8 @@ export function PaymentModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 relative">
-        {(paymentStatus === 'processing' || isPollingPayment) && (
+        {/* Overlay de loading durante processamento */}
+        {open && (paymentStatus === 'processing' || (isPollingPayment && paymentStatus !== 'idle')) && (
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
