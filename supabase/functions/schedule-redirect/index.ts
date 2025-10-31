@@ -37,6 +37,13 @@ const ESPECIALISTA_SKUS = [
   'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186'
 ];
 
+// SKUs de Psicólogo (combos)
+const PSICOLOGO_SKUS = [
+  'ZXW2165', // Psicólogo 1 sessão
+  'HXR8516', // Psicólogo 4 sessões
+  'YME9025'  // Psicólogo 8 sessões
+];
+
 /**
  * Normaliza strings removendo acentos, convertendo para lowercase e trim
  */
@@ -399,13 +406,20 @@ Deno.serve(async (req) => {
       // Continuar fluxo normal para ClickLife (não retornar aqui)
     }
 
-    // ✅ EXCEÇÃO: Médicos Especialistas → WhatsApp Suporte ClickLife (0800)
-    if (ESPECIALISTA_SKUS.includes(payload.sku)) {
-      console.log(`[schedule-redirect] ✓ Médico especialista (${payload.sku}) → WhatsApp Suporte 0800`);
+    // ✅ EXCEÇÃO: Médicos Especialistas OU Psicólogos com Plano Ativo → WhatsApp 0800
+    const isEspecialista = ESPECIALISTA_SKUS.includes(payload.sku);
+    const isPsicologoComPlano = PSICOLOGO_SKUS.includes(payload.sku) && payload.plano_ativo;
+
+    if (isEspecialista || isPsicologoComPlano) {
+      const motivo = isEspecialista 
+        ? `Médico especialista (${payload.sku})` 
+        : `Psicólogo COM plano ativo (${payload.sku})`;
+      
+      console.log(`[schedule-redirect] ✓ ${motivo} → WhatsApp Suporte 0800`);
       return new Response(
         JSON.stringify({
           ok: true,
-          url: 'https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista',
+          url: 'https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta',
           provider: 'whatsapp_specialist'
         }),
         {
