@@ -208,6 +208,21 @@ export function PaymentModal({
     }
   }, [paymentMethod, open, paymentStatus]);
 
+  // ✅ NOVO: Desmontar brick ao trocar de método de pagamento
+  useEffect(() => {
+    if (paymentMethod !== 'card' && isBrickMountedRef.current && cardPaymentBrickRef.current) {
+      console.log('[PaymentModal] Desmontando brick (troca de método)');
+      try {
+        cardPaymentBrickRef.current.unmount();
+      } catch (err) {
+        console.warn('[PaymentModal] Erro ao desmontar brick:', err);
+      } finally {
+        cardPaymentBrickRef.current = null;
+        isBrickMountedRef.current = false;
+      }
+    }
+  }, [paymentMethod]);
+
   // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos
   useEffect(() => {
     if (!open || paymentMethod !== 'card' || !mpInstanceRef.current || isLoadingUserData) {
@@ -226,11 +241,17 @@ export function PaymentModal({
         mountCardPaymentBrick();
       }
     } else {
-      // Se perdeu dados mínimos, desmontar brick
-      if (isBrickMountedRef.current && cardPaymentBrickRef.current) {
-        cardPaymentBrickRef.current.unmount();
-        cardPaymentBrickRef.current = null;
-        isBrickMountedRef.current = false;
+      // ✅ MODIFICADO: Só desmontar se realmente perdeu dados críticos E não está no método cartão
+      if (isBrickMountedRef.current && cardPaymentBrickRef.current && paymentMethod === 'card') {
+        console.log('[PaymentModal] Desmontando brick (dados insuficientes)');
+        try {
+          cardPaymentBrickRef.current.unmount();
+        } catch (err) {
+          console.warn('[PaymentModal] Erro ao desmontar brick:', err);
+        } finally {
+          cardPaymentBrickRef.current = null;
+          isBrickMountedRef.current = false;
+        }
       }
     }
   }, [open, paymentMethod, mpInstanceRef.current, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf]);
@@ -238,6 +259,16 @@ export function PaymentModal({
 
   const mountCardPaymentBrick = async () => {
     if (isBrickMountedRef.current || !mpInstanceRef.current) return;
+
+    // ✅ NOVO: Aguardar DOM estar pronto
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // ✅ NOVO: Verificar se container existe no DOM
+    const container = document.getElementById('cardPaymentBrick');
+    if (!container) {
+      console.warn('[PaymentModal] Container #cardPaymentBrick não encontrado no DOM');
+      return;
+    }
 
     // CRITICAL: Só usar dados REAIS (não placeholders)
     const payerEmail = formData.email;
@@ -890,6 +921,7 @@ export function PaymentModal({
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Seu nome completo"
+                    autoComplete="name"
                     required
                   />
                 </div>
@@ -901,6 +933,7 @@ export function PaymentModal({
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     placeholder="seu@email.com"
+                    autoComplete="email"
                     required
                   />
                 </div>
@@ -911,6 +944,7 @@ export function PaymentModal({
                     value={formData.cpf}
                     onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
                     placeholder="000.000.000-00"
+                    autoComplete="off"
                     required
                   />
                 </div>
@@ -921,6 +955,7 @@ export function PaymentModal({
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     placeholder="+55 11 99999-9999"
+                    autoComplete="tel"
                     required
                   />
                 </div>
@@ -950,7 +985,11 @@ export function PaymentModal({
 
                  {/* Card Payment Brick */}
                  {paymentMethod === 'card' && (
-                   <div id="cardPaymentBrick" className="mp-brick-container min-h-[400px]"></div>
+                   <div 
+                     key={`brick-${paymentMethod}`}
+                     id="cardPaymentBrick" 
+                     className="mp-brick-container min-h-[400px]"
+                   ></div>
                  )}
 
                  {/* Botão PIX */}
