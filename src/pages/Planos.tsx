@@ -263,6 +263,23 @@ const Planos = () => {
       navigate('/area-do-paciente');
       return;
     }
+
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      localStorage.setItem('returnUrl', '/planos');
+      localStorage.setItem('pendingPlan', JSON.stringify({
+        planoId
+      }));
+      navigate('/completar-perfil');
+      return;
+    }
+
     const plano = novosPlanosData.find(p => p.id === planoId);
     if (!plano) return;
     const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));

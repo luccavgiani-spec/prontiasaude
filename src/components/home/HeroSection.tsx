@@ -25,6 +25,24 @@ export function HeroSection() {
       navigate('/area-do-paciente');
       return;
     }
+
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      localStorage.setItem('returnUrl', '/');
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: 'ITC6534',
+        name: 'Pronto Atendimento',
+        amount: 4390
+      }));
+      navigate('/completar-perfil');
+      return;
+    }
     
     // Verificar plano ativo
     const planStatus = await checkPatientPlanActive(user.email!);

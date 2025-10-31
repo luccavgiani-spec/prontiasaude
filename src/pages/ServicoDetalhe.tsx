@@ -115,6 +115,26 @@ const ServicoDetalhe = () => {
       return;
     }
 
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      const pendingService = {
+        sku: getCurrentSku(),
+        serviceName: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),
+        amount: getTotalPrice(),
+        especialidade: selectedVariant || servico.nome,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pendingService', JSON.stringify(pendingService));
+      navigate('/completar-perfil');
+      return;
+    }
+
     // Verificar plano ativo
     const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
@@ -194,6 +214,26 @@ const ServicoDetalhe = () => {
       };
       localStorage.setItem('pendingService', JSON.stringify(pendingService));
       navigate('/area-do-paciente');
+      return;
+    }
+
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      const pendingService = {
+        sku: pkg.sku,
+        serviceName: `${servico.nome} - ${pkg.nome}`,
+        amount: pkg.valor * 100,
+        especialidade: pkg.nome,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pendingService', JSON.stringify(pendingService));
+      navigate('/completar-perfil');
       return;
     }
 

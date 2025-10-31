@@ -103,6 +103,25 @@ export function ServicoCard({
       return;
     }
 
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      const returnUrl = window.location.pathname + window.location.search;
+      localStorage.setItem('returnUrl', returnUrl);
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: servico.sku,
+        name: servico.nome,
+        amount: Math.round(precoComDesconto * 100)
+      }));
+      navigate('/completar-perfil');
+      return;
+    }
+
     // Verificar se tem plano ativo
     const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
@@ -173,6 +192,25 @@ export function ServicoCard({
       
       // Redirecionar para /area-do-paciente
       navigate('/area-do-paciente');
+      return;
+    }
+
+    // Verificar se perfil está completo
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('profile_complete')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!patient?.profile_complete) {
+      const returnUrl = window.location.pathname + window.location.search;
+      localStorage.setItem('returnUrl', returnUrl);
+      localStorage.setItem('pendingService', JSON.stringify({
+        sku: pkg.sku,
+        name: `${servico.nome} - ${pkg.nome}`,
+        amount: Math.round(pkg.valor * 100)
+      }));
+      navigate('/completar-perfil');
       return;
     }
 
