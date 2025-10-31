@@ -330,14 +330,13 @@ export function PaymentModal({
     const cpfValid = formData.cpf && formData.cpf.replace(/\D/g, '').length === 11;
     const hasMinimalPayerData = emailValid && cpfValid;
 
-    // Se usuário logado, só montar se hasRequiredData
-    // Se não logado, só montar se hasMinimalPayerData
-    if ((isUserLoggedIn && hasRequiredData) || (!isUserLoggedIn && hasMinimalPayerData)) {
+    // ✅ Montar se tiver dados mínimos OU dados completos
+    if (hasRequiredData || hasMinimalPayerData) {
       if (!isBrickMountedRef.current) {
         mountCardPaymentBrick();
       }
     } else {
-      // ✅ MODIFICADO: Só desmontar se realmente perdeu dados críticos E não está no método cartão
+      // Só desmontar se realmente perdeu dados críticos E não está no método cartão
       if (isBrickMountedRef.current && cardPaymentBrickRef.current && paymentMethod === 'card') {
         console.log('[PaymentModal] Desmontando brick (dados insuficientes)');
         try {
