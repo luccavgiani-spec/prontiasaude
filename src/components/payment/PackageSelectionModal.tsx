@@ -51,12 +51,6 @@ export function PackageSelectionModal({
                   onOpenChange(false);
                 }}
               >
-                {economiaPercent > 0 && (
-                  <div className="absolute -top-3 right-4 bg-green-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                    Economize {economiaPercent}%
-                  </div>
-                )}
-                
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg mb-1">
