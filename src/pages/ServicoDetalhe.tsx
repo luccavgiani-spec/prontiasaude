@@ -422,6 +422,34 @@ const ServicoDetalhe = () => {
                           </div>
                         </div>
                       </>}
+                    </> : servico.slug === "psicologa" ? <>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          1
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Pagamento</h3>
+                          <p className="text-muted-foreground">Realize o pagamento do serviço desejado.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          2
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
+                          <p className="text-muted-foreground">Após recebermos a confirmação do pagamento, você será redirecionado automaticamente para uma de nossas plataformas parceiras.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          3
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
+                          <p className="text-muted-foreground">Após entrar na fila de atendimento, um psicólogo te chamará para iniciar a sua sessão contratada.</p>
+                        </div>
+                      </div>
                     </> : <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
