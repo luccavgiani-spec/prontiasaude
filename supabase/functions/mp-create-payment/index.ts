@@ -21,6 +21,15 @@ interface PaymentRequest {
       type: string;
       number: string;
     };
+    phone?: {
+      area_code: string;
+      number: string;
+    };
+    address?: {
+      zip_code?: string;
+      street_name?: string;
+      street_number?: number;
+    };
   };
   payment_method_id?: string;
   token?: string;
@@ -29,6 +38,17 @@ interface PaymentRequest {
     order_id: string;
     schedulePayload?: any;
   };
+  device_id?: string;
+}
+
+/**
+ * Mapeia SKU para category_id do Mercado Pago
+ */
+function getCategoryIdBySKU(sku: string): string {
+  if (sku.includes('PSI') || sku.includes('PSICO')) {
+    return 'services';
+  }
+  return 'health';
 }
 
 Deno.serve(async (req) => {
@@ -116,11 +136,28 @@ Deno.serve(async (req) => {
 
     // ✅ Usar valores validados do DB (não do cliente)
     const paymentData: any = {
-      transaction_amount: expectedAmount, // Preço do DB
-      description: service.name, // Nome do DB
+      transaction_amount: expectedAmount,
+      description: service.name,
       payer: paymentRequest.payer,
       metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,
+      additional_info: {
+        items: [
+          {
+            id: sku,
+            title: service.name,
+            category_id: getCategoryIdBySKU(sku),
+            quantity: 1,
+            unit_price: expectedAmount
+          }
+        ],
+        payer: {
+          first_name: paymentRequest.payer.first_name || '',
+          last_name: paymentRequest.payer.last_name || '',
+          phone: paymentRequest.payer.phone || {},
+          address: paymentRequest.payer.address || {}
+        }
+      }
     };
 
     // ✅ Determinar método de pagamento sem fallback silencioso
@@ -149,10 +186,14 @@ Deno.serve(async (req) => {
       // ✅ binary_mode: true força resposta approved/rejected (evita in_process)
       paymentData.binary_mode = true;
       
+      // ✅ Ativar 3DS 2.0 em modo opcional
+      paymentData.three_d_secure_mode = 'optional';
+      
       console.log('[mp-create-payment] Card payment normalized:', {
         email: payerEmail,
         cpf: payerCPF ? `${payerCPF.substring(0, 3)}***` : 'AUSENTE',
-        binary_mode: true
+        binary_mode: true,
+        three_d_secure_mode: 'optional'
       });
     } else {
       // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO
@@ -174,13 +215,21 @@ Deno.serve(async (req) => {
     });
 
     // Call Mercado Pago API
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json',
+      'X-Idempotency-Key': idempotencyKey,
+    };
+
+    // Adicionar Device ID no header (se disponível)
+    if (paymentRequest.device_id) {
+      headers['X-meli-session-id'] = paymentRequest.device_id;
+      console.log('[mp-create-payment] Device ID added to header');
+    }
+
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-Idempotency-Key': idempotencyKey,
-      },
+      headers,
       body: JSON.stringify(paymentData),
     });
 
@@ -194,7 +243,18 @@ Deno.serve(async (req) => {
     console.log('[mp-create-payment] Payment created successfully:', {
       payment_id: responseData.id,
       status: responseData.status,
-      status_detail: responseData.status_detail
+      status_detail: responseData.status_detail,
+      security_validation: {
+        has_device_id: !!paymentRequest.device_id,
+        has_additional_info: !!paymentData.additional_info,
+        has_3ds: !!paymentData.three_d_secure_mode,
+        payer_data_completeness: {
+          has_email: !!paymentRequest.payer.email,
+          has_cpf: !!paymentRequest.payer.identification?.number,
+          has_phone: !!paymentRequest.payer.phone,
+          has_address: !!paymentRequest.payer.address
+        }
+      }
     });
 
     return new Response(

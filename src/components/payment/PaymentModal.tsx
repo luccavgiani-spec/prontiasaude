@@ -15,6 +15,7 @@ import { MP_PUBLIC_KEY } from '@/lib/constants';
 declare global {
   interface Window {
     MercadoPago: any;
+    MP_DEVICE_SESSION_ID?: string;
   }
 }
 
@@ -80,6 +81,15 @@ export function PaymentModal({
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const [isPollingPayment, setIsPollingPayment] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [patientAddress, setPatientAddress] = useState<{
+    cep?: string;
+    city?: string;
+    state?: string;
+    street_name?: string;
+    street_number?: string;
+  } | null>(null);
+  const [threeDSecureUrl, setThreeDSecureUrl] = useState<string | null>(null);
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -90,12 +100,16 @@ export function PaymentModal({
     if (open) {
       loadUserData();
       loadMercadoPagoSDK();
+      captureDeviceId();
     } else {
       // Reset ao fechar
       setPaymentStatus('idle');
       setPixData(null);
       setError('');
       setUserMessage('');
+      setDeviceId(null);
+      setPatientAddress(null);
+      setThreeDSecureUrl(null);
       if (cardPaymentBrickRef.current) {
         cardPaymentBrickRef.current.unmount();
         cardPaymentBrickRef.current = null;
@@ -103,6 +117,26 @@ export function PaymentModal({
       }
     }
   }, [open]);
+
+  const captureDeviceId = () => {
+    // Aguardar até 5 segundos pela geração do Device ID
+    const maxAttempts = 10;
+    let attempts = 0;
+
+    const intervalId = setInterval(() => {
+      if (window.MP_DEVICE_SESSION_ID) {
+        console.log('[Device ID] Captured:', window.MP_DEVICE_SESSION_ID);
+        setDeviceId(window.MP_DEVICE_SESSION_ID);
+        clearInterval(intervalId);
+      } else {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          console.warn('[Device ID] Not captured after 5 seconds, proceeding without it');
+          clearInterval(intervalId);
+        }
+      }
+    }, 500);
+  };
 
   const loadUserData = async () => {
     setIsLoadingUserData(true);
@@ -142,6 +176,15 @@ export function PaymentModal({
             phone: patient.phone_e164
           });
         }
+
+        // Carregar endereço do paciente
+        setPatientAddress({
+          cep: patient.cep,
+          city: patient.city,
+          state: patient.state,
+          street_name: patient.address_line,
+          street_number: patient.address_number
+        });
       }
 
       // Verificar plano ativo antes de permitir checkout
@@ -491,6 +534,17 @@ export function PaymentModal({
 
       const dbUnitPrice = service.price_cents / 100;
       
+      // Validação do checklist de dados de pagamento
+      console.log('[Payment Validation Checklist]', {
+        '✅ Device ID': deviceId ? 'PRESENTE' : '⚠️ AUSENTE',
+        '✅ CPF': formData.cpf ? 'PRESENTE' : '❌ AUSENTE',
+        '✅ Email': formData.email ? 'PRESENTE' : '❌ AUSENTE',
+        '✅ Telefone': formData.phone ? 'PRESENTE' : '❌ AUSENTE',
+        '✅ Endereço': patientAddress ? 'PRESENTE' : '⚠️ AUSENTE (opcional)',
+        '✅ Card Token': cardFormData.token ? 'PRESENTE' : '❌ AUSENTE',
+        '✅ Payment Method': cardFormData.payment_method_id ? 'PRESENTE' : '❌ AUSENTE'
+      });
+      
       const paymentRequest: any = {
         items: [{
           id: sku,
@@ -505,7 +559,16 @@ export function PaymentModal({
           identification: {
             type: 'CPF',
             number: formData.cpf.replace(/\D/g, '')
-          }
+          },
+          phone: {
+            area_code: formData.phone.replace(/\D/g, '').substring(2, 4),
+            number: formData.phone.replace(/\D/g, '').substring(4)
+          },
+          address: patientAddress ? {
+            zip_code: patientAddress.cep?.replace(/\D/g, ''),
+            street_name: patientAddress.street_name,
+            street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined
+          } : undefined
         },
         token: cardFormData.token,
         payment_method_id: cardFormData.payment_method_id,
@@ -513,7 +576,8 @@ export function PaymentModal({
         metadata: {
           order_id: orderId,
           schedulePayload
-        }
+        },
+        device_id: deviceId || undefined
       };
 
       // Adicionar auto_recurring se for assinatura
@@ -575,6 +639,18 @@ export function PaymentModal({
             window.location.href = scheduleData.url;
           }, 1500);
         }
+      } else if (data.status === 'pending' && data.status_detail === 'pending_challenge') {
+        // Usuário precisa completar desafio 3DS
+        console.log('[3DS] Challenge required:', data);
+        
+        if (data.three_d_secure_info?.external_resource_url) {
+          setThreeDSecureUrl(data.three_d_secure_info.external_resource_url);
+          setPaymentStatus('in_process');
+          toast.info('Autenticação adicional necessária. Redirecionando...');
+          
+          // Abrir URL de challenge em nova aba
+          window.open(data.three_d_secure_info.external_resource_url, '_blank');
+        }
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
@@ -582,21 +658,26 @@ export function PaymentModal({
       } else {
         setPaymentStatus('rejected');
         
-        // ✅ Mensagens específicas baseadas em status_detail
+        // Mensagens específicas baseadas em status_detail
         const rejectMessages: Record<string, string> = {
-          'cc_rejected_insufficient_amount': 'Cartão sem saldo suficiente',
-          'cc_rejected_bad_filled_security_code': 'Código de segurança (CVV) incorreto',
-          'cc_rejected_bad_filled_card_number': 'Número do cartão inválido',
-          'cc_rejected_call_for_authorize': 'Cartão bloqueado. Entre em contato com seu banco',
-          'cc_rejected_high_risk': 'Pagamento recusado por segurança. Use outro cartão',
-          'cc_rejected_invalid_installments': 'Número de parcelas inválido',
-          'cc_rejected_duplicated_payment': 'Pagamento duplicado detectado',
-          'cc_rejected_card_disabled': 'Cartão desabilitado. Entre em contato com seu banco'
+          'cc_rejected_insufficient_amount': '💳 Cartão sem saldo suficiente. Tente outro cartão ou PIX.',
+          'cc_rejected_bad_filled_security_code': '🔒 Código de segurança (CVV) incorreto. Verifique e tente novamente.',
+          'cc_rejected_bad_filled_card_number': '❌ Número do cartão inválido. Verifique os dados.',
+          'cc_rejected_bad_filled_date': '📅 Data de validade inválida.',
+          'cc_rejected_call_for_authorize': '🔒 Cartão bloqueado. Entre em contato com seu banco.',
+          'cc_rejected_high_risk': '⚠️ Pagamento recusado por segurança. Use outro cartão ou tente PIX.',
+          'cc_rejected_invalid_installments': '📊 Número de parcelas inválido para este cartão.',
+          'cc_rejected_duplicated_payment': '⚠️ Pagamento duplicado detectado.',
+          'cc_rejected_card_disabled': '🚫 Cartão desabilitado. Entre em contato com seu banco.',
+          'cc_rejected_max_attempts': '⚠️ Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
+          'cc_rejected_bad_filled_other': '❌ Dados do cartão incorretos. Verifique todas as informações.',
+          'cc_rejected_blacklist': '🚫 Cartão não aceito. Use outro cartão ou PIX.',
+          'cc_amount_rate_limit_exceeded': '💰 Valor excede o limite permitido para este cartão.'
         };
         
         const userMessage = data.status_detail 
-          ? rejectMessages[data.status_detail] || 'Pagamento rejeitado. Verifique os dados do cartão.' 
-          : 'Pagamento rejeitado. Verifique os dados do cartão.';
+          ? rejectMessages[data.status_detail] || `Pagamento rejeitado (${data.status_detail}). Use outro cartão ou tente PIX.` 
+          : 'Pagamento rejeitado. Use outro cartão ou tente PIX.';
         
         setUserMessage(userMessage);
         setError('');
@@ -693,7 +774,8 @@ export function PaymentModal({
         metadata: {
           order_id: orderId,
           schedulePayload
-        }
+        },
+        device_id: deviceId || undefined
       };
 
       // Adicionar auto_recurring se for assinatura
@@ -832,8 +914,28 @@ export function PaymentModal({
         <div className="flex flex-col items-center justify-center py-8">
           <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
           <p className="text-xl font-bold text-red-600 mb-2">Pagamento Recusado</p>
-          <p className="text-muted-foreground mb-4">{error || 'Verifique os dados e tente novamente'}</p>
-          <Button onClick={handleTryAgain}>Tentar Novamente</Button>
+          <p className="text-muted-foreground mb-4 text-center px-4">
+            {userMessage || error || 'Verifique os dados e tente novamente'}
+          </p>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 max-w-md">
+            <p className="text-sm text-blue-800 font-medium mb-2">💡 Sugestões:</p>
+            <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+              <li>Verifique se os dados do cartão estão corretos</li>
+              <li>Tente usar outro cartão</li>
+              <li>Use PIX (aprovação instantânea)</li>
+              <li>Entre em contato com seu banco se o problema persistir</li>
+            </ul>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button onClick={handleTryAgain} variant="outline">
+              Tentar Outro Cartão
+            </Button>
+            <Button onClick={() => setPaymentMethod('pix')} variant="default">
+              Pagar com PIX
+            </Button>
+          </div>
         </div>
       );
     }
