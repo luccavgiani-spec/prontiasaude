@@ -28,11 +28,7 @@ const ServicoDetalhe = () => {
   const [selectedVariant, setSelectedVariant] = useState<string>("");
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<{
-    sku: string;
-    nome: string;
-    valor: number;
-  } | null>(null);
+  const [selectedPackage, setSelectedPackage] = useState<{ sku: string; nome: string; valor: number } | null>(null);
   const navigate = useNavigate();
   const {
     toast
@@ -103,11 +99,8 @@ const ServicoDetalhe = () => {
     });
 
     // Verificar se usuário está logado
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) {
       // Salvar serviço pendente e redirecionar para login
       const pendingService = {
@@ -123,15 +116,17 @@ const ServicoDetalhe = () => {
     }
 
     // Verificar plano ativo
-    const {
-      checkPatientPlanActive
-    } = await import('@/lib/patient-plan');
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
+
     if (planStatus.canBypassPayment) {
       // Tem plano ativo: buscar dados completos do paciente
-      const {
-        data: patient
-      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164, gender')
+        .eq('id', user.id)
+        .maybeSingle();
+
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
@@ -142,14 +137,14 @@ const ServicoDetalhe = () => {
       }
 
       // Mapear gender para 'M' ou 'F'
-      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
+      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
+
       toast({
         description: 'Redirecionando para agendamento...',
         duration: 2000
       });
-      const {
-        scheduleWithActivePlan
-      } = await import('@/lib/schedule-service');
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
         cpf: patient.cpf,
         email: user.email!,
@@ -160,6 +155,7 @@ const ServicoDetalhe = () => {
         plano_ativo: true,
         sexo: mapSexo(patient.gender)
       });
+
       if (result.ok && result.url) {
         window.location.href = result.url;
       } else {
@@ -174,13 +170,10 @@ const ServicoDetalhe = () => {
     // Usuário logado sem plano: abrir modal de pagamento
     setIsPaymentModalOpen(true);
   };
-  const handlePackageSelect = async (pkg: {
-    sku: string;
-    nome: string;
-    valor: number;
-  }) => {
-    setSelectedPackage(pkg);
 
+  const handlePackageSelect = async (pkg: { sku: string; nome: string; valor: number }) => {
+    setSelectedPackage(pkg);
+    
     // Track Lead event
     trackLead({
       value: pkg.valor,
@@ -188,11 +181,8 @@ const ServicoDetalhe = () => {
     });
 
     // Verificar se usuário está logado
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) {
       // Salvar serviço pendente e redirecionar para login
       const pendingService = {
@@ -208,15 +198,17 @@ const ServicoDetalhe = () => {
     }
 
     // Verificar plano ativo
-    const {
-      checkPatientPlanActive
-    } = await import('@/lib/patient-plan');
+    const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
+
     if (planStatus.canBypassPayment) {
       // Tem plano ativo: buscar dados completos do paciente
-      const {
-        data: patient
-      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164, gender')
+        .eq('id', user.id)
+        .maybeSingle();
+
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
@@ -227,14 +219,14 @@ const ServicoDetalhe = () => {
       }
 
       // Mapear gender para 'M' ou 'F'
-      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
+      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
+
       toast({
         description: 'Redirecionando para agendamento...',
         duration: 2000
       });
-      const {
-        scheduleWithActivePlan
-      } = await import('@/lib/schedule-service');
+      
+      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
         cpf: patient.cpf,
         email: user.email!,
@@ -245,6 +237,7 @@ const ServicoDetalhe = () => {
         plano_ativo: true,
         sexo: mapSexo(patient.gender)
       });
+
       if (result.ok && result.url) {
         window.location.href = result.url;
       } else {
@@ -276,9 +269,11 @@ const ServicoDetalhe = () => {
               <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
                 {servico.nome}
               </h1>
-              {servico.slug !== "laudos_psicologicos" && <p className="text-xl text-muted-foreground mb-8">
+              {servico.slug !== "laudos_psicologicos" && (
+                <p className="text-xl text-muted-foreground mb-8">
                   {servico.slug === "renovacao_receitas" ? "Renove agora sua receita com validade para todo o território nacional, de maneira rápida e prática." : servico.slug === "solicitacao_exames" ? "Peça seus exames de forma prática: solicitação médica online, assinada digitalmente e aceita em qualquer laboratório, sem sair de casa." : servico.descricao}
-                </p>}
+                </p>
+              )}
 
               {/* Informações básicas */}
               {servico.slug !== "renovacao_receitas" && servico.slug !== "solicitacao_exames" && servico.slug !== "laudos_psicologicos" && <div className="mb-8">
@@ -433,8 +428,8 @@ const ServicoDetalhe = () => {
                           1
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground mb-1">Agendamento</h3>
-                          <p className="text-muted-foreground">Realize o pagamento e agende sua consulta</p>
+                          <h3 className="font-semibold text-foreground mb-1">Pagamento</h3>
+                          <p className="text-muted-foreground">Realize o pagamento do serviço desejado.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -443,7 +438,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
-                          <p className="text-muted-foreground">Receba o link da videochamada no seu WhatsApp</p>
+                          <p className="text-muted-foreground">Após recebermos a confirmação do pagamento, você será redirecionado automaticamente para uma de nossas plataformas parceiras.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
@@ -452,7 +447,16 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                          <p className="text-muted-foreground">Após entrar na fila de atendimento, um psicólogo responsável te chamará para iniciar sua sessão</p>
+                          <p className="text-muted-foreground">Após entrar na fila de atendimento, um médico responsável te chamará para ouvir suas necessidades.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
+                          4
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-foreground mb-1">Pós consulta</h3>
+                          <p className="text-muted-foreground">Você receberá pedido de exames, receitas e atestados por WhatsApp, prontos para usar em qualquer lugar do território nacional.</p>
                         </div>
                       </div>
                     </>}
@@ -545,15 +549,30 @@ const ServicoDetalhe = () => {
       </div>
 
       {/* Package Selection Modal (Psicóloga) */}
-      {servico.slug === "psicologa" && servico.variantes && <PackageSelectionModal open={isPackageModalOpen} onOpenChange={setIsPackageModalOpen} packages={servico.variantes} onPackageSelect={handlePackageSelect} />}
+      {servico.slug === "psicologa" && servico.variantes && (
+        <PackageSelectionModal
+          open={isPackageModalOpen}
+          onOpenChange={setIsPackageModalOpen}
+          packages={servico.variantes}
+          onPackageSelect={handlePackageSelect}
+        />
+      )}
 
-      <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku={selectedPackage?.sku || getCurrentSku() || ''} serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')} amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(getTotalPrice() * 100)} especialidade={selectedPackage?.nome || selectedVariant || servico.nome} onSuccess={() => {
-      setIsPaymentModalOpen(false);
-      toast({
-        title: "Sucesso!",
-        description: "Pagamento processado com sucesso"
-      });
-    }} />
+      <PaymentModal
+        open={isPaymentModalOpen}
+        onOpenChange={setIsPaymentModalOpen}
+        sku={selectedPackage?.sku || getCurrentSku() || ''}
+        serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')}
+        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(getTotalPrice() * 100)}
+        especialidade={selectedPackage?.nome || selectedVariant || servico.nome}
+        onSuccess={() => {
+          setIsPaymentModalOpen(false);
+          toast({
+            title: "Sucesso!",
+            description: "Pagamento processado com sucesso"
+          });
+        }}
+      />
 
       <CadastroModal open={isModalOpen} onOpenChange={setIsModalOpen} onSuccess={handleAgendar} />
     </>;
