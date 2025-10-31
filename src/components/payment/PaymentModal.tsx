@@ -1283,7 +1283,7 @@ export function PaymentModal({
     </>
   );
 
-  const isInlineFallback = typeof window !== 'undefined' && (() => { try { return window.top !== window.self; } catch { return false; } })();
+  const isInlineFallback = typeof window !== 'undefined' && window.location.hostname.includes('lovableproject.com');
 
   if (!open) return null;
 
@@ -1292,7 +1292,7 @@ export function PaymentModal({
     return (
       <div role="dialog" aria-modal="true" className="fixed inset-0 z-[100]">
         <div className="absolute inset-0 bg-black/80" onClick={() => onOpenChange(false)} />
-        <div className="fixed left-1/2 top-1/2 z-[100] grid w-full max-w-[500px] -translate-x-1/2 -translate-y-1/2 gap-4 border bg-background p-4 sm:p-6 shadow-lg sm:rounded-lg relative">
+        <div className="fixed left-1/2 top-1/2 z-[100] w-full max-w-[500px] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 border bg-background p-4 sm:p-6 shadow-lg sm:rounded-lg flex flex-col overflow-hidden">
           {modalBody}
         </div>
       </div>
