@@ -83,7 +83,7 @@
       @media(max-width:768px){html{font-size:14px}.container{padding:0 1rem}}
     </style>
 
-    <!-- Meta Pixel Code - Carregamento otimizado -->
+    <!-- Meta Pixel Code - Carregamento diferido após window.load -->
     <script>
       window.__fbq_defer = true;
       !function(f,b,e,v,n,t,s)
@@ -91,23 +91,20 @@
       n.callMethod.apply(n,arguments):n.queue.push(arguments)};
       if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
       n.queue=[];
-      // Carregar após window load para não bloquear renderização
-      if(document.readyState === 'complete'){
-        t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
-        s.parentNode.insertBefore(t,s);
-      } else {
-        window.addEventListener('load', function(){
+      // Carregar SOMENTE após window.load completo
+      window.addEventListener('load', function(){
+        setTimeout(function(){
           t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
           s.parentNode.insertBefore(t,s);
-        });
-      }
+        }, 100);
+      });
       }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
     </script>
     <!-- End Meta Pixel Code -->
     
-    <!-- Mercado Pago Security Script (Device Fingerprint) - Carregamento otimizado -->
+    <!-- Mercado Pago Security Script (Device Fingerprint) - Carregamento diferido -->
     <script>
-      // Carregar MP security.js somente quando necessário (diferido)
+      // Carregar MP security.js somente quando necessário (após window.load)
       window.loadMPSecurity = function() {
         if (window.MP_SECURITY_LOADED) return;
         window.MP_SECURITY_LOADED = true;
@@ -118,30 +115,24 @@
         document.head.appendChild(script);
       };
       
-      // Carregar após 3s ou quando modal de pagamento for aberto
-      setTimeout(window.loadMPSecurity, 3000);
+      // Carregar SOMENTE após window.load + 2s ou quando modal de pagamento for aberto
+      window.addEventListener('load', function() {
+        setTimeout(window.loadMPSecurity, 2000);
+      });
     </script>
     
-    <!-- Google Identity Services - Carregamento otimizado -->
+    <!-- Google Identity Services - Carregamento diferido após window.load -->
     <script>
-      // Carregar GSI após interação ou após load
-      (function() {
-        var loaded = false;
-        function loadGSI() {
-          if (loaded) return;
-          loaded = true;
+      // Carregar GSI SOMENTE após window.load
+      window.addEventListener('load', function() {
+        setTimeout(function() {
           var script = document.createElement('script');
           script.src = 'https://accounts.google.com/gsi/client';
           script.async = true;
           script.defer = true;
           document.head.appendChild(script);
-        }
-        // Carregar após 3 segundos ou após primeira interação
-        setTimeout(loadGSI, 3000);
-        ['scroll', 'mousemove', 'touchstart'].forEach(function(event) {
-          document.addEventListener(event, loadGSI, { once: true, passive: true });
-        });
-      })();
+        }, 200);
+      });
     </script>
   </head>
 

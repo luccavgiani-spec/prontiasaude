@@ -11,14 +11,21 @@ function cacheHeadersPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         const url = req.url || '';
         
-        // Assets com hash (imutáveis) - cache de 1 ano
-        if (/\.(js|css|jpg|jpeg|png|svg|webp|woff2|woff)$/.test(url)) {
-          const hash = url.match(/[a-f0-9]{8,}/)?.[0] || Date.now().toString();
+        // Assets com hash (imutáveis) - cache de 1 ano com compressão
+        if (/\.(js|css|webp|woff2)$/.test(url) && /[a-f0-9]{8}/.test(url)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-          res.setHeader('ETag', `"${hash}"`);
           res.setHeader('Vary', 'Accept-Encoding');
         }
-        // HTML (sempre revalidar)
+        // Imagens sem hash (1 semana)
+        else if (/\.(jpg|jpeg|png|svg|webp)$/.test(url)) {
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          res.setHeader('Vary', 'Accept-Encoding');
+        }
+        // Fontes (1 ano)
+        else if (/\.(woff|woff2|ttf|eot)$/.test(url)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+        // HTML (sem cache)
         else if (url.endsWith('.html') || url === '/') {
           res.setHeader('Cache-Control', 'no-cache, must-revalidate');
         }
