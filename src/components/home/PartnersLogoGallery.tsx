@@ -12,22 +12,24 @@ import heringLogo from '@/assets/partners/hering.webp';
 import drogaraiaLogo from '@/assets/partners/drogaraia.webp';
 import drogasilLogo from '@/assets/partners/drogasil.webp';
 import buddhaspaLogo from '@/assets/partners/buddhaspa.webp';
+import pachecoLogo from '@/assets/partners/pacheco.webp';
+import carrefourLogo from '@/assets/partners/carrefour.webp';
+import riachueloLogo from '@/assets/partners/riachuelo.webp';
 
 const partnerLogos = [
-  { id: 'hering', src: heringLogo, alt: 'Hering' },
-  { id: 'nike', src: nikeLogo, alt: 'Nike' },
-  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes' },
-  { id: 'lavoisier', src: lavoisierLogo, alt: 'Lavoisier' },
-  { id: 'cinemark', src: cinemarkLogo, alt: 'Cinemark' },
-  { id: 'dsp', src: dspLogo, alt: 'Drogaria São Paulo' },
-  { id: 'labi', src: labiLogo, alt: 'Labi Exames' },
-  { id: 'buddhaspa', src: buddhaspaLogo, alt: 'Buddha Spa' },
-  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil' },
-  { id: 'drogaraia', src: drogaraiaLogo, alt: 'Droga Raia' },
-  // Placeholders para os 3 restantes
-  { id: 'pacheco', src: 'https://via.placeholder.com/512x512/4169E1/FFFFFF?text=Pacheco', alt: 'Pacheco' },
-  { id: 'carrefour', src: 'https://via.placeholder.com/512x512/0066CC/FFFFFF?text=Carrefour', alt: 'Carrefour' },
-  { id: 'riachuelo', src: 'https://via.placeholder.com/512x512/E53935/FFFFFF?text=Riachuelo', alt: 'Riachuelo' },
+  { id: 'hering', src: heringLogo, alt: 'Hering', fullFill: false },
+  { id: 'nike', src: nikeLogo, alt: 'Nike', fullFill: false },
+  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes', fullFill: false },
+  { id: 'lavoisier', src: lavoisierLogo, alt: 'Lavoisier', fullFill: false },
+  { id: 'cinemark', src: cinemarkLogo, alt: 'Cinemark', fullFill: false },
+  { id: 'dsp', src: dspLogo, alt: 'Drogaria São Paulo', fullFill: false },
+  { id: 'labi', src: labiLogo, alt: 'Labi Exames', fullFill: true }, // Colorido - preenchimento total
+  { id: 'buddhaspa', src: buddhaspaLogo, alt: 'Buddha Spa', fullFill: true }, // Colorido - preenchimento total
+  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil', fullFill: false },
+  { id: 'drogaraia', src: drogaraiaLogo, alt: 'Droga Raia', fullFill: false },
+  { id: 'pacheco', src: pachecoLogo, alt: 'Pacheco', fullFill: false },
+  { id: 'carrefour', src: carrefourLogo, alt: 'Carrefour', fullFill: false },
+  { id: 'riachuelo', src: riachueloLogo, alt: 'Riachuelo', fullFill: false },
 ];
 
 export const PartnersLogoGallery: React.FC = () => {
@@ -45,7 +47,7 @@ export const PartnersLogoGallery: React.FC = () => {
           {extendedLogos.map((logo, index) => (
             <div 
               key={`${logo.id}-${index}`} 
-              className="partner-logo-item"
+              className={`partner-logo-item ${logo.fullFill ? 'full-fill' : ''}`}
             >
               <img
                 src={logo.src}

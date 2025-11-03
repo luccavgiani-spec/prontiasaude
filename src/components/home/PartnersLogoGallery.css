@@ -59,6 +59,12 @@
   border: 1px solid hsl(var(--border));
 }
 
+/* Logos coloridas com preenchimento total (Labi, Buddha Spa) */
+.partner-logo-item.full-fill {
+  padding: 0;
+  border: none;
+}
+
 .partner-logo-item:hover {
   transform: scale(1.1);
   box-shadow: 0 4px 16px hsla(var(--foreground) / 0.12);
@@ -108,6 +114,10 @@
     width: 80px;
     height: 80px;
     padding: 14px;
+  }
+
+  .partner-logo-item.full-fill {
+    padding: 0;
   }
 
   @keyframes scroll-partners-infinite {
