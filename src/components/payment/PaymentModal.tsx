@@ -100,6 +100,8 @@ export function PaymentModal({
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const brickRecoverAttemptsRef = useRef(0);
+  const isMountingRef = useRef(false);
+  const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Reset de segurança: liberar flag após 10 segundos (caso algo dê errado)
   useEffect(() => {
@@ -409,23 +411,12 @@ export function PaymentModal({
     }
   }, [open, showSummary, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
-  // ✅ ETAPA 2: Forçar remontagem ao voltar para 'card'
-  useEffect(() => {
-    if (
-      open &&
-      !showSummary &&
-      paymentMethod === 'card' &&
-      !isLoadingUserData &&
-      !isBrickMountedRef.current && // Só remontar se NÃO estiver montado
-      mpInstanceRef.current &&
-      (hasRequiredData || (formData.email && formData.cpf.replace(/\D/g, '').length === 11))
-    ) {
-      console.log('[Brick Remount] Forçando remontagem ao voltar para cartão');
-      mountCardPaymentBrick();
-    }
-  }, [paymentMethod, open, showSummary, isLoadingUserData, hasRequiredData, formData.email, formData.cpf]);
-
   const mountCardPaymentBrick = async () => {
+    // Guard: Prevenir montagens concorrentes
+    if (isMountingRef.current) {
+      console.warn('[mountCardPaymentBrick] Montagem já em andamento, ignorando');
+      return;
+    }
     if (isBrickMountedRef.current || !mpInstanceRef.current) {
       console.log('[mountCardPaymentBrick] Skipping:', { 
         isBrickMounted: isBrickMountedRef.current, 
@@ -434,12 +425,28 @@ export function PaymentModal({
       return;
     }
 
+    isMountingRef.current = true;
+
     console.log('[mountCardPaymentBrick] Iniciando montagem. Estado:', {
       isBrickMounted: isBrickMountedRef.current,
       hasMPInstance: !!mpInstanceRef.current,
       hasContainer: !!document.getElementById('cardPaymentBrick'),
       formData: { email: formData.email, cpf: formData.cpf }
     });
+
+    // Timeout de segurança para detectar montagens travadas
+    if (mountTimeoutRef.current) {
+      clearTimeout(mountTimeoutRef.current);
+    }
+    
+    mountTimeoutRef.current = setTimeout(() => {
+      if (isMountingRef.current) {
+        console.error('[mountCardPaymentBrick] Montagem travada, resetando...');
+        isMountingRef.current = false;
+        isBrickMountedRef.current = false;
+        cardPaymentBrickRef.current = null;
+      }
+    }, 10000);
 
     // ✅ ETAPA 4: Aguardar DOM estar estável
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -457,8 +464,15 @@ export function PaymentModal({
     
     if (!container) {
       console.error('[PaymentModal] Container #cardPaymentBrick não encontrado após 5 tentativas');
+      isMountingRef.current = false;
+      if (mountTimeoutRef.current) {
+        clearTimeout(mountTimeoutRef.current);
+      }
       return;
     }
+
+    // Limpar container antes de montar
+    container.innerHTML = '';
 
     console.log('[mountCardPaymentBrick] Container encontrado, montando brick...');
 
@@ -469,6 +483,10 @@ export function PaymentModal({
     // Validação final antes de montar
     if (!payerEmail || !payerCPF || payerCPF.length !== 11) {
       console.warn('[PaymentModal] Dados insuficientes para montar Brick:', { payerEmail, payerCPF });
+      isMountingRef.current = false;
+      if (mountTimeoutRef.current) {
+        clearTimeout(mountTimeoutRef.current);
+      }
       return;
     }
 
@@ -504,6 +522,10 @@ export function PaymentModal({
             console.log('[Brick onReady] Container:', document.getElementById('cardPaymentBrick'));
             isBrickMountedRef.current = true;
             brickRecoverAttemptsRef.current = 0;
+            isMountingRef.current = false;
+            if (mountTimeoutRef.current) {
+              clearTimeout(mountTimeoutRef.current);
+            }
           },
           onSubmit: async (brickSubmitData: any) => {
             // Prevenir múltiplos submits simultâneos
@@ -568,39 +590,40 @@ export function PaymentModal({
               message.toLowerCase().includes('fields_setup_failed');
 
             if (isSecureFieldsFailure) {
-              console.warn('[Card Payment Brick] Detected Secure Fields setup failure. Attempting controlled remount.');
-              setError('Não foi possível iniciar os campos do cartão. Recarregando o formulário...');
-              setPaymentStatus('idle');
-
+              console.warn('[Card Payment Brick] Secure Fields setup failure detectado');
+              
               if (brickRecoverAttemptsRef.current >= 2) {
-                console.error('[Card Payment Brick] Máximo de tentativas de recuperação atingido.');
+                console.error('[Card Payment Brick] Máximo de tentativas atingido');
+                setError('Não foi possível carregar o formulário de pagamento. Por favor, recarregue a página.');
                 return;
               }
-
+              
               brickRecoverAttemptsRef.current += 1;
-
+              
+              // Desmontar completamente
               try {
                 if (cardPaymentBrickRef.current) {
                   cardPaymentBrickRef.current.unmount();
                 }
               } catch (e) {
-                console.warn('[Card Payment Brick] Erro ao desmontar para remontagem:', e);
+                console.warn('[Card Payment Brick] Erro ao desmontar:', e);
               } finally {
                 cardPaymentBrickRef.current = null;
                 isBrickMountedRef.current = false;
+                isMountingRef.current = false;
+                if (mountTimeoutRef.current) {
+                  clearTimeout(mountTimeoutRef.current);
+                }
               }
-
-              // Remontar de forma controlada após pequena espera
+              
+              // Aguardar mais tempo antes de remontar (1.5s em vez de 400ms)
               setTimeout(() => {
-                if (
-                  open &&
-                  !showSummary &&
-                  paymentMethod === 'card' &&
-                  mpInstanceRef.current
-                ) {
+                if (open && !showSummary && paymentMethod === 'card' && mpInstanceRef.current) {
+                  console.log('[Card Payment Brick] Tentando remontagem após espera');
                   mountCardPaymentBrick();
                 }
-              }, 400);
+              }, 1500);
+              
               return;
             }
 
@@ -623,6 +646,11 @@ export function PaymentModal({
     } catch (err) {
       console.error('Erro ao montar brick (não crítico):', err);
       // NÃO exibir mensagem ao usuário - brick pode funcionar mesmo com erros de setup
+    } finally {
+      isMountingRef.current = false;
+      if (mountTimeoutRef.current) {
+        clearTimeout(mountTimeoutRef.current);
+      }
     }
   };
 
