@@ -21,35 +21,7 @@ export const ClubeBenBannerSection = () => {
               </p>
 
               {/* Ícones de benefícios */}
-              <div className="flex flex-wrap gap-6 mb-6 justify-center md:justify-start">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Pill className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium">Farmácias</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Stethoscope className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium">Exames</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Dumbbell className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium">Fitness</span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Apple className="h-5 w-5 text-primary" />
-                  </div>
-                  <span className="text-sm font-medium">Alimentação</span>
-                </div>
-              </div>
+              
 
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
