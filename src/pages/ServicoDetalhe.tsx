@@ -594,7 +594,7 @@ const ServicoDetalhe = () => {
                 <Button onClick={() => {
                 handleAgendar();
               }} variant="outline" size="lg" className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
-                  {isLoading ? "Processando..." : servico.slug === "solicitacao_exames" ? "Solicitar exames" : "Agendar agora"}
+                  {isLoading ? "Processando..." : servico.slug === "solicitacao_exames" ? "Solicitar exames" : servico.slug === "renovacao_receitas" ? "Renovar agora" : "Agendar agora"}
                 </Button>
 
                 <div className="text-center">
