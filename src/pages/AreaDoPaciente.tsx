@@ -57,23 +57,21 @@ const AreaDoPaciente = () => {
         console.error('Erro ao carregar plano do paciente:', error);
       }
       setIsLoading(false);
-      
+
       // Verificar returnUrl após login
       const returnUrl = localStorage.getItem('returnUrl');
       const pendingService = localStorage.getItem('pendingService');
       const pendingPlan = localStorage.getItem('pendingPlan');
-
       if (returnUrl) {
         localStorage.removeItem('returnUrl');
         localStorage.removeItem('pendingService');
         localStorage.removeItem('pendingPlan');
-        
         toast({
           title: "✅ Cadastro concluído com sucesso!",
           description: "Você pode finalizar a compra do serviço escolhido agora.",
-          variant: "default",
+          variant: "default"
         });
-        
+
         // Redirecionar após 2s
         setTimeout(() => {
           navigate(returnUrl);
@@ -90,7 +88,6 @@ const AreaDoPaciente = () => {
     });
     navigate('/entrar');
   };
-
   const handleAccessClubeBen = async () => {
     try {
       setAccessingClub(true);
@@ -99,44 +96,42 @@ const AreaDoPaciente = () => {
       // Se usuário tem plano mas clubeben_status != 'active', disparar sync
       if (patientPlan && patient?.clubeben_status !== 'active') {
         console.log('[ClubeBen] User has plan but not synced yet, triggering sync...');
-        
-        const { data: syncData, error: syncError } = await supabase.functions.invoke(
-          'clubeben-sync',
-          {
-            body: {
-              user_id: currentUser?.id,
-              user_email: currentUser?.email,
-              trigger_source: 'area_do_paciente_access',
-            },
+        const {
+          data: syncData,
+          error: syncError
+        } = await supabase.functions.invoke('clubeben-sync', {
+          body: {
+            user_id: currentUser?.id,
+            user_email: currentUser?.email,
+            trigger_source: 'area_do_paciente_access'
           }
-        );
-
+        });
         if (syncError) {
           console.error('[ClubeBen] Sync error:', syncError);
           toast({
             title: "Ativação em andamento",
             description: "Seu acesso está sendo preparado. Tente novamente em alguns instantes.",
-            variant: "default",
+            variant: "default"
           });
           return;
         }
       }
 
       // Gerar JWT e redirecionar
-      const { data, error } = await supabase.functions.invoke(
-        'clubeben-auth-bridge',
-        {
-          body: { user_id: currentUser?.id },
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('clubeben-auth-bridge', {
+        body: {
+          user_id: currentUser?.id
         }
-      );
-
+      });
       if (error) throw error;
-
       if (data?.redirect_url) {
         window.location.href = data.redirect_url;
         toast({
           title: "Redirecionando",
-          description: "Você está sendo direcionado ao Clube de Benefícios.",
+          description: "Você está sendo direcionado ao Clube de Benefícios."
         });
       } else {
         throw new Error('URL de redirecionamento não recebida');
@@ -146,13 +141,12 @@ const AreaDoPaciente = () => {
       toast({
         title: "Erro ao acessar",
         description: "Não foi possível acessar o Clube de Benefícios. Tente novamente.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setAccessingClub(false);
     }
   };
-
   const getPregnancyStatusText = (status?: string) => {
     switch (status) {
       case 'never':
@@ -315,60 +309,45 @@ const AreaDoPaciente = () => {
               <CardTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-primary" />
                 Clubes de Benefícios Prontìa Saúde!
-                {patientPlan && (
-                  <Badge variant="default">Disponível</Badge>
-                )}
+                {patientPlan && <Badge variant="default">Disponível</Badge>}
               </CardTitle>
               <CardDescription>
                 Descontos exclusivos em farmácias, exames e muito mais
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {patientPlan ? (
-                // ✅ USUÁRIO TEM PLANO ATIVO
-                <>
+              {patientPlan ?
+            // ✅ USUÁRIO TEM PLANO ATIVO
+            <>
                   <p className="text-sm text-muted-foreground">
                     Como assinante Prontia, você tem acesso gratuito ao ClubeBen com descontos em centenas de parceiros.
                   </p>
                   
                   {/* Mostrar status de sincronização se estiver pendente */}
-                  {patient?.clubeben_status === 'pending' && (
-                    <Alert className="border-blue-200 bg-blue-50">
+                  {patient?.clubeben_status === 'pending' && <Alert className="border-blue-200 bg-blue-50">
                       <AlertCircle className="h-4 w-4 text-blue-600" />
                       <AlertDescription className="text-blue-800 text-sm">
                         Seu acesso está sendo ativado. Pode levar alguns minutos.
                       </AlertDescription>
-                    </Alert>
-                  )}
+                    </Alert>}
                   
                   {/* Botão idêntico ao da /clubeben */}
-                  <Button 
-                    onClick={handleAccessClubeBen} 
-                    className="w-full"
-                    disabled={accessingClub}
-                  >
-                    {accessingClub ? (
-                      <>Redirecionando...</>
-                    ) : (
-                      <>
+                  <Button onClick={handleAccessClubeBen} className="w-full" disabled={accessingClub}>
+                    {accessingClub ? <>Redirecionando...</> : <>
                         <ExternalLink className="h-4 w-4 mr-2" />
                         Acessar Clube
-                      </>
-                    )}
+                      </>}
                   </Button>
-                </>
-              ) : (
-                // ❌ USUÁRIO NÃO TEM PLANO - RENDERIZAR BANNER PROMOCIONAL
-                <>
+                </> :
+            // ❌ USUÁRIO NÃO TEM PLANO - RENDERIZAR BANNER PROMOCIONAL
+            <>
                   <div className="space-y-4">
                     <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
                       <Gift className="h-4 w-4 text-primary" />
                       <span className="text-xs font-medium text-primary">Benefício Exclusivo</span>
                     </div>
                     
-                    <h3 className="text-lg font-semibold">
-                      Descontos exclusivos para quem é Prontia
-                    </h3>
+                    
                     
                     <p className="text-sm text-muted-foreground">
                       Farmácias, exames, fitness e bem-estar com vantagens reais. 
@@ -421,8 +400,7 @@ const AreaDoPaciente = () => {
                       </Button>
                     </div>
                   </div>
-                </>
-              )}
+                </>}
             </CardContent>
           </Card>
 
@@ -545,11 +523,9 @@ const AreaDoPaciente = () => {
         </div>
 
         {/* Disque Denúncia Section - Only for users with active plan */}
-        {patientPlan?.plan_code && patientPlan?.status === 'active' && (
-          <div className="mt-8">
+        {patientPlan?.plan_code && patientPlan?.status === 'active' && <div className="mt-8">
             <DisqueDenunciaSection />
-          </div>
-        )}
+          </div>}
       </div>
     </div>;
 };
