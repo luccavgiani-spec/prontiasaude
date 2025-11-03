@@ -192,7 +192,7 @@ export function HeroSection() {
         sku="ITC6534"
         serviceName="Pronto Atendimento"
         amount={4390}
-        onSuccess={() => window.location.href = '/confirmacao/ITC6534'}
+        onSuccess={() => {}}
       />
     </section>;
 }

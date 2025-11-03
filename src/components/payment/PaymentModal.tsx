@@ -1132,9 +1132,6 @@ export function PaymentModal({
         <h2 className="text-lg font-semibold leading-none tracking-tight">
           {showSummary ? 'Finalizar Compra' : serviceName}
         </h2>
-        <span id="payment-desc" className="sr-only">
-          Complete seu pagamento com segurança.
-        </span>
         {!showSummary && (
           <p className="text-2xl font-bold text-primary">
             R$ {(amount / 100).toFixed(2).replace('.', ',')}
@@ -1339,9 +1336,6 @@ export function PaymentModal({
         <DialogTitle>
           {showSummary ? 'Finalizar Compra' : serviceName}
         </DialogTitle>
-        <DialogDescription id="payment-desc">
-          Complete seu pagamento com segurança.
-        </DialogDescription>
         {!showSummary && (
           <p className="text-2xl font-bold text-primary">
             R$ {(amount / 100).toFixed(2).replace('.', ',')}

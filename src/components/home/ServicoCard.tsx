@@ -369,9 +369,7 @@ export function ServicoCard({
         sku={selectedPackage?.sku || servico.sku}
         serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome}
         amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(precoComDesconto * 100)}
-        onSuccess={() => {
-          navigate(`/confirmacao/${selectedPackage?.sku || servico.sku}`);
-        }}
+        onSuccess={() => {}}
       />
     </>;
 }

@@ -30,8 +30,6 @@ import CompletarPerfil from "./pages/CompletarPerfil";
 import Antecedentes from "./pages/intake/Antecedentes";
 import AreaDoPaciente from "./pages/AreaDoPaciente";
 import Agendamento from "./pages/Agendamento";
-import Confirmacao from "./pages/Confirmacao";
-import ConfirmacaoReceitas from "./pages/ConfirmacaoReceitas";
 import ConfirmacaoExame from "./pages/ConfirmacaoExame";
 
 // New wellness pages
@@ -101,8 +99,6 @@ const App = () => (
               <Route path="/blogs-artigos" element={<BlogsIndex />} />
               <Route path="/blogs-artigos/:slug" element={<BlogArticlePage />} />
               <Route path="/paciente" element={<Paciente />} />
-              <Route path="/confirmacao/:sku" element={<Confirmacao />} />
-              <Route path="/confirmacao_receitas" element={<ConfirmacaoReceitas />} />
               <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
               
               {/* Auth routes */}
