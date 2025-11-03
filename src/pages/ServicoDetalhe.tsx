@@ -506,7 +506,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Confirmação</h3>
-                          <p className="text-muted-foreground">Após recebermos a confirmação do pagamento, você será redirecionado automaticamente para uma de nossas plataformas parceiras.</p>
+                          <p className="text-muted-foreground">Assim que o pagamento for confirmado, você será direcionado imediatamente para o atendimento médico online — sem precisar agendar horário.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
