@@ -264,7 +264,7 @@ const AreaDoPaciente = () => {
                       </Button>
                       
                       <Button 
-                        onClick={() => window.open('https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')}
+                        onClick={() => window.open('https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')}
                         variant="outline" 
                         size="lg" 
                         className="flex-1"

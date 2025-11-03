@@ -431,7 +431,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           ok: true,
-          url: 'https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta',
+          url: 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta',
           provider: 'whatsapp_specialist'
         }),
         {
