@@ -315,10 +315,28 @@ export function PaymentModal({
     }
   }, [paymentMethod, open, paymentStatus]);
 
-  // ✅ NOVO: Desmontar brick ao trocar de método de pagamento
+  // ✅ ETAPA 1: Proteger Brick contra desmontagens indevidas
   useEffect(() => {
-    if (paymentMethod !== 'card' && isBrickMountedRef.current && cardPaymentBrickRef.current) {
-      console.log('[PaymentModal] Desmontando brick (troca de método)');
+    // Só desmontar se:
+    // 1. Modal está aberto
+    // 2. NÃO está mostrando resumo
+    // 3. Método mudou para algo diferente de 'card'
+    // 4. Método está definido (não é undefined)
+    // 5. Brick está montado
+    if (
+      open && 
+      !showSummary && 
+      paymentMethod !== 'card' && 
+      paymentMethod !== undefined && 
+      isBrickMountedRef.current && 
+      cardPaymentBrickRef.current
+    ) {
+      console.log('[Brick Unmount] Desmontando brick (troca de método para:', paymentMethod, ')');
+      console.log('[Brick Unmount] Estado:', {
+        paymentMethod,
+        isBrickMounted: isBrickMountedRef.current,
+        cardPaymentBrickRef: !!cardPaymentBrickRef.current
+      });
       try {
         cardPaymentBrickRef.current.unmount();
       } catch (err) {
@@ -328,7 +346,7 @@ export function PaymentModal({
         isBrickMountedRef.current = false;
       }
     }
-  }, [paymentMethod]);
+  }, [paymentMethod, open, showSummary]);
 
   // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos E showSummary === false
   useEffect(() => {
@@ -390,19 +408,58 @@ export function PaymentModal({
     }
   }, [open, showSummary, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
+  // ✅ ETAPA 2: Forçar remontagem ao voltar para 'card'
+  useEffect(() => {
+    if (
+      open &&
+      !showSummary &&
+      paymentMethod === 'card' &&
+      !isLoadingUserData &&
+      !isBrickMountedRef.current && // Só remontar se NÃO estiver montado
+      mpInstanceRef.current &&
+      (hasRequiredData || (formData.email && formData.cpf.replace(/\D/g, '').length === 11))
+    ) {
+      console.log('[Brick Remount] Forçando remontagem ao voltar para cartão');
+      mountCardPaymentBrick();
+    }
+  }, [paymentMethod, open, showSummary, isLoadingUserData, hasRequiredData, formData.email, formData.cpf]);
 
   const mountCardPaymentBrick = async () => {
-    if (isBrickMountedRef.current || !mpInstanceRef.current) return;
-
-    // ✅ NOVO: Aguardar DOM estar pronto
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // ✅ NOVO: Verificar se container existe no DOM
-    const container = document.getElementById('cardPaymentBrick');
-    if (!container) {
-      console.warn('[PaymentModal] Container #cardPaymentBrick não encontrado no DOM');
+    if (isBrickMountedRef.current || !mpInstanceRef.current) {
+      console.log('[mountCardPaymentBrick] Skipping:', { 
+        isBrickMounted: isBrickMountedRef.current, 
+        hasMPInstance: !!mpInstanceRef.current 
+      });
       return;
     }
+
+    console.log('[mountCardPaymentBrick] Iniciando montagem. Estado:', {
+      isBrickMounted: isBrickMountedRef.current,
+      hasMPInstance: !!mpInstanceRef.current,
+      hasContainer: !!document.getElementById('cardPaymentBrick'),
+      formData: { email: formData.email, cpf: formData.cpf }
+    });
+
+    // ✅ ETAPA 4: Aguardar DOM estar estável
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // ✅ ETAPA 4: Verificar múltiplas vezes se container existe
+    let container = document.getElementById('cardPaymentBrick');
+    let attempts = 0;
+    
+    while (!container && attempts < 5) {
+      console.log('[mountCardPaymentBrick] Container não encontrado, aguardando... (tentativa', attempts + 1, ')');
+      await new Promise(resolve => setTimeout(resolve, 200));
+      container = document.getElementById('cardPaymentBrick');
+      attempts++;
+    }
+    
+    if (!container) {
+      console.error('[PaymentModal] Container #cardPaymentBrick não encontrado após 5 tentativas');
+      return;
+    }
+
+    console.log('[mountCardPaymentBrick] Container encontrado, montando brick...');
 
     // CRITICAL: Só usar dados REAIS (não placeholders)
     const payerEmail = formData.email;
@@ -428,9 +485,22 @@ export function PaymentModal({
             }
           }
         },
+        customization: {
+          visual: {
+            style: {
+              theme: 'default'
+            }
+          },
+          // ✅ ETAPA 3: Permitir paste nos campos (pode ser limitado pelo MP)
+          paymentMethods: {
+            creditCard: 'all',
+            debitCard: 'all'
+          }
+        },
         callbacks: {
           onReady: () => {
-            console.log('Card Payment Brick pronto');
+            console.log('[Brick onReady] ✅ Card Payment Brick montado com sucesso');
+            console.log('[Brick onReady] Container:', document.getElementById('cardPaymentBrick'));
             isBrickMountedRef.current = true;
           },
           onSubmit: async (brickSubmitData: any) => {
