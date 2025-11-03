@@ -124,7 +124,7 @@ export function PlanosSection() {
     {
       id: "individual_com_especialistas",
       nome: "Individual com Especialistas",
-      icone: <Users className="h-12 w-12 text-primary" />,
+      icone: <Users className="h-12 w-12 text-accent" />,
       popular: true,
       recurring: true,
       precoBase: precosPlanosBase.individual_com_especialistas,
@@ -143,7 +143,7 @@ export function PlanosSection() {
     {
       id: "familiar_com_especialistas",
       nome: "Familiar com Especialistas",
-      icone: <Crown className="h-12 w-12 text-primary" />,
+      icone: <Crown className="h-12 w-12 text-accent" />,
       popular: false,
       recurring: true,
       precoBase: precosPlanosBase.familiar_com_especialistas,
@@ -163,7 +163,7 @@ export function PlanosSection() {
     {
       id: "individual_sem_especialistas",
       nome: "Individual sem Especialistas",
-      icone: <Activity className="h-12 w-12 text-primary" />,
+      icone: <Activity className="h-12 w-12 text-accent" />,
       popular: false,
       recurring: true,
       precoBase: precosPlanosBase.individual_sem_especialistas,
@@ -179,7 +179,7 @@ export function PlanosSection() {
     {
       id: "familiar_sem_especialistas",
       nome: "Familiar sem Especialistas",
-      icone: <Users className="h-12 w-12 text-primary" />,
+      icone: <Users className="h-12 w-12 text-accent" />,
       popular: false,
       recurring: true,
       precoBase: precosPlanosBase.familiar_sem_especialistas,

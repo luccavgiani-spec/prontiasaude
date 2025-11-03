@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
-import prontiaLogoMisto from "@/assets/prontia-logo-horizontal-misto.webp";
+import prontiaLogo from "@/assets/prontia-logo-verde-clean.webp";
 
 export function Footer() {
   return <footer className="bg-muted/30 border-t border-border mt-16">
@@ -11,9 +11,9 @@ export function Footer() {
           <div className="md:col-span-2">
             <Link to="/" className="inline-block mb-4 transition-all duration-300 hover:scale-105">
               <img 
-                src={prontiaLogoMisto} 
+                src={prontiaLogo} 
                 alt="Prontìa Saúde" 
-                className="h-10 w-auto"
+                className="h-12 w-auto"
               />
             </Link>
             <p className="text-muted-foreground mb-4 max-w-md">

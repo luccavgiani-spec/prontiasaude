@@ -49,19 +49,19 @@ export function ServicoCard({
   const getServicoIcon = (slug: string) => {
     switch (slug) {
       case "consulta":
-        return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
+        return <Stethoscope className="h-12 w-12 text-accent mb-4" />;
       case "renovacao_receitas":
-        return <Pill className="h-12 w-12 text-primary mb-4" />;
+        return <Pill className="h-12 w-12 text-accent mb-4" />;
       case "solicitacao_exames":
-        return <FileText className="h-12 w-12 text-primary mb-4" />;
+        return <FileText className="h-12 w-12 text-accent mb-4" />;
       case "psicologa":
-        return <Brain className="h-12 w-12 text-primary mb-4" />;
+        return <Brain className="h-12 w-12 text-accent mb-4" />;
       case "medicos_especialistas":
-        return <UserCheck className="h-12 w-12 text-primary mb-4" />;
+        return <UserCheck className="h-12 w-12 text-accent mb-4" />;
       case "laudos_psicologicos":
-        return <FileText className="h-12 w-12 text-primary mb-4" />;
+        return <FileText className="h-12 w-12 text-accent mb-4" />;
       default:
-        return <Stethoscope className="h-12 w-12 text-primary mb-4" />;
+        return <Stethoscope className="h-12 w-12 text-accent mb-4" />;
     }
   };
 
@@ -298,7 +298,7 @@ export function ServicoCard({
               <h4 className="text-sm font-medium text-foreground mb-2">Inclui:</h4>
               <ul className="space-y-1">
                 {servico.inclui.map((item, index) => <li key={index} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle className="h-3 w-3 text-primary flex-shrink-0" />
+                    <CheckCircle className="h-3 w-3 text-accent flex-shrink-0" />
                     <span>{item}</span>
                   </li>)}
                 
@@ -306,8 +306,8 @@ export function ServicoCard({
               </ul>
             </div>
             {servico.naoInclui && <div>
-                <div className="bg-orange-50 border border-orange-300 rounded-lg p-3">
-                  <p className="text-sm font-bold text-orange-700">
+                <div className="bg-secondary/10 border border-secondary rounded-lg p-3">
+                  <p className="text-sm font-bold text-secondary-dark">
                     Necessário consulta psicológica prévia!
                   </p>
                 </div>

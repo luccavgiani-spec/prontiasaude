@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import prontiaLogoMisto from "@/assets/prontia-logo-horizontal-misto.webp";
+import prontiaLogo from "@/assets/prontia-logo-verde-clean.webp";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,9 +44,9 @@ export function Navbar() {
           {/* Logo Prontìa Oficial */}
           <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
             <img 
-              src={prontiaLogoMisto} 
+              src={prontiaLogo} 
               alt="Prontìa Saúde" 
-              className="h-8 lg:h-10 w-auto transition-all duration-300 group-hover:scale-105"
+              className="h-10 lg:h-12 w-auto transition-all duration-300 group-hover:scale-105"
             />
           </Link>
 
