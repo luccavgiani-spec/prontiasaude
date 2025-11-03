@@ -10,7 +10,7 @@ export function ProvasSection() {
   const depoimentoAnterior = () => {
     setDepoimentoAtivo(prev => (prev - 1 + DEPOIMENTOS.length) % DEPOIMENTOS.length);
   };
-  return <section className="bg-background my-0 py-0">
+  return <section className="bg-muted/30 my-0 py-0">
       <div className="container mx-auto px-4">
         {/* Contadores */}
         

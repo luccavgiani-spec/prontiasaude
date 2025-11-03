@@ -105,7 +105,7 @@ export function HeroSection() {
       });
     }
   };
-  return <section className="relative min-h-[500px] md:min-h-[700px] bg-gradient-to-br from-background via-primary-light/20 to-background overflow-hidden">
+  return <section className="relative min-h-[500px] md:min-h-[700px] bg-muted/30 overflow-hidden">
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />

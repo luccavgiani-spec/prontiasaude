@@ -6,7 +6,7 @@
   width: 100%;
   margin: 24px 0;
   overflow: hidden;
-  background: transparent;
+  background: hsl(32 43% 89% / 0.3);
 }
 
 .partners-logo-gallery-wrapper {

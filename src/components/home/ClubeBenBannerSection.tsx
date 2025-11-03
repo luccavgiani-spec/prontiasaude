@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Gift, Pill, Stethoscope, Dumbbell, Apple, ArrowRight } from "lucide-react";
 export const ClubeBenBannerSection = () => {
-  return <section className="py-16 bg-gradient-to-br from-primary/5 via-secondary/5 to-primary/10">
+  return <section className="py-16 bg-muted/30">
       <div className="container mx-auto px-4">
           <div className="flex flex-col items-center gap-8">
             {/* Conteúdo */}
