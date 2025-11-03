@@ -54,7 +54,7 @@ export const faqData: FAQ[] = [{
       </p>
 }, {
   question: "Existe coparticipação ou carência no plano?",
-  answer: <p>Não há coparticipação nas consultas online.</p>
+  answer: <p>Não há coparticipação nas consultas online. O pagamento é apenas pelo serviço contratado. Não existe carência para consultas de telemedicina. Você pode usar assim que contratar.</p>
 }, {
   question: "Existe diferença entre psicoterapia online e presencial?",
   answer: <p>
