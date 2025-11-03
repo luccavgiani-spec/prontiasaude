@@ -18,7 +18,7 @@ export function ServicosSection() {
     desconto: 25
   }];
   const descontoAtual = opcoesContratacao.find(opcao => opcao.code === tipoContratacao)?.desconto || 0;
-  return <section id="servicos" className="py-16 bg-muted/30">
+  return <section id="servicos" className="py-16 bg-muted/30" style={{ contentVisibility: 'auto', containIntrinsicSize: '800px' }}>
       <div className="container mx-auto px-[25px]">
         {/* Header da seção */}
         <div className="text-center mb-12">

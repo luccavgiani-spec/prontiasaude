@@ -1,7 +1,7 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { faqData } from "@/data/faqData.tsx";
 export function FAQSection() {
-  return <section id="faq" className="py-16 bg-muted/30">
+  return <section id="faq" className="py-16 bg-muted/30" style={{ contentVisibility: 'auto', containIntrinsicSize: '800px' }}>
       <div className="container mx-auto px-[25px]">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">

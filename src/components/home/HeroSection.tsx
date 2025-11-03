@@ -105,7 +105,7 @@ export function HeroSection() {
       });
     }
   };
-  return <section className="relative min-h-[500px] md:min-h-[700px] bg-muted/30 overflow-hidden" style={{ contentVisibility: 'auto' }}>
+  return <section className="hero-section relative min-h-[70vh] md:min-h-[700px] bg-muted/30 overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '700px' }}>
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
@@ -142,8 +142,8 @@ export function HeroSection() {
             </div>
             
             {/* Modern CTAs */}
-            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400">
-              <Button onClick={handleCTA} size="xl" className="bg-green-600 text-white border-green-600 hover:bg-green-700 text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group">
+            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4 animate-fade-in delay-400" style={{ minHeight: '56px' }}>
+              <Button onClick={handleCTA} size="xl" className="bg-green-600 text-white border-green-600 hover:bg-green-700 text-base md:text-lg px-8 md:px-12 py-4 md:py-8 rounded-2xl shadow-2xl group" style={{ minHeight: '56px' }}>
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -154,33 +154,33 @@ export function HeroSection() {
           
           {/* Modern Image Column */}
           <div className="relative flex justify-center lg:justify-end animate-fade-in delay-600">
-            <div className="relative w-full max-w-lg" style={{ aspectRatio: '512/682' }}>
+            <div className="relative w-full max-w-lg" style={{ aspectRatio: '16/9', minHeight: '400px' }}>
               {/* Enhanced background effects */}
               <div className="hidden sm:block absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
-              
-              {/* Skeleton placeholder to prevent CLS */}
-              <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-muted/30 rounded-3xl skeleton" aria-hidden="true" />
               
               {/* Modern doctor image container */}
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1 h-full">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10" />
-            <img
-              srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
-              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 512px"
-              src="/assets/hero-doctor-realistic-1200.webp"
-              alt="Médico especialista em telemedicina realizando consulta online"
-              width="512"
-              height="682"
-              loading="eager"
-              decoding="async"
-              fetchPriority="high"
-              style={{ aspectRatio: '512/682' }}
-              className="w-full h-full object-cover"
-              onLoad={(e) => {
-                const skeleton = e.currentTarget.parentElement?.parentElement?.querySelector('.skeleton');
-                if (skeleton) skeleton.remove();
-              }}
-            />
+            <picture>
+              <source 
+                type="image/webp"
+                srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
+                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
+              />
+              <img
+                src="/assets/hero-doctor-realistic-1200.webp"
+                srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
+                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
+                alt="Médico especialista em telemedicina realizando consulta online"
+                width="1200"
+                height="675"
+                loading="eager"
+                decoding="async"
+                fetchPriority="high"
+                style={{ aspectRatio: '16/9', objectFit: 'cover', width: '100%', height: 'auto' }}
+                className="w-full h-full object-cover"
+              />
+            </picture>
           </div>
               
               {/* Modern floating badges */}

@@ -27,7 +27,7 @@ const passos = [
 
 export function ComoFunciona() {
   return (
-    <section className="py-10 bg-gradient-to-br from-background via-primary/5 to-background overflow-hidden">
+    <section className="py-10 bg-gradient-to-br from-background via-primary/5 to-background overflow-hidden" style={{ contentVisibility: 'auto', containIntrinsicSize: '800px' }}>
       <div className="container mx-auto px-4">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-foreground mb-6">
@@ -102,6 +102,7 @@ export function ComoFunciona() {
                 height="800"
                 loading="lazy"
                 decoding="async"
+                fetchPriority="low"
                 style={{ aspectRatio: '3/2' }}
                 className="w-full h-auto object-cover"
               />
