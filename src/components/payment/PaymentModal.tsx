@@ -160,12 +160,12 @@ export function PaymentModal({
       clearInterval(deviceIdIntervalRef.current);
     }
 
-    const maxAttempts = 10;
+    const maxAttempts = 20; // ✅ ETAPA 1: Aumentado para 10 segundos (20 * 500ms)
     let attempts = 0;
 
     deviceIdIntervalRef.current = setInterval(() => {
       if (window.MP_DEVICE_SESSION_ID) {
-        console.log('[Device ID] Captured:', window.MP_DEVICE_SESSION_ID);
+        console.log('[Device ID] ✅ Captured:', window.MP_DEVICE_SESSION_ID);
         setDeviceId(window.MP_DEVICE_SESSION_ID);
         if (deviceIdIntervalRef.current) {
           clearInterval(deviceIdIntervalRef.current);
@@ -174,7 +174,7 @@ export function PaymentModal({
       } else {
         attempts++;
         if (attempts >= maxAttempts) {
-          console.warn('[Device ID] Not captured after 5 seconds, proceeding without it');
+          console.error('[Device ID] ❌ NOT CAPTURED after 10 seconds - SECURITY RISK!');
           if (deviceIdIntervalRef.current) {
             clearInterval(deviceIdIntervalRef.current);
             deviceIdIntervalRef.current = null;
@@ -224,14 +224,30 @@ export function PaymentModal({
           });
         }
 
-        // Carregar endereço do paciente
-        setPatientAddress({
+        // ✅ ETAPA 4 (OPÇÃO A): Validar endereço completo antes de checkout
+        const patientAddressData = {
           cep: patient.cep,
           city: patient.city,
           state: patient.state,
           street_name: patient.address_line,
           street_number: patient.address_number
-        });
+        };
+
+        const hasCompleteAddress = !!(
+          patientAddressData.cep &&
+          patientAddressData.city &&
+          patientAddressData.state &&
+          patientAddressData.street_name
+        );
+
+        if (!hasCompleteAddress) {
+          console.warn('[Payment Security] ⚠️ Endereço incompleto detectado - RISCO DE RECUSA');
+          toast.warning('⚠️ Complete seu endereço no perfil para aumentar a aprovação do pagamento', {
+            duration: 5000
+          });
+        }
+
+        setPatientAddress(patientAddressData);
       }
 
       // Verificar plano ativo antes de permitir checkout
@@ -585,10 +601,56 @@ export function PaymentModal({
     }, 5000); // 5 segundos
   };
 
+  // ✅ ETAPA 6: Validação pré-pagamento (checklist completo)
+  const validatePaymentReadiness = (): boolean => {
+    const checks = {
+      deviceId: !!deviceId,
+      cpf: !!formData.cpf && formData.cpf.replace(/\D/g, '').length === 11,
+      email: !!formData.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
+      phone: !!formData.phone && formData.phone.replace(/\D/g, '').length >= 10,
+      address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name),
+      name: formData.name.trim().split(' ').length >= 2
+    };
+
+    console.log('[Payment Readiness Check] 🔒', checks);
+
+    if (!checks.deviceId) {
+      toast.error('🔒 Erro de segurança: Device ID não capturado. Recarregue a página e tente novamente.', {
+        duration: 5000
+      });
+      return false;
+    }
+
+    if (!checks.address) {
+      toast.error('📍 Complete seu endereço no perfil antes de finalizar o pagamento. Endereços incompletos aumentam as recusas.', {
+        duration: 6000
+      });
+      return false;
+    }
+
+    if (!checks.cpf || !checks.email || !checks.phone) {
+      toast.error('📋 Dados pessoais incompletos (CPF, email ou telefone)');
+      return false;
+    }
+
+    if (!checks.name) {
+      toast.error('👤 Digite seu nome completo (nome e sobrenome)');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleCardSubmit = async (cardFormData: any) => {
     console.log('[handleCardSubmit] START - Card form data:', cardFormData);
     console.log('[handleCardSubmit] formData:', formData);
     console.log('[handleCardSubmit] SKU:', sku, 'Amount:', amount);
+    
+    // ✅ ETAPA 6: Validar readiness ANTES de processar
+    if (!validatePaymentReadiness()) {
+      setPaymentStatus('idle');
+      return;
+    }
     
     setPaymentStatus('processing');
     setError('');
@@ -647,10 +709,37 @@ export function PaymentModal({
             type: 'CPF',
             number: formData.cpf.replace(/\D/g, '')
           },
-          phone: {
-            area_code: formData.phone.replace(/\D/g, '').substring(2, 4),
-            number: formData.phone.replace(/\D/g, '').substring(4)
-          },
+          // ✅ ETAPA 3: Parse telefone robusto
+          phone: (() => {
+            const phoneClean = formData.phone.replace(/\D/g, '');
+            let areaCode = '';
+            let phoneNumber = '';
+
+            if (phoneClean.startsWith('55')) {
+              // Formato E.164 (+5511999998888)
+              areaCode = phoneClean.substring(2, 4); // DDD
+              phoneNumber = phoneClean.substring(4); // Número
+            } else if (phoneClean.length === 11) {
+              // Formato nacional (11999998888)
+              areaCode = phoneClean.substring(0, 2);
+              phoneNumber = phoneClean.substring(2);
+            } else if (phoneClean.length === 10) {
+              // Formato nacional sem 9 (1199998888)
+              areaCode = phoneClean.substring(0, 2);
+              phoneNumber = phoneClean.substring(2);
+            } else {
+              // Fallback: tentar extrair primeiros 2 dígitos como DDD
+              areaCode = phoneClean.substring(0, 2) || '11';
+              phoneNumber = phoneClean.substring(2) || phoneClean;
+            }
+
+            console.log('[Phone Parse]', { original: formData.phone, clean: phoneClean, areaCode, phoneNumber });
+            
+            return {
+              area_code: areaCode,
+              number: phoneNumber
+            };
+          })(),
           address: patientAddress ? {
             zip_code: patientAddress.cep?.replace(/\D/g, ''),
             street_name: patientAddress.street_name,
@@ -743,14 +832,27 @@ export function PaymentModal({
       } else {
         setPaymentStatus('rejected');
         
-        // Mensagens específicas baseadas em status_detail
+        // ✅ ETAPA 8: Mensagens específicas e úteis
         const rejectMessages: Record<string, string> = {
           'cc_rejected_insufficient_amount': '💳 Cartão sem saldo suficiente. Tente outro cartão ou PIX.',
           'cc_rejected_bad_filled_security_code': '🔒 Código de segurança (CVV) incorreto. Verifique e tente novamente.',
           'cc_rejected_bad_filled_card_number': '❌ Número do cartão inválido. Verifique os dados.',
           'cc_rejected_bad_filled_date': '📅 Data de validade inválida.',
           'cc_rejected_call_for_authorize': '🔒 Cartão bloqueado. Entre em contato com seu banco.',
-          'cc_rejected_high_risk': '⚠️ Pagamento recusado por segurança. Use outro cartão ou tente PIX.',
+          'cc_rejected_high_risk': `🔒 PAGAMENTO RECUSADO POR SEGURANÇA
+
+Para sua proteção, este pagamento foi bloqueado pelo sistema de segurança do Mercado Pago.
+
+✅ RECOMENDAÇÕES:
+• Use outro cartão de crédito
+• Pague com PIX (aprovação instantânea)
+• Entre em contato com seu banco
+• Certifique-se de que seu endereço está completo no perfil
+
+Geralmente isso ocorre quando:
+- É a primeira compra com este cartão
+- Dados incompletos no cadastro
+- Endereço não cadastrado`,
           'cc_rejected_invalid_installments': '📊 Número de parcelas inválido para este cartão.',
           'cc_rejected_duplicated_payment': '⚠️ Pagamento duplicado detectado.',
           'cc_rejected_card_disabled': '🚫 Cartão desabilitado. Entre em contato com seu banco.',

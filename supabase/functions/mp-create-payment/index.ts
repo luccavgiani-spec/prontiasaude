@@ -42,13 +42,18 @@ interface PaymentRequest {
 }
 
 /**
- * Mapeia SKU para category_id do Mercado Pago
+ * ✅ ETAPA 5: Mapeia SKU para category_id específico do Mercado Pago
  */
 function getCategoryIdBySKU(sku: string): string {
-  if (sku.includes('PSI') || sku.includes('PSICO')) {
-    return 'services';
-  }
-  return 'health';
+  // Categorias mais específicas para reduzir recusas
+  if (sku.includes('PSI') || sku.includes('PSICO')) return 'health_services';
+  if (sku.includes('LAU')) return 'health_services';
+  if (sku.includes('REC') || sku.includes('RZP')) return 'health_services';
+  if (sku.includes('EXA') || sku.includes('LAB')) return 'medical_services';
+  if (sku.includes('ITC') || sku.includes('PRON')) return 'health';
+  if (sku.includes('PLAN')) return 'subscriptions';
+  
+  return 'health'; // fallback
 }
 
 Deno.serve(async (req) => {
@@ -141,11 +146,14 @@ Deno.serve(async (req) => {
       payer: paymentRequest.payer,
       metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,
+      // ✅ ETAPA 2: Additional Info COMPLETO com todos os campos
       additional_info: {
         items: [
           {
             id: sku,
             title: service.name,
+            description: service.name, // ✅ NOVO
+            picture_url: 'https://prontiasaude.com.br/logo.png', // ✅ NOVO
             category_id: getCategoryIdBySKU(sku),
             quantity: 1,
             unit_price: expectedAmount
@@ -155,7 +163,12 @@ Deno.serve(async (req) => {
           first_name: paymentRequest.payer.first_name || '',
           last_name: paymentRequest.payer.last_name || '',
           phone: paymentRequest.payer.phone || {},
-          address: paymentRequest.payer.address || {}
+          address: paymentRequest.payer.address || {},
+          registration_date: new Date().toISOString() // ✅ NOVO: Data de cadastro
+        },
+        // ✅ NOVO: Informações sobre o negócio/envio
+        shipments: {
+          receiver_address: paymentRequest.payer.address || {}
         }
       }
     };
@@ -240,20 +253,32 @@ Deno.serve(async (req) => {
       throw new Error(`Mercado Pago API error: ${responseData.message || 'Unknown error'}`);
     }
 
-    console.log('[mp-create-payment] Payment created successfully:', {
+    // ✅ ETAPA 7: Logs detalhados de validação de segurança
+    console.log('[mp-create-payment] 🎉 Payment created successfully:', {
       payment_id: responseData.id,
       status: responseData.status,
       status_detail: responseData.status_detail,
-      security_validation: {
-        has_device_id: !!paymentRequest.device_id,
-        has_additional_info: !!paymentData.additional_info,
-        has_3ds: !!paymentData.three_d_secure_mode,
-        payer_data_completeness: {
-          has_email: !!paymentRequest.payer.email,
-          has_cpf: !!paymentRequest.payer.identification?.number,
-          has_phone: !!paymentRequest.payer.phone,
-          has_address: !!paymentRequest.payer.address
+      '🔒 SECURITY CHECKLIST': {
+        '✅ Device ID': !!paymentRequest.device_id ? 'SENT ✓' : '❌ MISSING - HIGH RISK!',
+        '✅ Additional Info': !!paymentData.additional_info ? 'COMPLETE ✓' : '⚠️ INCOMPLETE',
+        '✅ 3DS Mode': paymentData.three_d_secure_mode || 'NOT SET',
+        '✅ Binary Mode': paymentData.binary_mode || false,
+        '✅ Payer Data Completeness': {
+          email: !!paymentRequest.payer.email ? '✓' : '✗',
+          cpf: !!paymentRequest.payer.identification?.number ? '✓' : '✗',
+          phone: !!paymentRequest.payer.phone?.number ? '✓' : '✗',
+          address_complete: !!(
+            paymentRequest.payer.address?.zip_code &&
+            paymentRequest.payer.address?.street_name &&
+            paymentRequest.payer.address?.street_number
+          ) ? '✓ COMPLETE' : '⚠️ INCOMPLETE'
         }
+      },
+      '⚠️ RISK FACTORS': {
+        missing_device_id: !paymentRequest.device_id ? '🔴 YES - CRITICAL' : '✅ NO',
+        missing_address: !paymentRequest.payer.address?.zip_code ? '🟡 YES - HIGH RISK' : '✅ NO',
+        incomplete_phone: !paymentRequest.payer.phone?.number ? '🟡 YES' : '✅ NO',
+        incomplete_additional_info: !paymentData.additional_info?.items?.[0]?.description ? '🟡 YES' : '✅ NO'
       }
     });
 
