@@ -497,7 +497,7 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Pagamento</h3>
-                          <p className="text-muted-foreground">Realize o pagamento do serviço desejado.</p>
+                          <p className="text-muted-foreground">Escolha o serviço desejado e realize o pagamento de forma rápida e segura.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
