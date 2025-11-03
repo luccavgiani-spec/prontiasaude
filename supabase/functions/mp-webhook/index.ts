@@ -144,8 +144,9 @@ Deno.serve(async (req) => {
     }
 
     console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
+    console.log('[mp-webhook] Source:', schedulePayload.source);
 
-    // ✅ EXCEÇÃO: Especialistas ou Psicólogos SEM PLANO ATIVO → WhatsApp
+    // ✅ EXCEÇÃO: Especialistas ou Psicólogos SEM PLANO ATIVO → WhatsApp (EXCETO se vier da ClickLife)
     const ESPECIALISTA_SKUS = [
       'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
       'CCP1566', 'FKS5964', 'TVQ5046', 'HMG9544', 'HME8366', 'DYY8522',
@@ -181,8 +182,10 @@ Deno.serve(async (req) => {
     const isEspecialista = ESPECIALISTA_SKUS.includes(schedulePayload.sku);
     const isPsicologo = PSICOLOGO_SKUS.includes(schedulePayload.sku);
     const semPlanoAtivo = !schedulePayload.plano_ativo;
+    const fromClicklife = schedulePayload.source === 'clicklife';
 
-    if ((isEspecialista || isPsicologo) && semPlanoAtivo) {
+    // ✅ Só aplicar exceção WhatsApp se NÃO for ClickLife
+    if ((isEspecialista || isPsicologo) && semPlanoAtivo && !fromClicklife) {
       const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
       const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
       

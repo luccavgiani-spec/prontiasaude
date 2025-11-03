@@ -674,6 +674,9 @@ export function PaymentModal({
   };
 
   const buildSchedulePayload = () => {
+    // Detectar se a compra veio da janela ClickLife
+    const fromClicklife = document.referrer?.toLowerCase().includes('clicklife');
+    
     const payload: any = {
       email: formData.email,
       cpf: (formData.cpf || '').replace(/\D/g, ''),
@@ -682,7 +685,8 @@ export function PaymentModal({
       sku,
       especialidade: especialidade || 'Clínico Geral',
       plano_ativo: false,
-      horario_iso: new Date().toISOString()
+      horario_iso: new Date().toISOString(),
+      source: fromClicklife ? 'clicklife' : 'web'
     };
 
     // Adicionar sexo se disponível (M ou F)
@@ -977,42 +981,29 @@ export function PaymentModal({
       } else {
         setPaymentStatus('rejected');
         
-        // ✅ ETAPA 8: Mensagens específicas e úteis
+        // ✅ Mensagens objetivas e claras
         const rejectMessages: Record<string, string> = {
-          'cc_rejected_insufficient_amount': '💳 Cartão sem saldo suficiente. Tente outro cartão ou PIX.',
-          'cc_rejected_bad_filled_security_code': '🔒 Código de segurança (CVV) incorreto. Verifique e tente novamente.',
-          'cc_rejected_bad_filled_card_number': '❌ Número do cartão inválido. Verifique os dados.',
-          'cc_rejected_bad_filled_date': '📅 Data de validade inválida.',
-          'cc_rejected_call_for_authorize': '🔒 Cartão bloqueado. Entre em contato com seu banco.',
-          'cc_rejected_high_risk': `🔒 PAGAMENTO RECUSADO POR SEGURANÇA
-
-Para sua proteção, este pagamento foi bloqueado pelo sistema de segurança do Mercado Pago.
-
-✅ RECOMENDAÇÕES:
-• Use outro cartão de crédito
-• Pague com PIX (aprovação instantânea)
-• Entre em contato com seu banco
-• Certifique-se de que seu endereço está completo no perfil
-
-Geralmente isso ocorre quando:
-- É a primeira compra com este cartão
-- Dados incompletos no cadastro
-- Endereço não cadastrado`,
-          'cc_rejected_invalid_installments': '📊 Número de parcelas inválido para este cartão.',
-          'cc_rejected_duplicated_payment': '⚠️ Pagamento duplicado detectado.',
-          'cc_rejected_card_disabled': '🚫 Cartão desabilitado. Entre em contato com seu banco.',
-          'cc_rejected_max_attempts': '⚠️ Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.',
-          'cc_rejected_bad_filled_other': '❌ Dados do cartão incorretos. Verifique todas as informações.',
-          'cc_rejected_blacklist': '🚫 Cartão não aceito. Use outro cartão ou PIX.',
-          'cc_amount_rate_limit_exceeded': '💰 Valor excede o limite permitido para este cartão.'
+          'cc_rejected_insufficient_amount': 'Cartão sem saldo suficiente.',
+          'cc_rejected_bad_filled_security_code': 'Código de segurança (CVV) incorreto.',
+          'cc_rejected_bad_filled_card_number': 'Número do cartão inválido.',
+          'cc_rejected_bad_filled_date': 'Data de validade inválida.',
+          'cc_rejected_call_for_authorize': 'Cartão bloqueado. Entre em contato com seu banco.',
+          'cc_rejected_high_risk': 'Pagamento recusado por segurança.',
+          'cc_rejected_invalid_installments': 'Número de parcelas inválido para este cartão.',
+          'cc_rejected_duplicated_payment': 'Pagamento duplicado detectado.',
+          'cc_rejected_card_disabled': 'Cartão desabilitado. Entre em contato com seu banco.',
+          'cc_rejected_max_attempts': 'Muitas tentativas. Aguarde alguns minutos.',
+          'cc_rejected_bad_filled_other': 'Dados do cartão incorretos.',
+          'cc_rejected_blacklist': 'Cartão não aceito.',
+          'cc_amount_rate_limit_exceeded': 'Valor excede o limite permitido para este cartão.'
         };
         
         const userMessage = data.status_detail 
-          ? rejectMessages[data.status_detail] || `Pagamento rejeitado (${data.status_detail}). Use outro cartão ou tente PIX.` 
+          ? rejectMessages[data.status_detail] || `Pagamento rejeitado. Use outro cartão ou tente PIX.` 
           : 'Pagamento rejeitado. Use outro cartão ou tente PIX.';
         
         setUserMessage(userMessage);
-        setError('');
+        setError(data.status_detail || ''); // Armazena status_detail no error para exibir badge
         
         console.error('[CARD REJECTED]', {
           status_detail: data.status_detail,
@@ -1280,14 +1271,26 @@ Geralmente isso ocorre quando:
 
     if (paymentStatus === 'rejected') {
       return (
-        <div className="flex flex-col items-center justify-center py-8">
+        <div className="flex flex-col items-center justify-center py-8 px-4">
           <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
           <p className="text-xl font-bold text-red-600 mb-2">Pagamento Recusado</p>
-          <p className="text-muted-foreground mb-4 text-center px-4">
-            {userMessage || error || 'Verifique os dados e tente novamente'}
+          
+          {/* Badge com status_detail */}
+          {error && (
+            <div className="mb-3">
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                Código: {error}
+              </span>
+            </div>
+          )}
+          
+          {/* Mensagem de erro formatada */}
+          <p className="text-muted-foreground mb-4 text-center max-w-md whitespace-pre-line">
+            {userMessage || 'Verifique os dados e tente novamente'}
           </p>
           
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 max-w-md">
+          {/* Box de sugestões */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 max-w-md w-full">
             <p className="text-sm text-blue-800 font-medium mb-2">💡 Sugestões:</p>
             <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
               <li>Verifique se os dados do cartão estão corretos</li>
@@ -1297,7 +1300,8 @@ Geralmente isso ocorre quando:
             </ul>
           </div>
           
-          <div className="flex gap-2">
+          {/* Botões de ação */}
+          <div className="flex gap-2 flex-wrap justify-center">
             <Button onClick={handleTryAgain} variant="outline">
               Tentar Outro Cartão
             </Button>
