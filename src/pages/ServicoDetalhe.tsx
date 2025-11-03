@@ -523,10 +523,7 @@ Ao final, você receberá receitas, atestados e encaminhamentos, conforme a nece
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           4
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground mb-1">Pós consulta</h3>
-                          <p className="text-muted-foreground">Você receberá pedido de exames, receitas e atestados por WhatsApp, prontos para usar em qualquer lugar do território nacional.</p>
-                        </div>
+                        
                       </div>
                     </>}
                 </div>
