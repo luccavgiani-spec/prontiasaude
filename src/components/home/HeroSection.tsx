@@ -105,7 +105,7 @@ export function HeroSection() {
       });
     }
   };
-  return <section className="relative min-h-[500px] md:min-h-[700px] bg-muted/30 overflow-hidden">
+  return <section className="relative min-h-[500px] md:min-h-[700px] bg-muted/30 overflow-hidden" style={{ contentVisibility: 'auto' }}>
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
@@ -159,7 +159,7 @@ export function HeroSection() {
               <div className="hidden sm:block absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
               
               {/* Skeleton placeholder to prevent CLS */}
-              <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-muted/30 rounded-3xl animate-pulse" />
+              <div className="absolute inset-0 bg-gradient-to-br from-muted/50 to-muted/30 rounded-3xl skeleton" aria-hidden="true" />
               
               {/* Modern doctor image container */}
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl transform hover:scale-105 transition-all duration-700 hover:rotate-1 h-full">
@@ -176,6 +176,10 @@ export function HeroSection() {
               fetchPriority="high"
               style={{ aspectRatio: '512/682' }}
               className="w-full h-full object-cover"
+              onLoad={(e) => {
+                const skeleton = e.currentTarget.parentElement?.parentElement?.querySelector('.skeleton');
+                if (skeleton) skeleton.remove();
+              }}
             />
           </div>
               
