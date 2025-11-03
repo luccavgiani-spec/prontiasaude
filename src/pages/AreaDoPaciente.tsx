@@ -314,7 +314,7 @@ const AreaDoPaciente = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-primary" />
-                Clube de Benefícios
+                Clubes de Benefícios Prontìa Saúde!
                 {patientPlan && (
                   <Badge variant="default">Disponível</Badge>
                 )}
