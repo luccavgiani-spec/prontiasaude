@@ -17,19 +17,19 @@ import carrefourLogo from '@/assets/partners/carrefour.webp';
 import riachueloLogo from '@/assets/partners/riachuelo.webp';
 
 const partnerLogos = [
-  { id: 'hering', src: heringLogo, alt: 'Hering', fullFill: false },
-  { id: 'nike', src: nikeLogo, alt: 'Nike', fullFill: false },
-  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes', fullFill: false },
-  { id: 'lavoisier', src: lavoisierLogo, alt: 'Lavoisier', fullFill: false },
-  { id: 'cinemark', src: cinemarkLogo, alt: 'Cinemark', fullFill: false },
-  { id: 'dsp', src: dspLogo, alt: 'Drogaria São Paulo', fullFill: false },
-  { id: 'labi', src: labiLogo, alt: 'Labi Exames', fullFill: true }, // Colorido - preenchimento total
-  { id: 'buddhaspa', src: buddhaspaLogo, alt: 'Buddha Spa', fullFill: true }, // Colorido - preenchimento total
-  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil', fullFill: false },
-  { id: 'drogaraia', src: drogaraiaLogo, alt: 'Droga Raia', fullFill: false },
-  { id: 'pacheco', src: pachecoLogo, alt: 'Pacheco', fullFill: false },
-  { id: 'carrefour', src: carrefourLogo, alt: 'Carrefour', fullFill: false },
-  { id: 'riachuelo', src: riachueloLogo, alt: 'Riachuelo', fullFill: false },
+  { id: 'hering', src: heringLogo, alt: 'Hering', fullFill: true },
+  { id: 'nike', src: nikeLogo, alt: 'Nike', fullFill: true },
+  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes', fullFill: true },
+  { id: 'lavoisier', src: lavoisierLogo, alt: 'Lavoisier', fullFill: true },
+  { id: 'cinemark', src: cinemarkLogo, alt: 'Cinemark', fullFill: true },
+  { id: 'dsp', src: dspLogo, alt: 'Drogaria São Paulo', fullFill: true },
+  { id: 'labi', src: labiLogo, alt: 'Labi Exames', fullFill: true },
+  { id: 'buddhaspa', src: buddhaspaLogo, alt: 'Buddha Spa', fullFill: true },
+  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil', fullFill: true },
+  { id: 'drogaraia', src: drogaraiaLogo, alt: 'Droga Raia', fullFill: true },
+  { id: 'pacheco', src: pachecoLogo, alt: 'Pacheco', fullFill: true },
+  { id: 'carrefour', src: carrefourLogo, alt: 'Carrefour', fullFill: true },
+  { id: 'riachuelo', src: riachueloLogo, alt: 'Riachuelo', fullFill: true },
 ];
 
 export const PartnersLogoGallery: React.FC = () => {
