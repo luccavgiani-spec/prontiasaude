@@ -12,6 +12,12 @@ import Index from "./pages/Index";
 import QuemSomos from "./pages/QuemSomos";
 import Servicos from "./pages/Servicos";
 import ServicoDetalhe from "./pages/ServicoDetalhe";
+import Consulta from "./pages/servicos/Consulta";
+import Psicologa from "./pages/servicos/Psicologa";
+import MedicosEspecialistas from "./pages/servicos/MedicosEspecialistas";
+import LaudosPsicologicos from "./pages/servicos/LaudosPsicologicos";
+import RenovacaoReceitas from "./pages/servicos/RenovacaoReceitas";
+import SolicitacaoExames from "./pages/servicos/SolicitacaoExames";
 import Planos from "./pages/Planos";
 import Empresas from "./pages/Empresas";
 import EmpresasDoBem from "./pages/EmpresasDoBem";
@@ -92,6 +98,12 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/quem-somos" element={<QuemSomos />} />
               <Route path="/servicos" element={<Servicos />} />
+              <Route path="/servicos/consulta" element={<Consulta />} />
+              <Route path="/servicos/psicologa" element={<Psicologa />} />
+              <Route path="/servicos/medicos_especialistas" element={<MedicosEspecialistas />} />
+              <Route path="/servicos/laudos_psicologicos" element={<LaudosPsicologicos />} />
+              <Route path="/servicos/renovacao_receitas" element={<RenovacaoReceitas />} />
+              <Route path="/servicos/solicitacao_exames" element={<SolicitacaoExames />} />
               <Route path="/servicos/:slug" element={<ServicoDetalhe />} />
               <Route path="/planos" element={<Planos />} />
               <Route path="/empresas" element={<Empresas />} />
