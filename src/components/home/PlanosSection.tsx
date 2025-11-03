@@ -382,20 +382,9 @@ export function PlanosSection() {
                       {formataPreco(precoMensal / 100)}
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
                     </div>
-                    {meses > 1 ? (
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">
-                          Cobrança de {formataPreco((precoMensal * meses) / 100)} a cada {meses} meses
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Equivale a {formataPreco(precoDiario / 100)}/dia
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">
-                        Equivale a {formataPreco(precoDiario / 100)}/dia
-                      </div>
-                    )}
+                    <div className="text-xs text-muted-foreground">
+                      Equivale a {formataPreco(precoDiario / 100)}/dia
+                    </div>
                   </div>
                 </CardHeader>
 
