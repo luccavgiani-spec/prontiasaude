@@ -145,7 +145,127 @@ Deno.serve(async (req) => {
 
     console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
 
-    // Chamar schedule-redirect diretamente
+    // ✅ EXCEÇÃO: Especialistas ou Psicólogos SEM PLANO ATIVO → WhatsApp
+    const ESPECIALISTA_SKUS = [
+      'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
+      'CCP1566', 'FKS5964', 'TVQ5046', 'HMG9544', 'HME8366', 'DYY8522',
+      'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186'
+    ];
+    
+    const PSICOLOGO_SKUS = ['ZXW2165', 'HXR8516', 'YME9025'];
+    
+    const SERVICE_NAMES: Record<string, string> = {
+      'BIR7668': 'Personal Trainer',
+      'VPN5132': 'Nutricionista',
+      'TQP5720': 'Cardiologista',
+      'HGG3503': 'Dermatologista',
+      'VHH8883': 'Endocrinologista',
+      'TSB0751': 'Gastroenterologista',
+      'CCP1566': 'Ginecologista',
+      'FKS5964': 'Oftalmologista',
+      'TVQ5046': 'Ortopedista',
+      'HMG9544': 'Pediatra',
+      'HME8366': 'Otorrinolaringologista',
+      'DYY8522': 'Médico da Família',
+      'QOP1101': 'Psiquiatra',
+      'LZF3879': 'Nutrólogo',
+      'YZD9932': 'Geriatria',
+      'UDH3250': 'Reumatologista',
+      'PKS9388': 'Neurologista',
+      'MYX5186': 'Infectologista',
+      'ZXW2165': 'Psicólogo - 1 sessão',
+      'HXR8516': 'Psicólogo - 4 sessões',
+      'YME9025': 'Psicólogo - 8 sessões',
+    };
+
+    const isEspecialista = ESPECIALISTA_SKUS.includes(schedulePayload.sku);
+    const isPsicologo = PSICOLOGO_SKUS.includes(schedulePayload.sku);
+    const semPlanoAtivo = !schedulePayload.plano_ativo;
+
+    if ((isEspecialista || isPsicologo) && semPlanoAtivo) {
+      const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
+      const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
+      
+      console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → WhatsApp Suporte`);
+      console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
+
+      // Salvar appointment para tracking
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      await supabaseAdmin.from('appointments').insert({
+        appointment_id: appointmentId,
+        email: schedulePayload.email,
+        service_code: schedulePayload.sku,
+        service_name: serviceName,
+        start_at_local: new Date().toISOString(),
+        duration_min: 30,
+        status: 'pending_schedule',
+        provider: 'whatsapp_manual',
+        redirect_url: whatsappUrl,
+        teams_join_url: whatsappUrl,
+        order_id: payment.metadata?.order_id
+      });
+
+      // Gravar métrica
+      await supabaseAdmin.from('metrics').insert({
+        metric_type: 'sale',
+        amount_cents: Math.round(payment.transaction_amount * 100),
+        plan_code: schedulePayload.sku,
+        platform: 'whatsapp_manual',
+        status: 'approved',
+        patient_email: schedulePayload.email,
+        metadata: { 
+          payment_id: payment.id, 
+          mp_status: payment.status,
+          order_id: payment.metadata?.order_id,
+          redirect_type: 'whatsapp_specialist_no_plan'
+        }
+      });
+
+      // Marcar como processado
+      if (payment.metadata?.order_id) {
+        await supabaseAdmin
+          .from('pending_payments')
+          .update({ 
+            processed: true,
+            processed_at: new Date().toISOString(),
+            status: 'approved'
+          })
+          .eq('order_id', payment.metadata.order_id);
+      }
+
+      // Sincronizar ClubeBen (fire-and-forget)
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!
+      );
+      
+      supabase.functions.invoke('clubeben-sync', {
+        body: {
+          user_email: schedulePayload.email,
+          trigger_source: 'payment_approved'
+        }
+      }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
+
+      console.log('[mp-webhook] ✅ Redirecionamento WhatsApp configurado');
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        payment_id: payment.id,
+        redirect_url: whatsappUrl,
+        provider: 'whatsapp_manual'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Fluxo normal: Chamar schedule-redirect
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!
