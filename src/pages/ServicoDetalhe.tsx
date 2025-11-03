@@ -457,7 +457,7 @@ const ServicoDetalhe = () => {
                             3
                           </div>
                           <div>
-                            <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
+                            <h3 className="font-semibold text-foreground mb-1">Emissão da Receita</h3>
                             <p className="text-muted-foreground">Receba sua nova receita digital com assinatura médica.</p>
                           </div>
                         </div>
