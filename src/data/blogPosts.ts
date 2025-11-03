@@ -1,9 +1,9 @@
-import telemedicineImage from "@/assets/telemedicine-consultation.jpg";
-import prescriptionImage from "@/assets/doctor-prescription-real.jpg";
-import consultationImage from "@/assets/doctor-online-consultation.jpg";
-import medicalTeamImage from "@/assets/medical-team-modern.jpg";
-import heroMedicalImage from "@/assets/hero-medical.jpg";
-import heroModernImage from "@/assets/hero-doctor-modern.jpg";
+import telemedicineImage from "@/assets/telemedicine-consultation.webp";
+import prescriptionImage from "@/assets/doctor-prescription-real.webp";
+import consultationImage from "@/assets/doctor-online-consultation.webp";
+import medicalTeamImage from "@/assets/medical-team-modern.webp";
+import heroMedicalImage from "@/assets/hero-medical.webp";
+import heroModernImage from "@/assets/hero-doctor-modern.webp";
 
 export type BlogPost = {
   slug: string;
