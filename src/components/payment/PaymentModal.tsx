@@ -99,6 +99,7 @@ export function PaymentModal({
   const deviceIdIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const brickRecoverAttemptsRef = useRef(0);
 
   // Reset de segurança: liberar flag após 10 segundos (caso algo dê errado)
   useEffect(() => {
@@ -502,6 +503,7 @@ export function PaymentModal({
             console.log('[Brick onReady] ✅ Card Payment Brick montado com sucesso');
             console.log('[Brick onReady] Container:', document.getElementById('cardPaymentBrick'));
             isBrickMountedRef.current = true;
+            brickRecoverAttemptsRef.current = 0;
           },
           onSubmit: async (brickSubmitData: any) => {
             // Prevenir múltiplos submits simultâneos
@@ -556,12 +558,57 @@ export function PaymentModal({
           },
           onError: (error: any) => {
             console.error('[Card Payment Brick] Error:', error);
-            
+
+            const cause = error?.cause || error?.cause?.[0]?.code || '';
+            const message: string = error?.message || '';
+            const isSecureFieldsFailure =
+              cause === 'fields_setup_failed_after_3_tries' ||
+              cause === 'fields_setup_failed' ||
+              message.toLowerCase().includes('secure fields failed') ||
+              message.toLowerCase().includes('fields_setup_failed');
+
+            if (isSecureFieldsFailure) {
+              console.warn('[Card Payment Brick] Detected Secure Fields setup failure. Attempting controlled remount.');
+              setError('Não foi possível iniciar os campos do cartão. Recarregando o formulário...');
+              setPaymentStatus('idle');
+
+              if (brickRecoverAttemptsRef.current >= 2) {
+                console.error('[Card Payment Brick] Máximo de tentativas de recuperação atingido.');
+                return;
+              }
+
+              brickRecoverAttemptsRef.current += 1;
+
+              try {
+                if (cardPaymentBrickRef.current) {
+                  cardPaymentBrickRef.current.unmount();
+                }
+              } catch (e) {
+                console.warn('[Card Payment Brick] Erro ao desmontar para remontagem:', e);
+              } finally {
+                cardPaymentBrickRef.current = null;
+                isBrickMountedRef.current = false;
+              }
+
+              // Remontar de forma controlada após pequena espera
+              setTimeout(() => {
+                if (
+                  open &&
+                  !showSummary &&
+                  paymentMethod === 'card' &&
+                  mpInstanceRef.current
+                ) {
+                  mountCardPaymentBrick();
+                }
+              }, 400);
+              return;
+            }
+
             // ✅ Exibir erros críticos ao usuário
-            if (error?.cause?.[0]?.code === 'E301' || error?.message?.includes('token')) {
+            if (error?.cause?.[0]?.code === 'E301' || message.includes('token')) {
               setError('Erro ao processar dados do cartão. Verifique as informações e tente novamente.');
               setPaymentStatus('idle');
-            } else if (error?.message?.includes('security_code')) {
+            } else if (message.includes('security_code')) {
               setError('Código de segurança (CVV) inválido.');
               setPaymentStatus('idle');
             } else {
