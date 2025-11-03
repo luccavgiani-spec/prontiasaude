@@ -515,7 +515,8 @@ const ServicoDetalhe = () => {
                         </div>
                         <div>
                           <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                          <p className="text-muted-foreground">Após entrar na fila de atendimento, um médico responsável te chamará para ouvir suas necessidades.</p>
+                          <p className="text-muted-foreground">Durante a consulta, o médico realizará sua avaliação.
+Ao final, você receberá receitas, atestados e encaminhamentos, conforme a necessidade do seu caso.</p>
                         </div>
                       </div>
                       <div className="flex gap-4">
