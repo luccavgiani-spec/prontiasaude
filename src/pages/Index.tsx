@@ -6,10 +6,8 @@ import { PlanosSection } from "@/components/home/PlanosSection";
 import { FAQSection } from "@/components/home/FAQSection";
 import { ProvasSection } from "@/components/home/ProvasSection";
 import { ClubeBenBannerSection } from "@/components/home/ClubeBenBannerSection";
-
 const Index = () => {
-  return (
-    <>
+  return <>
       <HeroSection />
       <BenefitsBar />
       <ServicosSection />
@@ -17,9 +15,7 @@ const Index = () => {
       <PlanosSection />
       <ClubeBenBannerSection />
       <FAQSection />
-      <ProvasSection />
-    </>
-  );
+      
+    </>;
 };
-
 export default Index;
