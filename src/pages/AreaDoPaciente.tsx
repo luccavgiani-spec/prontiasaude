@@ -6,10 +6,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight } from "lucide-react";
+import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
+import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 const AreaDoPaciente = () => {
@@ -18,6 +19,8 @@ const AreaDoPaciente = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [patientPlan, setPatientPlan] = useState<PatientPlan | null>(null);
   const [accessingClub, setAccessingClub] = useState(false);
+  const [redirectingConsulta, setRedirectingConsulta] = useState(false);
+  const [redirectingReceita, setRedirectingReceita] = useState(false);
   const {
     toast
   } = useToast();
@@ -147,6 +150,49 @@ const AreaDoPaciente = () => {
       setAccessingClub(false);
     }
   };
+
+  const handleDirectSchedule = async (sku: string, serviceName: string) => {
+    if (!patient || !currentUser) return;
+    
+    const isConsulta = sku === 'ITC6534';
+    const setLoading = isConsulta ? setRedirectingConsulta : setRedirectingReceita;
+    
+    setLoading(true);
+    
+    try {
+      const payload = {
+        cpf: patient.cpf || '',
+        email: currentUser.email || '',
+        nome: `${patient.first_name} ${patient.last_name}`,
+        telefone: patient.phone_e164 || '',
+        sku,
+        plano_ativo: true as const,
+        sexo: patient.gender
+      };
+      
+      const response = await scheduleWithActivePlan(payload);
+      
+      if (response.ok && response.url) {
+        toast({
+          title: "✅ Redirecionando",
+          description: `Abrindo ${serviceName}...`
+        });
+        window.location.href = response.url;
+      } else {
+        throw new Error(response.error || 'Erro ao redirecionar');
+      }
+    } catch (error) {
+      console.error('[Direct Schedule Error]:', error);
+      toast({
+        title: "❌ Erro",
+        description: "Não foi possível redirecionar. Tente novamente.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getPregnancyStatusText = (status?: string) => {
     switch (status) {
       case 'never':
@@ -203,19 +249,58 @@ const AreaDoPaciente = () => {
                 <p className="text-muted-foreground">
                   Escolha o atendimento que você precisa
                 </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
-                  <Button asChild size="lg" className="flex-1">
-                    <Link to="/servicos">
-                      <Stethoscope className="h-5 w-5 mr-2" />
-                      Nova consulta
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="lg" className="flex-1">
-                    <Link to="/servicos/renovacao_receitas">
-                      <Pill className="h-5 w-5 mr-2" />
-                      Renovar Receitas
-                    </Link>
-                  </Button>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto">
+                  {patientPlan ? (
+                    // ✅ USUÁRIO COM PLANO ATIVO - Redirecionamentos diretos
+                    <>
+                      <Button 
+                        onClick={() => handleDirectSchedule('ITC6534', 'Pronto Atendimento')}
+                        size="lg" 
+                        className="flex-1"
+                        disabled={redirectingConsulta}
+                      >
+                        <Stethoscope className="h-5 w-5 mr-2" />
+                        {redirectingConsulta ? "Redirecionando..." : "Nova consulta"}
+                      </Button>
+                      
+                      <Button 
+                        onClick={() => window.open('https://wa.me/08000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')}
+                        variant="outline" 
+                        size="lg" 
+                        className="flex-1"
+                      >
+                        <PhoneCall className="h-5 w-5 mr-2" />
+                        Agendar Especialidades
+                      </Button>
+                      
+                      <Button 
+                        onClick={() => handleDirectSchedule('RZP5755', 'Renovação de Receitas')}
+                        variant="outline" 
+                        size="lg" 
+                        className="flex-1"
+                        disabled={redirectingReceita}
+                      >
+                        <Pill className="h-5 w-5 mr-2" />
+                        {redirectingReceita ? "Redirecionando..." : "Renovar Receitas"}
+                      </Button>
+                    </>
+                  ) : (
+                    // ❌ USUÁRIO SEM PLANO - Comportamento normal
+                    <>
+                      <Button asChild size="lg" className="flex-1">
+                        <Link to="/servicos">
+                          <Stethoscope className="h-5 w-5 mr-2" />
+                          Nova consulta
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" size="lg" className="flex-1">
+                        <Link to="/servicos/renovacao_receitas">
+                          <Pill className="h-5 w-5 mr-2" />
+                          Renovar Receitas
+                        </Link>
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             </CardContent>
