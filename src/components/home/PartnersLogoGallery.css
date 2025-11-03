@@ -50,7 +50,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: hsl(var(--background));
+  background: hsl(32 43% 89% / 0.3);
   border-radius: 50%; /* círculo perfeito */
   box-shadow: 0 2px 8px hsla(var(--foreground) / 0.08);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
