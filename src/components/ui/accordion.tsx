@@ -43,14 +43,11 @@ const AccordionContent = React.forwardRef<React.ElementRef<typeof AccordionPrimi
           </div>;
       }
       
-      // Handle single line breaks as bullet list items
+      // Handle single line breaks as separate paragraphs
       const lines = content.split('\n').filter(l => l.trim());
       if (lines.length > 1) {
         return <div className="space-y-3">
-            <p>{lines[0].trim()}</p>
-            <ul className="space-y-2 list-disc list-inside">
-              {lines.slice(1).map((line, index) => <li key={index}>{line.trim()}</li>)}
-            </ul>
+            {lines.map((line, index) => <p key={index}>{line.trim()}</p>)}
           </div>;
       }
       
