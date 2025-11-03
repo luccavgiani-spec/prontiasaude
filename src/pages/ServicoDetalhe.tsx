@@ -519,12 +519,7 @@ const ServicoDetalhe = () => {
 Ao final, você receberá receitas, atestados e encaminhamentos, conforme a necessidade do seu caso.</p>
                         </div>
                       </div>
-                      <div className="flex gap-4">
-                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                          4
-                        </div>
-                        
-                      </div>
+                      
                     </>}
                 </div>
               </div>
