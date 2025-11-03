@@ -509,16 +509,7 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Após o pagamento ser confirmado, você será direcionado para o agendamento via WhatsApp para escolher o melhor horário da sua consulta.</p>
                         </div>
                       </div>
-                      <div className="flex gap-4">
-                        <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
-                          3
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-foreground mb-1">Consulta</h3>
-                          <p className="text-muted-foreground">Durante a consulta, o médico realizará sua avaliação.
-Ao final, você receberá receitas, atestados e encaminhamentos, conforme a necessidade do seu caso.</p>
-                        </div>
-                      </div>
+                      
                       
                     </>}
                 </div>
