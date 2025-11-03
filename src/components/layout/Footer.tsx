@@ -13,7 +13,7 @@ export function Footer() {
               <img 
                 src={prontiaLogo} 
                 alt="Prontìa Saúde" 
-                className="h-14 w-auto"
+                className="h-16 w-auto"
               />
             </Link>
             <p className="text-white/80 mb-4 max-w-md">

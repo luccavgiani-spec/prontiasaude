@@ -46,7 +46,7 @@ export function Navbar() {
             <img 
               src={prontiaLogo} 
               alt="Prontìa Saúde" 
-              className="h-12 lg:h-14 w-auto transition-all duration-300 group-hover:scale-105"
+              className="h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105"
             />
           </Link>
 
