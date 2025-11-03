@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, Copy, QrCode, RefreshCw } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Check, Copy, QrCode, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePaymentRedirect } from '@/hooks/usePaymentRedirect';
 
 interface PixPaymentFormProps {
   qrCode: string;
@@ -17,6 +19,37 @@ interface PixPaymentFormProps {
 export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, paymentId, orderId, email }: PixPaymentFormProps) {
   const [copied, setCopied] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [progress, setProgress] = useState(0);
+  
+  // Hook para polling automático
+  const { redirectUrl: autoRedirectUrl, isChecking, attempts } = usePaymentRedirect({
+    orderId,
+    email,
+    enabled: !redirectUrl && (!!orderId || !!email),
+    maxAttempts: 20,
+    intervalMs: 3000
+  });
+
+  // Atualizar progress bar baseado nas tentativas
+  useEffect(() => {
+    if (isChecking && attempts > 0) {
+      // Calcular progresso: 0% a 95% durante polling (nunca 100% até confirmar)
+      const percentage = Math.min((attempts / 20) * 95, 95);
+      setProgress(percentage);
+    } else if (redirectUrl || autoRedirectUrl) {
+      setProgress(100);
+    }
+  }, [attempts, isChecking, redirectUrl, autoRedirectUrl]);
+
+  // Redirecionar quando URL estiver disponível
+  useEffect(() => {
+    if (autoRedirectUrl && !redirectUrl) {
+      toast.success('Pagamento confirmado! Redirecionando...');
+      setTimeout(() => {
+        window.location.href = autoRedirectUrl;
+      }, 1500);
+    }
+  }, [autoRedirectUrl, redirectUrl]);
 
   const handleCopyCode = async () => {
     try {
@@ -128,15 +161,44 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
         )}
       </Button>
 
-      {/* Status */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-        <div className="flex items-center justify-center gap-2 text-blue-700 mb-2">
-          <div className="h-2 w-2 bg-blue-600 rounded-full animate-pulse" />
-          <span className="font-medium">Aguardando pagamento...</span>
+      {/* Status com Progress Bar */}
+      <div className="space-y-4">
+        {/* Barra de Progresso */}
+        {isChecking && !redirectUrl && !autoRedirectUrl && (
+          <div className="space-y-2">
+            <Progress value={progress} className="h-2" />
+            <p className="text-xs text-center text-muted-foreground">
+              Verificando pagamento... (tentativa {attempts}/20)
+            </p>
+          </div>
+        )}
+
+        {/* Status Card */}
+        <div className={`rounded-lg p-4 text-center border-2 transition-colors ${
+          redirectUrl || autoRedirectUrl 
+            ? 'bg-green-50 border-green-200' 
+            : 'bg-blue-50 border-blue-200'
+        }`}>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            {redirectUrl || autoRedirectUrl ? (
+              <>
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <span className="font-medium text-green-700">Pagamento confirmado!</span>
+              </>
+            ) : (
+              <>
+                <Clock className="h-5 w-5 text-blue-600 animate-pulse" />
+                <span className="font-medium text-blue-700">Aguardando pagamento...</span>
+              </>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {redirectUrl || autoRedirectUrl 
+              ? 'Redirecionando para o atendimento...'
+              : 'Verificando status automaticamente a cada 3 segundos'
+            }
+          </p>
         </div>
-        <p className="text-sm text-blue-600">
-          O pagamento será confirmado automaticamente após a compensação
-        </p>
       </div>
 
       {/* Botão Verificar Status Manualmente */}

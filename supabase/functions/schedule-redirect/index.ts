@@ -302,6 +302,11 @@ async function saveAppointment(
   try {
     const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    console.log('[saveAppointment] 💾 Salvando appointment no banco de dados...');
+    console.log('[saveAppointment] Provider:', provider);
+    console.log('[saveAppointment] Redirect URL:', redirectUrl);
+    console.log('[saveAppointment] Order ID:', payload.order_id || 'N/A');
+    
     // Mapeamento de SKU para nome do serviço
     const SERVICE_NAMES: Record<string, string> = {
       'ITC6534': 'Clínico Geral',
@@ -344,27 +349,26 @@ async function saveAppointment(
       status: 'confirmed',
       provider: provider,
       redirect_url: redirectUrl,
-      teams_join_url: redirectUrl, // Por enquanto, usar redirect_url como join_url
+      teams_join_url: redirectUrl,
       order_id: payload.order_id
     };
-    
-    console.log('[saveAppointment] order_id recebido:', payload.order_id || 'AUSENTE');
-    console.log('[saveAppointment] Salvando appointment:', {
-      ...appointmentData,
-      order_id: payload.order_id || 'AUSENTE'
-    });
     
     const { error } = await supabase
       .from('appointments')
       .insert(appointmentData);
     
     if (error) {
-      console.error('[saveAppointment] Erro ao salvar:', error);
+      console.error('[saveAppointment] ❌ ERRO ao salvar appointment:', error);
+      throw error;
     } else {
-      console.log('[saveAppointment] ✓ Appointment salvo com sucesso:', appointmentId);
+      console.log('[saveAppointment] ✅ APPOINTMENT SALVO COM SUCESSO!');
+      console.log('[saveAppointment] Appointment ID:', appointmentId);
+      console.log('[saveAppointment] Email:', payload.email);
+      console.log('[saveAppointment] Redirect URL:', redirectUrl);
     }
   } catch (error) {
-    console.error('[saveAppointment] Erro inesperado:', error);
+    console.error('[saveAppointment] ❌ EXCEÇÃO ao salvar appointment:', error);
+    throw error;
   }
 }
 
@@ -377,7 +381,15 @@ Deno.serve(async (req) => {
 
   try {
     const payload: SchedulePayload = await req.json();
-    console.log('[schedule-redirect] Processing request for SKU:', payload.sku);
+    
+    console.log('[schedule-redirect] ========================================');
+    console.log('[schedule-redirect] 🚀 INICIANDO AGENDAMENTO:', new Date().toISOString());
+    console.log('[schedule-redirect] SKU:', payload.sku);
+    console.log('[schedule-redirect] Email:', payload.email);
+    console.log('[schedule-redirect] Order ID:', payload.order_id || 'N/A');
+    console.log('[schedule-redirect] Payment ID:', payload.payment_id || 'N/A');
+    console.log('[schedule-redirect] Plano Ativo:', payload.plano_ativo);
+    console.log('[schedule-redirect] ========================================');
 
     // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp (SOMENTE SEM PLANO)
     const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {

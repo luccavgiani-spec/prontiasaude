@@ -151,38 +151,56 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY')!
     );
 
-    console.log('[mp-webhook] Calling schedule-redirect for payment:', payment.id);
+    console.log('[mp-webhook] 📞 Chamando schedule-redirect para payment:', payment.id);
 
-    const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
-      body: {
-        cpf: schedulePayload.cpf,
-        email: schedulePayload.email,
-        nome: schedulePayload.nome,
-        telefone: schedulePayload.telefone,
-        especialidade: schedulePayload.especialidade || 'Clínico Geral',
-        sku: schedulePayload.sku,
-        horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
-        plano_ativo: schedulePayload.plano_ativo || false,
-        order_id: payment.metadata?.order_id,
-        payment_id: payment.id
-      }
-    });
-
-    if (scheduleError) {
-      console.error('[mp-webhook] Schedule-redirect error:', scheduleError.message);
-    } else {
-      console.log('[mp-webhook] Scheduled successfully:', scheduleData);
+    // ✅ RETRY AUTOMÁTICO: Tentar 3 vezes com delay exponencial
+    let scheduleData = null;
+    let scheduleError = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      console.log(`[mp-webhook] 🔄 Tentativa ${attempt}/${maxRetries} de agendar...`);
       
-      if (scheduleData) {
+      const result = await supabase.functions.invoke('schedule-redirect', {
+        body: {
+          cpf: schedulePayload.cpf,
+          email: schedulePayload.email,
+          nome: schedulePayload.nome,
+          telefone: schedulePayload.telefone,
+          especialidade: schedulePayload.especialidade || 'Clínico Geral',
+          sku: schedulePayload.sku,
+          horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+          plano_ativo: schedulePayload.plano_ativo || false,
+          order_id: payment.metadata?.order_id,
+          payment_id: payment.id
+        }
+      });
+
+      scheduleData = result.data;
+      scheduleError = result.error;
+
+      if (!scheduleError && scheduleData?.ok) {
+        console.log(`[mp-webhook] ✅ Agendamento bem-sucedido na tentativa ${attempt}`);
         console.log('[mp-webhook] Appointment details:', {
           appointment_id: scheduleData.appointment_id,
           redirect_url: scheduleData.url,
           provider: scheduleData.provider
         });
+        break;
+      }
+
+      if (attempt < maxRetries) {
+        const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`[mp-webhook] ⚠️ Falha na tentativa ${attempt}, aguardando ${delayMs}ms antes de retentar...`);
+        console.log('[mp-webhook] Erro:', scheduleError?.message || 'Resposta inválida');
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      } else {
+        console.error(`[mp-webhook] ❌ FALHA após ${maxRetries} tentativas de agendamento`);
+        console.error('[mp-webhook] Último erro:', scheduleError?.message || 'Resposta inválida');
       }
     }
 
-    // ✅ Gravar métrica de venda
+    // ✅ Gravar métrica de venda e atualizar pending_payments
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -195,16 +213,31 @@ Deno.serve(async (req) => {
         amount_cents: Math.round(payment.transaction_amount * 100),
         plan_code: schedulePayload.sku || 'UNKNOWN',
         platform: scheduleData?.provider || 'unknown',
-        status: 'approved',
+        status: scheduleError ? 'failed_schedule' : 'approved',
         patient_email: payment.payer?.email || schedulePayload.email,
         metadata: { 
           payment_id: payment.id, 
           mp_status: payment.status,
-          order_id: payment.metadata?.order_id
+          order_id: payment.metadata?.order_id,
+          schedule_error: scheduleError?.message || null
         }
       });
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
+
+    // ✅ Marcar pending_payment como processado
+    if (payment.metadata?.order_id) {
+      await supabaseAdmin
+        .from('pending_payments')
+        .update({ 
+          processed: !scheduleError,
+          processed_at: new Date().toISOString(),
+          status: scheduleError ? 'failed' : 'approved'
+        })
+        .eq('order_id', payment.metadata.order_id);
+      
+      console.log('[mp-webhook] ✅ Pending payment atualizado:', payment.metadata.order_id);
+    }
 
     console.log('[mp-webhook] ========================================');
     console.log('[mp-webhook] ✅ PROCESSAMENTO CONCLUÍDO');
