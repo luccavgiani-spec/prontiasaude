@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Check, Copy, QrCode } from 'lucide-react';
+import { Check, Copy, QrCode, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface PixPaymentFormProps {
   qrCode: string;
   qrCodeBase64: string;
   redirectUrl?: string;
   onCancel: () => void;
+  paymentId?: string;
+  orderId?: string;
+  email?: string;
 }
 
-export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel }: PixPaymentFormProps) {
+export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, paymentId, orderId, email }: PixPaymentFormProps) {
   const [copied, setCopied] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   const handleCopyCode = async () => {
     try {
@@ -21,6 +26,53 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel }: 
       setTimeout(() => setCopied(false), 3000);
     } catch (error) {
       toast.error('Erro ao copiar código');
+    }
+  };
+
+  const handleCheckPaymentStatus = async () => {
+    if (!paymentId && !orderId) {
+      toast.error('Dados de pagamento não disponíveis');
+      return;
+    }
+
+    setChecking(true);
+    
+    try {
+      console.log('[PixPaymentForm] Verificando status do pagamento:', { paymentId, orderId, email });
+      
+      const { data, error } = await supabase.functions.invoke('check-payment-status', {
+        body: { 
+          payment_id: paymentId,
+          order_id: orderId,
+          email: email
+        }
+      });
+
+      if (error) {
+        console.error('[PixPaymentForm] Erro ao verificar status:', error);
+        toast.error('Erro ao verificar pagamento');
+        return;
+      }
+
+      console.log('[PixPaymentForm] Resposta:', data);
+
+      if (data.approved && data.redirect_url) {
+        toast.success('Pagamento aprovado! Redirecionando...');
+        setTimeout(() => {
+          window.location.href = data.redirect_url;
+        }, 1500);
+      } else if (data.status === 'pending') {
+        toast.info('Pagamento ainda pendente. Aguarde a compensação.');
+      } else if (data.status === 'rejected') {
+        toast.error('Pagamento rejeitado. Tente novamente.');
+      } else {
+        toast.warning(`Status: ${data.status}`);
+      }
+    } catch (error) {
+      console.error('[PixPaymentForm] Exceção:', error);
+      toast.error('Erro ao verificar pagamento');
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -86,6 +138,21 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel }: 
           O pagamento será confirmado automaticamente após a compensação
         </p>
       </div>
+
+      {/* Botão Verificar Status Manualmente */}
+      {(paymentId || orderId) && !redirectUrl && (
+        <Button
+          type="button"
+          onClick={handleCheckPaymentStatus}
+          disabled={checking}
+          variant="outline"
+          className="w-full"
+          size="lg"
+        >
+          <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+          {checking ? 'Verificando...' : 'Verificar Status do Pagamento'}
+        </Button>
+      )}
 
       {/* Botão Acessar Atendimento - Apenas quando redirectUrl existir */}
       {redirectUrl && (

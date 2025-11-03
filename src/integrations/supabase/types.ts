@@ -530,6 +530,45 @@ export type Database = {
         }
         Relationships: []
       }
+      pending_payments: {
+        Row: {
+          amount_cents: number | null
+          created_at: string | null
+          email: string
+          id: string
+          order_id: string | null
+          payment_id: string
+          processed: boolean | null
+          processed_at: string | null
+          sku: string | null
+          status: string
+        }
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string | null
+          email: string
+          id?: string
+          order_id?: string | null
+          payment_id: string
+          processed?: boolean | null
+          processed_at?: string | null
+          sku?: string | null
+          status: string
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          order_id?: string | null
+          payment_id?: string
+          processed?: boolean | null
+          processed_at?: string | null
+          sku?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       services: {
         Row: {
           active: boolean | null
