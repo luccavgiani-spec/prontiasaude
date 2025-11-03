@@ -46,7 +46,7 @@
 
 .item-image {
   width: 100%;
-  height: 40%;
+  height: 30%;
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -68,7 +68,7 @@
 
 .item-content {
   padding: 30px;
-  height: 60%;
+  height: 70%;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -88,6 +88,8 @@
   font-size: 0.95rem;
   opacity: 0.9;
   line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 @keyframes scroll-circular {
@@ -113,7 +115,7 @@
   
   .item-content {
     padding: 20px;
-    height: 60%;
+    height: 70%;
     overflow-y: auto;
   }
   
