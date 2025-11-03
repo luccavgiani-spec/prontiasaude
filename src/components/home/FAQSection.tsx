@@ -1,5 +1,5 @@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { faqData } from "@/data/faqData";
+import { faqData } from "@/data/faqData.tsx";
 export function FAQSection() {
   return <section id="faq" className="py-16 bg-muted/30">
       <div className="container mx-auto px-[25px]">

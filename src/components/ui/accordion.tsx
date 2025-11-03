@@ -24,40 +24,9 @@ const AccordionContent = React.forwardRef<React.ElementRef<typeof AccordionPrimi
   children,
   ...props
 }, ref) => {
-  const formatContent = (content: React.ReactNode) => {
-    if (typeof content === 'string') {
-      // Split by bullet points and format as paragraphs
-      const parts = content.split('•').filter(part => part.trim());
-      if (parts.length > 1) {
-        return <div className="space-y-2">
-            <p>{parts[0].trim()}</p>
-            
-          </div>;
-      }
-
-      // Handle regular paragraphs by splitting on double line breaks
-      const paragraphs = content.split('\n\n').filter(p => p.trim());
-      if (paragraphs.length > 1) {
-        return <div className="space-y-3">
-            {paragraphs.map((paragraph, index) => <p key={index}>{paragraph.trim()}</p>)}
-          </div>;
-      }
-      
-      // Handle single line breaks as separate paragraphs
-      const lines = content.split('\n').filter(l => l.trim());
-      if (lines.length > 1) {
-        return <div className="space-y-3">
-            {lines.map((line, index) => <p key={index}>{line.trim()}</p>)}
-          </div>;
-      }
-      
-      return <p>{content}</p>;
-    }
-    return children;
-  };
   return <AccordionPrimitive.Content ref={ref} className="overflow-hidden text-sm transition-all data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down" {...props}>
       <div className={cn("pb-4 pt-0", className)}>
-        {formatContent(children)}
+        {children}
       </div>
     </AccordionPrimitive.Content>;
 });
