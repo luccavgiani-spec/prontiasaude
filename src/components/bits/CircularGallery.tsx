@@ -24,7 +24,7 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
     },
     {
       title: "Instituto Caminhos da Luz",
-      description: "Localizado em São Paulo, o Instituto Caminhos da Luz é um porto seguro para crianças e adolescentes em vulnerabilidade social. Oferecemos acolhimento especializado, apoio psicológico e cuidados integrais, criando um ambiente de proteção e desenvolvimento. Nossa missão é reconstruir esperanças e abrir caminhos para um futuro digno e promissor.",
+      description: "O Instituto Caminhos da Luz, fundado em 2017, é uma organização da sociedade civil que acredita no poder do cuidado e da empatia para transformar vidas. O propósito é promover dignidade, cidadania e inclusão social, criando oportunidades para pessoas em situação de vulnerabilidade. Com sede em Bragança Paulista (SP), desenvolve projetos nas áreas de assistência social, saúde mental, educação, igualdade racial, geração de renda e valorização cultural. Mais do que oferecer ajuda imediata, busca construir caminhos duradouros, fortalecendo famílias e comunidades por meio de ações solidárias e transformadoras. Acredita que toda mudança começa quando escolhemos enxergar o outro com amor, respeito e esperança. 💛",
       image: institutoCaminhosLogo
     }
   ];
