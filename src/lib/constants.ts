@@ -65,9 +65,9 @@ export const CATALOGO_SERVICOS = [
     ]
   },
   { 
-    slug: "laudos_psicologicos", 
-    nome: "Laudos Psicológicos", 
-    precoBase: 119.90, 
+    slug: "laudos_psicologicos",
+    nome: "Laudos Psicológicos",
+    precoBase: 129.90,
     sku: "OVM9892",
     descricao: "Laudos assinados digitalmente",
     tempo: "Disponível após consulta",
