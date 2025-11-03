@@ -156,10 +156,10 @@ Deno.serve(async (req) => {
     // ✅ RETRY AUTOMÁTICO: Tentar 3 vezes com delay exponencial
     let scheduleData = null;
     let scheduleError = null;
-    const maxRetries = 3;
+    const maxScheduleRetries = 3;
     
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      console.log(`[mp-webhook] 🔄 Tentativa ${attempt}/${maxRetries} de agendar...`);
+    for (let attempt = 1; attempt <= maxScheduleRetries; attempt++) {
+      console.log(`[mp-webhook] 🔄 Tentativa ${attempt}/${maxScheduleRetries} de agendar...`);
       
       const result = await supabase.functions.invoke('schedule-redirect', {
         body: {
@@ -189,13 +189,13 @@ Deno.serve(async (req) => {
         break;
       }
 
-      if (attempt < maxRetries) {
+      if (attempt < maxScheduleRetries) {
         const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
         console.log(`[mp-webhook] ⚠️ Falha na tentativa ${attempt}, aguardando ${delayMs}ms antes de retentar...`);
         console.log('[mp-webhook] Erro:', scheduleError?.message || 'Resposta inválida');
         await new Promise(resolve => setTimeout(resolve, delayMs));
       } else {
-        console.error(`[mp-webhook] ❌ FALHA após ${maxRetries} tentativas de agendamento`);
+        console.error(`[mp-webhook] ❌ FALHA após ${maxScheduleRetries} tentativas de agendamento`);
         console.error('[mp-webhook] Último erro:', scheduleError?.message || 'Resposta inválida');
       }
     }
