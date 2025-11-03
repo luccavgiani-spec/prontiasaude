@@ -1,0 +1,149 @@
+/* ====================================
+   PARTNERS LOGO GALLERY - CIRCULAR
+   ==================================== */
+
+.partners-logo-gallery-section {
+  width: 100%;
+  margin: 24px 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.partners-logo-gallery-wrapper {
+  width: 100%;
+  height: 140px; /* desktop default */
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 10%,
+    black 90%,
+    transparent 100%
+  );
+}
+
+.partners-logo-gallery-wrapper:active {
+  cursor: grabbing;
+}
+
+.partners-logo-track {
+  display: flex;
+  gap: 32px;
+  height: 100%;
+  animation: scroll-partners-infinite 40s linear infinite;
+  will-change: transform;
+}
+
+.partner-logo-item {
+  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: hsl(var(--background));
+  border-radius: 50%; /* círculo perfeito */
+  box-shadow: 0 2px 8px hsla(var(--foreground) / 0.08);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: hidden;
+  padding: 20px;
+  border: 1px solid hsl(var(--border));
+}
+
+.partner-logo-item:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px hsla(var(--foreground) / 0.12);
+}
+
+.partner-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Animação de loop infinito */
+@keyframes scroll-partners-infinite {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-152px * 13)); /* (120px + 32px gap) * 13 logos */
+  }
+}
+
+/* Pause on hover */
+.partners-logo-gallery-wrapper:hover .partners-logo-track {
+  animation-play-state: paused;
+}
+
+/* ====================================
+   RESPONSIVO - MOBILE
+   ==================================== */
+
+@media (max-width: 768px) {
+  .partners-logo-gallery-section {
+    margin: 16px 0;
+  }
+
+  .partners-logo-gallery-wrapper {
+    height: 96px;
+  }
+
+  .partners-logo-track {
+    gap: 24px;
+  }
+
+  .partner-logo-item {
+    width: 80px;
+    height: 80px;
+    padding: 14px;
+  }
+
+  @keyframes scroll-partners-infinite {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(calc(-104px * 13)); /* (80px + 24px gap) * 13 logos */
+    }
+  }
+}
+
+/* ====================================
+   ACESSIBILIDADE
+   ==================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .partners-logo-track {
+    animation: none;
+  }
+  
+  .partners-logo-gallery-wrapper {
+    cursor: default;
+  }
+  
+  .partners-logo-gallery-wrapper:active {
+    cursor: default;
+  }
+}
+
+/* ====================================
+   PERFORMANCE
+   ==================================== */
+
+.partners-logo-track {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  -moz-backface-visibility: hidden;
+}
