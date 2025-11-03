@@ -312,7 +312,7 @@ const ServicoDetalhe = () => {
               </h1>
               {servico.slug === "laudos_psicologicos" && <p className="text-xl text-muted-foreground mb-8">Necessário consulta prévia com psicólogo.</p>}
               {servico.slug !== "laudos_psicologicos" && <p className="text-xl text-muted-foreground mb-8">
-                  {servico.slug === "renovacao_receitas" ? "Renove agora sua receita com validade para todo o território nacional, de maneira rápida e prática." : servico.slug === "solicitacao_exames" ? "Peça seus exames de forma prática: solicitação médica online, assinada digitalmente e aceita em qualquer laboratório, sem sair de casa." : servico.descricao}
+                  {servico.slug === "renovacao_receitas" ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança." : servico.slug === "solicitacao_exames" ? "Peça seus exames de forma prática: solicitação médica online, assinada digitalmente e aceita em qualquer laboratório, sem sair de casa." : servico.descricao}
                 </p>}
 
               {/* Informações básicas */}
