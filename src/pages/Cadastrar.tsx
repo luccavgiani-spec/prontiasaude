@@ -158,6 +158,42 @@ const Cadastrar = () => {
     return gender;
   };
 
+  const translateAuthError = (error: any): string => {
+    const message = error.message?.toLowerCase() || '';
+    
+    // Email já cadastrado
+    if (message.includes('user already registered') || 
+        message.includes('email already registered') ||
+        error.code === '23505') {
+      return 'Este email já está cadastrado. Faça login ou recupere sua senha.';
+    }
+    
+    // Validação de email
+    if (message.includes('invalid email') || 
+        message.includes('invalid format')) {
+      return 'Email inválido. Verifique o formato digitado.';
+    }
+    
+    // Senha fraca
+    if (message.includes('password') && 
+        (message.includes('weak') || message.includes('short') || message.includes('at least'))) {
+      return 'A senha deve ter no mínimo 6 caracteres e atender aos requisitos de segurança.';
+    }
+    
+    // Erro de rede
+    if (message.includes('network') || message.includes('fetch')) {
+      return 'Erro de conexão. Verifique sua internet e tente novamente.';
+    }
+    
+    // Rate limit
+    if (message.includes('rate limit') || message.includes('too many')) {
+      return 'Muitas tentativas. Aguarde alguns minutos e tente novamente.';
+    }
+    
+    // Erro genérico
+    return 'Erro ao criar conta. Tente novamente ou entre em contato com o suporte.';
+  };
+
   const handleSignUpWithPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -219,7 +255,7 @@ const Cadastrar = () => {
     if (error) {
       toast({
         title: "Erro no cadastro",
-        description: error.message,
+        description: translateAuthError(error),
         variant: "destructive",
       });
       setIsLoading(false);
@@ -262,8 +298,9 @@ const Cadastrar = () => {
     }
 
     toast({
-      title: "Cadastro realizado",
-      description: "Verifique seu email para confirmar a conta.",
+      title: "✅ Cadastro realizado com sucesso!",
+      description: `Enviamos um email de confirmação para ${formData.email}. Verifique sua caixa de entrada.`,
+      duration: 6000,
     });
     navigate('/entrar');
     
@@ -320,7 +357,7 @@ const Cadastrar = () => {
     if (signUpError) {
       toast({
         title: "Erro no cadastro",
-        description: signUpError.message,
+        description: translateAuthError(signUpError),
         variant: "destructive",
       });
     } else {
@@ -335,13 +372,14 @@ const Cadastrar = () => {
       if (magicError) {
         toast({
           title: "Erro ao enviar magic link",
-          description: magicError.message,
+          description: translateAuthError(magicError),
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Magic link enviado",
-          description: "Verifique seu email para acessar sua conta.",
+          title: "✅ Link de acesso enviado!",
+          description: `Enviamos um link de acesso para ${formData.email}. Clique no link para fazer login.`,
+          duration: 6000,
         });
         navigate('/entrar');
       }
