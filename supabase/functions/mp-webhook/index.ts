@@ -93,6 +93,40 @@ Deno.serve(async (req) => {
     // Processar apenas pagamentos aprovados
     if (payment.status !== 'approved') {
       console.log('[mp-webhook] Payment status não é approved:', payment.status);
+      
+      // Gravar métrica de tentativa PIX pending para tracking
+      if (payment.status === 'pending' && payment.payment_type_id === 'pix') {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+        
+        await supabaseAdmin.from('metrics').insert({
+          metric_type: 'payment_attempt',
+          status: 'pending',
+          amount_cents: Math.round(payment.transaction_amount * 100),
+          plan_code: schedulePayload?.sku || 'UNKNOWN',
+          patient_email: payment.payer?.email || schedulePayload?.email,
+          metadata: { 
+            payment_id: payment.id, 
+            payment_type: 'pix',
+            order_id: payment.metadata?.order_id 
+          }
+        });
+        
+        // Salvar em pending_payments para tracking manual
+        await supabaseAdmin.from('pending_payments').insert({
+          payment_id: payment.id,
+          order_id: payment.metadata?.order_id,
+          email: schedulePayload?.email || payment.payer?.email,
+          status: 'pending',
+          sku: schedulePayload?.sku,
+          amount_cents: Math.round(payment.transaction_amount * 100)
+        });
+        
+        console.log('[mp-webhook] ⏳ PIX pending registrado, aguardando aprovação');
+      }
+      
       return new Response(JSON.stringify({ success: true, message: 'Not approved yet' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
