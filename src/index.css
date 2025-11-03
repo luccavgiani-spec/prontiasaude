@@ -28,39 +28,39 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    /* Medical Green - Primary Brand (Enhanced) */
-    --primary: 142 69% 35%;
-    --primary-light: 142 69% 92%;
-    --primary-glow: 142 69% 45%;
+    /* Primary: Verde petróleo Prontìa */
+    --primary: 172 100% 23%;
+    --primary-light: 172 30% 85%;
+    --primary-glow: 172 80% 30%;
     --primary-foreground: 0 0% 100%;
 
-    /* Medical Red - Secondary/Emergency (Enhanced) */
-    --secondary: 0 84% 60%;
-    --secondary-light: 0 84% 95%;
-    --secondary-glow: 0 84% 70%;
+    /* Secondary: Amarelo mostarda Prontìa */
+    --secondary: 40 98% 50%;
+    --secondary-light: 40 98% 90%;
+    --secondary-glow: 40 98% 60%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Medical Yellow - Highlights/Warnings (Enhanced) */
-    --accent: 48 96% 53%;
-    --accent-light: 48 96% 95%;
-    --accent-foreground: 222.2 84% 4.9%;
+    /* Accent: Coral/Laranja Prontìa */
+    --accent: 13 69% 57%;
+    --accent-light: 13 69% 90%;
+    --accent-foreground: 0 0% 100%;
 
-    /* Modern Neutral System */
-    --muted: 210 40% 98%;
+    /* Modern Neutral System - Bege Prontìa */
+    --muted: 32 43% 89%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --muted-dark: 215 13.8% 34.1%;
+    --muted-dark: 32 43% 70%;
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 142 69% 35%;
+    --ring: 172 100% 23%;
 
-    /* Modern Medical Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(142, 69%, 35%) 0%, hsl(142, 69%, 45%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(0, 84%, 60%) 0%, hsl(0, 84%, 70%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(48, 96%, 53%) 0%, hsl(48, 96%, 63%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(142, 69%, 35%) 0%, hsl(142, 69%, 45%) 50%, hsl(0, 84%, 60%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 98%) 100%);
-    --gradient-subtle: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(210, 40%, 99%) 100%);
+    /* Gradientes - Paleta Prontìa */
+    --gradient-primary: linear-gradient(135deg, hsl(172, 100%, 23%) 0%, hsl(172, 80%, 30%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(40, 98%, 50%) 0%, hsl(40, 98%, 60%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(13, 69%, 57%) 0%, hsl(13, 69%, 67%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(172, 100%, 23%) 0%, hsl(172, 90%, 26%) 50%, hsl(172, 80%, 30%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0, 0%, 100%) 0%, hsl(32, 43%, 89%) 100%);
+    --gradient-subtle: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(172, 30%, 98%) 100%);
 
     /* Enhanced shadows for depth */
     --shadow-sm: 0 1px 2px 0 hsl(0, 0%, 0%, 0.05);
@@ -68,9 +68,9 @@
     --shadow-lg: 0 10px 15px -3px hsl(0, 0%, 0%, 0.1), 0 4px 6px -2px hsl(0, 0%, 0%, 0.05);
     --shadow-xl: 0 20px 25px -5px hsl(0, 0%, 0%, 0.1), 0 10px 10px -5px hsl(0, 0%, 0%, 0.04);
     --shadow-2xl: 0 25px 50px -12px hsl(0, 0%, 0%, 0.25);
-    --medical-shadow: 0 10px 30px -10px hsl(142, 69%, 35%, 0.3);
+    --medical-shadow: 0 10px 30px -10px hsl(172, 100%, 23%, 0.3);
     --card-shadow: 0 4px 20px -4px hsl(0, 0%, 0%, 0.1);
-    --button-shadow: 0 4px 14px 0 hsl(142, 69%, 35%, 0.39);
+    --button-shadow: 0 4px 14px 0 hsl(172, 100%, 23%, 0.39);
 
     /* Smooth modern transitions */
     --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -105,18 +105,18 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 142 69% 45%;
-    --primary-light: 142 69% 15%;
-    --primary-glow: 142 69% 55%;
+    --primary: 172 80% 35%;
+    --primary-light: 172 30% 25%;
+    --primary-glow: 172 70% 40%;
     --primary-foreground: 222.2 84% 4.9%;
 
-    --secondary: 0 84% 65%;
-    --secondary-light: 0 84% 15%;
-    --secondary-glow: 0 84% 75%;
+    --secondary: 40 98% 60%;
+    --secondary-light: 40 98% 25%;
+    --secondary-glow: 40 98% 70%;
     --secondary-foreground: 222.2 84% 4.9%;
 
-    --accent: 48 96% 58%;
-    --accent-light: 48 96% 15%;
+    --accent: 13 69% 60%;
+    --accent-light: 13 69% 25%;
     --accent-foreground: 222.2 84% 4.9%;
 
     --muted: 217.2 32.6% 17.5%;
@@ -125,13 +125,13 @@
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 142 69% 45%;
+    --ring: 172 80% 35%;
 
-    /* Dark mode gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(142, 69%, 45%) 0%, hsl(142, 69%, 55%) 100%);
-    --gradient-secondary: linear-gradient(135deg, hsl(0, 84%, 65%) 0%, hsl(0, 84%, 75%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(48, 96%, 58%) 0%, hsl(48, 96%, 68%) 100%);
-    --gradient-hero: linear-gradient(135deg, hsl(142, 69%, 45%) 0%, hsl(142, 69%, 55%) 50%, hsl(0, 84%, 65%) 100%);
+    /* Dark mode gradients - Prontìa */
+    --gradient-primary: linear-gradient(135deg, hsl(172, 80%, 35%) 0%, hsl(172, 70%, 40%) 100%);
+    --gradient-secondary: linear-gradient(135deg, hsl(40, 98%, 60%) 0%, hsl(40, 98%, 70%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(13, 69%, 60%) 0%, hsl(13, 69%, 70%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(172, 80%, 35%) 0%, hsl(172, 75%, 38%) 50%, hsl(172, 70%, 40%) 100%);
     --gradient-card: linear-gradient(145deg, hsl(217.2, 32.6%, 17.5%) 0%, hsl(217.2, 32.6%, 20%) 100%);
     --gradient-subtle: linear-gradient(180deg, hsl(222.2, 84%, 4.9%) 0%, hsl(217.2, 32.6%, 17.5%) 100%);
 
@@ -156,9 +156,13 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6, button {
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
   /* Modern Medical UI Components */

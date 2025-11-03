@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Heart } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import prontiaLogoMisto from "@/assets/prontia-logo-horizontal-misto.webp";
+
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -39,14 +41,13 @@ export function Navbar() {
   return <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md supports-[backdrop-filter]:bg-background/80 border-b border-border/50 shadow-sm">
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
         <div className="flex justify-between items-center h-12 lg:h-14">
-          {/* Modern Logo */}
-          <Link to="/" className="flex items-center gap-2 text-lg lg:text-xl font-bold text-primary group">
-            <div className="p-2 bg-gradient-to-br from-primary to-primary-glow rounded-lg shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
-              <Heart className="h-4 w-4 text-white" />
-            </div>
-            <span className="hidden sm:inline bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              PRONTIA SAÚDE
-            </span>
+          {/* Logo Prontìa Oficial */}
+          <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
+            <img 
+              src={prontiaLogoMisto} 
+              alt="Prontìa Saúde" 
+              className="h-8 lg:h-10 w-auto transition-all duration-300 group-hover:scale-105"
+            />
           </Link>
 
           {/* Desktop Navigation */}
