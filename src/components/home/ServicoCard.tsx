@@ -79,8 +79,8 @@ export function ServicoCard({
     }
   };
   const handleAgendar = async () => {
-    // Se for psicóloga, abrir modal de seleção de pacote primeiro
-    if (servico.slug === "psicologa" && servico.variantes) {
+    // Se for psicóloga ou médicos especialistas, abrir modal de seleção de pacote primeiro
+    if ((servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && servico.variantes) {
       setIsPackageModalOpen(true);
       return;
     }
@@ -352,8 +352,8 @@ export function ServicoCard({
         </div>
       </div>
 
-      {/* Package Selection Modal (Psicóloga) */}
-      {servico.slug === "psicologa" && servico.variantes && (
+      {/* Package Selection Modal (Psicóloga e Médicos Especialistas) */}
+      {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && servico.variantes && (
         <PackageSelectionModal
           open={isPackageModalOpen}
           onOpenChange={setIsPackageModalOpen}
