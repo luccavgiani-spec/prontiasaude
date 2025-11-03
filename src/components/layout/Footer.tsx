@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
-import prontiaLogo from "@/assets/prontia-logo-verde-clean.webp";
+import prontiaLogo from "@/assets/prontia-logo-branca.webp";
 
 export function Footer() {
-  return <footer className="bg-muted/30 border-t border-border mt-16">
+  return <footer className="bg-primary border-t border-primary-glow/20 mt-16">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Logo e Descrição */}
@@ -13,23 +13,23 @@ export function Footer() {
               <img 
                 src={prontiaLogo} 
                 alt="Prontìa Saúde" 
-                className="h-12 w-auto"
+                className="h-14 w-auto"
               />
             </Link>
-            <p className="text-muted-foreground mb-4 max-w-md">
+            <p className="text-white/80 mb-4 max-w-md">
               Conectamos você aos melhores profissionais de saúde através de consultas online seguras e acessíveis.
             </p>
-            <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-2 text-sm text-white/70">
               <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4" />
+                <Mail className="h-4 w-4 text-white" />
                 <span>suporte@prontiasaude.com.br</span>
               </div>
               <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4" />
-                <a href="https://wa.me/5511933359187?text=Ol%C3%A1!" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">+55 11 93335-9187</a>
+                <Phone className="h-4 w-4 text-white" />
+                <a href="https://wa.me/5511933359187?text=Ol%C3%A1!" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">+55 11 93335-9187</a>
               </div>
               <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4" />
+                <MapPin className="h-4 w-4 text-white" />
                 <span>São Paulo, SP - Brasil</span>
               </div>
             </div>
@@ -37,13 +37,13 @@ export function Footer() {
 
           {/* Links Rápidos */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">Links Rápidos</h3>
+            <h3 className="font-semibold text-white mb-4">Links Rápidos</h3>
             <ul className="space-y-2 text-sm">
               {CATALOGO_SERVICOS.map((servico) => (
                 <li key={servico.slug}>
                   <Link 
                     to={`/servicos/${servico.slug}`} 
-                    className="text-muted-foreground hover:text-primary transition-colors"
+                    className="text-white/70 hover:text-white transition-colors"
                   >
               {servico.nome}
             </Link>
@@ -54,40 +54,40 @@ export function Footer() {
 
           {/* Institucional */}
           <div>
-            <h3 className="font-semibold text-foreground mb-4">Institucional</h3>
+            <h3 className="font-semibold text-white mb-4">Institucional</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="/planos" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/planos" className="text-white/70 hover:text-white transition-colors">
                   Planos
                 </Link>
               </li>
               <li>
-                <Link to="/empresas" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/empresas" className="text-white/70 hover:text-white transition-colors">
                   Para Empresas
                 </Link>
               </li>
               <li>
-                <Link to="/empresasdobem" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/empresasdobem" className="text-white/70 hover:text-white transition-colors">
                   Empresas do Bem
                 </Link>
               </li>
               <li>
-                <Link to="/quem-somos" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link to="/quem-somos" className="text-white/70 hover:text-white transition-colors">
                   Quem Somos
                 </Link>
               </li>
           <li>
-            <Link to="/blogs-artigos" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/blogs-artigos" className="text-white/70 hover:text-white transition-colors">
               Blog
             </Link>
           </li>
           <li>
-            <Link to="/trabalhe-conosco" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/trabalhe-conosco" className="text-white/70 hover:text-white transition-colors">
               Trabalhe Conosco
             </Link>
           </li>
           <li>
-            <Link to="/seja-nosso-parceiro" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/seja-nosso-parceiro" className="text-white/70 hover:text-white transition-colors">
               Parcerias
             </Link>
           </li>
@@ -96,15 +96,15 @@ export function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div className="border-t border-border mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="border-t border-white/20 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-4 text-sm text-white/70">
             <span>© 2024 Prontìa Saúde. Todos os direitos reservados.</span>
           </div>
           <div className="flex items-center gap-6 text-sm">
-            <Link to="/termos" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/termos" className="text-white/70 hover:text-white transition-colors">
               Termos de Uso
             </Link>
-            <Link to="/privacidade" className="text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/privacidade" className="text-white/70 hover:text-white transition-colors">
               Política de Privacidade
             </Link>
           </div>
@@ -112,25 +112,25 @@ export function Footer() {
 
         {/* Selos de Segurança */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-          <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
-            <div className="w-2 h-2 bg-primary rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Dados Protegidos (SSL)</span>
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg border border-white/20">
+            <div className="w-2 h-2 bg-white rounded-full"></div>
+            <span className="text-xs text-white/70">Dados Protegidos (SSL)</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
-            <div className="w-2 h-2 bg-accent rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Plataforma Verificada</span>
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg border border-white/20">
+            <div className="w-2 h-2 bg-secondary rounded-full"></div>
+            <span className="text-xs text-white/70">Plataforma Verificada</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg border border-white/20">
             <div className="w-2 h-2 bg-[#9b87f5] rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Communicare</span>
+            <span className="text-xs text-white/70">Communicare</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg border border-white/20">
             <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Clicklife Saúde</span>
+            <span className="text-xs text-white/70">Clicklife Saúde</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-card rounded-lg border border-border">
+          <div className="flex items-center gap-2 px-3 py-1 bg-white/10 rounded-lg border border-white/20">
             <div className="w-2 h-2 bg-[#009EE3] rounded-full"></div>
-            <span className="text-xs text-muted-foreground">Mercado Pago</span>
+            <span className="text-xs text-white/70">Mercado Pago</span>
           </div>
         </div>
       </div>
