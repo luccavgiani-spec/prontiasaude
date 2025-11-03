@@ -27,10 +27,13 @@ export const faqData: FAQ[] = [
     answer: (
       <div className="space-y-3">
         <p>
-          Após a primeira consulta, o psicólogo avaliará quantas sessões serão necessárias para a emissão do laudo.
+          Após a primeira consulta, o psicólogo avaliará quantas sessões serão necessárias para a emissão do laudo. Em média, são necessárias:
         </p>
         <p>
-          Em média, são necessárias 2 a 3 consultas para laudos de vasectomia ou laqueadura, e 4 a 10 consultas para laudos de cirurgia bariátrica.
+          Laudo de vasectomia ou laqueadura: 2 a 3 consultas;
+        </p>
+        <p>
+          Laudo de cirurgia bariátrica: 4 a 10 consultas para laudos de cirurgia bariátrica.
         </p>
       </div>
     )
