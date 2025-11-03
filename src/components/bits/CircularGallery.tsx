@@ -24,7 +24,7 @@ const CircularGallery: React.FC<CircularGalleryProps> = ({
     },
     {
       title: "Instituto Caminhos da Luz",
-      description: "O Instituto Caminhos da Luz, fundado em 2017, é uma organização da sociedade civil que acredita no poder do cuidado e da empatia para transformar vidas. O propósito é promover dignidade, cidadania e inclusão social, criando oportunidades para pessoas em situação de vulnerabilidade. Com sede em Bragança Paulista (SP), desenvolve projetos nas áreas de assistência social, saúde mental, educação, igualdade racial, geração de renda e valorização cultural. Mais do que oferecer ajuda imediata, busca construir caminhos duradouros, fortalecendo famílias e comunidades por meio de ações solidárias e transformadoras. Acredita que toda mudança começa quando escolhemos enxergar o outro com amor, respeito e esperança. 💛",
+      description: "O Instituto Caminhos da Luz, criado em 2017 e sediado em Bragança Paulista (SP), é uma organização da sociedade civil dedicada à promoção da dignidade, cidadania e inclusão social. Atua em áreas como assistência social, saúde mental, educação, igualdade racial, geração de renda e valorização cultural. Mais do que prestar ajuda imediata, o Instituto busca fortalecer famílias e comunidades com ações solidárias que geram transformações duradouras. Sua filosofia se baseia na crença de que toda mudança começa com empatia, respeito e esperança. 💛",
       image: institutoCaminhosLogo
     }
   ];
