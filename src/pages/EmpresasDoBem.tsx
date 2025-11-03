@@ -87,7 +87,7 @@ const EmpresasDoBem = () => {
           </div>
           
           <div style={{
-          height: '540px',
+          height: '740px',
           position: 'relative'
         }}>
             <CircularGallery bend={3} textColor="#1f2937" borderRadius={0.05} scrollEase={0.02} />
