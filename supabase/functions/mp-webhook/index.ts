@@ -11,16 +11,27 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    console.log('[mp-webhook] Webhook received - action:', body.action);
+    
+    console.log('[mp-webhook] ========================================');
+    console.log('[mp-webhook] 📥 WEBHOOK RECEBIDO:', new Date().toISOString());
+    console.log('[mp-webhook] Action:', body.action);
+    console.log('[mp-webhook] Payment ID:', body.data?.id);
+    console.log('[mp-webhook] Type:', body.type);
+    console.log('[mp-webhook] ========================================');
 
-    // Apenas processar payment.updated
-    if (body.action !== 'payment.updated') {
-      console.log('[mp-webhook] Ignorando action:', body.action);
+    // Aceitar múltiplos formatos de action do Mercado Pago
+    const action = (body.action || '').toLowerCase();
+    const validActions = ['payment.updated', 'payment.created', 'updated', 'created'];
+
+    if (!validActions.includes(action)) {
+      console.log('[mp-webhook] Ignorando action não relacionada a pagamentos:', body.action);
       return new Response(JSON.stringify({ success: true, message: 'Action ignored' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    console.log('[mp-webhook] ✅ Action aceita:', body.action);
 
     const paymentId = body.data?.id;
     if (!paymentId) {
@@ -42,15 +53,34 @@ Deno.serve(async (req) => {
     }
 
     console.log('[mp-webhook] Buscando payment:', paymentId);
-    const paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
-      headers: {
-        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+    
+    // Retry logic para race conditions
+    let paymentRes;
+    let attempts = 0;
+    const maxRetries = 3;
+
+    while (attempts < maxRetries) {
+      paymentRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` }
+      });
+
+      if (paymentRes.ok) {
+        console.log('[mp-webhook] ✅ Payment encontrado na tentativa', attempts + 1);
+        break;
       }
-    });
+
+      if (paymentRes.status === 404 && attempts < maxRetries - 1) {
+        console.log(`[mp-webhook] Payment não encontrado, tentativa ${attempts + 1}/${maxRetries}, aguardando 3s...`);
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        attempts++;
+      } else {
+        break;
+      }
+    }
 
     if (!paymentRes.ok) {
       const errorText = await paymentRes.text();
-      console.error('[mp-webhook] Erro ao buscar payment:', paymentRes.status, errorText);
+      console.error('[mp-webhook] Erro ao buscar payment após', attempts + 1, 'tentativas:', paymentRes.status, errorText);
       return new Response(JSON.stringify({ success: true, message: 'Payment fetch failed' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -141,6 +171,15 @@ Deno.serve(async (req) => {
       });
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
+
+    console.log('[mp-webhook] ========================================');
+    console.log('[mp-webhook] ✅ PROCESSAMENTO CONCLUÍDO');
+    console.log('[mp-webhook] Payment ID:', payment.id);
+    console.log('[mp-webhook] Status:', payment.status);
+    console.log('[mp-webhook] Email:', schedulePayload.email);
+    console.log('[mp-webhook] SKU:', schedulePayload.sku);
+    console.log('[mp-webhook] Appointment ID:', scheduleData?.appointment_id || 'N/A');
+    console.log('[mp-webhook] ========================================');
 
     // ✅ Sincronizar com ClubeBen (fire-and-forget)
     if (schedulePayload.email || schedulePayload.cpf) {
