@@ -27,7 +27,7 @@ export default function HeroChipsMobile() {
 
   return (
     <div className="md:hidden relative z-20">
-      <div style={{ minHeight: '56px' }}>
+      <div style={{ minHeight: '56px', contain: 'layout' }}>
         <LogoLoop
           logos={logos}
           speed={48}

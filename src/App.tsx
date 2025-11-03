@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -6,62 +6,60 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { useMetaTracking } from "@/hooks/use-meta-tracking";
 import { initMetaTracking } from "@/lib/meta-tracking";
+import { initWebVitals } from "@/lib/web-vitals";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+
+// Critical Pages (loaded immediately)
 import Index from "./pages/Index";
-import QuemSomos from "./pages/QuemSomos";
 import Servicos from "./pages/Servicos";
-import ServicoDetalhe from "./pages/ServicoDetalhe";
-import Consulta from "./pages/servicos/Consulta";
-import Psicologa from "./pages/servicos/Psicologa";
-import MedicosEspecialistas from "./pages/servicos/MedicosEspecialistas";
-import LaudosPsicologicos from "./pages/servicos/LaudosPsicologicos";
-import RenovacaoReceitas from "./pages/servicos/RenovacaoReceitas";
-import SolicitacaoExames from "./pages/servicos/SolicitacaoExames";
-import Planos from "./pages/Planos";
-import Empresas from "./pages/Empresas";
-import EmpresasDoBem from "./pages/EmpresasDoBem";
-import BlogsIndex from "./pages/BlogsIndex";
-import BlogArticlePage from "./pages/BlogArticlePage";
-import Paciente from "./pages/Paciente";
 import NotFound from "./pages/NotFound";
-// Auth pages
-import Entrar from "./pages/Entrar";
-import Cadastrar from "./pages/Cadastrar";
-import EsqueciSenha from "./pages/EsqueciSenha";
-import AuthCallback from "./pages/auth/Callback";
-import ResetPassword from "./pages/auth/Reset";
-import NovaSenha from "./pages/NovaSenha";
-import CompletarPerfil from "./pages/CompletarPerfil";
-import Antecedentes from "./pages/intake/Antecedentes";
-import AreaDoPaciente from "./pages/AreaDoPaciente";
-import Agendamento from "./pages/Agendamento";
-import ConfirmacaoExame from "./pages/ConfirmacaoExame";
 
-// New wellness pages
-import SaudeMental from "./pages/SaudeMental";
-import Livros from "./pages/Livros";
-import Playlists from "./pages/Playlists";
-import ReceitasSaudaveis from "./pages/ReceitasSaudaveis";
-
-// Footer pages
-import TrabalheConosco from "./pages/TrabalheConosco";
-import SejaNossParceiro from "./pages/SejaNossParceiro";
-import DisqueDenuncia from "./pages/DisqueDenuncia";
-import Termos from "./pages/Termos";
-import Privacidade from "./pages/Privacidade";
-// Admin pages
-import AdminLogin from "./pages/AdminLogin";
-import AdminDashboard from "./pages/AdminDashboard";
-// Empresa pages
-import EmpresaLogin from "./pages/empresa/Login";
-import EmpresaDashboard from "./pages/empresa/Dashboard";
-import EmpresaPerfil from "./pages/empresa/Perfil";
-import EmpresaSeguranca from "./pages/empresa/Seguranca";
-import EmpresaTrocarSenha from "./pages/empresa/TrocarSenha";
-import EmpresaFuncionarios from "./pages/empresa/Funcionarios";
-import ClubeBen from "./pages/ClubeBen";
-import ClubeBenAuth from "./pages/ClubeBenAuth";
+// Lazy-loaded Pages (code splitting)
+const QuemSomos = lazy(() => import("./pages/QuemSomos"));
+const ServicoDetalhe = lazy(() => import("./pages/ServicoDetalhe"));
+const Consulta = lazy(() => import("./pages/servicos/Consulta"));
+const Psicologa = lazy(() => import("./pages/servicos/Psicologa"));
+const MedicosEspecialistas = lazy(() => import("./pages/servicos/MedicosEspecialistas"));
+const LaudosPsicologicos = lazy(() => import("./pages/servicos/LaudosPsicologicos"));
+const RenovacaoReceitas = lazy(() => import("./pages/servicos/RenovacaoReceitas"));
+const SolicitacaoExames = lazy(() => import("./pages/servicos/SolicitacaoExames"));
+const Planos = lazy(() => import("./pages/Planos"));
+const Empresas = lazy(() => import("./pages/Empresas"));
+const EmpresasDoBem = lazy(() => import("./pages/EmpresasDoBem"));
+const BlogsIndex = lazy(() => import("./pages/BlogsIndex"));
+const BlogArticlePage = lazy(() => import("./pages/BlogArticlePage"));
+const Paciente = lazy(() => import("./pages/Paciente"));
+const Entrar = lazy(() => import("./pages/Entrar"));
+const Cadastrar = lazy(() => import("./pages/Cadastrar"));
+const EsqueciSenha = lazy(() => import("./pages/EsqueciSenha"));
+const AuthCallback = lazy(() => import("./pages/auth/Callback"));
+const ResetPassword = lazy(() => import("./pages/auth/Reset"));
+const NovaSenha = lazy(() => import("./pages/NovaSenha"));
+const CompletarPerfil = lazy(() => import("./pages/CompletarPerfil"));
+const Antecedentes = lazy(() => import("./pages/intake/Antecedentes"));
+const AreaDoPaciente = lazy(() => import("./pages/AreaDoPaciente"));
+const Agendamento = lazy(() => import("./pages/Agendamento"));
+const ConfirmacaoExame = lazy(() => import("./pages/ConfirmacaoExame"));
+const SaudeMental = lazy(() => import("./pages/SaudeMental"));
+const Livros = lazy(() => import("./pages/Livros"));
+const Playlists = lazy(() => import("./pages/Playlists"));
+const ReceitasSaudaveis = lazy(() => import("./pages/ReceitasSaudaveis"));
+const TrabalheConosco = lazy(() => import("./pages/TrabalheConosco"));
+const SejaNossParceiro = lazy(() => import("./pages/SejaNossParceiro"));
+const DisqueDenuncia = lazy(() => import("./pages/DisqueDenuncia"));
+const Termos = lazy(() => import("./pages/Termos"));
+const Privacidade = lazy(() => import("./pages/Privacidade"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const EmpresaLogin = lazy(() => import("./pages/empresa/Login"));
+const EmpresaDashboard = lazy(() => import("./pages/empresa/Dashboard"));
+const EmpresaPerfil = lazy(() => import("./pages/empresa/Perfil"));
+const EmpresaSeguranca = lazy(() => import("./pages/empresa/Seguranca"));
+const EmpresaTrocarSenha = lazy(() => import("./pages/empresa/TrocarSenha"));
+const EmpresaFuncionarios = lazy(() => import("./pages/empresa/Funcionarios"));
+const ClubeBen = lazy(() => import("./pages/ClubeBen"));
+const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
 
 const queryClient = new QueryClient();
 
@@ -79,9 +77,10 @@ const ScrollToTop = () => {
   return null;
 };
 
-// Initialize Meta tracking once
+// Initialize Meta tracking and Web Vitals once
 if (typeof window !== 'undefined') {
   initMetaTracking();
+  initWebVitals();
 }
 
 const App = () => (
@@ -94,7 +93,12 @@ const App = () => (
         <div className="min-h-screen flex flex-col bg-muted/30">
           <Navbar />
           <main className="flex-1">
-            <Routes>
+            <Suspense fallback={
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            }>
+              <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/quem-somos" element={<QuemSomos />} />
               <Route path="/servicos" element={<Servicos />} />
@@ -153,6 +157,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </Suspense>
           </main>
           <Footer />
         </div>

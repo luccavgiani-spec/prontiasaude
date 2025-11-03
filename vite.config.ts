@@ -46,10 +46,25 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    rollupOptions: {},
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-accordion', '@radix-ui/react-select'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-query': ['@tanstack/react-query'],
+        }
+      }
+    },
     chunkSizeWarningLimit: 500,
-    minify: 'esbuild',
-    target: 'esnext',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+      }
+    },
+    target: 'es2020',
     cssCodeSplit: true,
     reportCompressedSize: false,
   },

@@ -87,13 +87,22 @@ export function Navbar() {
           </div>
 
           {/* Mobile & Tablet Menu Button */}
-          <button onClick={() => setIsOpen(!isOpen)} className="lg:hidden p-3 rounded-xl hover:bg-white/10 transition-colors duration-300 text-white">
+          <button 
+            onClick={() => setIsOpen(!isOpen)} 
+            className="lg:hidden p-3 rounded-xl hover:bg-white/10 transition-colors duration-300 text-white"
+            aria-label={isOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={isOpen}
+            aria-controls="mobile-menu"
+          >
             {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
         </div>
 
         {/* Enhanced Mobile & Tablet Navigation */}
-        {isOpen && <div className="lg:hidden py-4 border-t border-white/20 bg-primary-glow/30 rounded-b-2xl">
+        {isOpen && <div 
+          id="mobile-menu"
+          className="lg:hidden py-4 border-t border-white/20 bg-primary-glow/30 rounded-b-2xl"
+        >
             <div className="flex flex-col gap-3">
               {navItems.map(item => <Link key={item.href} to={item.href} onClick={(e) => {
                   setIsOpen(false);

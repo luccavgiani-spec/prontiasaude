@@ -12,3 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+Sitemap: https://www.prontiasaude.com.br/sitemap.xml
+
+# Bloquear páginas administrativas
+Disallow: /admin/
+Disallow: /empresa/login
+Disallow: /testes-qa

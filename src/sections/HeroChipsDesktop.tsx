@@ -26,7 +26,7 @@ export default function HeroChipsDesktop() {
 
   return (
     <div className="hidden md:block relative z-20">
-      <div style={{ minHeight: '56px' }}>
+      <div style={{ minHeight: '56px', contain: 'layout' }}>
         <LogoLoop
           logos={logos}
           speed={120}

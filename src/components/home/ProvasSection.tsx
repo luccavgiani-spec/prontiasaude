@@ -16,7 +16,12 @@ export function ProvasSection() {
         
 
         {/* Carrossel de Depoimentos */}
-        <div className="max-w-2xl mx-auto">
+        <div 
+          className="max-w-2xl mx-auto"
+          role="region"
+          aria-label="Depoimentos de pacientes"
+          aria-live="polite"
+        >
           <h3 className="text-2xl font-bold text-center text-foreground mb-8">O que nossos pacientes dizem</h3>
           
           <div className="relative">
@@ -39,16 +44,26 @@ export function ProvasSection() {
 
             {/* Controles do carrossel */}
             <div className="flex justify-center items-center gap-4 mt-6">
-              <Button variant="outline" size="icon" onClick={depoimentoAnterior}>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={depoimentoAnterior}
+                aria-label="Depoimento anterior"
+              >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               
               {/* Indicadores */}
               <div className="flex gap-2">
-                {DEPOIMENTOS.map((_, index) => <button key={index} onClick={() => setDepoimentoAtivo(index)} className={`w-2 h-2 rounded-full transition-colors ${index === depoimentoAtivo ? 'bg-primary' : 'bg-muted-foreground/30'}`} />)}
+                {DEPOIMENTOS.map((_, index) => <button key={index} onClick={() => setDepoimentoAtivo(index)} className={`w-2 h-2 rounded-full transition-colors ${index === depoimentoAtivo ? 'bg-primary' : 'bg-muted-foreground/30'}`} aria-label={`Ir para depoimento ${index + 1}`} />)}
               </div>
               
-              <Button variant="outline" size="icon" onClick={proximoDepoimento}>
+              <Button 
+                variant="outline" 
+                size="icon" 
+                onClick={proximoDepoimento}
+                aria-label="Próximo depoimento"
+              >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>

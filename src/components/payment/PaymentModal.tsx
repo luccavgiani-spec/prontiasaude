@@ -157,6 +157,13 @@ export function PaymentModal({
     }
   }, [open]);
 
+  // Carregar Mercado Pago security script quando modal abrir
+  useEffect(() => {
+    if (open && typeof window !== 'undefined' && (window as any).loadMPSecurity) {
+      (window as any).loadMPSecurity();
+    }
+  }, [open]);
+
   const captureDeviceId = () => {
     // Limpar interval anterior se existir
     if (deviceIdIntervalRef.current) {
