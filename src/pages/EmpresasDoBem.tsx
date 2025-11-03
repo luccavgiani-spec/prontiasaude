@@ -18,12 +18,11 @@ const EmpresasDoBem = () => {
   });
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Track Lead event for NGO registration
     trackLead({
-      content_name: 'Cadastro ONG',
+      content_name: 'Cadastro ONG'
     });
-    
     try {
       const {
         data,
@@ -77,7 +76,7 @@ const EmpresasDoBem = () => {
 
 
       {/* Circular Gallery */}
-      <section className="py-16 bg-gradient-to-b from-primary/5 to-transparent">
+      <section className="bg-gradient-to-b from-primary/5 to-transparent py-[20px]">
         <div className="container mx-auto px-4">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -87,7 +86,7 @@ const EmpresasDoBem = () => {
           </div>
           
           <div style={{
-          height: '740px',
+          height: '540px',
           position: 'relative'
         }}>
             <CircularGallery bend={3} textColor="#1f2937" borderRadius={0.05} scrollEase={0.02} />
