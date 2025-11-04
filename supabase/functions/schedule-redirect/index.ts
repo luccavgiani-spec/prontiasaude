@@ -397,6 +397,62 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // ✅ EXCEÇÃO PRIORITÁRIA: LAUDOS PSICOLÓGICOS → SEMPRE WhatsApp (independente de plano/horário)
+    if (payload.sku === 'OVM9892') {
+      console.log('[schedule-redirect] ✓ LAUDOS PSICOLÓGICOS detectado → WhatsApp dedicado (SEMPRE)');
+      
+      // Buscar nome do paciente se não estiver no payload
+      let nomeCompleto = payload.nome || '';
+      
+      if (!nomeCompleto) {
+        try {
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('first_name, last_name')
+            .eq('email', payload.email)
+            .maybeSingle();
+          
+          if (patientData) {
+            nomeCompleto = `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+            console.log('[schedule-redirect] Nome obtido da tabela patients:', nomeCompleto);
+          }
+        } catch (err) {
+          console.error('[schedule-redirect] Erro ao buscar nome do paciente:', err);
+        }
+      }
+      
+      // Fallback se nome ainda estiver vazio
+      if (!nomeCompleto) {
+        nomeCompleto = 'Cliente Prontia';
+        console.warn('[schedule-redirect] Nome não encontrado, usando fallback');
+      }
+      
+      // Criar URL do WhatsApp com mensagem personalizada
+      const mensagem = `Olá, meu nome é ${nomeCompleto} e eu comprei um Laudo Psicólogo na Prontìa Saúde! 💚`;
+      const mensagemEncoded = encodeURIComponent(mensagem);
+      const whatsappUrl = `https://wa.me/5511975102072?text=${mensagemEncoded}`;
+      
+      console.log('[schedule-redirect] WhatsApp URL gerada:', whatsappUrl);
+      console.log('[schedule-redirect] Mensagem:', mensagem);
+      
+      // Salvar appointment no banco
+      await saveAppointment(payload, 'whatsapp_laudos', whatsappUrl, supabase);
+      console.log('[schedule-redirect] ✅ Appointment salvo para Laudos Psicológicos');
+      
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          url: whatsappUrl,
+          provider: 'whatsapp_laudos',
+          message: mensagem
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp (SOMENTE SEM PLANO)
     const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {
       'RZP5755': 'https://wa.me/5511933359187?text=Quero%20renovar%20minha%20receita!',
