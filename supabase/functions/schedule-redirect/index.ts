@@ -391,6 +391,12 @@ Deno.serve(async (req) => {
     console.log('[schedule-redirect] Plano Ativo:', payload.plano_ativo);
     console.log('[schedule-redirect] ========================================');
 
+    // ✅ Inicializar cliente Supabase ANTES de qualquer uso
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
     // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp (SOMENTE SEM PLANO)
     const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {
       'RZP5755': 'https://wa.me/5511933359187?text=Quero%20renovar%20minha%20receita!',
@@ -447,11 +453,6 @@ Deno.serve(async (req) => {
         }
       );
     }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
 
     // 1. Normalizar campos (remover caracteres especiais/espaços)
     payload.cpf = (payload.cpf || '').replace(/\D/g, '').trim();
