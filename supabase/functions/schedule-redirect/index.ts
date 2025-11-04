@@ -399,10 +399,17 @@ Deno.serve(async (req) => {
 
     if (WHATSAPP_REDIRECT_SKUS[payload.sku] && !payload.plano_ativo) {
       console.log(`[schedule-redirect] ✓ SKU ${payload.sku} SEM plano ativo → WhatsApp`);
+      
+      const whatsappUrl = WHATSAPP_REDIRECT_SKUS[payload.sku];
+      
+      // ✅ CRÍTICO: Salvar appointment ANTES de retornar para permitir polling do frontend
+      await saveAppointment(payload, 'whatsapp', whatsappUrl, supabase);
+      console.log('[schedule-redirect] ✅ Appointment salvo no banco antes de redirecionar');
+      
       return new Response(
         JSON.stringify({
           ok: true,
-          url: WHATSAPP_REDIRECT_SKUS[payload.sku],
+          url: whatsappUrl,
           provider: 'whatsapp'
         }),
         {

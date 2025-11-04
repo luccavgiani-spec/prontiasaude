@@ -193,9 +193,13 @@ Deno.serve(async (req) => {
           },
           registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString() // ✅ FASE 2.2: Usar data real do metadata
         },
-        // ✅ NOVO: Informações sobre o negócio/envio
+        // ✅ Informações sobre o negócio/envio (sem city/state que causam bad_request)
         shipments: {
-          receiver_address: paymentRequest.payer.address || {}
+          receiver_address: {
+            zip_code: paymentRequest.payer.address?.zip_code,
+            street_name: paymentRequest.payer.address?.street_name,
+            street_number: paymentRequest.payer.address?.street_number
+          }
         }
       }
     };

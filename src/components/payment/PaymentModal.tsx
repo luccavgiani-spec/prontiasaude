@@ -915,9 +915,7 @@ export function PaymentModal({
             return {
               zip_code: patientAddress.cep.replace(/\D/g, ''),
               street_name: patientAddress.street_name,
-              street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
-              city: patientAddress.city, // ✅ FASE 3.1
-              state: patientAddress.state, // ✅ FASE 3.1
+              street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined
             };
           })()
         },
@@ -1046,7 +1044,7 @@ export function PaymentModal({
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
       
-      // ✅ NOVO: Tratamento específico de erros
+      // ✅ Tratamento específico de erros
       let errorMessage = 'Erro ao processar pagamento';
       
       if (err.message?.includes('Price validation failed')) {
@@ -1057,6 +1055,10 @@ export function PaymentModal({
         errorMessage = 'Este serviço não está disponível como assinatura.';
       } else if (err.response?.status === 401) {
         errorMessage = 'Erro de autenticação. Faça login novamente.';
+      } else if (err.message?.includes('bad_request') || err.message?.includes('400')) {
+        errorMessage = 'Dados de pagamento inválidos. Verifique os dados do cartão e tente novamente.';
+      } else if (err.data?.error?.includes('bad_request')) {
+        errorMessage = 'Erro ao processar dados do cartão. Verifique as informações e tente novamente.';
       }
       
       setError(errorMessage);
