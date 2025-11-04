@@ -19,13 +19,13 @@ import riachueloLogo from '@/assets/partners/riachuelo.webp';
 const partnerLogos = [
   { id: 'hering', src: heringLogo, alt: 'Hering', fullFill: true },
   { id: 'nike', src: nikeLogo, alt: 'Nike', fullFill: true },
-  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes', fullFill: true },
+  { id: 'netshoes', src: netshoesLogo, alt: 'Netshoes', fullFill: true, coverFill: true },
   { id: 'lavoisier', src: lavoisierLogo, alt: 'Lavoisier', fullFill: true },
   { id: 'cinemark', src: cinemarkLogo, alt: 'Cinemark', fullFill: true },
   { id: 'dsp', src: dspLogo, alt: 'Drogaria São Paulo', fullFill: true },
   { id: 'labi', src: labiLogo, alt: 'Labi Exames', fullFill: true },
   { id: 'buddhaspa', src: buddhaspaLogo, alt: 'Buddha Spa', fullFill: true },
-  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil', fullFill: true },
+  { id: 'drogasil', src: drogasilLogo, alt: 'Drogasil', fullFill: true, coverFill: true },
   { id: 'drogaraia', src: drogaraiaLogo, alt: 'Droga Raia', fullFill: true },
   { id: 'pacheco', src: pachecoLogo, alt: 'Pacheco', fullFill: true },
   { id: 'carrefour', src: carrefourLogo, alt: 'Carrefour', fullFill: true },
@@ -47,7 +47,7 @@ export const PartnersLogoGallery: React.FC = () => {
           {extendedLogos.map((logo, index) => (
             <div 
               key={`${logo.id}-${index}`} 
-              className={`partner-logo-item ${logo.fullFill ? 'full-fill' : ''}`}
+              className={`partner-logo-item ${logo.fullFill ? 'full-fill' : ''} ${logo.coverFill ? 'cover-fill' : ''}`}
             >
               <img
                 src={logo.src}

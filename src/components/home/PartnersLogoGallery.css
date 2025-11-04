@@ -78,6 +78,11 @@
   pointer-events: none;
 }
 
+/* Logos que preenchem totalmente com cover */
+.partner-logo-item.cover-fill .partner-logo-image {
+  object-fit: cover;
+}
+
 /* Animação de loop infinito */
 @keyframes scroll-partners-infinite {
   0% {
