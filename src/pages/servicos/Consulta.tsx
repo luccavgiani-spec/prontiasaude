@@ -298,7 +298,7 @@ export default function Consulta() {
         onOpenChange={setIsPaymentModalOpen}
         sku={servico.sku}
         serviceName={servico.nome}
-        amount={servico.precoBase}
+        amount={Math.round(servico.precoBase * 100)}
         especialidade={servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);

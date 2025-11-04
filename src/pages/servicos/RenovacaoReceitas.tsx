@@ -202,7 +202,7 @@ export default function RenovacaoReceitas() {
               <div className="medical-card p-6">
                 <div className="text-center mb-6">
                   <div className="text-3xl font-bold text-foreground mb-2">
-                    {formataPreco(9.99)}
+                    {formataPreco(servico.precoBase)}
                   </div>
                   <p className="text-muted-foreground">Pagamento único</p>
                 </div>
@@ -237,7 +237,7 @@ export default function RenovacaoReceitas() {
         onOpenChange={setIsPaymentModalOpen}
         sku={servico.sku}
         serviceName={servico.nome}
-        amount={servico.precoBase}
+        amount={Math.round(servico.precoBase * 100)}
         especialidade={servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);

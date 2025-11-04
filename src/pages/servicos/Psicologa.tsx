@@ -266,7 +266,7 @@ export default function Psicologa() {
         onOpenChange={setIsPaymentModalOpen}
         sku={selectedPackage?.sku || servico.sku}
         serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome}
-        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : servico.precoBase}
+        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(servico.precoBase * 100)}
         especialidade={selectedPackage?.nome || servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);
