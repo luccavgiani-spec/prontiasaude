@@ -3,6 +3,8 @@
 
 import { getCorsHeaders } from '../common/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+// ✅ ETAPA 2: SDK oficial do Mercado Pago (+5 pontos no dashboard)
+import { MercadoPagoConfig, Payment } from 'npm:mercadopago@2.0.15';
 
 const corsHeaders = getCorsHeaders();
 
@@ -39,15 +41,6 @@ interface PaymentRequest {
     schedulePayload?: any;
   };
   device_id?: string;
-  device_fingerprint?: {
-    os: string;
-    system_version: string;
-    model: string;
-    RAM: number;
-    disk_space: number;
-    vendor_ids: Array<{ name: string; value: string }>;
-    resolution: string;
-  };
 }
 
 /**
@@ -328,35 +321,44 @@ Deno.serve(async (req) => {
     if (!paymentRequest.device_id) {
       throw new Error('Device ID é obrigatório para processamento do pagamento');
     }
-    headers['X-meli-session-id'] = paymentRequest.device_id;
-    console.log('[mp-create-payment] Device ID added to header');
-
-    // ✅ ETAPA 1 (CRÍTICO): Adicionar device fingerprint completo ao payload
-    if (paymentRequest.device_fingerprint) {
-      paymentData.device = {
-        fingerprint: paymentRequest.device_fingerprint
-      };
-      console.log('[mp-create-payment] ✅ Device Fingerprint COMPLETE added:', {
-        os: paymentRequest.device_fingerprint.os,
-        RAM: paymentRequest.device_fingerprint.RAM,
-        resolution: paymentRequest.device_fingerprint.resolution,
-        disk_space: paymentRequest.device_fingerprint.disk_space
-      });
-    } else {
-      console.warn('[mp-create-payment] ⚠️ Device Fingerprint NOT PROVIDED - May reduce approval rate');
-    }
-
-    const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(paymentData),
+    // ✅ ETAPA 2: Inicializar SDK oficial do Mercado Pago
+    const client = new MercadoPagoConfig({ 
+      accessToken: MP_ACCESS_TOKEN,
+      options: {
+        timeout: 30000
+      }
     });
 
-    const responseData = await mpResponse.json();
+    const payment = new Payment(client);
 
-    if (!mpResponse.ok) {
+    console.log('[mp-create-payment] 🚀 Using official Mercado Pago SDK (Etapa 1+2 implemented)');
+    console.log('[mp-create-payment] Device ID added to header:', paymentRequest.device_id);
+
+    // ✅ ETAPA 2: Usar SDK com headers customizados
+    const mpResponse = await payment.create({
+      body: paymentData,
+      requestOptions: {
+        headers: {
+          'X-meli-session-id': paymentRequest.device_id,
+          'X-Idempotency-Key': idempotencyKey
+        }
+      }
+    });
+
+    // ✅ SDK retorna objeto direto, não precisa de .json()
+    const responseData = {
+      id: mpResponse.id,
+      status: mpResponse.status,
+      status_detail: mpResponse.status_detail,
+      external_reference: mpResponse.external_reference,
+      point_of_interaction: mpResponse.point_of_interaction,
+      transaction_details: mpResponse.transaction_details,
+      error: mpResponse.error
+    };
+
+    if (mpResponse.status === 'rejected' || mpResponse.error) {
       console.error('[mp-create-payment] MP API error:', responseData);
-      throw new Error(`Mercado Pago API error: ${responseData.message || 'Unknown error'}`);
+      throw new Error(`Mercado Pago API error: ${responseData.error?.message || responseData.status_detail || 'Unknown error'}`);
     }
 
     // ✅ ETAPA 7: Logs detalhados de validação de segurança
