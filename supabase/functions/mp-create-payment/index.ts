@@ -310,9 +310,6 @@ Deno.serve(async (req) => {
       statement_descriptor: paymentData.statement_descriptor || 'N/A (PIX)' // ✅ Validação
     });
 
-    // Generate idempotency key
-    const idempotencyKey = crypto.randomUUID();
-
     // ✅ FASE 1.3: Garantir envio obrigatório do Device ID no header
     if (!paymentRequest.device_id) {
       throw new Error('Device ID é obrigatório para processamento do pagamento');
