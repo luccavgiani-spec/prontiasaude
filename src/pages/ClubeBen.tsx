@@ -2,69 +2,63 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
 import { PlanosSection } from "@/components/home/PlanosSection";
-import { 
-  Check, 
-  Pill, 
-  Stethoscope, 
-  Dumbbell, 
-  Apple, 
-  MapPin,
-  ArrowRight,
-  Gift
-} from "lucide-react";
+import { Check, Pill, Stethoscope, Dumbbell, Apple, MapPin, ArrowRight, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-
 const ClubeBen = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
   const [accessing, setAccessing] = useState(false);
-
   const handleAccessClub = async () => {
     setAccessing(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: {
+          session
+        }
+      } = await supabase.auth.getSession();
       if (!session) {
         toast({
           title: "Faça login",
-          description: "Você precisa estar logado para acessar o Clube.",
+          description: "Você precisa estar logado para acessar o Clube."
         });
         navigate('/entrar?returnUrl=/clubeben');
         return;
       }
-
-      const { data, error } = await supabase.functions.invoke('clubeben-auth-bridge', {
-        body: { user_id: session.user.id }
+      const {
+        data,
+        error
+      } = await supabase.functions.invoke('clubeben-auth-bridge', {
+        body: {
+          user_id: session.user.id
+        }
       });
-
       if (error || !data?.redirect_url) {
         if (data?.needs_completion) {
           toast({
             title: "Complete seu cadastro",
-            description: "Precisamos do seu CPF e data de nascimento.",
+            description: "Precisamos do seu CPF e data de nascimento."
           });
           navigate('/completar-perfil?from=clubeben');
           return;
         }
         throw new Error('Falha ao gerar acesso');
       }
-
       window.location.href = data.redirect_url;
     } catch (error) {
       toast({
         title: "Erro ao acessar",
         description: "Tente novamente em instantes.",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setAccessing(false);
     }
   };
-
-  return (
-    <>
+  return <>
       {/* Hero Section */}
       <section className="relative py-20 bg-gradient-to-br from-primary/10 via-background to-secondary/10">
         <div className="container mx-auto px-4">
@@ -90,12 +84,7 @@ const ClubeBen = () => {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                onClick={handleAccessClub}
-                disabled={accessing}
-              >
+              <Button size="lg" variant="outline" onClick={handleAccessClub} disabled={accessing}>
                 {accessing ? 'Redirecionando...' : 'Acessar Clube'}
               </Button>
             </div>
@@ -105,47 +94,7 @@ const ClubeBen = () => {
 
       {/* Como Funciona */}
       <section className="py-16 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Como funciona</h2>
-          
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-primary">1</span>
-                </div>
-                <h3 className="font-semibold mb-2">Assine um plano</h3>
-                <p className="text-sm text-muted-foreground">
-                  Escolha o plano que mais combina com você
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-primary">2</span>
-                </div>
-                <h3 className="font-semibold mb-2">Acesse o clube</h3>
-                <p className="text-sm text-muted-foreground">
-                  Entre na sua área do paciente e clique em "Acessar Clube"
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6 text-center">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-primary">3</span>
-                </div>
-                <h3 className="font-semibold mb-2">Aproveite os descontos</h3>
-                <p className="text-sm text-muted-foreground">
-                  Apresente seu benefício na rede credenciada
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        
       </section>
 
       {/* Benefícios por Categoria */}
@@ -277,8 +226,6 @@ const ClubeBen = () => {
           <PlanosSection />
         </div>
       </section>
-    </>
-  );
+    </>;
 };
-
 export default ClubeBen;
