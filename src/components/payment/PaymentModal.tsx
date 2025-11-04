@@ -693,41 +693,49 @@ export function PaymentModal({
   const pollPaymentStatus = async (paymentId: string, orderId: string) => {
     setIsPollingPayment(true);
     setCurrentOrderId(orderId);
-    console.log('[pollPaymentStatus] Aguardando appointment com order_id:', orderId);
+    console.log('[pollPaymentStatus] 🔍 Iniciando polling para order_id:', orderId);
     
-    const maxAttempts = 60; // 5 minutos (5s x 60)
+    const maxAttempts = 120; // 10 minutos (5s x 120)
     let attempts = 0;
     
     const interval = setInterval(async () => {
       attempts++;
+      console.log(`[pollPaymentStatus] Tentativa ${attempts}/${maxAttempts} - Buscando appointment...`);
       
       try {
         // Buscar appointments do usuário
         const result = await getAppointments(formData.email);
         
         if (result.success && result.appointments) {
-          // 🔍 Procurar appointment ESPECÍFICO deste pagamento (filtrar por order_id)
+          console.log('[pollPaymentStatus] Appointments encontrados:', {
+            total: result.appointments.length,
+            orders: result.appointments.map(apt => ({ order_id: apt.order_id, status: apt.status, has_redirect: !!apt.redirect_url }))
+          });
+          
+          // 🔍 Procurar appointment ESPECÍFICO deste pagamento (REMOVIDO filtro de status)
           const appointment = result.appointments.find(
-            apt => apt.order_id === orderId && 
-                   apt.status === 'confirmed' && 
-                   apt.redirect_url
+            apt => apt.order_id === orderId && apt.redirect_url
           );
           
           if (appointment?.redirect_url) {
             clearInterval(interval);
             setIsPollingPayment(false);
             
-            console.log('[pollPaymentStatus] ✅ Appointment encontrado:', {
+            console.log('[pollPaymentStatus] ✅ Appointment encontrado e confirmado:', {
               order_id: appointment.order_id,
+              status: appointment.status,
               redirect_url: appointment.redirect_url,
-              provider: appointment.provider
+              provider: appointment.provider,
+              appointment_id: appointment.appointment_id
             });
             
             toast.success('✅ Pagamento aprovado! Redirecionando para sua consulta...');
             
             setTimeout(() => {
-              window.location.href = appointment.redirect_url!;
+              window.open(appointment.redirect_url!, '_blank');
             }, 1500);
+          } else {
+            console.log('[pollPaymentStatus] ⏳ Appointment ainda não disponível (tentativa', attempts, ')');
           }
         }
         
@@ -735,10 +743,20 @@ export function PaymentModal({
           clearInterval(interval);
           setIsPollingPayment(false);
           
-          toast.info('Aguardando confirmação do pagamento. Acesse "Minhas Consultas" em alguns instantes.');
+          console.warn('[pollPaymentStatus] ⏱️ Timeout após 10 minutos');
+          toast.info(
+            'Aguardando confirmação do pagamento. Acesse "Minhas Consultas" para verificar o status.',
+            {
+              duration: 8000,
+              action: {
+                label: 'Ir para Área do Paciente',
+                onClick: () => window.open('/area-do-paciente', '_blank')
+              }
+            }
+          );
         }
       } catch (error) {
-        console.error('[pollPaymentStatus] Erro ao verificar status:', error);
+        console.error('[pollPaymentStatus] ❌ Erro ao verificar status:', error);
       }
     }, 5000); // 5 segundos
   };
@@ -967,7 +985,7 @@ export function PaymentModal({
         if (scheduleData.url) {
           toast.success('✅ Pagamento aprovado! Redirecionando...');
           setTimeout(() => {
-            window.location.href = scheduleData.url;
+            window.open(scheduleData.url, '_blank');
           }, 1500);
         }
       } else if (data.status === 'pending' && data.status_detail === 'pending_challenge') {
@@ -1208,7 +1226,7 @@ export function PaymentModal({
             toast.success('Agendamento confirmado! Redirecionando...');
             
             setTimeout(() => {
-              window.location.href = appointment.redirect_url;
+              window.open(appointment.redirect_url, '_blank');
             }, 1500);
           } else {
             console.log('[Realtime] Appointment ignorado (order_id diferente):', {
