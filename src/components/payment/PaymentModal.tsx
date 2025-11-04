@@ -16,7 +16,6 @@ import { MP_PUBLIC_KEY } from '@/lib/constants';
 declare global {
   interface Window {
     MercadoPago: any;
-    MP_DEVICE_SESSION_ID?: string;
   }
 }
 
@@ -97,7 +96,6 @@ export function PaymentModal({
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
   const isBrickMountedRef = useRef(false);
-  const deviceIdIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const brickRecoverAttemptsRef = useRef(0);
@@ -123,7 +121,6 @@ export function PaymentModal({
       setPaymentMethod(undefined); // Reset método de pagamento
       loadUserData();
       loadMercadoPagoSDK();
-      captureDeviceId();
     } else {
       // Reset ao fechar
       setShowSummary(true);
@@ -139,12 +136,7 @@ export function PaymentModal({
       setIsLoadingUserData(false);
       setIsPollingPayment(false);
       
-      // Limpar intervals e timeouts
-      if (deviceIdIntervalRef.current) {
-        clearInterval(deviceIdIntervalRef.current);
-        deviceIdIntervalRef.current = null;
-      }
-      
+      // Limpar timeouts
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current);
         validationTimeoutRef.current = null;
@@ -158,42 +150,6 @@ export function PaymentModal({
     }
   }, [open]);
 
-  // Carregar Mercado Pago security script quando modal abrir
-  useEffect(() => {
-    if (open && typeof window !== 'undefined' && (window as any).loadMPSecurity) {
-      (window as any).loadMPSecurity();
-    }
-  }, [open]);
-
-  const captureDeviceId = () => {
-    // Limpar interval anterior se existir
-    if (deviceIdIntervalRef.current) {
-      clearInterval(deviceIdIntervalRef.current);
-    }
-
-    const maxAttempts = 20; // ✅ ETAPA 1: Aumentado para 10 segundos (20 * 500ms)
-    let attempts = 0;
-
-    deviceIdIntervalRef.current = setInterval(() => {
-      if (window.MP_DEVICE_SESSION_ID) {
-        console.log('[Device ID] ✅ Captured:', window.MP_DEVICE_SESSION_ID);
-        setDeviceId(window.MP_DEVICE_SESSION_ID);
-        if (deviceIdIntervalRef.current) {
-          clearInterval(deviceIdIntervalRef.current);
-          deviceIdIntervalRef.current = null;
-        }
-      } else {
-        attempts++;
-        if (attempts >= maxAttempts) {
-          console.error('[Device ID] ❌ NOT CAPTURED after 10 seconds - SECURITY RISK!');
-          if (deviceIdIntervalRef.current) {
-            clearInterval(deviceIdIntervalRef.current);
-            deviceIdIntervalRef.current = null;
-          }
-        }
-      }
-    }, 500);
-  };
 
   const loadUserData = async () => {
     console.log('[loadUserData] Starting...');
@@ -526,7 +482,7 @@ export function PaymentModal({
           }
         },
         callbacks: {
-          onReady: () => {
+          onReady: async () => {
             console.log('[Brick onReady] ✅ Card Payment Brick montado com sucesso');
             console.log('[Brick onReady] Container:', document.getElementById('cardPaymentBrick'));
             isBrickMountedRef.current = true;
@@ -534,6 +490,19 @@ export function PaymentModal({
             isMountingRef.current = false;
             if (mountTimeoutRef.current) {
               clearTimeout(mountTimeoutRef.current);
+            }
+
+            // ✅ FASE 2: Capturar Device ID via SDK v2
+            try {
+              const capturedDeviceId = await cardPaymentBrick.getDeviceId();
+              if (capturedDeviceId) {
+                console.log('[Device ID] ✅ Capturado via SDK v2:', capturedDeviceId);
+                setDeviceId(capturedDeviceId);
+              } else {
+                console.warn('[Device ID] ⚠️ SDK v2 retornou vazio');
+              }
+            } catch (err) {
+              console.error('[Device ID] ❌ Erro ao capturar via SDK v2:', err);
             }
           },
           onSubmit: async (brickSubmitData: any) => {
