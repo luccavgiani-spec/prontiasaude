@@ -499,10 +499,18 @@ export function PaymentModal({
                 console.log('[Device ID] ✅ Capturado via SDK v2:', capturedDeviceId);
                 setDeviceId(capturedDeviceId);
               } else {
-                console.warn('[Device ID] ⚠️ SDK v2 retornou vazio');
+                console.error('[Device ID] ❌ SDK v2 retornou vazio - BLOQUEANDO PAGAMENTO');
+                setError('Erro ao capturar Device ID. Recarregue a página.');
+                toast.error('🔒 Erro de segurança. Por favor, recarregue a página e tente novamente.', {
+                  duration: 6000
+                });
               }
             } catch (err) {
               console.error('[Device ID] ❌ Erro ao capturar via SDK v2:', err);
+              setError('Erro ao inicializar sistema de segurança.');
+              toast.error('🔒 Erro ao inicializar sistema de segurança. Recarregue a página.', {
+                duration: 6000
+              });
             }
           },
           onSubmit: async (brickSubmitData: any) => {
@@ -1223,6 +1231,7 @@ export function PaymentModal({
     setPaymentMethod(undefined);
     setPaymentStatus('idle');
     setError('');
+    setUserMessage('');
     setPixData(null);
     if (cardPaymentBrickRef.current) {
       cardPaymentBrickRef.current.unmount();
@@ -1308,7 +1317,13 @@ export function PaymentModal({
             <Button onClick={handleTryAgain} variant="outline">
               Tentar Outro Cartão
             </Button>
-            <Button onClick={() => setPaymentMethod('pix')} variant="default">
+            <Button onClick={() => {
+              setPaymentMethod('pix');
+              setPaymentStatus('idle');
+              setShowSummary(false);
+              setError('');
+              setUserMessage('');
+            }} variant="default">
               Pagar com PIX
             </Button>
           </div>
