@@ -413,7 +413,7 @@ export function PlanosSection() {
                       <span className="text-sm font-normal text-muted-foreground">/mês</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      Equivale a {formataPreco(precoDiario / 100)}/dia
+                      À partir de {formataPreco(precoDiario / 100)}/dia
                     </div>
                   </div>
                 </CardHeader>
