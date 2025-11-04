@@ -129,24 +129,8 @@
     </script>
     <!-- End Meta Pixel Code -->
     
-    <!-- Mercado Pago Security Script (Device Fingerprint) - Carregamento diferido -->
-    <script>
-      // Carregar MP security.js somente quando necessário (após window.load)
-      window.loadMPSecurity = function() {
-        if (window.MP_SECURITY_LOADED) return;
-        window.MP_SECURITY_LOADED = true;
-        var script = document.createElement('script');
-        script.src = 'https://www.mercadopago.com/v2/security.js';
-        script.setAttribute('view', 'checkout');
-        script.async = true;
-        document.head.appendChild(script);
-      };
-      
-      // Carregar SOMENTE após window.load + 2s ou quando modal de pagamento for aberto
-      window.addEventListener('load', function() {
-        setTimeout(window.loadMPSecurity, 2000);
-      });
-    </script>
+    <!-- ✅ CORREÇÃO CRÍTICA FASE 1.1: Mercado Pago Device ID - Carregar IMEDIATAMENTE -->
+    <script src="https://www.mercadopago.com/v2/security.js" view="checkout" output="deviceId"></script>
     
     <!-- Google Identity Services - Carregamento diferido após window.load -->
     <script>

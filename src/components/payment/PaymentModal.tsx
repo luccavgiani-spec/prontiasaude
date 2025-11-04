@@ -92,6 +92,7 @@ export function PaymentModal({
     street_number?: string;
   } | null>(null);
   const [threeDSecureUrl, setThreeDSecureUrl] = useState<string | null>(null);
+  const [patientCreatedAt, setPatientCreatedAt] = useState<string | null>(null);
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -224,6 +225,7 @@ export function PaymentModal({
 
         setHasRequiredData(hasData);
         setPatientGender(patient.gender || '');
+        setPatientCreatedAt(patient.created_at); // ✅ FASE 2.1: Capturar data real de cadastro
 
         if (hasData) {
           setFormData({
@@ -693,7 +695,8 @@ export function PaymentModal({
       especialidade: especialidade || 'Clínico Geral',
       plano_ativo: false,
       horario_iso: new Date().toISOString(),
-      source: fromClicklife ? 'clicklife' : 'web'
+      source: fromClicklife ? 'clicklife' : 'web',
+      registration_date: patientCreatedAt || new Date().toISOString() // ✅ FASE 2.1: Data real de cadastro
     };
 
     // Adicionar sexo se disponível (M ou F)
@@ -757,14 +760,14 @@ export function PaymentModal({
     }, 5000); // 5 segundos
   };
 
-  // ✅ ETAPA 6: Validação pré-pagamento (checklist completo)
+  // ✅ FASE 1.2 + 3.2: Validação pré-pagamento (checklist completo com street_number)
   const validatePaymentReadiness = (): boolean => {
     const checks = {
       deviceId: !!deviceId,
       cpf: !!formData.cpf && formData.cpf.replace(/\D/g, '').length === 11,
       email: !!formData.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
       phone: !!formData.phone && formData.phone.replace(/\D/g, '').length >= 10,
-      address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name),
+      address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name && patientAddress?.street_number), // ✅ FASE 3.2: Exigir street_number
       name: formData.name.trim().split(' ').length >= 2
     };
 
@@ -865,7 +868,7 @@ export function PaymentModal({
             type: 'CPF',
             number: formData.cpf.replace(/\D/g, '')
           },
-          // ✅ ETAPA 3: Parse telefone robusto
+          // ✅ FASE 4.1: Parse telefone com validação explícita
           phone: (() => {
             const phoneClean = formData.phone.replace(/\D/g, '');
             let areaCode = '';
@@ -889,18 +892,34 @@ export function PaymentModal({
               phoneNumber = phoneClean.substring(2) || phoneClean;
             }
 
-            console.log('[Phone Parse]', { original: formData.phone, clean: phoneClean, areaCode, phoneNumber });
+            // ✅ FASE 4.1: Validação final
+            if (!areaCode || areaCode.length !== 2) {
+              throw new Error('📞 DDD inválido no telefone');
+            }
+            if (!phoneNumber || phoneNumber.length < 8 || phoneNumber.length > 9) {
+              throw new Error('📞 Número de telefone inválido (deve ter 8 ou 9 dígitos)');
+            }
+
+            console.log('[Phone Parse] Validado:', { original: formData.phone, clean: phoneClean, areaCode, phoneNumber });
             
             return {
               area_code: areaCode,
               number: phoneNumber
             };
           })(),
-          address: patientAddress ? {
-            zip_code: patientAddress.cep?.replace(/\D/g, ''),
-            street_name: patientAddress.street_name,
-            street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined
-          } : undefined
+          // ✅ FASE 3.1: BLOQUEAR sem endereço completo e adicionar city/state
+          address: (() => {
+            if (!patientAddress?.cep || !patientAddress?.city || !patientAddress?.state || !patientAddress?.street_name) {
+              throw new Error('📍 Endereço completo é obrigatório. Complete no seu perfil antes de pagar.');
+            }
+            return {
+              zip_code: patientAddress.cep.replace(/\D/g, ''),
+              street_name: patientAddress.street_name,
+              street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
+              city: patientAddress.city, // ✅ FASE 3.1
+              state: patientAddress.state, // ✅ FASE 3.1
+            };
+          })()
         },
         token: cardFormData.token,
         payment_method_id: cardFormData.payment_method_id,
@@ -909,7 +928,13 @@ export function PaymentModal({
           order_id: orderId,
           schedulePayload
         },
-        device_id: deviceId || undefined
+        // ✅ FASE 1.2: BLOQUEAR sem Device ID
+        device_id: (() => {
+          if (!deviceId) {
+            throw new Error('🔒 Device ID não capturado. Recarregue a página e tente novamente.');
+          }
+          return deviceId;
+        })()
       };
 
       // Adicionar auto_recurring se for assinatura

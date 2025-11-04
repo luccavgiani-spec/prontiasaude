@@ -72,6 +72,28 @@ Deno.serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
     
+    // ✅ FASE 6.1: Log detalhado PRE-VALIDAÇÃO
+    console.log('[mp-create-payment] 🔒 SECURITY CHECKLIST PRE-VALIDATION:', {
+      has_device_id: !!paymentRequest.device_id,
+      has_payer_email: !!paymentRequest.payer?.email,
+      has_payer_cpf: !!paymentRequest.payer?.identification?.number,
+      has_payer_phone: !!paymentRequest.payer?.phone?.number,
+      has_complete_address: !!(
+        paymentRequest.payer?.address?.zip_code &&
+        paymentRequest.payer?.address?.street_name &&
+        paymentRequest.payer?.address?.city &&
+        paymentRequest.payer?.address?.state
+      ),
+      token_present: !!paymentRequest.token,
+      payment_method: paymentRequest.payment_method_id
+    });
+
+    // ✅ FASE 1.3 + 6.1: BLOQUEAR se Device ID ausente
+    if (!paymentRequest.device_id) {
+      console.error('[mp-create-payment] ❌ BLOCKED: Device ID missing');
+      throw new Error('Device ID é obrigatório para segurança do pagamento');
+    }
+    
     // ✅ NOVO: Conectar ao Supabase para validar preço
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -152,8 +174,8 @@ Deno.serve(async (req) => {
           {
             id: sku,
             title: service.name,
-            description: service.name, // ✅ NOVO
-            picture_url: 'https://prontiasaude.com.br/logo.png', // ✅ NOVO
+            description: service.name,
+            picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`, // ✅ FASE 5.1: URL específica do serviço
             category_id: getCategoryIdBySKU(sku),
             quantity: 1,
             unit_price: expectedAmount
@@ -163,8 +185,14 @@ Deno.serve(async (req) => {
           first_name: paymentRequest.payer.first_name || '',
           last_name: paymentRequest.payer.last_name || '',
           phone: paymentRequest.payer.phone || {},
-          address: paymentRequest.payer.address || {},
-          registration_date: new Date().toISOString() // ✅ NOVO: Data de cadastro
+          address: {
+            zip_code: paymentRequest.payer.address?.zip_code,
+            street_name: paymentRequest.payer.address?.street_name,
+            street_number: paymentRequest.payer.address?.street_number,
+            city: paymentRequest.payer.address?.city || '', // ✅ FASE 2.3
+            state: paymentRequest.payer.address?.state || '', // ✅ FASE 2.3
+          },
+          registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString() // ✅ FASE 2.2: Usar data real do metadata
         },
         // ✅ NOVO: Informações sobre o negócio/envio
         shipments: {
@@ -234,11 +262,12 @@ Deno.serve(async (req) => {
       'X-Idempotency-Key': idempotencyKey,
     };
 
-    // Adicionar Device ID no header (se disponível)
-    if (paymentRequest.device_id) {
-      headers['X-meli-session-id'] = paymentRequest.device_id;
-      console.log('[mp-create-payment] Device ID added to header');
+    // ✅ FASE 1.3: Garantir envio obrigatório do Device ID no header
+    if (!paymentRequest.device_id) {
+      throw new Error('Device ID é obrigatório para processamento do pagamento');
     }
+    headers['X-meli-session-id'] = paymentRequest.device_id;
+    console.log('[mp-create-payment] Device ID added to header');
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',
