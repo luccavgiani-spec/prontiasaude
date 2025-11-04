@@ -346,9 +346,7 @@ const AreaDoPaciente = () => {
               </div>
               
               <div>
-                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Shield className="h-3 w-3" /> Termos aceitos em
-                </Label>
+                
                 <p className="text-foreground">
                   {patient?.terms_accepted_at ? new Date(patient.terms_accepted_at).toLocaleDateString('pt-BR') : 'Não aceito'}
                 </p>
