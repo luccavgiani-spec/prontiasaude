@@ -150,15 +150,11 @@ const AreaDoPaciente = () => {
       setAccessingClub(false);
     }
   };
-
   const handleDirectSchedule = async (sku: string, serviceName: string) => {
     if (!patient || !currentUser) return;
-    
     const isConsulta = sku === 'ITC6534';
     const setLoading = isConsulta ? setRedirectingConsulta : setRedirectingReceita;
-    
     setLoading(true);
-    
     try {
       const payload = {
         cpf: patient.cpf || '',
@@ -169,9 +165,7 @@ const AreaDoPaciente = () => {
         plano_ativo: true as const,
         sexo: patient.gender
       };
-      
       const response = await scheduleWithActivePlan(payload);
-      
       if (response.ok && response.url) {
         toast({
           title: "✅ Redirecionando",
@@ -192,7 +186,6 @@ const AreaDoPaciente = () => {
       setLoading(false);
     }
   };
-
   const getPregnancyStatusText = (status?: string) => {
     switch (status) {
       case 'never':
@@ -250,43 +243,26 @@ const AreaDoPaciente = () => {
                   Escolha o atendimento que você precisa
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-2xl mx-auto">
-                  {patientPlan ? (
-                    // ✅ USUÁRIO COM PLANO ATIVO - Redirecionamentos diretos
-                    <>
-                      <Button 
-                        onClick={() => handleDirectSchedule('ITC6534', 'Pronto Atendimento')}
-                        size="lg" 
-                        className="flex-1"
-                        disabled={redirectingConsulta}
-                      >
+                  {patientPlan ?
+                // ✅ USUÁRIO COM PLANO ATIVO - Redirecionamentos diretos
+                <>
+                      <Button onClick={() => handleDirectSchedule('ITC6534', 'Pronto Atendimento')} size="lg" className="flex-1" disabled={redirectingConsulta}>
                         <Stethoscope className="h-5 w-5 mr-2" />
                         {redirectingConsulta ? "Redirecionando..." : "Nova consulta"}
                       </Button>
                       
-                      <Button 
-                        onClick={() => window.open('https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')}
-                        variant="outline" 
-                        size="lg" 
-                        className="flex-1"
-                      >
+                      <Button onClick={() => window.open('https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')} variant="outline" size="lg" className="flex-1">
                         <PhoneCall className="h-5 w-5 mr-2" />
                         Agendar Especialidades
                       </Button>
                       
-                      <Button 
-                        onClick={() => handleDirectSchedule('RZP5755', 'Renovação de Receitas')}
-                        variant="outline" 
-                        size="lg" 
-                        className="flex-1"
-                        disabled={redirectingReceita}
-                      >
+                      <Button onClick={() => handleDirectSchedule('RZP5755', 'Renovação de Receitas')} variant="outline" size="lg" className="flex-1" disabled={redirectingReceita}>
                         <Pill className="h-5 w-5 mr-2" />
                         {redirectingReceita ? "Redirecionando..." : "Renovar Receitas"}
                       </Button>
-                    </>
-                  ) : (
-                    // ❌ USUÁRIO SEM PLANO - Comportamento normal
-                    <>
+                    </> :
+                // ❌ USUÁRIO SEM PLANO - Comportamento normal
+                <>
                       <Button asChild size="lg" className="flex-1">
                         <Link to="/servicos">
                           <Stethoscope className="h-5 w-5 mr-2" />
@@ -299,8 +275,7 @@ const AreaDoPaciente = () => {
                           Renovar Receitas
                         </Link>
                       </Button>
-                    </>
-                  )}
+                    </>}
                 </div>
               </div>
             </CardContent>
@@ -434,10 +409,10 @@ const AreaDoPaciente = () => {
                     
                     
                     
-                    <p className="text-sm text-muted-foreground">
-                      Farmácias, exames, fitness e bem-estar com vantagens reais. 
-                      Centenas de parceiros em todo o Brasil.
-                    </p>
+                    <p className="text-sm text-muted-foreground">Além do cuidado com a sua saúde, a Prontìa Saúde oferece benefícios exclusivos para tornar o seu dia a dia ainda melhor. Aqui, saúde vem com vantagens!
+
+
+Descontos em farmácias, laboratório, lojas parceiras de diversos segmentos — bem-estar, alimentação, educação e mais de 450 parceiros para você.</p>
 
                     {/* Grid de ícones de benefícios */}
                     <div className="grid grid-cols-2 gap-3">
