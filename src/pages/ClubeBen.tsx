@@ -162,11 +162,6 @@ const ClubeBen = () => {
         </div>
       </section>
 
-      {/* Como Funciona */}
-      <section className="py-16 bg-muted/30">
-        
-      </section>
-
       {/* Benefícios por Categoria */}
       <section className="py-16">
         <div className="container mx-auto px-4">
