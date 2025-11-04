@@ -117,12 +117,15 @@ export function PaymentModal({
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
     if (open) {
+      console.log('[Modal] Abrindo modal, resetando flags...');
       setShowSummary(true); // Reset para resumo ao abrir
       setPaymentMethod(undefined); // Reset método de pagamento
+      isSubmittingRef.current = false; // NOVO: Reset de segurança
       loadUserData();
       loadMercadoPagoSDK();
     } else {
       // Reset ao fechar
+      console.log('[Modal] Fechando modal, limpando estado...');
       setShowSummary(true);
       setPaymentMethod(undefined);
       setPaymentStatus('idle');
@@ -132,7 +135,7 @@ export function PaymentModal({
       setDeviceId(null);
       setPatientAddress(null);
       setThreeDSecureUrl(null);
-      isSubmittingRef.current = false;
+      isSubmittingRef.current = false; // Garantir reset ao fechar
       setIsLoadingUserData(false);
       setIsPollingPayment(false);
       
@@ -496,6 +499,12 @@ export function PaymentModal({
             console.log('[Device ID] ⏳ Aguardando captura no momento do submit');
           },
           onSubmit: async (brickSubmitData: any) => {
+            // NOVO: Resetar flag primeiro (caso esteja travada de submit anterior)
+            const wasSubmitting = isSubmittingRef.current;
+            if (wasSubmitting) {
+              console.warn('[Brick onSubmit] Flag já estava em true, resetando...');
+            }
+            
             // Prevenir múltiplos submits simultâneos
             if (isSubmittingRef.current) {
               console.warn('[Brick onSubmit] Submit already in progress, ignoring');
@@ -503,6 +512,7 @@ export function PaymentModal({
             }
 
             isSubmittingRef.current = true;
+            console.log('[Brick onSubmit] Flag setada, iniciando processamento...');
 
             // ✅ CAPTURAR Device ID NO MOMENTO DO SUBMIT (não no onReady)
             try {
@@ -553,10 +563,11 @@ export function PaymentModal({
               setPaymentStatus('idle');
               toast.error('Erro ao processar pagamento');
             } finally {
-              // Liberar flag após 2 segundos (prevenir double-click)
+              // Liberar flag após 1 segundo (era 2s)
               setTimeout(() => {
+                console.log('[Brick onSubmit] Liberando isSubmittingRef');
                 isSubmittingRef.current = false;
-              }, 2000);
+              }, 1000);
             }
           },
           onError: (error: any) => {
@@ -1155,10 +1166,11 @@ export function PaymentModal({
       setError(err.message || 'Erro ao gerar PIX');
       setPaymentStatus('idle');
     } finally {
-      // Liberar flag após 2 segundos
+      // Liberar flag após 1 segundo
       setTimeout(() => {
+        console.log('[handlePixSubmit] Liberando isSubmittingRef');
         isSubmittingRef.current = false;
-      }, 2000);
+      }, 1000);
     }
   };
 
@@ -1229,8 +1241,10 @@ export function PaymentModal({
   };
 
   const handlePaymentMethodSelect = (method: 'card' | 'pix') => {
+    console.log('[handlePaymentMethodSelect] Transição:', { method, currentShowSummary: showSummary });
     setPaymentMethod(method);
     setShowSummary(false); // Transicionar para tela de pagamento
+    console.log('[handlePaymentMethodSelect] Após transição:', { method, newShowSummary: false });
   };
 
   const handleBackToSummary = () => {
@@ -1247,6 +1261,49 @@ export function PaymentModal({
         isBrickMountedRef.current = false;
       }
     }
+  };
+
+  // Mapeamento de status_detail para mensagens claras
+  const getStatusMessage = (statusDetail: string) => {
+    const statusMessages: Record<string, { title: string; message: string; showRetry: boolean; showPix: boolean }> = {
+      'cc_rejected_high_risk': {
+        title: '🔒 Transação bloqueada por segurança',
+        message: 'O Mercado Pago bloqueou esta transação por medidas de segurança. Isso pode acontecer com cartões novos, compras de locais diferentes ou por histórico de fraudes. Tente usar outro cartão ou pague com PIX.',
+        showRetry: true,
+        showPix: true
+      },
+      'cc_rejected_bad_filled_security_code': {
+        title: '🔒 Código de segurança incorreto',
+        message: 'O código CVV do cartão está incorreto. Verifique os 3 dígitos no verso do cartão.',
+        showRetry: true,
+        showPix: false
+      },
+      'cc_rejected_bad_filled_date': {
+        title: '📅 Data de validade incorreta',
+        message: 'A data de validade do cartão está incorreta. Verifique o mês e ano no cartão.',
+        showRetry: true,
+        showPix: false
+      },
+      'cc_rejected_insufficient_amount': {
+        title: '💳 Saldo insuficiente',
+        message: 'O cartão não tem limite disponível para esta compra. Tente outro cartão ou pague com PIX.',
+        showRetry: true,
+        showPix: true
+      },
+      'cc_rejected_call_for_authorize': {
+        title: '📞 Autorização necessária',
+        message: 'O banco solicita que você entre em contato para autorizar esta compra. Ligue para o banco ou use outro cartão/PIX.',
+        showRetry: true,
+        showPix: true
+      }
+    };
+
+    return statusMessages[statusDetail] || {
+      title: '❌ Pagamento recusado',
+      message: userMessage || 'O pagamento foi recusado. Verifique os dados do cartão ou tente outro método de pagamento.',
+      showRetry: true,
+      showPix: true
+    };
   };
 
   const renderStatus = () => {
@@ -1270,12 +1327,26 @@ export function PaymentModal({
     }
 
     if (paymentStatus === 'rejected') {
+      const statusInfo = getStatusMessage(error);
+      
       return (
         <div className="flex flex-col items-center justify-center py-8 px-4">
           <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
-          <p className="text-xl font-bold text-red-600 mb-2">Pagamento Recusado</p>
           
-          {/* Badge com status_detail */}
+          {/* Box com título e mensagem específica */}
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 max-w-md w-full">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-red-800 font-semibold text-sm mb-1">
+                  {statusInfo.title}
+                </p>
+                <p className="text-red-700 text-sm">{statusInfo.message}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Badge com código de erro */}
           {error && (
             <div className="mb-3">
               <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
@@ -1284,36 +1355,38 @@ export function PaymentModal({
             </div>
           )}
           
-          {/* Mensagem de erro formatada */}
-          <p className="text-muted-foreground mb-4 text-center max-w-md whitespace-pre-line">
-            {userMessage || 'Verifique os dados e tente novamente'}
-          </p>
-          
-          {/* Box de sugestões */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 max-w-md w-full">
-            <p className="text-sm text-blue-800 font-medium mb-2">💡 Sugestões:</p>
-            <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
-              <li>Verifique se os dados do cartão estão corretos</li>
-              <li>Tente usar outro cartão</li>
-              <li>Use PIX (aprovação instantânea)</li>
-              <li>Entre em contato com seu banco se o problema persistir</li>
-            </ul>
-          </div>
-          
           {/* Botões de ação */}
           <div className="flex gap-2 flex-wrap justify-center">
-            <Button onClick={handleTryAgain} variant="outline">
-              Tentar Outro Cartão
-            </Button>
-            <Button onClick={() => {
-              setPaymentMethod('pix');
-              setPaymentStatus('idle');
-              setShowSummary(false);
-              setError('');
-              setUserMessage('');
-            }} variant="default">
-              Pagar com PIX
-            </Button>
+            {statusInfo.showRetry && (
+              <Button
+                onClick={() => {
+                  setPaymentStatus('idle');
+                  setError('');
+                  setUserMessage('');
+                  setShowSummary(false);
+                  setPaymentMethod('card');
+                }}
+                variant="outline"
+                size="sm"
+              >
+                🔄 Tentar outro cartão
+              </Button>
+            )}
+            {statusInfo.showPix && (
+              <Button
+                onClick={() => {
+                  setPaymentStatus('idle');
+                  setError('');
+                  setUserMessage('');
+                  setShowSummary(false);
+                  setPaymentMethod('pix');
+                }}
+                variant="default"
+                size="sm"
+              >
+                💳 Pagar com PIX
+              </Button>
+            )}
           </div>
         </div>
       );
@@ -1614,23 +1687,34 @@ export function PaymentModal({
           <>
             {console.log('[UI] Renderizando resumo:', { showSummary, isLoadingUserData, paymentStatus })}
             
-            {/* Indicador de carregamento */}
-            {isLoadingUserData && (
-              <div className="flex items_center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
+            {/* Indicador de loading durante transição */}
+            {paymentMethod !== undefined && (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
+                <span className="text-sm text-muted-foreground">Preparando pagamento...</span>
+              </div>
+            )}
+            
+            {/* Indicador de carregamento de dados */}
+            {isLoadingUserData && paymentMethod === undefined && (
+              <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">Carregando seus dados...</span>
               </div>
             )}
             
-            <PaymentSummary
-              serviceName={serviceName}
-              amount={amount}
-              formData={formData}
-              recurring={recurring}
-              frequency={frequency}
-              frequencyType={frequencyType}
-              onSelectPaymentMethod={handlePaymentMethodSelect}
-            />
+            {/* PaymentSummary - só mostrar se não tiver método selecionado */}
+            {paymentMethod === undefined && (
+              <PaymentSummary
+                serviceName={serviceName}
+                amount={amount}
+                formData={formData}
+                recurring={recurring}
+                frequency={frequency}
+                frequencyType={frequencyType}
+                onSelectPaymentMethod={handlePaymentMethodSelect}
+              />
+            )}
           </>
         )}
 
