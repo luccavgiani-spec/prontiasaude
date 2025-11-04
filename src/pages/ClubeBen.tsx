@@ -116,9 +116,9 @@ const ClubeBen = () => {
             <Card>
               <CardContent className="pt-6">
                 <Stethoscope className="h-8 w-8 text-primary mb-4" />
-                <h3 className="font-semibold mb-2">Exames e Laboratoriais</h3>
+                <h3 className="font-semibold mb-2">Laboratórios</h3>
                 <p className="text-sm text-muted-foreground">
-                  Descontos especiais em exames e procedimentos
+                  Descontos expeciais em exames
                 </p>
               </CardContent>
             </Card>
