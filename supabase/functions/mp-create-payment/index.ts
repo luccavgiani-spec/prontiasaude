@@ -189,9 +189,7 @@ Deno.serve(async (req) => {
           address: {
             zip_code: paymentRequest.payer.address?.zip_code,
             street_name: paymentRequest.payer.address?.street_name,
-            street_number: paymentRequest.payer.address?.street_number,
-            city: paymentRequest.payer.address?.city || '', // ✅ FASE 2.3
-            state: paymentRequest.payer.address?.state || '', // ✅ FASE 2.3
+            street_number: paymentRequest.payer.address?.street_number
           },
           registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString() // ✅ FASE 2.2: Usar data real do metadata
         },
