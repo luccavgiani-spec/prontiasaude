@@ -397,6 +397,29 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
+    // ✅ GUARD: Nunca processar SKUs de PLANO (assinaturas)
+    if (payload.sku?.match(/^(IND_|FAM_)/)) {
+      console.error('[schedule-redirect] ❌ SKU de PLANO detectado - não deve chamar schedule-redirect');
+      console.error('[schedule-redirect] SKU recebido:', payload.sku);
+      console.error('[schedule-redirect] Este endpoint é apenas para SERVIÇOS, não PLANOS');
+      
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Planos não devem ser agendados via schedule-redirect',
+          redirect_url: '/area-do-paciente',
+          details: {
+            sku: payload.sku,
+            reason: 'Este endpoint processa apenas serviços (consultas avulsas), não planos de assinatura'
+          }
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
     // ✅ EXCEÇÃO PRIORITÁRIA: LAUDOS PSICOLÓGICOS → SEMPRE WhatsApp (independente de plano/horário)
     if (payload.sku === 'OVM9892') {
       console.log('[schedule-redirect] ✓ LAUDOS PSICOLÓGICOS detectado → WhatsApp dedicado (SEMPRE)');

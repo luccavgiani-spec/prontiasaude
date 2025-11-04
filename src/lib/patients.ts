@@ -78,9 +78,25 @@ export async function upsertPatientBasic(payload: {
 
   // Send to GAS webhook
   try {
-    // Check if patient has active plan
+    // ✅ CORREÇÃO: Verificar plano ATIVO e NÃO EXPIRADO na tabela patient_plans
     const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
-    const hasActivePlan = patientPlan?.status === 'active' || patientPlan?.plan_code ? true : false;
+    
+    // Só marcar hasActivePlan=true se:
+    // 1. Tiver plan_code
+    // 2. Status for 'active'
+    // 3. plan_expires_at for maior que agora
+    const hasActivePlan = patientPlan?.plan_code && 
+                         patientPlan?.status === 'active' && 
+                         patientPlan?.plan_expires_at &&
+                         new Date(patientPlan.plan_expires_at) > new Date();
+
+    console.log('[patients] Verificação de plano:', {
+      email: userEmail,
+      plan_code: patientPlan?.plan_code,
+      status: patientPlan?.status,
+      expires_at: patientPlan?.plan_expires_at,
+      hasActivePlan
+    });
 
     await supabase.functions.invoke('patient-operations', {
       body: {

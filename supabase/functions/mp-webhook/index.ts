@@ -146,6 +146,119 @@ Deno.serve(async (req) => {
     console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
     console.log('[mp-webhook] Source:', schedulePayload.source);
 
+    // ✅ IDENTIFICAR SE É PLANO (assinatura recorrente)
+    const isPlanPurchase = schedulePayload.sku?.match(/^(IND_|FAM_)/) || 
+                           payment.metadata?.recurring === true ||
+                           payment.auto_recurring !== undefined;
+
+    // ✅ FLUXO ESPECÍFICO PARA COMPRA DE PLANO
+    if (isPlanPurchase) {
+      console.log('[mp-webhook] 🎯 PLANO DETECTADO - Processando assinatura');
+      console.log('[mp-webhook] SKU:', schedulePayload.sku);
+      console.log('[mp-webhook] Email:', schedulePayload.email);
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      // Buscar user_id pelo email
+      let userId: string | null = null;
+      const { data: userData } = await supabaseAdmin
+        .from('patients')
+        .select('id')
+        .eq('email', schedulePayload.email)
+        .maybeSingle();
+      
+      userId = userData?.id || null;
+
+      // Calcular data de expiração baseado no auto_recurring
+      let planExpiresAt = new Date();
+      if (payment.auto_recurring?.frequency_type === 'months') {
+        planExpiresAt.setMonth(planExpiresAt.getMonth() + (payment.auto_recurring.frequency || 1));
+      } else if (payment.auto_recurring?.frequency_type === 'days') {
+        planExpiresAt.setDate(planExpiresAt.getDate() + (payment.auto_recurring.frequency || 30));
+      } else {
+        // Fallback: 1 mês
+        planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+      }
+
+      // Criar registro em patient_plans
+      const { error: planError } = await supabaseAdmin
+        .from('patient_plans')
+        .insert({
+          user_id: userId,
+          email: schedulePayload.email,
+          plan_code: schedulePayload.sku,
+          plan_expires_at: planExpiresAt.toISOString(),
+          status: 'active'
+        });
+
+      if (planError) {
+        console.error('[mp-webhook] ❌ Erro ao criar patient_plan:', planError);
+      } else {
+        console.log('[mp-webhook] ✅ Plano criado:', {
+          email: schedulePayload.email,
+          plan_code: schedulePayload.sku,
+          expires_at: planExpiresAt.toISOString()
+        });
+      }
+
+      // Gravar métrica de venda de plano
+      await supabaseAdmin.from('metrics').insert({
+        metric_type: 'sale',
+        amount_cents: Math.round(payment.transaction_amount * 100),
+        plan_code: schedulePayload.sku,
+        platform: 'mercadopago',
+        status: 'approved',
+        patient_email: schedulePayload.email,
+        metadata: { 
+          payment_id: payment.id, 
+          mp_status: payment.status,
+          order_id: payment.metadata?.order_id,
+          purchase_type: 'plan'
+        }
+      });
+
+      // Marcar pending_payment como processado
+      if (payment.metadata?.order_id) {
+        await supabaseAdmin
+          .from('pending_payments')
+          .update({ 
+            processed: true,
+            processed_at: new Date().toISOString(),
+            status: 'approved'
+          })
+          .eq('order_id', payment.metadata.order_id);
+      }
+
+      // Sincronizar ClubeBen (fire-and-forget)
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!
+      );
+      
+      supabase.functions.invoke('clubeben-sync', {
+        body: {
+          user_email: schedulePayload.email,
+          trigger_source: 'plan_purchase'
+        }
+      }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
+
+      console.log('[mp-webhook] ✅ Plano processado com sucesso');
+      
+      // Retornar URL de redirecionamento para área do paciente
+      return new Response(JSON.stringify({ 
+        success: true, 
+        payment_id: payment.id,
+        redirect_url: '/area-do-paciente',
+        provider: 'plan_purchase'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // ✅ EXCEÇÃO: Especialistas ou Psicólogos SEM PLANO ATIVO → WhatsApp (EXCETO se vier da ClickLife)
     const ESPECIALISTA_SKUS = [
       'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
