@@ -47,7 +47,19 @@ interface SejaParceiroRequest {
   recipients: string[];
 }
 
-type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest;
+interface ClubeBenParceiroRequest {
+  type: "clubeben-parceiro";
+  data: {
+    nomeLoja: string;
+    responsavel: string;
+    contato: string;
+    cnpj: string;
+    categoria: string;
+    descricao: string;
+  };
+}
+
+type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest | ClubeBenParceiroRequest;
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
@@ -185,6 +197,44 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response(JSON.stringify({ success: true }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+
+    } else if (formData.type === "clubeben-parceiro") {
+      const emailResponse = await resend.emails.send({
+        from: "Formulários <onboarding@resend.dev>",
+        to: recipients,
+        subject: `Nova loja parceira ClubeBen: ${formData.data.nomeLoja}`,
+        html: `
+          <h1>Nova Loja Parceira - Clube de Benefícios</h1>
+          <p>Uma nova loja/empresa deseja se tornar parceira e oferecer benefícios aos nossos assinantes.</p>
+          
+          <h2>Dados da Loja:</h2>
+          <ul>
+            <li><strong>Nome da Loja/Empresa:</strong> ${formData.data.nomeLoja}</li>
+            <li><strong>Responsável:</strong> ${formData.data.responsavel}</li>
+            <li><strong>Contato:</strong> ${formData.data.contato}</li>
+            <li><strong>CNPJ:</strong> ${formData.data.cnpj}</li>
+            <li><strong>Categoria:</strong> ${formData.data.categoria}</li>
+          </ul>
+          
+          <h3>Descrição dos Benefícios Oferecidos:</h3>
+          <p>${formData.data.descricao}</p>
+          
+          <hr>
+          <p><em>Cadastro recebido em ${new Date().toLocaleString('pt-BR')}</em></p>
+          <p style="color: #666; font-size: 12px;">
+            Este email foi enviado automaticamente pelo sistema de formulários da Prontia Saúde.
+          </p>
+        `,
+      });
+
+      console.log("ClubeBen parceiro email sent:", emailResponse);
+      return new Response(JSON.stringify({ success: true, type: "clubeben-parceiro" }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
       });
     }
 

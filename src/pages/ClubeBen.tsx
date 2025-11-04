@@ -2,16 +2,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
 import { PlanosSection } from "@/components/home/PlanosSection";
-import { Check, Pill, Stethoscope, Dumbbell, Apple, MapPin, ArrowRight, Gift } from "lucide-react";
+import { Check, Pill, Stethoscope, Dumbbell, Apple, MapPin, ArrowRight, Gift, Store } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 const ClubeBen = () => {
   const navigate = useNavigate();
   const {
     toast
   } = useToast();
   const [accessing, setAccessing] = useState(false);
+  const [parceiroForm, setParceiroForm] = useState({
+    nomeLoja: '',
+    responsavel: '',
+    contato: '',
+    cnpj: '',
+    categoria: '',
+    descricao: ''
+  });
+  const [isSubmittingParceiro, setIsSubmittingParceiro] = useState(false);
   const handleAccessClub = async () => {
     setAccessing(true);
     try {
@@ -58,6 +71,63 @@ const ClubeBen = () => {
       setAccessing(false);
     }
   };
+
+  const handleParceiroInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setParceiroForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleParceiroSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!parceiroForm.nomeLoja || !parceiroForm.responsavel || !parceiroForm.contato || !parceiroForm.cnpj || !parceiroForm.categoria || !parceiroForm.descricao) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Por favor, preencha todos os campos.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmittingParceiro(true);
+
+    try {
+      const { error } = await supabase.functions.invoke('send-form-emails', {
+        body: {
+          type: 'clubeben-parceiro',
+          data: parceiroForm
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: "Cadastro enviado!",
+        description: "Recebemos sua proposta. Entraremos em contato em breve."
+      });
+
+      setParceiroForm({
+        nomeLoja: '',
+        responsavel: '',
+        contato: '',
+        cnpj: '',
+        categoria: '',
+        descricao: ''
+      });
+    } catch (error) {
+      console.error('Error sending form:', error);
+      toast({
+        title: "Erro ao enviar",
+        description: "Tente novamente mais tarde ou entre em contato conosco.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmittingParceiro(false);
+    }
+  };
+
   return <>
       {/* Hero Section */}
       <section className="relative py-20 bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -224,6 +294,117 @@ const ClubeBen = () => {
             </p>
           </div>
           <PlanosSection />
+        </div>
+      </section>
+
+      {/* Formulário Seja Parceiro */}
+      <section className="py-16 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+                <Store className="h-8 w-8 text-primary" />
+              </div>
+              <h2 className="text-3xl font-bold mb-4">Seja uma loja parceira</h2>
+              <p className="text-lg text-muted-foreground">
+                Faça parte do nosso clube de benefícios e ofereça descontos exclusivos para nossos assinantes
+              </p>
+            </div>
+
+            <Card>
+              <CardContent className="pt-6">
+                <form onSubmit={handleParceiroSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="nomeLoja">Nome da Loja/Empresa *</Label>
+                      <Input
+                        id="nomeLoja"
+                        name="nomeLoja"
+                        value={parceiroForm.nomeLoja}
+                        onChange={handleParceiroInputChange}
+                        placeholder="Nome da sua loja"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="responsavel">Responsável *</Label>
+                      <Input
+                        id="responsavel"
+                        name="responsavel"
+                        value={parceiroForm.responsavel}
+                        onChange={handleParceiroInputChange}
+                        placeholder="Seu nome completo"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="contato">Contato *</Label>
+                      <Input
+                        id="contato"
+                        name="contato"
+                        value={parceiroForm.contato}
+                        onChange={handleParceiroInputChange}
+                        placeholder="Email ou telefone"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cnpj">CNPJ *</Label>
+                      <Input
+                        id="cnpj"
+                        name="cnpj"
+                        value={parceiroForm.cnpj}
+                        onChange={handleParceiroInputChange}
+                        placeholder="00.000.000/0000-00"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="categoria">Categoria *</Label>
+                    <Select
+                      value={parceiroForm.categoria}
+                      onValueChange={(value) => setParceiroForm(prev => ({ ...prev, categoria: value }))}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="farmacias">Farmácias e Drogarias</SelectItem>
+                        <SelectItem value="laboratorios">Laboratórios e Exames</SelectItem>
+                        <SelectItem value="fitness">Fitness e Bem-estar</SelectItem>
+                        <SelectItem value="alimentacao">Alimentação Saudável</SelectItem>
+                        <SelectItem value="varejo">Varejo e Serviços</SelectItem>
+                        <SelectItem value="outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="descricao">Descreva os benefícios que deseja oferecer *</Label>
+                    <Textarea
+                      id="descricao"
+                      name="descricao"
+                      value={parceiroForm.descricao}
+                      onChange={handleParceiroInputChange}
+                      placeholder="Ex: 20% de desconto em todos os produtos da loja, 15% em medicamentos genéricos..."
+                      rows={4}
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full" size="lg" disabled={isSubmittingParceiro}>
+                    {isSubmittingParceiro ? 'Enviando...' : 'Enviar Proposta de Parceria'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
     </>;
