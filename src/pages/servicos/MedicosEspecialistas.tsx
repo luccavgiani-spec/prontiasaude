@@ -19,6 +19,8 @@ interface Variante {
 export default function MedicosEspecialistas() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<string>("");
+  const [hasActivePlan, setHasActivePlan] = useState<boolean>(false);
+  const [isCheckingPlan, setIsCheckingPlan] = useState<boolean>(true);
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -29,6 +31,24 @@ export default function MedicosEspecialistas() {
       setSelectedVariant(servico.variantes[0].nome);
     }
   }, [servico]);
+
+  // Verificar plano ativo ao carregar a página
+  useEffect(() => {
+    const checkPlan = async () => {
+      setIsCheckingPlan(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user?.email) {
+        const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+        const planStatus = await checkPatientPlanActive(user.email);
+        setHasActivePlan(planStatus.canBypassPayment);
+      }
+      
+      setIsCheckingPlan(false);
+    };
+    
+    checkPlan();
+  }, []);
 
   useEffect(() => {
     if (servico) {
@@ -108,41 +128,13 @@ export default function MedicosEspecialistas() {
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
-        toast({ description: 'Complete seu cadastro antes de agendar', variant: 'destructive' });
-        navigate('/completar-perfil');
-        return;
-      }
-
-      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
-      toast({ description: 'Redirecionando para agendamento...', duration: 2000 });
-
-      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
-      const result = await scheduleWithActivePlan({
-        cpf: patient.cpf,
-        email: user.email!,
-        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
-        telefone: patient.phone_e164,
-        especialidade: selectedVariant || servico.nome,
-        sku: getCurrentSku(),
-        plano_ativo: true,
-        sexo: mapSexo(patient.gender)
-      });
-
-      if (result.ok && result.url) {
-        window.location.href = result.url;
-      } else {
-        toast({ description: result.error || 'Erro ao agendar', variant: 'destructive' });
-      }
+      // ✅ COM PLANO ATIVO: Redireciona direto para WhatsApp 0800 (pula seletor)
+      toast({ description: 'Redirecionando para agendamento via WhatsApp...', duration: 2000 });
+      window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20médico%20especialista';
       return;
     }
 
+    // SEM PLANO ATIVO: Abre modal de pagamento
     setIsPaymentModalOpen(true);
   };
 
@@ -226,7 +218,8 @@ export default function MedicosEspecialistas() {
 
             <div className="lg:sticky lg:top-24">
               <div className="medical-card p-6">
-                {servico.variantes && servico.variantes.length > 0 && (
+                {/* Mostrar seletor APENAS se NÃO tiver plano ativo */}
+                {!hasActivePlan && servico.variantes && servico.variantes.length > 0 && (
                   <div className="mb-4">
                     <label className="text-sm font-medium text-foreground mb-2 block">Selecione a especialidade:</label>
                     <Select value={selectedVariant} onValueChange={setSelectedVariant}>
@@ -244,12 +237,21 @@ export default function MedicosEspecialistas() {
                   </div>
                 )}
 
-                <div className="text-center mb-6">
-                  {!selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
-                  <div className="text-3xl font-bold text-foreground mb-2">
-                    {formataPreco(getTotalPrice())}
+                {/* Mensagem especial se tiver plano ativo */}
+                {hasActivePlan && (
+                  <div className="mb-6 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-900 rounded-lg">
+                    <p className="text-sm text-green-800 dark:text-green-300 text-center font-medium">
+                      ✓ Você possui plano ativo! Ao clicar em agendar, será direcionado para nosso WhatsApp para escolher a especialidade.
+                    </p>
                   </div>
-                  <p className="text-muted-foreground">Pagamento único</p>
+                )}
+
+                <div className="text-center mb-6">
+                  {!hasActivePlan && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
+                  <div className="text-3xl font-bold text-foreground mb-2">
+                    {hasActivePlan ? 'Incluso no plano' : formataPreco(getTotalPrice())}
+                  </div>
+                  {!hasActivePlan && <p className="text-muted-foreground">Pagamento único</p>}
                 </div>
 
                 <Button
@@ -258,8 +260,9 @@ export default function MedicosEspecialistas() {
                   size="lg"
                   className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4"
                   data-sku={getCurrentSku()}
+                  disabled={isCheckingPlan}
                 >
-                  Agendar agora
+                  {isCheckingPlan ? 'Verificando...' : 'Agendar agora'}
                 </Button>
 
                 <div className="text-center">
