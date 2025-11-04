@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Gift, Pill, Stethoscope, Dumbbell, Apple, ArrowRight } from "lucide-react";
+import { Gift, ArrowRight } from "lucide-react";
+import { PartnersLogoGallery } from "./PartnersLogoGallery";
 export const ClubeBenBannerSection = () => {
   return <section className="py-16 bg-muted/30">
       <div className="container mx-auto px-4">
@@ -14,10 +15,10 @@ export const ClubeBenBannerSection = () => {
               
               <h2 className="text-3xl md:text-4xl font-bold mb-4">Descontos exclusivos para quem é Prontìa</h2>
               
-              
-
-              {/* Ícones de benefícios */}
-              
+              {/* Galeria de Parceiros */}
+              <div className="my-8 w-full">
+                <PartnersLogoGallery />
+              </div>
 
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
