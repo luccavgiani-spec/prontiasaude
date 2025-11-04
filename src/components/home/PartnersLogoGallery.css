@@ -78,9 +78,13 @@
   pointer-events: none;
 }
 
-/* Logos que preenchem totalmente com cover */
-.partner-logo-item.cover-fill .partner-logo-image {
-  object-fit: cover;
+/* Backgrounds coloridos para logos específicas */
+.partner-logo-item.bg-netshoes {
+  background: linear-gradient(135deg, #7B52AB 0%, #9D7BC7 100%);
+}
+
+.partner-logo-item.bg-drogasil {
+  background: linear-gradient(135deg, #E31837 0%, #FF4458 100%);
 }
 
 /* Animação de loop infinito */
