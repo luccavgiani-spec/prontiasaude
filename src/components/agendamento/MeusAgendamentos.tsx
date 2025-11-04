@@ -6,6 +6,8 @@ import { getAppointments, AppointmentData } from '@/lib/appointments';
 import { getServiceNameFromSKU } from '@/lib/sku-mapping';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, ClockIcon, VideoIcon, RefreshCwIcon, CopyIcon } from 'lucide-react';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+
 interface MeusAgendamentosProps {
   userEmail: string;
 }
@@ -14,6 +16,9 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
 }) => {
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(false);
+  const [upcomingPage, setUpcomingPage] = useState(1);
+  const [pastPage, setPastPage] = useState(1);
+  const ITEMS_PER_PAGE = 5;
   const {
     toast
   } = useToast();
@@ -50,6 +55,8 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       });
       
       setAppointments(result.appointments || []);
+      setUpcomingPage(1);
+      setPastPage(1);
     } catch (error) {
       console.error('Exception loading appointments:', error);
       toast({
@@ -123,6 +130,16 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       </Badge>;
   };
 
+  const paginateArray = (array: AppointmentData[], currentPage: number) => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return {
+      items: array.slice(startIndex, endIndex),
+      totalPages: Math.ceil(array.length / ITEMS_PER_PAGE),
+      totalItems: array.length
+    };
+  };
+
   // Separar consultas próximas e anteriores
   const now = new Date();
   const upcomingAppointments = appointments.filter(apt => {
@@ -147,6 +164,10 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
     const appointmentDate = new Date(apt.start_at_local);
     return appointmentDate < now;
   }).sort((a, b) => new Date(b.start_at_local).getTime() - new Date(a.start_at_local).getTime());
+
+  const paginatedUpcoming = paginateArray(upcomingAppointments, upcomingPage);
+  const paginatedPast = paginateArray(pastAppointments, pastPage);
+
   return <div className="w-full space-y-6">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-semibold">Minhas Consultas</h3>
@@ -182,8 +203,8 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
 
       {/* Próximas Consultas */}
       {upcomingAppointments.length > 0 && <div className="space-y-4">
-          <h4 className="font-semibold text-primary">Próximas Consultas</h4>
-          {upcomingAppointments.map(appointment => <Card key={appointment.appointment_id} className="border-primary/20">
+          <h4 className="font-semibold text-primary">Próximas Consultas ({upcomingAppointments.length})</h4>
+          {paginatedUpcoming.items.map(appointment => <Card key={appointment.appointment_id} className="border-primary/20">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
@@ -274,12 +295,50 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                   </div>}
               </CardContent>
             </Card>)}
+
+          {paginatedUpcoming.totalPages > 1 && (
+            <div className="flex justify-center mt-6">
+              <Pagination>
+                <PaginationContent>
+                  {upcomingPage > 1 && (
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setUpcomingPage(p => p - 1)}
+                        className="cursor-pointer"
+                      />
+                    </PaginationItem>
+                  )}
+                  
+                  {Array.from({ length: paginatedUpcoming.totalPages }, (_, i) => i + 1).map(page => (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        onClick={() => setUpcomingPage(page)}
+                        isActive={page === upcomingPage}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  
+                  {upcomingPage < paginatedUpcoming.totalPages && (
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setUpcomingPage(p => p + 1)}
+                        className="cursor-pointer"
+                      />
+                    </PaginationItem>
+                  )}
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>}
 
       {/* Consultas Anteriores */}
       {pastAppointments.length > 0 && <div className="space-y-4">
-          <h4 className="font-semibold text-muted-foreground">Consultas Anteriores</h4>
-          {pastAppointments.map(appointment => <Card key={appointment.appointment_id} className="opacity-75">
+          <h4 className="font-semibold text-muted-foreground">Consultas Anteriores ({pastAppointments.length})</h4>
+          {paginatedPast.items.map(appointment => <Card key={appointment.appointment_id} className="opacity-75">
             <CardHeader>
               <div className="flex justify-between items-start">
                 <div>
@@ -357,6 +416,44 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                 </div>}
             </CardContent>
           </Card>)}
+
+          {paginatedPast.totalPages > 1 && (
+            <div className="flex justify-center mt-6">
+              <Pagination>
+                <PaginationContent>
+                  {pastPage > 1 && (
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => setPastPage(p => p - 1)}
+                        className="cursor-pointer"
+                      />
+                    </PaginationItem>
+                  )}
+                  
+                  {Array.from({ length: paginatedPast.totalPages }, (_, i) => i + 1).map(page => (
+                    <PaginationItem key={page}>
+                      <PaginationLink
+                        onClick={() => setPastPage(page)}
+                        isActive={page === pastPage}
+                        className="cursor-pointer"
+                      >
+                        {page}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  
+                  {pastPage < paginatedPast.totalPages && (
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => setPastPage(p => p + 1)}
+                        className="cursor-pointer"
+                      />
+                    </PaginationItem>
+                  )}
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>}
     </div>;
 };
