@@ -81,8 +81,7 @@ Deno.serve(async (req) => {
       has_complete_address: !!(
         paymentRequest.payer?.address?.zip_code &&
         paymentRequest.payer?.address?.street_name &&
-        paymentRequest.payer?.address?.city &&
-        paymentRequest.payer?.address?.state
+        paymentRequest.payer?.address?.street_number
       ),
       token_present: !!paymentRequest.token,
       payment_method: paymentRequest.payment_method_id
@@ -166,7 +165,15 @@ Deno.serve(async (req) => {
       transaction_amount: expectedAmount,
       description: service.name,
       external_reference: paymentRequest.metadata.order_id, // ✅ CRÍTICO: Reconciliação financeira (+14 pontos)
-      payer: paymentRequest.payer,
+      payer: {
+        ...paymentRequest.payer,
+        address: paymentRequest.payer.address ? {
+          zip_code: paymentRequest.payer.address.zip_code,
+          street_name: paymentRequest.payer.address.street_name,
+          street_number: paymentRequest.payer.address.street_number,
+          // ✅ Removido: city, state (causam bad_request 400)
+        } : undefined
+      },
       metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,
       // ✅ ETAPA 2: Additional Info COMPLETO com todos os campos
