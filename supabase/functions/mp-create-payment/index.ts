@@ -310,17 +310,14 @@ Deno.serve(async (req) => {
       statement_descriptor: paymentData.statement_descriptor || 'N/A (PIX)' // ✅ Validação
     });
 
-    // Call Mercado Pago API
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-      'Content-Type': 'application/json',
-      'X-Idempotency-Key': idempotencyKey,
-    };
+    // Generate idempotency key
+    const idempotencyKey = crypto.randomUUID();
 
     // ✅ FASE 1.3: Garantir envio obrigatório do Device ID no header
     if (!paymentRequest.device_id) {
       throw new Error('Device ID é obrigatório para processamento do pagamento');
     }
+
     // ✅ ETAPA 2: Inicializar SDK oficial do Mercado Pago
     const client = new MercadoPagoConfig({ 
       accessToken: MP_ACCESS_TOKEN,
@@ -332,18 +329,21 @@ Deno.serve(async (req) => {
     const payment = new Payment(client);
 
     console.log('[mp-create-payment] 🚀 Using official Mercado Pago SDK (Etapa 1+2 implemented)');
-    console.log('[mp-create-payment] Device ID added to header:', paymentRequest.device_id);
 
-    // ✅ ETAPA 2: Usar SDK com headers customizados
+    // ✅ CRÍTICO: Usar SDK v2 com headers corretos via customHeaders
     const mpResponse = await payment.create({
       body: paymentData,
       requestOptions: {
-        headers: {
+        idempotencyKey: idempotencyKey,
+        customHeaders: {
           'X-meli-session-id': paymentRequest.device_id,
-          'X-Idempotency-Key': idempotencyKey
+          'X-Forwarded-For': clientIp ?? '',
+          'User-Agent': req.headers.get('user-agent') ?? ''
         }
       }
     });
+
+    console.log('[mp-create-payment] ✅ Headers set via SDK requestOptions (idempotencyKey + customHeaders)');
 
     // ✅ SDK retorna objeto direto, não precisa de .json()
     const responseData = {
