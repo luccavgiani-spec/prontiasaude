@@ -39,6 +39,15 @@ interface PaymentRequest {
     schedulePayload?: any;
   };
   device_id?: string;
+  device_fingerprint?: {
+    os: string;
+    system_version: string;
+    model: string;
+    RAM: number;
+    disk_space: number;
+    vendor_ids: Array<{ name: string; value: string }>;
+    resolution: string;
+  };
 }
 
 /**
@@ -321,6 +330,21 @@ Deno.serve(async (req) => {
     }
     headers['X-meli-session-id'] = paymentRequest.device_id;
     console.log('[mp-create-payment] Device ID added to header');
+
+    // ✅ ETAPA 1 (CRÍTICO): Adicionar device fingerprint completo ao payload
+    if (paymentRequest.device_fingerprint) {
+      paymentData.device = {
+        fingerprint: paymentRequest.device_fingerprint
+      };
+      console.log('[mp-create-payment] ✅ Device Fingerprint COMPLETE added:', {
+        os: paymentRequest.device_fingerprint.os,
+        RAM: paymentRequest.device_fingerprint.RAM,
+        resolution: paymentRequest.device_fingerprint.resolution,
+        disk_space: paymentRequest.device_fingerprint.disk_space
+      });
+    } else {
+      console.warn('[mp-create-payment] ⚠️ Device Fingerprint NOT PROVIDED - May reduce approval rate');
+    }
 
     const mpResponse = await fetch('https://api.mercadopago.com/v1/payments', {
       method: 'POST',

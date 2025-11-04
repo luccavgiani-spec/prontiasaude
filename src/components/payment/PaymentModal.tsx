@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { PixPaymentForm } from './PixPaymentForm';
 import { PaymentSummary } from './PaymentSummary';
 import { MP_PUBLIC_KEY } from '@/lib/constants';
+import { useDeviceFingerprint } from '@/hooks/useDeviceFingerprint';
 
 declare global {
   interface Window {
@@ -103,6 +104,9 @@ export function PaymentModal({
   const brickRecoverAttemptsRef = useRef(0);
   const isMountingRef = useRef(false);
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ ETAPA 1: Capturar Device Fingerprint completo
+  const { fingerprint: deviceFingerprint, isLoading: isFingerprintLoading } = useDeviceFingerprint();
 
   // Reset de segurança: liberar flag após 10 segundos (caso algo dê errado)
   useEffect(() => {
@@ -932,7 +936,9 @@ export function PaymentModal({
             throw new Error('🔒 Device ID não capturado. Recarregue a página e tente novamente.');
           }
           return deviceId;
-        })()
+        })(),
+        // ✅ ETAPA 1 (CRÍTICO): Adicionar device fingerprint completo
+        device_fingerprint: deviceFingerprint
       };
 
       // Adicionar auto_recurring se for assinatura
