@@ -96,10 +96,10 @@ Deno.serve(async (req) => {
       payment_method: paymentRequest.payment_method_id
     });
 
-    // ✅ FASE 1.3 + 6.1: BLOQUEAR se Device ID ausente
-    if (!paymentRequest.device_id) {
-      console.error('[mp-create-payment] ❌ BLOCKED: Device ID missing');
-      throw new Error('Device ID é obrigatório para segurança do pagamento');
+    // Device ID: avisar se não foi capturado explicitamente, mas não bloquear
+    if (!paymentRequest.device_id || paymentRequest.device_id === 'mp_sdk_auto') {
+      console.warn('[mp-create-payment] ⚠️ Device ID não capturado explicitamente. SDK do MP deve enviar automaticamente.');
+      // Não bloquear - o SDK do MP já está enviando o Device ID nos headers automaticamente
     }
     
     // ✅ NOVO: Conectar ao Supabase para validar preço
