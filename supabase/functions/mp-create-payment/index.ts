@@ -165,6 +165,7 @@ Deno.serve(async (req) => {
     const paymentData: any = {
       transaction_amount: expectedAmount,
       description: service.name,
+      external_reference: paymentRequest.metadata.order_id, // ✅ CRÍTICO: Reconciliação financeira (+14 pontos)
       payer: paymentRequest.payer,
       metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,
@@ -210,6 +211,7 @@ Deno.serve(async (req) => {
       paymentData.token = paymentRequest.token;
       paymentData.payment_method_id = paymentRequest.payment_method_id;
       paymentData.installments = paymentRequest.installments || 1;
+      paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ RECOMENDADO: Nome na fatura (+10 pontos)
       
       // ✅ NOVO: Normalização server-side para cartão + binary_mode
       const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
@@ -252,7 +254,9 @@ Deno.serve(async (req) => {
     console.log('[mp-create-payment] Creating payment:', {
       amount: paymentData.transaction_amount,
       payment_method: paymentData.payment_method_id,
-      order_id: paymentRequest.metadata.order_id
+      order_id: paymentRequest.metadata.order_id,
+      external_reference: paymentData.external_reference, // ✅ Validação
+      statement_descriptor: paymentData.statement_descriptor || 'N/A (PIX)' // ✅ Validação
     });
 
     // Call Mercado Pago API
