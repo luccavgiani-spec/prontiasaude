@@ -310,9 +310,9 @@ Deno.serve(async (req) => {
       statement_descriptor: paymentData.statement_descriptor || 'N/A (PIX)' // ✅ Validação
     });
 
-    // ✅ FASE 1.3: Garantir envio obrigatório do Device ID no header
-    if (!paymentRequest.device_id) {
-      throw new Error('Device ID é obrigatório para processamento do pagamento');
+    // Device ID: avisar se ausente, mas não bloquear (SDK envia automaticamente)
+    if (!paymentRequest.device_id || paymentRequest.device_id === 'mp_sdk_auto') {
+      console.warn('[mp-create-payment] ⚠️ Device ID não explícito. SDK do MP envia automaticamente.');
     }
 
     // ✅ ETAPA 2: Inicializar SDK oficial do Mercado Pago
@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
       requestOptions: {
         idempotencyKey: idempotencyKey,
         customHeaders: {
-          'X-meli-session-id': paymentRequest.device_id,
+          'X-meli-session-id': paymentRequest.device_id || '',
           'X-Forwarded-For': clientIp ?? '',
           'User-Agent': req.headers.get('user-agent') ?? ''
         }

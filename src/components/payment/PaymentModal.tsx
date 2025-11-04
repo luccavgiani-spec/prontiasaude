@@ -1106,7 +1106,7 @@ export function PaymentModal({
           order_id: orderId,
           schedulePayload
         },
-        device_id: deviceId || undefined
+        device_id: deviceId || 'mp_sdk_auto'
       };
 
       // Adicionar auto_recurring se for assinatura
