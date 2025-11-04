@@ -24,7 +24,7 @@ interface PaymentRequest {
     phone?: {
       area_code: string;
       number: string;
-    };
+    } | string;
     address?: {
       zip_code?: string;
       street_name?: string;
@@ -72,12 +72,19 @@ Deno.serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
     
+    // ✅ Extrair IP do cliente para additional_info.ip_address
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                     req.headers.get('cf-connecting-ip') ||
+                     req.headers.get('x-real-ip') ||
+                     undefined;
+    
     // ✅ FASE 6.1: Log detalhado PRE-VALIDAÇÃO
     console.log('[mp-create-payment] 🔒 SECURITY CHECKLIST PRE-VALIDATION:', {
       has_device_id: !!paymentRequest.device_id,
+      has_ip_address: !!clientIp,
       has_payer_email: !!paymentRequest.payer?.email,
       has_payer_cpf: !!paymentRequest.payer?.identification?.number,
-      has_payer_phone: !!paymentRequest.payer?.phone?.number,
+      has_payer_phone: !!paymentRequest.payer?.phone,
       has_complete_address: !!(
         paymentRequest.payer?.address?.zip_code &&
         paymentRequest.payer?.address?.street_name &&
@@ -207,7 +214,9 @@ Deno.serve(async (req) => {
             street_name: paymentRequest.payer.address?.street_name,
             street_number: paymentRequest.payer.address?.street_number
           }
-        }
+        },
+        // ✅ IP do cliente para análise antifraude
+        ip_address: clientIp
       }
     };
 
@@ -226,26 +235,57 @@ Deno.serve(async (req) => {
       const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
       const payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
       
+      // ✅ Normalizar telefone server-side: string E.164 → { area_code, number }
+      let normalizedPhone: { area_code: string; number: string } | undefined;
+      if (paymentRequest.payer.phone) {
+        if (typeof paymentRequest.payer.phone === 'string') {
+          // Telefone veio como string (ex: "+5511999887766" ou "(11) 99988-7766")
+          const digitsOnly = paymentRequest.payer.phone.replace(/\D/g, '');
+          if (digitsOnly.length >= 10) {
+            // Assume Brasil: DDI 55 + DDD (2) + número (8-9 dígitos)
+            const cleanNumber = digitsOnly.startsWith('55') ? digitsOnly.slice(2) : digitsOnly;
+            normalizedPhone = {
+              area_code: cleanNumber.slice(0, 2),
+              number: cleanNumber.slice(2)
+            };
+          }
+        } else if (paymentRequest.payer.phone.area_code && paymentRequest.payer.phone.number) {
+          // Já estruturado, apenas sanear
+          normalizedPhone = {
+            area_code: String(paymentRequest.payer.phone.area_code).replace(/\D/g, ''),
+            number: String(paymentRequest.payer.phone.number).replace(/\D/g, '')
+          };
+        }
+      }
+      
       paymentData.payer = {
         ...paymentRequest.payer,
         email: payerEmail,
         identification: {
           type: 'CPF',
           number: payerCPF
-        }
+        },
+        phone: normalizedPhone,
+        address: paymentRequest.payer.address ? {
+          zip_code: paymentRequest.payer.address.zip_code,
+          street_name: paymentRequest.payer.address.street_name,
+          street_number: paymentRequest.payer.address.street_number,
+        } : undefined
       };
       
       // ✅ binary_mode: true força resposta approved/rejected (evita in_process)
       paymentData.binary_mode = true;
       
-      // ✅ Ativar 3DS 2.0 em modo opcional
-      paymentData.three_d_secure_mode = 'optional';
+      // ✅ Forçar 3DS 2.0 em modo REQUIRED para aumentar aprovação
+      paymentData.three_d_secure_mode = 'required';
       
       console.log('[mp-create-payment] Card payment normalized:', {
         email: payerEmail,
         cpf: payerCPF ? `${payerCPF.substring(0, 3)}***` : 'AUSENTE',
+        phone_structured: !!(normalizedPhone?.area_code && normalizedPhone?.number),
+        phone_area_code: normalizedPhone?.area_code || 'N/A',
         binary_mode: true,
-        three_d_secure_mode: 'optional'
+        three_d_secure_mode: 'required'
       });
     } else {
       // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO
@@ -302,13 +342,14 @@ Deno.serve(async (req) => {
       status_detail: responseData.status_detail,
       '🔒 SECURITY CHECKLIST': {
         '✅ Device ID': !!paymentRequest.device_id ? 'SENT ✓' : '❌ MISSING - HIGH RISK!',
+        '✅ IP Address': !!clientIp ? `SENT ✓ (${clientIp})` : '⚠️ NOT CAPTURED',
         '✅ Additional Info': !!paymentData.additional_info ? 'COMPLETE ✓' : '⚠️ INCOMPLETE',
         '✅ 3DS Mode': paymentData.three_d_secure_mode || 'NOT SET',
         '✅ Binary Mode': paymentData.binary_mode || false,
         '✅ Payer Data Completeness': {
           email: !!paymentRequest.payer.email ? '✓' : '✗',
           cpf: !!paymentRequest.payer.identification?.number ? '✓' : '✗',
-          phone: !!paymentRequest.payer.phone?.number ? '✓' : '✗',
+          phone_structured: !!(paymentData.payer?.phone?.area_code && paymentData.payer?.phone?.number) ? '✓' : '✗',
           address_complete: !!(
             paymentRequest.payer.address?.zip_code &&
             paymentRequest.payer.address?.street_name &&
@@ -318,8 +359,9 @@ Deno.serve(async (req) => {
       },
       '⚠️ RISK FACTORS': {
         missing_device_id: !paymentRequest.device_id ? '🔴 YES - CRITICAL' : '✅ NO',
+        missing_ip: !clientIp ? '🟡 YES - MEDIUM RISK' : '✅ NO',
         missing_address: !paymentRequest.payer.address?.zip_code ? '🟡 YES - HIGH RISK' : '✅ NO',
-        incomplete_phone: !paymentRequest.payer.phone?.number ? '🟡 YES' : '✅ NO',
+        incomplete_phone: !(paymentData.payer?.phone?.area_code && paymentData.payer?.phone?.number) ? '🟡 YES' : '✅ NO',
         incomplete_additional_info: !paymentData.additional_info?.items?.[0]?.description ? '🟡 YES' : '✅ NO'
       }
     });
