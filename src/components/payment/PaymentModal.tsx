@@ -732,7 +732,7 @@ export function PaymentModal({
             toast.success('✅ Pagamento aprovado! Redirecionando para sua consulta...');
             
             setTimeout(() => {
-              window.open(appointment.redirect_url!, '_blank');
+              window.location.href = appointment.redirect_url!;
             }, 1500);
           } else {
             console.log('[pollPaymentStatus] ⏳ Appointment ainda não disponível (tentativa', attempts, ')');
@@ -985,7 +985,7 @@ export function PaymentModal({
         if (scheduleData.url) {
           toast.success('✅ Pagamento aprovado! Redirecionando...');
           setTimeout(() => {
-            window.open(scheduleData.url, '_blank');
+            window.location.href = scheduleData.url;
           }, 1500);
         }
       } else if (data.status === 'pending' && data.status_detail === 'pending_challenge') {
@@ -1226,7 +1226,7 @@ export function PaymentModal({
             toast.success('Agendamento confirmado! Redirecionando...');
             
             setTimeout(() => {
-              window.open(appointment.redirect_url, '_blank');
+              window.location.href = appointment.redirect_url;
             }, 1500);
           } else {
             console.log('[Realtime] Appointment ignorado (order_id diferente):', {

@@ -251,7 +251,7 @@ const AreaDoPaciente = () => {
                         {redirectingConsulta ? "Redirecionando..." : "Nova consulta"}
                       </Button>
                       
-                      <Button onClick={() => window.open('https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista', '_blank')} variant="outline" size="lg" className="flex-1">
+                      <Button onClick={() => window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20especialista'} variant="outline" size="lg" className="flex-1">
                         <PhoneCall className="h-5 w-5 mr-2" />
                         Agendar Especialidades
                       </Button>
