@@ -510,6 +510,32 @@ Deno.serve(async (req) => {
       // Continuar fluxo normal para ClickLife (não retornar aqui)
     }
 
+    // ✅ EXCEÇÃO PRIORITÁRIA: PSICÓLOGO (todos os 3 pacotes) → Agendar.cc (SEMPRE)
+    if (PSICOLOGO_SKUS.includes(payload.sku)) {
+      console.log('[schedule-redirect] 🧠 PSICÓLOGO detectado → Agendar.cc (SEMPRE)');
+      console.log('[schedule-redirect] SKU:', payload.sku);
+      console.log('[schedule-redirect] Plano ativo:', payload.plano_ativo);
+      
+      const agendarUrl = 'https://prontiasaude.agendar.cc/';
+      
+      // Salvar appointment no banco (para aparecer em "Minhas Consultas")
+      await saveAppointment(payload, 'agendar_cc', agendarUrl, supabase);
+      console.log('[schedule-redirect] ✅ Appointment salvo para Psicólogo → Agendar.cc');
+      
+      // Retornar URL para o frontend redirecionar
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          url: agendarUrl,
+          provider: 'agendar_cc'
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     // ✅ EXCEÇÃO: Médicos Especialistas OU Psicólogos com Plano Ativo → WhatsApp 0800
     const isEspecialista = ESPECIALISTA_SKUS.includes(payload.sku);
     const isPsicologoComPlano = PSICOLOGO_SKUS.includes(payload.sku) && payload.plano_ativo;
