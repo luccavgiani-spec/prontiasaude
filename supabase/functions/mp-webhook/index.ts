@@ -297,15 +297,82 @@ Deno.serve(async (req) => {
     const semPlanoAtivo = !schedulePayload.plano_ativo;
     const fromClicklife = schedulePayload.source === 'clicklife';
 
-    // ✅ Só aplicar exceção WhatsApp se NÃO for ClickLife
-    if ((isEspecialista || isPsicologo) && semPlanoAtivo && !fromClicklife) {
+    // ✅ EXCEÇÃO 1: PSICÓLOGOS SEM plano → Agendar.cc
+    if (isPsicologo && semPlanoAtivo && !fromClicklife) {
+      const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
+      const agendarUrl = 'https://prontiasaude.agendar.cc/';
+      
+      console.log(`[mp-webhook] 🧠 ${serviceName} SEM plano ativo → Agendar.cc`);
+      console.log('[mp-webhook] URL:', agendarUrl);
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      await supabaseAdmin.from('appointments').insert({
+        appointment_id: appointmentId,
+        email: schedulePayload.email,
+        service_code: schedulePayload.sku,
+        service_name: serviceName,
+        start_at_local: new Date().toISOString(),
+        duration_min: 30,
+        status: 'pending_schedule',
+        provider: 'agendar_cc',
+        redirect_url: agendarUrl,
+        teams_join_url: agendarUrl,
+        order_id: payment.metadata?.order_id
+      });
+
+      await supabaseAdmin.from('metrics').insert({
+        metric_type: 'sale',
+        amount_cents: Math.round(payment.transaction_amount * 100),
+        plan_code: schedulePayload.sku,
+        platform: 'agendar_cc',
+        status: 'approved',
+        patient_email: schedulePayload.email,
+        metadata: { 
+          payment_id: payment.id, 
+          mp_status: payment.status,
+          order_id: payment.metadata?.order_id,
+          redirect_type: 'psicologo_sem_plano_agendar_cc'
+        }
+      });
+
+      if (payment.metadata?.order_id) {
+        await supabaseAdmin
+          .from('pending_payments')
+          .update({ 
+            processed: true,
+            processed_at: new Date().toISOString(),
+            status: 'approved'
+          })
+          .eq('order_id', payment.metadata.order_id);
+      }
+
+      console.log('[mp-webhook] ✅ Redirecionamento agendar.cc configurado (SEM plano)');
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        payment_id: payment.id,
+        redirect_url: agendarUrl,
+        provider: 'agendar_cc'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ✅ EXCEÇÃO 2: ESPECIALISTAS SEM plano → WhatsApp manual
+    if (isEspecialista && semPlanoAtivo && !fromClicklife) {
       const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
       const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
       
       console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → WhatsApp Suporte`);
       console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
 
-      // Salvar appointment para tracking
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -327,7 +394,6 @@ Deno.serve(async (req) => {
         order_id: payment.metadata?.order_id
       });
 
-      // Gravar métrica
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
         amount_cents: Math.round(payment.transaction_amount * 100),
