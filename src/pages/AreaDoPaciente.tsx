@@ -401,7 +401,7 @@ const AreaDoPaciente = () => {
                     
                     
                     
-                    <p className="text-sm text-muted-foreground">Mais de 450 descontos exclusivos para quem é Prontìa Saùde.</p>
+                    <p className="text-sm text-muted-foreground">Mais de 450 descontos exclusivos para quem é Prontìa Saúde.</p>
 
                     {/* Grid de ícones de benefícios */}
                     
