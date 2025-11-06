@@ -969,6 +969,20 @@ export function PaymentModal({
       if (data.status === 'approved') {
         setPaymentId(data.payment_id);
         setPaymentStatus('approved');
+        
+        // ✅ Detectar se é PLANO e redirecionar diretamente
+        const isPlan = sku.match(/^(IND_|FAM_)/);
+        
+        if (isPlan) {
+          console.log('[Card Payment] 🎯 PLANO detectado - Redirecionando para área do paciente');
+          toast.success('✅ Plano ativado! Redirecionando para área do paciente...');
+          setTimeout(() => {
+            window.location.href = '/area-do-paciente';
+          }, 1500);
+          return; // Não chamar schedule-redirect para planos
+        }
+        
+        // Fluxo normal para SERVIÇOS
         toast.success('Pagamento aprovado! Criando agendamento...');
         
         // Chamar schedule-redirect imediatamente após pagamento aprovado

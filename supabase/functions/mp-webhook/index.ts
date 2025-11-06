@@ -247,6 +247,32 @@ Deno.serve(async (req) => {
 
       console.log('[mp-webhook] ✅ Plano processado com sucesso');
       
+      // ✅ Criar appointment para permitir polling do PaymentModal (PIX)
+      if (payment.metadata?.order_id) {
+        const appointmentId = `PLN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        const { error: aptError } = await supabaseAdmin
+          .from('appointments')
+          .insert({
+            appointment_id: appointmentId,
+            order_id: payment.metadata.order_id,
+            email: schedulePayload.email,
+            service_code: schedulePayload.sku,
+            service_name: `Plano ${schedulePayload.sku}`,
+            start_at_local: new Date().toISOString(),
+            duration_min: 0,
+            redirect_url: '/area-do-paciente',
+            provider: 'plan_purchase',
+            status: 'approved'
+          });
+        
+        if (aptError) {
+          console.error('[mp-webhook] ❌ Erro ao criar appointment:', aptError);
+        } else {
+          console.log('[mp-webhook] ✅ Appointment criado para polling:', appointmentId);
+        }
+      }
+      
       // Retornar URL de redirecionamento para área do paciente
       return new Response(JSON.stringify({ 
         success: true, 
