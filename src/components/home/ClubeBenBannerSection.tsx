@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Gift, ArrowRight } from "lucide-react";
 import { PartnersLogoGallery } from "./PartnersLogoGallery";
 export const ClubeBenBannerSection = () => {
-  return <section className="py-16 bg-muted/30">
+  return <section className="py-16 bg-muted/30 md:bg-background">
       <div className="container mx-auto">
           <div className="flex flex-col items-center gap-8">
             {/* Conteúdo */}
