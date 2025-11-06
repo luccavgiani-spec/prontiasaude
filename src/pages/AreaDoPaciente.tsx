@@ -369,9 +369,7 @@ const AreaDoPaciente = () => {
                 Clubes de Benefícios Prontìa Saúde!
                 {patientPlan && <Badge variant="default">Disponível</Badge>}
               </CardTitle>
-              <CardDescription>
-                Descontos exclusivos em farmácias, exames e muito mais
-              </CardDescription>
+              
             </CardHeader>
             <CardContent className="space-y-4">
               {patientPlan ?
@@ -400,45 +398,14 @@ const AreaDoPaciente = () => {
             // ❌ USUÁRIO NÃO TEM PLANO - RENDERIZAR BANNER PROMOCIONAL
             <>
                   <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
-                      <Gift className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-medium text-primary">Benefício Exclusivo</span>
-                    </div>
+                    
                     
                     
                     
                     <p className="text-sm text-muted-foreground">Mais de 450 descontos exclusivos para quem é Prontìa Saùde.</p>
 
                     {/* Grid de ícones de benefícios */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Pill className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-xs font-medium">Farmácias</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Stethoscope className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-xs font-medium">Exames</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Dumbbell className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-xs font-medium">Fitness</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Apple className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-xs font-medium">Alimentação</span>
-                      </div>
-                    </div>
+                    
 
                     {/* CTAs */}
                     <div className="flex flex-col gap-2 pt-2">
