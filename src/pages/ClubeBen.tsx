@@ -142,7 +142,7 @@ const ClubeBen = () => {
               Cuidar da saúde ficou mais vantajoso
             </h1>
             
-            <p className="text-lg text-muted-foreground mb-6">
+            <p className="text-lg text-muted-foreground mb-6 italic">
               Além do cuidado com a sua saúde, a Prontìa Saúde oferece benefícios exclusivos para tornar o seu dia a dia ainda melhor. Aqui, saúde vem com vantagens!
             </p>
             
