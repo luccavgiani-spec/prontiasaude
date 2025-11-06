@@ -8,10 +8,7 @@ export const ClubeBenBannerSection = () => {
           <div className="flex flex-col items-center gap-8">
             {/* Conteúdo */}
             <div className="w-full text-center">
-              <div className="inline-flex items-center gap-2 bg-primary/10 px-4 py-2 rounded-full mb-4">
-                <Gift className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium text-primary">Benefício Exclusivo</span>
-              </div>
+              
               
               <h2 className="text-3xl md:text-4xl font-bold mb-4">Descontos exclusivos para quem é Prontìa</h2>
               
