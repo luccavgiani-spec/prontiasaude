@@ -11,10 +11,12 @@ import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const navigate = useNavigate();
-  
   const handleCTA = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    const {
+      data: {
+        user
+      }
+    } = await supabase.auth.getUser();
     if (!user) {
       localStorage.setItem('returnUrl', '/');
       localStorage.setItem('pendingService', JSON.stringify({
@@ -27,12 +29,9 @@ export function HeroSection() {
     }
 
     // Verificar se perfil está completo
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('profile_complete')
-      .eq('id', user.id)
-      .maybeSingle();
-
+    const {
+      data: patient
+    } = await supabase.from('patients').select('profile_complete').eq('id', user.id).maybeSingle();
     if (!patient?.profile_complete) {
       localStorage.setItem('returnUrl', '/');
       localStorage.setItem('pendingService', JSON.stringify({
@@ -43,18 +42,14 @@ export function HeroSection() {
       navigate('/completar-perfil');
       return;
     }
-    
+
     // Verificar plano ativo
     const planStatus = await checkPatientPlanActive(user.email!);
-    
     if (planStatus.canBypassPayment) {
       // Tem plano ativo: buscar dados completos do paciente
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('id', user.id)
-        .maybeSingle();
-
+      const {
+        data: patient
+      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast.error('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
@@ -62,10 +57,10 @@ export function HeroSection() {
       }
 
       // Mapear gender para 'M' ou 'F'
-      const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
-
-      toast('Redirecionando para agendamento...', { duration: 2000 });
-      
+      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
+      toast('Redirecionando para agendamento...', {
+        duration: 2000
+      });
       const result = await scheduleWithActivePlan({
         cpf: patient.cpf,
         email: user.email!,
@@ -75,7 +70,6 @@ export function HeroSection() {
         plano_ativo: true,
         sexo: mapSexo(patient.gender)
       });
-      
       if (result.ok && result.url) {
         window.location.href = result.url;
       } else {
@@ -83,11 +77,10 @@ export function HeroSection() {
       }
       return;
     }
-    
+
     // Sem plano: abrir checkout
     setIsPaymentModalOpen(true);
   };
-  
   const scrollToServicos = () => {
     const element = document.getElementById('servicos');
     if (element) {
@@ -96,7 +89,6 @@ export function HeroSection() {
       });
     }
   };
-
   const scrollToComoFunciona = () => {
     const element = document.querySelector('section[class*="py-10"][class*="bg-gradient-to-br"]');
     if (element) {
@@ -105,7 +97,12 @@ export function HeroSection() {
       });
     }
   };
-  return <section className="hero-section relative bg-muted/30 overflow-hidden" style={{ minHeight: '600px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+  return <section className="hero-section relative bg-muted/30 overflow-hidden" style={{
+    minHeight: '600px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  }}>
       {/* Modern geometric background */}
       <div className="absolute inset-0 geometric-pattern" />
       <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
@@ -130,9 +127,7 @@ export function HeroSection() {
                 <br />
                 <span className="text-foreground">consulta imediata por apenas</span>
                 <br />
-                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">
-                  R$13,99!
-                </span>
+                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$43,90!</span>
               </h1>
               
               <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
@@ -142,8 +137,13 @@ export function HeroSection() {
             </div>
             
             {/* Modern CTAs */}
-            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4" style={{ minHeight: '56px' }}>
-              <Button onClick={handleCTA} size="xl" className="bg-green-600 text-white border-green-600 hover:bg-green-700 text-base md:text-lg px-8 md:px-12 rounded-2xl shadow-2xl group hero-button" style={{ height: '56px', minWidth: '220px' }}>
+            <div className="flex flex-col sm:flex-row gap-4 md:gap-6 pt-2 md:pt-4" style={{
+            minHeight: '56px'
+          }}>
+              <Button onClick={handleCTA} size="xl" className="bg-green-600 text-white border-green-600 hover:bg-green-700 text-base md:text-lg px-8 md:px-12 rounded-2xl shadow-2xl group hero-button" style={{
+              height: '56px',
+              minWidth: '220px'
+            }}>
                 Consulte Agora
                 <ArrowRight className="ml-2 md:ml-3 w-5 h-5 md:w-6 md:h-6 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -154,7 +154,11 @@ export function HeroSection() {
           
           {/* Modern Image Column */}
           <div className="relative flex justify-center lg:justify-end">
-            <div className="relative w-full max-w-lg" style={{ width: '100%', maxWidth: '512px', aspectRatio: '16/9' }}>
+            <div className="relative w-full max-w-lg" style={{
+            width: '100%',
+            maxWidth: '512px',
+            aspectRatio: '16/9'
+          }}>
               {/* Enhanced background effects */}
               <div className="hidden sm:block absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
               
@@ -162,24 +166,14 @@ export function HeroSection() {
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl h-full">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10 pointer-events-none" />
             <picture className="hero-picture">
-              <source 
-                type="image/webp"
-                srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
-                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
-              />
-              <img
-                src="/assets/hero-doctor-realistic-1200.webp"
-                srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
-                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
-                alt="Médico especialista em telemedicina realizando consulta online"
-                width="1200"
-                height="675"
-                loading="eager"
-                decoding="async"
-                fetchPriority="high"
-                style={{ aspectRatio: '16/9', objectFit: 'cover', width: '100%', height: 'auto', display: 'block' }}
-                className="w-full h-auto object-cover"
-              />
+              <source type="image/webp" srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" />
+              <img src="/assets/hero-doctor-realistic-1200.webp" srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" alt="Médico especialista em telemedicina realizando consulta online" width="1200" height="675" loading="eager" decoding="async" fetchPriority="high" style={{
+                  aspectRatio: '16/9',
+                  objectFit: 'cover',
+                  width: '100%',
+                  height: 'auto',
+                  display: 'block'
+                }} className="w-full h-auto object-cover" />
             </picture>
           </div>
               
@@ -195,13 +189,6 @@ export function HeroSection() {
       </div>
 
       {/* Payment Modal */}
-      <PaymentModal
-        open={isPaymentModalOpen}
-        onOpenChange={setIsPaymentModalOpen}
-        sku="ITC6534"
-        serviceName="Pronto Atendimento"
-        amount={4390}
-        onSuccess={() => {}}
-      />
+      <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku="ITC6534" serviceName="Pronto Atendimento" amount={4390} onSuccess={() => {}} />
     </section>;
 }
