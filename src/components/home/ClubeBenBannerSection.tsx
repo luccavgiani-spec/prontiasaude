@@ -4,7 +4,7 @@ import { Gift, ArrowRight } from "lucide-react";
 import { PartnersLogoGallery } from "./PartnersLogoGallery";
 export const ClubeBenBannerSection = () => {
   return <section className="py-16 bg-muted/30">
-      <div className="container px-0 mx-[41px] my-0">
+      <div className="container mx-auto">
           <div className="flex flex-col items-center gap-8">
             {/* Conteúdo */}
             <div className="w-full text-center">
