@@ -92,6 +92,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ✅ VALIDAÇÃO OBRIGATÓRIA: Verificar plano ativo
+    const { data: activePlan, error: planError } = await supabase
+      .from('patient_plans')
+      .select('plan_code, plan_expires_at, status')
+      .eq('status', 'active')
+      .gte('plan_expires_at', new Date().toISOString())
+      .or(`user_id.eq.${patient.id},email.eq.${patient.email}`)
+      .order('plan_expires_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!activePlan || planError) {
+      console.warn('[ClubeBen Sync] No active plan found for patient:', patient.id);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'plan_required',
+          message: 'Plano ativo é necessário para sincronizar com o Clube de Benefícios.' 
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('[ClubeBen Sync] Active plan verified:', activePlan.plan_code);
+
     // Validar campos obrigatórios
     if (!patient.cpf || !patient.birth_date || !patient.email || !patient.first_name) {
       console.warn('[ClubeBen Sync] Missing required fields:', patient.id);

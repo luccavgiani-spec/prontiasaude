@@ -9,7 +9,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
-import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan } from "@/lib/patient-plan";
+import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
@@ -95,9 +95,31 @@ const AreaDoPaciente = () => {
     try {
       setAccessingClub(true);
 
-      // ✅ GARANTIR SYNC ANTES DE REDIRECIONAR
+      // ✅ VALIDAÇÃO OBRIGATÓRIA: Verificar plano ativo antes de qualquer ação
+      if (!currentUser?.email) {
+        toast({
+          title: "Erro",
+          description: "Usuário não autenticado.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const planStatus = await checkPatientPlanActive(currentUser.email);
+      
+      if (!planStatus.hasActivePlan) {
+        toast({
+          title: "Plano Necessário",
+          description: "O Clube de Benefícios é exclusivo para assinantes com plano ativo.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('[ClubeBen] Active plan verified, proceeding...');
+
       // Se usuário tem plano mas clubeben_status != 'active', disparar sync
-      if (patientPlan && patient?.clubeben_status !== 'active') {
+      if (patient?.clubeben_status !== 'active') {
         console.log('[ClubeBen] User has plan but not synced yet, triggering sync...');
         const {
           data: syncData,
@@ -109,12 +131,14 @@ const AreaDoPaciente = () => {
             trigger_source: 'area_do_paciente_access'
           }
         });
-        if (syncError) {
-          console.error('[ClubeBen] Sync error:', syncError);
+        
+        // Se o backend retornou plan_required, significa que não tem plano
+        if (syncError || syncData?.error === 'plan_required') {
+          console.error('[ClubeBen] Sync blocked - no active plan');
           toast({
-            title: "Ativação em andamento",
-            description: "Seu acesso está sendo preparado. Tente novamente em alguns instantes.",
-            variant: "default"
+            title: "Plano Necessário",
+            description: "O Clube de Benefícios é exclusivo para assinantes com plano ativo.",
+            variant: "destructive"
           });
           return;
         }
@@ -129,7 +153,19 @@ const AreaDoPaciente = () => {
           user_id: currentUser?.id
         }
       });
+      
+      // Verificar se o backend bloqueou por falta de plano
+      if (data?.error === 'plan_required') {
+        toast({
+          title: "Plano Necessário",
+          description: "O Clube de Benefícios é exclusivo para assinantes com plano ativo.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       if (error) throw error;
+      
       if (data?.redirect_url) {
         window.location.href = data.redirect_url;
         toast({

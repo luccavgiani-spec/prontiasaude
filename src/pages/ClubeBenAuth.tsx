@@ -36,6 +36,17 @@ const ClubeBenAuth = () => {
         }
       });
 
+      // ✅ TRATAR ERRO DE PLANO NECESSÁRIO
+      if (data?.error === 'plan_required') {
+        toast({
+          title: "Plano Necessário",
+          description: "O Clube de Benefícios é exclusivo para assinantes com plano ativo.",
+          variant: "default"
+        });
+        navigate('/area-do-paciente');
+        return;
+      }
+
       if (error || !data?.redirect_url) {
         if (data?.needs_completion) {
           toast({

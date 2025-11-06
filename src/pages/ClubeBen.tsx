@@ -6,7 +6,8 @@ import { PartnersLogoGallery } from "@/components/home/PartnersLogoGallery";
 import { Check, Pill, Stethoscope, Dumbbell, Apple, MapPin, ArrowRight, Gift, Store } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +43,22 @@ const ClubeBen = () => {
         navigate('/entrar?returnUrl=/clubeben');
         return;
       }
+
+      // ✅ VALIDAÇÃO OBRIGATÓRIA: Verificar plano ativo antes de acessar
+      const planStatus = await checkPatientPlanActive(session.user.email || '');
+      
+      if (!planStatus.hasActivePlan) {
+        toast({
+          title: "Plano Necessário",
+          description: "O Clube de Benefícios é exclusivo para assinantes. Assine um plano para ter acesso.",
+          variant: "default"
+        });
+        // Não redireciona - mantém na página para ver os planos
+        return;
+      }
+
+      console.log('[ClubeBen] Active plan verified, proceeding...');
+
       const {
         data,
         error
@@ -50,6 +67,17 @@ const ClubeBen = () => {
           user_id: session.user.id
         }
       });
+
+      // Verificar se o backend bloqueou por falta de plano
+      if (data?.error === 'plan_required') {
+        toast({
+          title: "Plano Necessário",
+          description: "O Clube de Benefícios é exclusivo para assinantes com plano ativo.",
+          variant: "default"
+        });
+        return;
+      }
+
       if (error || !data?.redirect_url) {
         if (data?.needs_completion) {
           toast({
