@@ -162,6 +162,14 @@ const ClubeBen = () => {
         </div>
       </section>
 
+      {/* Galeria de Parceiros */}
+      <section className="py-16">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-center mb-12">Nossos parceiros</h2>
+          <PartnersLogoGallery />
+        </div>
+      </section>
+
       {/* Benefícios por Categoria */}
       <section className="py-16">
         <div className="container mx-auto px-4">
@@ -228,14 +236,6 @@ const ClubeBen = () => {
               </CardContent>
             </Card>
           </div>
-        </div>
-      </section>
-
-      {/* Galeria de Parceiros */}
-      <section className="py-16">
-        <div className="container mx-auto px-4">
-          <h2 className="text-3xl font-bold text-center mb-12">Nossos parceiros</h2>
-          <PartnersLogoGallery />
         </div>
       </section>
 
