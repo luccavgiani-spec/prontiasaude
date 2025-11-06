@@ -7,7 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield } from "lucide-react";
+import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle } from "lucide-react";
 import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, formatPhoneMask, validateCEP, formatCEP } from "@/lib/validations";
 import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 
@@ -36,6 +36,7 @@ const Cadastrar = () => {
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -70,6 +71,11 @@ const Cadastrar = () => {
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
+    // Limpar erro do campo quando usuário digitar
+    if (fieldErrors[field]) {
+      setFieldErrors(prev => ({ ...prev, [field]: '' }));
+    }
+
     if (field === 'phone_display' && typeof value === 'string') {
       const masked = formatPhoneMask(value);
       const e164 = formatPhoneE164(value);
@@ -97,6 +103,50 @@ const Cadastrar = () => {
       value = value.replace(/\D/g, '');
     }
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Validação em tempo real quando usuário sai do campo
+  const validateField = async (field: string) => {
+    const newErrors = { ...fieldErrors };
+
+    switch (field) {
+      case 'email':
+        if (formData.email && !validateEmail(formData.email)) {
+          newErrors.email = 'Email inválido. Use o formato: email@exemplo.com';
+        }
+        break;
+
+      case 'cpf':
+        if (formData.cpf && !validateCPF(formData.cpf)) {
+          newErrors.cpf = 'CPF inválido. Verifique os dígitos digitados.';
+        } else if (formData.cpf && formData.cpf.length === 11) {
+          // Verificar se CPF já existe
+          const { data: existingPatient } = await supabase
+            .from('patients')
+            .select('id')
+            .eq('cpf', formData.cpf)
+            .maybeSingle();
+          
+          if (existingPatient) {
+            newErrors.cpf = 'Este CPF já está cadastrado. Faça login ou recupere sua senha.';
+          }
+        }
+        break;
+
+      case 'phone_display':
+        if (formData.phone_e164 && !validatePhoneE164(formData.phone_e164)) {
+          newErrors.phone_display = 'Telefone inválido. Use o formato: (11) 99999-9999';
+        }
+        break;
+
+      case 'birth_date':
+        if (formData.birth_date && !validateBirthDate(formData.birth_date)) {
+          newErrors.birth_date = 'Data de nascimento inválida.';
+        }
+        break;
+    }
+
+    setFieldErrors(newErrors);
   };
 
   const validateForm = () => {
@@ -440,10 +490,17 @@ const Cadastrar = () => {
                   placeholder="seu@email.com"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className="pl-10"
+                  onBlur={() => validateField('email')}
+                  className={`pl-10 ${fieldErrors.email ? 'border-destructive' : ''}`}
                   required
                 />
               </div>
+              {fieldErrors.email && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {fieldErrors.email}
+                </p>
+              )}
             </div>
             
             <div className="space-y-2">
@@ -563,9 +620,17 @@ const Cadastrar = () => {
                   placeholder="Apenas números"
                   value={formData.cpf}
                   onChange={(e) => handleInputChange('cpf', e.target.value)}
+                  onBlur={() => validateField('cpf')}
+                  className={fieldErrors.cpf ? 'border-destructive' : ''}
                   maxLength={11}
                   required
                 />
+                {fieldErrors.cpf && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {fieldErrors.cpf}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone_display">Telefone *</Label>
@@ -576,10 +641,17 @@ const Cadastrar = () => {
                     placeholder="(11) 91234-5678"
                     value={formData.phone_display}
                     onChange={(e) => handleInputChange('phone_display', e.target.value)}
-                    className="pl-10"
+                    onBlur={() => validateField('phone_display')}
+                    className={`pl-10 ${fieldErrors.phone_display ? 'border-destructive' : ''}`}
                     required
                   />
                 </div>
+                {fieldErrors.phone_display && (
+                  <p className="text-sm text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    {fieldErrors.phone_display}
+                  </p>
+                )}
               </div>
             </div>
             
@@ -592,10 +664,17 @@ const Cadastrar = () => {
                   type="date"
                   value={formData.birth_date}
                   onChange={(e) => handleInputChange('birth_date', e.target.value)}
-                  className="pl-10"
+                  onBlur={() => validateField('birth_date')}
+                  className={`pl-10 ${fieldErrors.birth_date ? 'border-destructive' : ''}`}
                   required
                 />
               </div>
+              {fieldErrors.birth_date && (
+                <p className="text-sm text-destructive flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {fieldErrors.birth_date}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

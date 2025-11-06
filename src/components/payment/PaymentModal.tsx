@@ -806,6 +806,7 @@ export function PaymentModal({
     
     // ✅ ETAPA 6: Validar readiness ANTES de processar
     if (!validatePaymentReadiness()) {
+      toast.error('Preencha todos os campos obrigatórios');
       setPaymentStatus('idle');
       return;
     }
@@ -813,14 +814,19 @@ export function PaymentModal({
     setPaymentStatus('processing');
     setError('');
     setUserMessage('');
+    toast.loading('Processando pagamento...');
 
     try {
       // ✅ Garantir que temos os dados corretos do cartão
       if (!cardFormData.token || !cardFormData.payment_method_id) {
         console.error('[handleCardSubmit] Missing card data:', cardFormData);
-        setError('Não foi possível processar os dados do cartão. Verifique os campos e tente novamente.');
+        const errorMsg = 'Não foi possível processar os dados do cartão. Verifique os campos e tente novamente.';
+        setError(errorMsg);
         setPaymentStatus('idle');
-        toast.error('Erro ao processar dados do cartão');
+        toast.dismiss();
+        toast.error('Dados do cartão inválidos', {
+          description: 'Verifique os campos e tente novamente'
+        });
         return;
       }
 
@@ -970,12 +976,16 @@ export function PaymentModal({
         setPaymentId(data.payment_id);
         setPaymentStatus('approved');
         
+        toast.dismiss();
+        
         // ✅ Detectar se é PLANO e redirecionar diretamente
         const isPlan = sku.match(/^(IND_|FAM_)/);
         
         if (isPlan) {
           console.log('[Card Payment] 🎯 PLANO detectado - Redirecionando para área do paciente');
-          toast.success('✅ Plano ativado! Redirecionando para área do paciente...');
+          toast.success('✅ Plano ativado!', {
+            description: 'Redirecionando para área do paciente...'
+          });
           setTimeout(() => {
             window.location.href = '/area-do-paciente';
           }, 1500);
@@ -983,7 +993,9 @@ export function PaymentModal({
         }
         
         // Fluxo normal para SERVIÇOS
-        toast.success('Pagamento aprovado! Criando agendamento...');
+        toast.success('Pagamento aprovado!', {
+          description: 'Criando agendamento...'
+        });
         
         // Chamar schedule-redirect imediatamente após pagamento aprovado
         const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
@@ -992,12 +1004,16 @@ export function PaymentModal({
         
         if (scheduleError || !scheduleData?.ok) {
           console.error('[Card Payment] Erro ao criar agendamento:', scheduleError || scheduleData);
-          toast.error('Pagamento aprovado, mas houve erro no agendamento. Entre em contato.');
+          toast.error('Pagamento aprovado', {
+            description: 'Mas houve erro no agendamento. Entre em contato.'
+          });
           return;
         }
         
         if (scheduleData.url) {
-          toast.success('✅ Pagamento aprovado! Redirecionando...');
+          toast.success('✅ Pagamento aprovado!', {
+            description: 'Redirecionando...'
+          });
           setTimeout(() => {
             window.location.href = scheduleData.url;
           }, 1500);
@@ -1006,42 +1022,101 @@ export function PaymentModal({
         // Usuário precisa completar desafio 3DS
         console.log('[3DS] Challenge required:', data);
         
+        toast.dismiss();
+        
         if (data.three_d_secure_info?.external_resource_url) {
           setThreeDSecureUrl(data.three_d_secure_info.external_resource_url);
           setPaymentStatus('in_process');
           setPaymentId(data.payment_id);
-          toast.info('Autenticação adicional necessária');
+          toast.info('Autenticação adicional necessária', {
+            description: 'Complete a verificação para continuar'
+          });
         }
       } else if (data.status === 'in_process' || data.status === 'pending') {
         setPaymentStatus('in_process');
         setPaymentId(data.payment_id);
-        toast.info('Pagamento em análise. Aguarde confirmação.');
+        
+        toast.dismiss();
+        toast.info('Pagamento em análise', {
+          description: 'Aguarde confirmação'
+        });
       } else {
         setPaymentStatus('rejected');
         
+        toast.dismiss();
+        
         // ✅ Mensagens objetivas e claras
-        const rejectMessages: Record<string, string> = {
-          'cc_rejected_insufficient_amount': 'Cartão sem saldo suficiente.',
-          'cc_rejected_bad_filled_security_code': 'Código de segurança (CVV) incorreto.',
-          'cc_rejected_bad_filled_card_number': 'Número do cartão inválido.',
-          'cc_rejected_bad_filled_date': 'Data de validade inválida.',
-          'cc_rejected_call_for_authorize': 'Cartão bloqueado. Entre em contato com seu banco.',
-          'cc_rejected_high_risk': 'Pagamento recusado por segurança.',
-          'cc_rejected_invalid_installments': 'Número de parcelas inválido para este cartão.',
-          'cc_rejected_duplicated_payment': 'Pagamento duplicado detectado.',
-          'cc_rejected_card_disabled': 'Cartão desabilitado. Entre em contato com seu banco.',
-          'cc_rejected_max_attempts': 'Muitas tentativas. Aguarde alguns minutos.',
-          'cc_rejected_bad_filled_other': 'Dados do cartão incorretos.',
-          'cc_rejected_blacklist': 'Cartão não aceito.',
-          'cc_amount_rate_limit_exceeded': 'Valor excede o limite permitido para este cartão.'
+        const rejectMessages: Record<string, { title: string; description: string }> = {
+          'cc_rejected_insufficient_amount': {
+            title: 'Saldo insuficiente',
+            description: 'Seu cartão não tem saldo suficiente'
+          },
+          'cc_rejected_bad_filled_security_code': {
+            title: 'CVV incorreto',
+            description: 'Código de segurança do cartão inválido'
+          },
+          'cc_rejected_bad_filled_card_number': {
+            title: 'Número do cartão inválido',
+            description: 'Verifique o número digitado'
+          },
+          'cc_rejected_bad_filled_date': {
+            title: 'Data de validade inválida',
+            description: 'Verifique a data do seu cartão'
+          },
+          'cc_rejected_call_for_authorize': {
+            title: 'Cartão bloqueado',
+            description: 'Entre em contato com seu banco'
+          },
+          'cc_rejected_high_risk': {
+            title: 'Pagamento recusado',
+            description: 'Transação bloqueada por segurança'
+          },
+          'cc_rejected_invalid_installments': {
+            title: 'Parcelas inválidas',
+            description: 'Número de parcelas não aceito'
+          },
+          'cc_rejected_duplicated_payment': {
+            title: 'Pagamento duplicado',
+            description: 'Este pagamento já foi processado'
+          },
+          'cc_rejected_card_disabled': {
+            title: 'Cartão desabilitado',
+            description: 'Entre em contato com seu banco'
+          },
+          'cc_rejected_max_attempts': {
+            title: 'Muitas tentativas',
+            description: 'Aguarde alguns minutos e tente novamente'
+          },
+          'cc_rejected_bad_filled_other': {
+            title: 'Dados incorretos',
+            description: 'Verifique os dados do cartão'
+          },
+          'cc_rejected_blacklist': {
+            title: 'Cartão não aceito',
+            description: 'Este cartão não pode ser utilizado'
+          },
+          'cc_amount_rate_limit_exceeded': {
+            title: 'Limite excedido',
+            description: 'Valor excede o limite do cartão'
+          }
         };
         
-        const userMessage = data.status_detail 
-          ? rejectMessages[data.status_detail] || `Pagamento rejeitado. Use outro cartão ou tente PIX.` 
-          : 'Pagamento rejeitado. Use outro cartão ou tente PIX.';
+        const errorInfo = data.status_detail 
+          ? rejectMessages[data.status_detail] || {
+              title: 'Pagamento rejeitado',
+              description: 'Use outro cartão ou tente PIX'
+            }
+          : {
+              title: 'Pagamento rejeitado',
+              description: 'Use outro cartão ou tente PIX'
+            };
         
-        setUserMessage(userMessage);
+        setUserMessage(errorInfo.description);
         setError(data.status_detail || ''); // Armazena status_detail no error para exibir badge
+        
+        toast.error(errorInfo.title, {
+          description: errorInfo.description
+        });
         
         console.error('[CARD REJECTED]', {
           status_detail: data.status_detail,
@@ -1052,25 +1127,37 @@ export function PaymentModal({
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
       
-      // ✅ Tratamento específico de erros
-      let errorMessage = 'Erro ao processar pagamento';
+      toast.dismiss();
       
-      if (err.message?.includes('Price validation failed')) {
-        errorMessage = 'Erro: Preço inválido detectado. Recarregue a página e tente novamente.';
+      // ✅ Tratamento específico de erros
+      let errorTitle = 'Erro ao processar pagamento';
+      let errorDescription = 'Tente novamente ou use outro método';
+      
+      if (err.message?.includes('📍 Endereço')) {
+        errorTitle = 'Endereço incompleto';
+        errorDescription = 'Complete seu endereço no perfil antes de pagar';
+      } else if (err.message?.includes('📞')) {
+        errorTitle = 'Telefone inválido';
+        errorDescription = 'Verifique o telefone digitado';
+      } else if (err.message?.includes('Price validation failed')) {
+        errorTitle = 'Erro de preço';
+        errorDescription = 'Recarregue a página e tente novamente';
       } else if (err.message?.includes('Invalid SKU')) {
-        errorMessage = 'Erro: Serviço inválido. Entre em contato com o suporte.';
+        errorTitle = 'Serviço inválido';
+        errorDescription = 'Entre em contato com o suporte';
       } else if (err.message?.includes('does not support recurring')) {
-        errorMessage = 'Este serviço não está disponível como assinatura.';
+        errorTitle = 'Serviço indisponível';
+        errorDescription = 'Este serviço não está disponível como assinatura';
       } else if (err.response?.status === 401) {
-        errorMessage = 'Erro de autenticação. Faça login novamente.';
+        errorTitle = 'Erro de autenticação';
+        errorDescription = 'Faça login novamente';
       } else if (err.message?.includes('bad_request') || err.message?.includes('400')) {
-        errorMessage = 'Dados de pagamento inválidos. Verifique os dados do cartão e tente novamente.';
-      } else if (err.data?.error?.includes('bad_request')) {
-        errorMessage = 'Erro ao processar dados do cartão. Verifique as informações e tente novamente.';
+        errorTitle = 'Dados inválidos';
+        errorDescription = 'Verifique os dados do cartão';
       }
       
-      setError(errorMessage);
-      toast.error(errorMessage);
+      setError(errorTitle);
+      toast.error(errorTitle, { description: errorDescription });
       setPaymentStatus('idle');
     } finally {
       // ✅ Garantir que sempre reseta o status em caso de erro não tratado
@@ -1087,6 +1174,33 @@ export function PaymentModal({
       return;
     }
 
+    // Validar CPF ANTES de tudo
+    const cleanCPF = formData.cpf.replace(/\D/g, '');
+    if (!validateCPF(cleanCPF)) {
+      toast.error('CPF inválido', {
+        description: 'Verifique o CPF digitado e tente novamente.'
+      });
+      return;
+    }
+
+    // Validar email
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      toast.error('Email inválido', {
+        description: 'Digite um email válido para continuar.'
+      });
+      return;
+    }
+
+    // Validar telefone
+    const { formatPhoneE164, validatePhoneE164 } = await import('@/lib/validations');
+    const formattedPhone = formatPhoneE164(formData.phone);
+    if (!validatePhoneE164(formattedPhone)) {
+      toast.error('Telefone inválido', {
+        description: 'Use o formato: (11) 91234-5678'
+      });
+      return;
+    }
+
     if (!validateForm()) return;
 
     // Setar flag ANTES de iniciar
@@ -1095,19 +1209,9 @@ export function PaymentModal({
     console.log('[handlePixSubmit] Starting PIX generation');
     setPaymentStatus('processing');
     setError('');
+    toast.loading('Gerando código PIX...');
 
     try {
-      // Formatar telefone localmente ANTES de usar
-      const { formatPhoneE164, validatePhoneE164 } = await import('@/lib/validations');
-      const formattedPhone = formatPhoneE164(formData.phone);
-
-      // Validar o telefone formatado
-      if (!validatePhoneE164(formattedPhone)) {
-        setError('Telefone inválido. Use o formato (11) 91234-5678');
-        setPaymentStatus('idle');
-        return;
-      }
-
       const orderId = `order_${Date.now()}`;
       const schedulePayload = {
         ...buildSchedulePayload(),
@@ -1141,7 +1245,7 @@ export function PaymentModal({
           last_name: formData.name.split(' ').slice(1).join(' '),
           identification: {
             type: 'CPF',
-            number: formData.cpf.replace(/\D/g, '')
+            number: cleanCPF
           }
         },
         payment_method_id: 'pix',
@@ -1177,6 +1281,11 @@ export function PaymentModal({
 
       console.log('[handlePixSubmit] PIX creation response:', data);
 
+      toast.dismiss();
+      toast.success('Código PIX gerado com sucesso!', {
+        description: 'Escaneie o QR Code para pagar'
+      });
+
       setPixData({
         qrCode: data.qr_code,
         qrCodeBase64: data.qr_code_base64,
@@ -1190,12 +1299,28 @@ export function PaymentModal({
       // Iniciar polling para detectar aprovação automaticamente
       console.log('[handlePixSubmit] Iniciando polling para order_id:', orderId);
       pollPaymentStatus(data.payment_id, orderId);
-      
-      // Usuário paga PIX, webhook notifica GAS em background
-      toast.info('Aguardando pagamento do PIX...');
     } catch (err: any) {
       console.error('[handlePixSubmit] PIX generation error:', err);
-      setError(err.message || 'Erro ao gerar PIX');
+      
+      toast.dismiss();
+      
+      // Mensagens de erro específicas
+      let errorTitle = 'Erro ao gerar PIX';
+      let errorDescription = 'Tente novamente em alguns instantes';
+      
+      if (err.message?.includes('CPF')) {
+        errorTitle = 'CPF inválido';
+        errorDescription = 'Verifique o CPF digitado e tente novamente';
+      } else if (err.message?.includes('email')) {
+        errorTitle = 'Email inválido';
+        errorDescription = 'Verifique o email digitado e tente novamente';
+      } else if (err.message?.includes('não encontrado')) {
+        errorTitle = 'Serviço indisponível';
+        errorDescription = 'Este serviço não está disponível no momento';
+      }
+      
+      toast.error(errorTitle, { description: errorDescription });
+      setError(errorTitle);
       setPaymentStatus('idle');
     } finally {
       // Liberar flag após 1 segundo
