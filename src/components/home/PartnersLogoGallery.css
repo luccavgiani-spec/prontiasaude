@@ -84,6 +84,12 @@
   background: white;
 }
 
+/* Preenchimento total para Netshoes e Drogasil */
+.partner-logo-item.bg-netshoes .partner-logo-image,
+.partner-logo-item.bg-drogasil .partner-logo-image {
+  object-fit: cover;
+}
+
 /* Animação de loop infinito */
 @keyframes scroll-partners-infinite {
   0% {
