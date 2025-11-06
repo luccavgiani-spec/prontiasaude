@@ -407,10 +407,7 @@ const AreaDoPaciente = () => {
                     
                     
                     
-                    <p className="text-sm text-muted-foreground">Além do cuidado com a sua saúde, a Prontìa Saúde oferece benefícios exclusivos para tornar o seu dia a dia ainda melhor. Aqui, saúde vem com vantagens!
-
-
-Descontos em farmácias, laboratório, lojas parceiras de diversos segmentos — bem-estar, alimentação, educação e mais de 450 parceiros para você.</p>
+                    <p className="text-sm text-muted-foreground">Mais de 450 descontos exclusivos para quem é Prontìa Saùde.</p>
 
                     {/* Grid de ícones de benefícios */}
                     <div className="grid grid-cols-2 gap-3">
