@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
-import { sign } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
+import { create } from 'https://deno.land/x/djwt@v3.0.2/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +32,11 @@ async function generateClubeBenJWT(payload: ClubeBenPayload): Promise<string> {
     ['sign']
   );
 
-  return await sign({ ...payload, exp: Math.floor(Date.now() / 1000) + 600 }, key, 'HS256');
+  return await create(
+    { alg: "HS256", typ: "JWT" },
+    { ...payload, exp: Math.floor(Date.now() / 1000) + 600 },
+    key
+  );
 }
 
 async function syncWithClubeBen(jwt: string): Promise<{ success: boolean; error?: string }> {
