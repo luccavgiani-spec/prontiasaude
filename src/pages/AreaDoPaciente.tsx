@@ -362,7 +362,7 @@ const AreaDoPaciente = () => {
           </Card>
 
           {/* Clube de Benefícios */}
-          <Card>
+          <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 md:bg-background md:border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Gift className="h-5 w-5 text-primary" />
