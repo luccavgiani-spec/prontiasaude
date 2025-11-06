@@ -364,8 +364,9 @@ const AreaDoPaciente = () => {
           {/* Clube de Benefícios */}
           <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20 md:bg-background md:border-border">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">Clube de Benefícios Prontìa Saúde!<Gift className="h-5 w-5 text-primary" />
-                Clubes de Benefícios Prontìa Saúde!
+              <CardTitle className="flex items-center gap-2">
+                <Gift className="h-5 w-5 text-primary" />
+                Clube de Benefícios Prontìa Saúde!
                 {patientPlan && <Badge variant="default">Disponível</Badge>}
               </CardTitle>
               
