@@ -1,3 +1,7 @@
+/* ⛔⛔⛔ NÃO ALTERAR ESTE ARQUIVO ⛔⛔⛔
+ * Galeria Circular de ONGs - Sistema bloqueado para edições
+ */
+
 import React from 'react';
 import './CircularGallery.css';
 import samaLogo from '@/assets/sama-logo.png';

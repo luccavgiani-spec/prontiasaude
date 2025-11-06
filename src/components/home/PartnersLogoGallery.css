@@ -1,5 +1,10 @@
 /* ====================================
    PARTNERS LOGO GALLERY - CIRCULAR
+   ⛔⛔⛔ NÃO ALTERAR ESTE ARQUIVO ⛔⛔⛔
+   Especialmente as classes:
+   - .full-fill
+   - .bg-netshoes
+   - .bg-drogasil
    ==================================== */
 
 .partners-logo-gallery-section {
@@ -78,12 +83,13 @@
   pointer-events: none;
 }
 
-/* Background e preenchimento total para Netshoes e Drogasil (sem bordas) */
+/* ⛔ NÃO ALTERAR - Background e preenchimento total para Netshoes e Drogasil (sem bordas) */
 .partner-logo-item.bg-netshoes,
 .partner-logo-item.bg-drogasil {
   background: white;
   border: none;
   box-shadow: none;
+  padding: 0; /* ⛔ CRÍTICO: padding zero para preenchimento total */
 }
 
 .partner-logo-item.bg-netshoes .partner-logo-image,
