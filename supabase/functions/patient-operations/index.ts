@@ -147,6 +147,11 @@ interface ScheduleRedirectRequest {
   sku: string;
 }
 
+interface DisablePlanRequest {
+  operation: 'disable_plan';
+  email: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -533,6 +538,78 @@ serve(async (req) => {
             meetingLink: gasResult.meetingLink || null,
             queueURL: gasResult.queueURL || null,
             url: gasResult.url || null
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'disable_plan': {
+        const { email } = body as DisablePlanRequest;
+        
+        if (!validateEmail(email)) {
+          return new Response(
+            JSON.stringify({ error: 'Email inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Check if user is admin
+        const token = authHeader!.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+          return new Response(
+            JSON.stringify({ error: 'Não autorizado' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!roles || roles.role !== 'admin') {
+          return new Response(
+            JSON.stringify({ error: 'Apenas administradores podem desabilitar planos' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Disable the plan
+        const { data: updatedPlan, error: updateError } = await supabase
+          .from('patient_plans')
+          .update({ 
+            status: 'inactive',
+            updated_at: new Date().toISOString()
+          })
+          .eq('email', email)
+          .eq('status', 'active')
+          .select();
+        
+        if (updateError) {
+          console.error('[disable_plan] Error:', updateError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao desabilitar plano' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!updatedPlan || updatedPlan.length === 0) {
+          return new Response(
+            JSON.stringify({ error: 'Nenhum plano ativo encontrado para este email' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[disable_plan] Plan disabled:', { email, plan: updatedPlan[0] });
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: `Plano desabilitado com sucesso para ${email}`,
+            plan: updatedPlan[0]
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

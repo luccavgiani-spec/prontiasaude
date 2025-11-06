@@ -19,6 +19,7 @@ import CompanyManagement from "@/components/admin/CompanyManagement";
 import ReportsTab from "@/components/admin/ReportsTab";
 import UserRegistrationsTab from "@/components/admin/UserRegistrationsTab";
 import SalesTab from "@/components/admin/SalesTab";
+import PlansManagement from "@/components/admin/PlansManagement";
 
 interface ContentItem {
   id: string;
@@ -327,9 +328,10 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="relatorios" className="space-y-6">
-          <TabsList className="grid w-full max-w-6xl grid-cols-7">
+          <TabsList className="grid w-full max-w-6xl grid-cols-8">
             <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
             <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
+            <TabsTrigger value="planos">📋 Planos</TabsTrigger>
             <TabsTrigger value="empresas">Empresas</TabsTrigger>
             <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
             <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
@@ -614,6 +616,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="vendas">
             <SalesTab />
+          </TabsContent>
+
+          <TabsContent value="planos">
+            <PlansManagement />
           </TabsContent>
 
           <TabsContent value="cadastros">
