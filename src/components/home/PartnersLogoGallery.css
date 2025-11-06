@@ -78,16 +78,19 @@
   pointer-events: none;
 }
 
-/* Backgrounds brancos para logos específicas */
+/* Background e preenchimento total para Netshoes e Drogasil (sem bordas) */
 .partner-logo-item.bg-netshoes,
 .partner-logo-item.bg-drogasil {
   background: white;
+  border: none;
+  box-shadow: none;
 }
 
-/* Preenchimento total para Netshoes e Drogasil */
 .partner-logo-item.bg-netshoes .partner-logo-image,
 .partner-logo-item.bg-drogasil .partner-logo-image {
   object-fit: cover;
+  width: 110%;
+  height: 110%;
 }
 
 /* Animação de loop infinito */
