@@ -376,7 +376,7 @@ const AreaDoPaciente = () => {
             // ✅ USUÁRIO TEM PLANO ATIVO
             <>
                   <p className="text-sm text-muted-foreground">
-                    Como assinante Prontia, você tem acesso gratuito ao ClubeBen com descontos em centenas de parceiros.
+                    Mais de 450 descontos exclusivos para quem é Prontìa Saúde
                   </p>
                   
                   {/* Mostrar status de sincronização se estiver pendente */}
