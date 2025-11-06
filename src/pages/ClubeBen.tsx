@@ -71,15 +71,18 @@ const ClubeBen = () => {
       setAccessing(false);
     }
   };
-
   const handleParceiroInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setParceiroForm(prev => ({ ...prev, [name]: value }));
+    const {
+      name,
+      value
+    } = e.target;
+    setParceiroForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
-
   const handleParceiroSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!parceiroForm.nomeLoja || !parceiroForm.responsavel || !parceiroForm.contato || !parceiroForm.cnpj || !parceiroForm.categoria || !parceiroForm.descricao) {
       toast({
         title: "Campos obrigatórios",
@@ -88,26 +91,23 @@ const ClubeBen = () => {
       });
       return;
     }
-
     setIsSubmittingParceiro(true);
-
     try {
-      const { error } = await supabase.functions.invoke('send-form-emails', {
+      const {
+        error
+      } = await supabase.functions.invoke('send-form-emails', {
         body: {
           type: 'clubeben-parceiro',
           data: parceiroForm
         }
       });
-
       if (error) {
         throw error;
       }
-
       toast({
         title: "Cadastro enviado!",
         description: "Recebemos sua proposta. Entraremos em contato em breve."
       });
-
       setParceiroForm({
         nomeLoja: '',
         responsavel: '',
@@ -127,7 +127,6 @@ const ClubeBen = () => {
       setIsSubmittingParceiro(false);
     }
   };
-
   return <>
       {/* Hero Section */}
       <section className="relative py-20 bg-gradient-to-br from-primary/10 via-background to-secondary/10">
@@ -267,13 +266,7 @@ const ClubeBen = () => {
             </Card>
 
             <Card>
-              <CardContent className="pt-6">
-                <h3 className="font-semibold mb-2">Preciso de ajuda, quem eu contato?</h3>
-                <p className="text-sm text-muted-foreground">
-                  Para dúvidas sobre os benefícios, entre em contato diretamente com o suporte ClubeBen 
-                  através do aplicativo ou site oficial.
-                </p>
-              </CardContent>
+              
             </Card>
           </div>
         </div>
@@ -312,60 +305,31 @@ const ClubeBen = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="nomeLoja">Nome da Loja/Empresa *</Label>
-                      <Input
-                        id="nomeLoja"
-                        name="nomeLoja"
-                        value={parceiroForm.nomeLoja}
-                        onChange={handleParceiroInputChange}
-                        placeholder="Nome da sua loja"
-                        required
-                      />
+                      <Input id="nomeLoja" name="nomeLoja" value={parceiroForm.nomeLoja} onChange={handleParceiroInputChange} placeholder="Nome da sua loja" required />
                     </div>
                     <div>
                       <Label htmlFor="responsavel">Responsável *</Label>
-                      <Input
-                        id="responsavel"
-                        name="responsavel"
-                        value={parceiroForm.responsavel}
-                        onChange={handleParceiroInputChange}
-                        placeholder="Seu nome completo"
-                        required
-                      />
+                      <Input id="responsavel" name="responsavel" value={parceiroForm.responsavel} onChange={handleParceiroInputChange} placeholder="Seu nome completo" required />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="contato">Contato *</Label>
-                      <Input
-                        id="contato"
-                        name="contato"
-                        value={parceiroForm.contato}
-                        onChange={handleParceiroInputChange}
-                        placeholder="Email ou telefone"
-                        required
-                      />
+                      <Input id="contato" name="contato" value={parceiroForm.contato} onChange={handleParceiroInputChange} placeholder="Email ou telefone" required />
                     </div>
                     <div>
                       <Label htmlFor="cnpj">CNPJ *</Label>
-                      <Input
-                        id="cnpj"
-                        name="cnpj"
-                        value={parceiroForm.cnpj}
-                        onChange={handleParceiroInputChange}
-                        placeholder="00.000.000/0000-00"
-                        required
-                      />
+                      <Input id="cnpj" name="cnpj" value={parceiroForm.cnpj} onChange={handleParceiroInputChange} placeholder="00.000.000/0000-00" required />
                     </div>
                   </div>
 
                   <div>
                     <Label htmlFor="categoria">Categoria *</Label>
-                    <Select
-                      value={parceiroForm.categoria}
-                      onValueChange={(value) => setParceiroForm(prev => ({ ...prev, categoria: value }))}
-                      required
-                    >
+                    <Select value={parceiroForm.categoria} onValueChange={value => setParceiroForm(prev => ({
+                    ...prev,
+                    categoria: value
+                  }))} required>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione a categoria" />
                       </SelectTrigger>
@@ -382,15 +346,7 @@ const ClubeBen = () => {
 
                   <div>
                     <Label htmlFor="descricao">Descreva os benefícios que deseja oferecer *</Label>
-                    <Textarea
-                      id="descricao"
-                      name="descricao"
-                      value={parceiroForm.descricao}
-                      onChange={handleParceiroInputChange}
-                      placeholder="Ex: 20% de desconto em todos os produtos da loja, 15% em medicamentos genéricos..."
-                      rows={4}
-                      required
-                    />
+                    <Textarea id="descricao" name="descricao" value={parceiroForm.descricao} onChange={handleParceiroInputChange} placeholder="Ex: 20% de desconto em todos os produtos da loja, 15% em medicamentos genéricos..." rows={4} required />
                   </div>
 
                   <Button type="submit" className="w-full" size="lg" disabled={isSubmittingParceiro}>
