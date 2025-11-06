@@ -7,11 +7,27 @@ import { Loader2 } from "lucide-react";
 const AuthCallback = () => {
   useEffect(() => {
     (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      // ✅ Tentar obter sessão com retry (até 3 segundos)
+      let session = null;
+      let attempts = 0;
+      const maxAttempts = 30; // 3 segundos (100ms * 30)
+      
+      while (!session && attempts < maxAttempts) {
+        const { data } = await supabase.auth.getSession();
+        session = data.session;
+        
+        if (!session) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          attempts++;
+        }
+      }
+      
       if (!session?.user?.id) {
+        console.error('No session after', attempts, 'attempts');
         window.location.replace('/entrar');
         return;
       }
+      
       try {
         await ensurePatientRow(session.user.id);
       } catch (e) {
