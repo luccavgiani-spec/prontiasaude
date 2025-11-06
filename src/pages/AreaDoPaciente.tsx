@@ -405,7 +405,32 @@ const AreaDoPaciente = () => {
                     <p className="text-sm text-muted-foreground">Mais de 450 descontos exclusivos para quem é Prontìa Saúde.</p>
 
                     {/* Grid de ícones de benefícios */}
-                    
+                    <div className="grid grid-cols-4 gap-3 py-4">
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Pill className="h-5 w-5 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Farmácias</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Stethoscope className="h-5 w-5 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Exames</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Dumbbell className="h-5 w-5 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Fitness</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 text-center">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Apple className="h-5 w-5 text-primary" />
+                        </div>
+                        <span className="text-xs font-medium">Alimentação</span>
+                      </div>
+                    </div>
 
                     {/* CTAs */}
                     <div className="flex flex-col gap-2 pt-2">
