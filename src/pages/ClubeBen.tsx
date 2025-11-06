@@ -138,13 +138,16 @@ const ClubeBen = () => {
               <span className="text-sm font-medium text-primary">Benefício Exclusivo</span>
             </div>
             
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+            <h1 className="text-4xl md:text-5xl font-bold mb-4">
               Cuidar da saúde ficou mais vantajoso
             </h1>
             
+            <p className="text-lg text-muted-foreground mb-6">
+              Além do cuidado com a sua saúde, a Prontìa Saúde oferece benefícios exclusivos para tornar o seu dia a dia ainda melhor. Aqui, saúde vem com vantagens!
+            </p>
+            
             <p className="text-xl text-muted-foreground mb-8">
-              Descontos exclusivos em farmácias, exames, academias e muito mais. 
-              Centenas de parceiros em todo o Brasil.
+              Descontos em farmácias, laboratórios, lojas parceiras de diversos segmentos - bem estar, alimentação, educação - e mais de 450 parceiros para você.
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
