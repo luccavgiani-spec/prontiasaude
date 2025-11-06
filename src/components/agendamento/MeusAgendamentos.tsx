@@ -6,7 +6,6 @@ import { getAppointments, AppointmentData } from '@/lib/appointments';
 import { getServiceNameFromSKU } from '@/lib/sku-mapping';
 import { useToast } from '@/hooks/use-toast';
 import { CalendarIcon, ClockIcon, VideoIcon, RefreshCwIcon, CopyIcon } from 'lucide-react';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 interface MeusAgendamentosProps {
   userEmail: string;
@@ -16,9 +15,6 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
 }) => {
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [upcomingPage, setUpcomingPage] = useState(1);
-  const [pastPage, setPastPage] = useState(1);
-  const ITEMS_PER_PAGE = 5;
   const {
     toast
   } = useToast();
@@ -55,8 +51,6 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       });
       
       setAppointments(result.appointments || []);
-      setUpcomingPage(1);
-      setPastPage(1);
     } catch (error) {
       console.error('Exception loading appointments:', error);
       toast({
@@ -130,43 +124,26 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       </Badge>;
   };
 
-  const paginateArray = (array: AppointmentData[], currentPage: number) => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return {
-      items: array.slice(startIndex, endIndex),
-      totalPages: Math.ceil(array.length / ITEMS_PER_PAGE),
-      totalItems: array.length
-    };
-  };
-
-  // Separar consultas próximas e anteriores
+  // Filtrar apenas consultas criadas nas últimas 24 horas
   const now = new Date();
-  const upcomingAppointments = appointments.filter(apt => {
-    if (!apt.start_at_local) return false;
-    const appointmentDate = new Date(apt.start_at_local);
-    const isPast = appointmentDate < now;
+  const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  
+  const recentAppointments = appointments.filter(apt => {
+    if (!apt.created_at) return false;
+    const createdDate = new Date(apt.created_at);
+    const isRecent = createdDate >= last24Hours;
     
     // Log de comparação de datas
-    console.log('[MeusAgendamentos] Date comparison:', {
+    console.log('[MeusAgendamentos] Recent filter:', {
       appointment_id: apt.appointment_id,
-      now: now.toISOString(),
-      appointment_date: appointmentDate.toISOString(),
-      is_past: isPast,
+      created_at: createdDate.toISOString(),
+      last_24h: last24Hours.toISOString(),
+      is_recent: isRecent,
       status: apt.status
     });
     
-    return !isPast && ['scheduled', 'confirmed'].includes(apt.status || '');
-  }).sort((a, b) => new Date(a.start_at_local).getTime() - new Date(b.start_at_local).getTime());
-  
-  const pastAppointments = appointments.filter(apt => {
-    if (!apt.start_at_local) return false;
-    const appointmentDate = new Date(apt.start_at_local);
-    return appointmentDate < now;
-  }).sort((a, b) => new Date(b.start_at_local).getTime() - new Date(a.start_at_local).getTime());
-
-  const paginatedUpcoming = paginateArray(upcomingAppointments, upcomingPage);
-  const paginatedPast = paginateArray(pastAppointments, pastPage);
+    return isRecent;
+  }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return <div className="w-full space-y-6">
       <div className="flex justify-between items-center mb-4">
@@ -187,9 +164,9 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
             <div className="bg-muted/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
               <CalendarIcon className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h4 className="font-semibold mb-2">Nenhuma consulta encontrada</h4>
+            <h4 className="font-semibold mb-2">Nenhuma consulta agendada nas últimas 24h</h4>
             <p className="text-muted-foreground">
-              Você ainda não tem consultas. Clique em "Nova Consulta" para contratar um serviço.
+              Você não tem consultas agendadas recentemente. As consultas aparecem aqui por até 24 horas após o agendamento.
             </p>
           </CardContent>
         </Card>}
@@ -201,10 +178,10 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
           </CardContent>
         </Card>}
 
-      {/* Próximas Consultas */}
-      {upcomingAppointments.length > 0 && <div className="space-y-4">
-          <h4 className="font-semibold text-primary">Próximas Consultas ({upcomingAppointments.length})</h4>
-          {paginatedUpcoming.items.map(appointment => <Card key={appointment.appointment_id} className="border-primary/20">
+      {/* Consultas Agendadas nas Últimas 24h */}
+      {recentAppointments.length > 0 && <div className="space-y-4">
+          <h4 className="font-semibold text-primary">Consultas Agendadas nas Últimas 24h ({recentAppointments.length})</h4>
+          {recentAppointments.map(appointment => <Card key={appointment.appointment_id} className="border-primary/20">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <div>
@@ -273,7 +250,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                     </Button>
                   </div>}
 
-                {appointment.status === 'confirmed' && !appointment.teams_join_url && <div className="pt-2 border-t">
+                {appointment.status === 'confirmed' && !appointment.teams_join_url && !appointment.redirect_url && <div className="pt-2 border-t">
                     <div className="bg-muted/20 rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <p className="text-sm text-muted-foreground">
@@ -286,7 +263,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                     </div>
                   </div>}
 
-                {appointment.status === 'scheduled' && !appointment.teams_join_url && <div className="pt-2 border-t">
+                {appointment.status === 'scheduled' && !appointment.teams_join_url && !appointment.redirect_url && <div className="pt-2 border-t">
                     <div className="bg-accent/10 rounded-lg p-3">
                       <p className="text-sm text-muted-foreground">
                         ⏱️ O link da reunião será disponibilizado automaticamente após a confirmação do pagamento.
@@ -295,166 +272,8 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
                   </div>}
               </CardContent>
             </Card>)}
-
-          {paginatedUpcoming.totalPages > 1 && (
-            <div className="flex justify-center mt-6">
-              <Pagination>
-                <PaginationContent>
-                  {upcomingPage > 1 && (
-                    <PaginationItem>
-                      <PaginationPrevious 
-                        onClick={() => setUpcomingPage(p => p - 1)}
-                        className="cursor-pointer"
-                      />
-                    </PaginationItem>
-                  )}
-                  
-                  {Array.from({ length: paginatedUpcoming.totalPages }, (_, i) => i + 1).map(page => (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        onClick={() => setUpcomingPage(page)}
-                        isActive={page === upcomingPage}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  
-                  {upcomingPage < paginatedUpcoming.totalPages && (
-                    <PaginationItem>
-                      <PaginationNext 
-                        onClick={() => setUpcomingPage(p => p + 1)}
-                        className="cursor-pointer"
-                      />
-                    </PaginationItem>
-                  )}
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
         </div>}
 
-      {/* Consultas Anteriores */}
-      {pastAppointments.length > 0 && <div className="space-y-4">
-          <h4 className="font-semibold text-muted-foreground">Consultas Anteriores ({pastAppointments.length})</h4>
-          {paginatedPast.items.map(appointment => <Card key={appointment.appointment_id} className="opacity-75">
-            <CardHeader>
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg">
-                    {getServiceNameFromSKU(appointment.service_code)}
-                  </CardTitle>
-                  <CardDescription>
-                    ID: {appointment.appointment_id}
-                  </CardDescription>
-                </div>
-                {getStatusBadge(appointment.status || 'scheduled')}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {formatDateTime(appointment.start_at_local)}
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <ClockIcon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm">
-                    {appointment.duration_min} minutos
-                  </span>
-                </div>
-
-                {/* Show provider if available from GAS */}
-                {appointment.teams_meeting_id && (
-                  <div className="flex items-center gap-2 md:col-span-2">
-                    <Badge variant="outline" className="text-xs">
-                      Provedor: {appointment.teams_meeting_id.includes('communicare') ? 'Communicare' : 'Clicklife'}
-                    </Badge>
-                  </div>
-                )}
-              </div>
-
-              {appointment.redirect_url && (() => {
-                const createdDate = appointment.created_at ? new Date(appointment.created_at) : null;
-                const now = new Date();
-                const hoursSinceCreated = createdDate 
-                  ? (now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)
-                  : 999;
-                const isExpired = hoursSinceCreated > 24;
-
-                return (
-                  <div className="pt-2 border-t">
-                    <div className="flex items-center gap-2 mb-3">
-                      <VideoIcon className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium">Link de Acesso Disponível</span>
-                    </div>
-                    <Button 
-                      asChild={!isExpired}
-                      variant="default" 
-                      size="sm" 
-                      className="w-full"
-                      disabled={isExpired}
-                    >
-                      {isExpired ? (
-                        <span className="text-muted-foreground">Link expirado (válido por 24h)</span>
-                      ) : (
-                        <a href={appointment.redirect_url} target="_blank" rel="noopener noreferrer">
-                          Acessar Consulta
-                        </a>
-                      )}
-                    </Button>
-                  </div>
-                );
-              })()}
-
-              {appointment.created_at && <div className="text-xs text-muted-foreground">
-                  Realizada em: {formatDateTime(appointment.start_at_local)}
-                </div>}
-            </CardContent>
-          </Card>)}
-
-          {paginatedPast.totalPages > 1 && (
-            <div className="flex justify-center mt-6">
-              <Pagination>
-                <PaginationContent>
-                  {pastPage > 1 && (
-                    <PaginationItem>
-                      <PaginationPrevious 
-                        onClick={() => setPastPage(p => p - 1)}
-                        className="cursor-pointer"
-                      />
-                    </PaginationItem>
-                  )}
-                  
-                  {Array.from({ length: paginatedPast.totalPages }, (_, i) => i + 1).map(page => (
-                    <PaginationItem key={page}>
-                      <PaginationLink
-                        onClick={() => setPastPage(page)}
-                        isActive={page === pastPage}
-                        className="cursor-pointer"
-                      >
-                        {page}
-                      </PaginationLink>
-                    </PaginationItem>
-                  ))}
-                  
-                  {pastPage < paginatedPast.totalPages && (
-                    <PaginationItem>
-                      <PaginationNext 
-                        onClick={() => setPastPage(p => p + 1)}
-                        className="cursor-pointer"
-                      />
-                    </PaginationItem>
-                  )}
-                </PaginationContent>
-              </Pagination>
-            </div>
-          )}
-        </div>}
     </div>;
 };
 export default MeusAgendamentos;
