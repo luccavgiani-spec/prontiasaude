@@ -91,38 +91,9 @@ export default function Psicologa() {
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
-        toast({ description: 'Complete seu cadastro antes de agendar', variant: 'destructive' });
-        navigate('/completar-perfil');
-        return;
-      }
-
-      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
-      toast({ description: 'Redirecionando para agendamento...', duration: 2000 });
-
-      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
-      const result = await scheduleWithActivePlan({
-        cpf: patient.cpf,
-        email: user.email!,
-        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
-        telefone: patient.phone_e164,
-        especialidade: pkg.nome,
-        sku: pkg.sku,
-        plano_ativo: true,
-        sexo: mapSexo(patient.gender)
-      });
-
-      if (result.ok && result.url) {
-        window.location.href = result.url;
-      } else {
-        toast({ description: result.error || 'Erro ao agendar', variant: 'destructive' });
-      }
+      // ✅ COM PLANO ATIVO: Redireciona direto para WhatsApp 0800
+      toast({ description: 'Redirecionando para agendamento via WhatsApp...', duration: 2000 });
+      window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20sessão%20de%20psicologia';
       return;
     }
 
