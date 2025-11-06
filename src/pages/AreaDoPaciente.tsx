@@ -369,9 +369,7 @@ const AreaDoPaciente = () => {
                 Clubes de Benefícios Prontìa Saúde!
                 {patientPlan && <Badge variant="default">Disponível</Badge>}
               </CardTitle>
-              <CardDescription>
-                Descontos exclusivos em farmácias, exames e muito mais
-              </CardDescription>
+              
             </CardHeader>
             <CardContent className="space-y-4">
               {patientPlan ?
@@ -400,10 +398,7 @@ const AreaDoPaciente = () => {
             // ❌ USUÁRIO NÃO TEM PLANO - RENDERIZAR BANNER PROMOCIONAL
             <>
                   <div className="space-y-4">
-                    <div className="inline-flex items-center gap-2 bg-primary/10 px-3 py-1.5 rounded-full">
-                      <Gift className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-medium text-primary">Benefício Exclusivo</span>
-                    </div>
+                    
                     
                     
                     
