@@ -379,6 +379,16 @@ export function PaymentModal({
     }
   }, [open, showSummary, paymentMethod, isLoadingUserData, hasRequiredData, isUserLoggedIn, formData.email, formData.cpf, paymentStatus]);
 
+  // Scroll automático para o topo quando erro aparece
+  useEffect(() => {
+    if (paymentStatus === 'rejected' && open) {
+      const modalContent = document.querySelector('[role="dialog"]');
+      if (modalContent) {
+        modalContent.scrollTop = 0;
+      }
+    }
+  }, [paymentStatus, open]);
+
   const mountCardPaymentBrick = async () => {
     // Guard: Prevenir montagens concorrentes
     if (isMountingRef.current) {
@@ -1487,63 +1497,80 @@ export function PaymentModal({
       const statusInfo = getStatusMessage(error);
       
       return (
-        <div className="flex flex-col items-center justify-center py-8 px-4">
-          <AlertCircle className="h-16 w-16 text-red-500 mb-4" />
-          
-          {/* Box com título e mensagem específica */}
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 max-w-md w-full">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-red-800 font-semibold text-sm mb-1">
-                  {statusInfo.title}
-                </p>
-                <p className="text-red-700 text-sm">{statusInfo.message}</p>
+        <div className="fixed inset-0 z-50 bg-background flex items-center justify-center p-4">
+          <div className="w-full max-w-md space-y-6">
+            <div className="flex flex-col items-center text-center">
+              <AlertCircle className="h-20 w-20 text-red-500 mb-6" />
+              
+              {/* Box com título e mensagem específica */}
+              <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6 mb-4 w-full">
+                <div className="flex flex-col gap-3">
+                  <p className="text-red-800 font-bold text-lg">
+                    {statusInfo.title}
+                  </p>
+                  <p className="text-red-700 text-base leading-relaxed">{statusInfo.message}</p>
+                </div>
+              </div>
+              
+              {/* Badge com código de erro */}
+              {error && (
+                <div className="mb-4">
+                  <span className="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                    Código: {error}
+                  </span>
+                </div>
+              )}
+              
+              {/* Botões de ação */}
+              <div className="flex flex-col gap-3 w-full">
+                {statusInfo.showRetry && (
+                  <Button
+                    onClick={() => {
+                      setPaymentStatus('idle');
+                      setError('');
+                      setUserMessage('');
+                      setShowSummary(false);
+                      setPaymentMethod('card');
+                    }}
+                    variant="outline"
+                    size="lg"
+                    className="w-full"
+                  >
+                    🔄 Tentar outro cartão
+                  </Button>
+                )}
+                {statusInfo.showPix && (
+                  <Button
+                    onClick={() => {
+                      setPaymentStatus('idle');
+                      setError('');
+                      setUserMessage('');
+                      setShowSummary(false);
+                      setPaymentMethod('pix');
+                    }}
+                    variant="default"
+                    size="lg"
+                    className="w-full"
+                  >
+                    💳 Pagar com PIX
+                  </Button>
+                )}
+                <Button
+                  onClick={() => {
+                    setPaymentStatus('idle');
+                    setError('');
+                    setUserMessage('');
+                    setShowSummary(true);
+                    setPaymentMethod(undefined);
+                  }}
+                  variant="ghost"
+                  size="lg"
+                  className="w-full"
+                >
+                  ← Voltar ao início
+                </Button>
               </div>
             </div>
-          </div>
-          
-          {/* Badge com código de erro */}
-          {error && (
-            <div className="mb-3">
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                Código: {error}
-              </span>
-            </div>
-          )}
-          
-          {/* Botões de ação */}
-          <div className="flex gap-2 flex-wrap justify-center">
-            {statusInfo.showRetry && (
-              <Button
-                onClick={() => {
-                  setPaymentStatus('idle');
-                  setError('');
-                  setUserMessage('');
-                  setShowSummary(false);
-                  setPaymentMethod('card');
-                }}
-                variant="outline"
-                size="sm"
-              >
-                🔄 Tentar outro cartão
-              </Button>
-            )}
-            {statusInfo.showPix && (
-              <Button
-                onClick={() => {
-                  setPaymentStatus('idle');
-                  setError('');
-                  setUserMessage('');
-                  setShowSummary(false);
-                  setPaymentMethod('pix');
-                }}
-                variant="default"
-                size="sm"
-              >
-                💳 Pagar com PIX
-              </Button>
-            )}
           </div>
         </div>
       );
@@ -1660,7 +1687,7 @@ export function PaymentModal({
           </>
         )}
 
-        {paymentStatus === 'idle' && !showSummary && (
+        {paymentStatus === 'idle' && !showSummary && !error && (
           <div className="space-y-4">
             {/* Botão Voltar */}
             <Button
@@ -1875,7 +1902,7 @@ export function PaymentModal({
           </>
         )}
 
-        {paymentStatus === 'idle' && !showSummary && (
+        {paymentStatus === 'idle' && !showSummary && !error && (
           <div className="space-y-4">
             {/* Botão Voltar */}
             <Button
