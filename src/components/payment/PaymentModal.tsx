@@ -42,6 +42,18 @@ interface FormData {
   phone: string;
 }
 
+interface PayerFormData {
+  name: string;
+  cpf: string;
+  phone: string;
+  cep: string;
+  street_name: string;
+  street_number: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+}
+
 interface PixData {
   qrCode: string;
   qrCodeBase64: string;
@@ -92,6 +104,20 @@ export function PaymentModal({
   } | null>(null);
   const [threeDSecureUrl, setThreeDSecureUrl] = useState<string | null>(null);
   const [patientCreatedAt, setPatientCreatedAt] = useState<string | null>(null);
+  
+  // Estados para cartão de terceiros
+  const [isThirdPartyCard, setIsThirdPartyCard] = useState(false);
+  const [payerData, setPayerData] = useState<PayerFormData>({
+    name: '',
+    cpf: '',
+    phone: '',
+    cep: '',
+    street_name: '',
+    street_number: '',
+    neighborhood: '',
+    city: '',
+    state: ''
+  });
   
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
@@ -566,6 +592,26 @@ export function PaymentModal({
                 token: cardData.token,
                 payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
                 installments: cardData.installments || 1,
+                deviceId: deviceId || undefined,
+                payerOverride: isThirdPartyCard ? {
+                  first_name: payerData.name.split(' ')[0],
+                  last_name: payerData.name.split(' ').slice(1).join(' '),
+                  cpf: payerData.cpf.replace(/\D/g, ''),
+                  phone: (() => {
+                    const phoneClean = payerData.phone.replace(/\D/g, '');
+                    const areaCode = phoneClean.startsWith('55') ? phoneClean.substring(2, 4) : phoneClean.substring(0, 2);
+                    const number = phoneClean.startsWith('55') ? phoneClean.substring(4) : phoneClean.substring(2);
+                    return { area_code: areaCode, number: number };
+                  })(),
+                  address: {
+                    zip_code: payerData.cep.replace(/\D/g, ''),
+                    street_name: payerData.street_name,
+                    street_number: payerData.street_number,
+                    neighborhood: payerData.neighborhood,
+                    city: payerData.city,
+                    state: payerData.state
+                  }
+                } : undefined
               });
             } catch (error) {
               console.error('[Brick onSubmit] Uncaught error:', error);
@@ -670,6 +716,20 @@ export function PaymentModal({
     if (!validatePhoneE164(formData.phone)) {
       setError('Telefone inválido');
       return false;
+    }
+
+    // Validar dados do titular se cartão de terceiro
+    if (isThirdPartyCard) {
+      if (!payerData.name || !payerData.cpf || !payerData.phone || 
+          !payerData.cep || !payerData.street_name || !payerData.city || !payerData.state) {
+        setError('Preencha todos os dados do titular do cartão');
+        return false;
+      }
+
+      if (!validateCPF(payerData.cpf)) {
+        setError('CPF do titular do cartão inválido');
+        return false;
+      }
     }
 
     return true;
@@ -1051,88 +1111,109 @@ export function PaymentModal({
           description: 'Aguarde confirmação'
         });
       } else {
-        setPaymentStatus('rejected');
+        // ✅ MAPEAMENTO COMPLETO: status_detail → mensagens amigáveis com CTAs
+        const statusDetail = data.status_detail || '';
         
-        toast.dismiss();
-        
-        // ✅ Mensagens objetivas e claras
-        const rejectMessages: Record<string, { title: string; description: string }> = {
+        const errorMapping: Record<string, { message: string; showPix: boolean; showRetry: boolean }> = {
+          'cc_rejected_high_risk': {
+            message: 'Pagamento recusado por segurança. O cartão utilizado não corresponde ao titular da compra. Use um cartão no seu CPF ou pague via PIX.',
+            showPix: true,
+            showRetry: true
+          },
           'cc_rejected_insufficient_amount': {
-            title: 'Saldo insuficiente',
-            description: 'Seu cartão não tem saldo suficiente'
+            message: 'Saldo insuficiente no cartão. Tente outro cartão ou pague via PIX.',
+            showPix: true,
+            showRetry: true
           },
           'cc_rejected_bad_filled_security_code': {
-            title: 'CVV incorreto',
-            description: 'Código de segurança do cartão inválido'
-          },
-          'cc_rejected_bad_filled_card_number': {
-            title: 'Número do cartão inválido',
-            description: 'Verifique o número digitado'
-          },
-          'cc_rejected_bad_filled_date': {
-            title: 'Data de validade inválida',
-            description: 'Verifique a data do seu cartão'
-          },
-          'cc_rejected_call_for_authorize': {
-            title: 'Cartão bloqueado',
-            description: 'Entre em contato com seu banco'
-          },
-          'cc_rejected_high_risk': {
-            title: 'Pagamento recusado',
-            description: 'Transação bloqueada por segurança'
-          },
-          'cc_rejected_invalid_installments': {
-            title: 'Parcelas inválidas',
-            description: 'Número de parcelas não aceito'
-          },
-          'cc_rejected_duplicated_payment': {
-            title: 'Pagamento duplicado',
-            description: 'Este pagamento já foi processado'
+            message: 'Código de segurança (CVV) inválido. Verifique os dados do cartão.',
+            showPix: false,
+            showRetry: true
           },
           'cc_rejected_card_disabled': {
-            title: 'Cartão desabilitado',
-            description: 'Entre em contato com seu banco'
+            message: 'Cartão desabilitado. Entre em contato com seu banco ou use outro cartão.',
+            showPix: true,
+            showRetry: true
+          },
+          'cc_rejected_call_for_authorize': {
+            message: 'Seu banco precisa autorizar esta compra. Entre em contato com eles ou tente outro cartão.',
+            showPix: true,
+            showRetry: true
+          },
+          'cc_rejected_invalid_installments': {
+            message: 'Número de parcelas não aceito para este cartão. Tente com menos parcelas.',
+            showPix: false,
+            showRetry: true
           },
           'cc_rejected_max_attempts': {
-            title: 'Muitas tentativas',
-            description: 'Aguarde alguns minutos e tente novamente'
+            message: 'Você atingiu o limite de tentativas. Aguarde alguns minutos ou pague via PIX.',
+            showPix: true,
+            showRetry: false
           },
-          'cc_rejected_bad_filled_other': {
-            title: 'Dados incorretos',
-            description: 'Verifique os dados do cartão'
+          'cc_rejected_duplicated_payment': {
+            message: 'Pagamento duplicado detectado. Verifique se já não foi processado.',
+            showPix: false,
+            showRetry: false
+          },
+          'cc_rejected_bad_filled_card_number': {
+            message: 'Número do cartão inválido. Verifique os dados digitados.',
+            showPix: false,
+            showRetry: true
+          },
+          'cc_rejected_bad_filled_date': {
+            message: 'Data de validade inválida. Verifique a data do seu cartão.',
+            showPix: false,
+            showRetry: true
           },
           'cc_rejected_blacklist': {
-            title: 'Cartão não aceito',
-            description: 'Este cartão não pode ser utilizado'
-          },
-          'cc_amount_rate_limit_exceeded': {
-            title: 'Limite excedido',
-            description: 'Valor excede o limite do cartão'
+            message: 'Este cartão não pode ser utilizado. Tente outro cartão ou PIX.',
+            showPix: true,
+            showRetry: true
           }
         };
         
-        const errorInfo = data.status_detail 
-          ? rejectMessages[data.status_detail] || {
-              title: 'Pagamento rejeitado',
-              description: 'Use outro cartão ou tente PIX'
+        const errorInfo = errorMapping[statusDetail] || {
+          message: data.error_message || 'Pagamento recusado. Tente outro cartão ou método de pagamento.',
+          showPix: true,
+          showRetry: true
+        };
+        
+        console.error('[handleCardSubmit] Payment rejected:', {
+          payment_id: data.payment_id,
+          status: data.status,
+          status_detail: statusDetail,
+          mapped_message: errorInfo.message
+        });
+        
+        setError(statusDetail);
+        setUserMessage(errorInfo.message);
+        setPaymentStatus('rejected');
+        setPaymentId(data.payment_id || '');
+        
+        toast.dismiss();
+        toast.error(errorInfo.message, { duration: 8000 });
+        
+        // Remontar Brick para evitar tela em branco
+        setTimeout(() => {
+          if (errorInfo.showRetry && paymentMethod === 'card') {
+            console.log('[handleCardSubmit] Remontando Brick após recusa...');
+            if (cardPaymentBrickRef.current) {
+              try {
+                cardPaymentBrickRef.current.unmount();
+              } catch (e) {
+                console.warn('[handleCardSubmit] Erro ao desmontar brick:', e);
+              }
+              cardPaymentBrickRef.current = null;
+              isBrickMountedRef.current = false;
             }
-          : {
-              title: 'Pagamento rejeitado',
-              description: 'Use outro cartão ou tente PIX'
-            };
-        
-        setUserMessage(errorInfo.description);
-        setError(data.status_detail || ''); // Armazena status_detail no error para exibir badge
-        
-        toast.error(errorInfo.title, {
-          description: errorInfo.description
-        });
-        
-        console.error('[CARD REJECTED]', {
-          status_detail: data.status_detail,
-          error_message: data.error_message,
-          payment_id: data.payment_id
-        });
+            // Trigger remontagem no próximo ciclo
+            setTimeout(() => {
+              if (open && !showSummary && paymentMethod === 'card' && mpInstanceRef.current) {
+                mountCardPaymentBrick();
+              }
+            }, 500);
+          }
+        }, 1000);
       }
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);
@@ -1787,6 +1868,127 @@ export function PaymentModal({
                     PIX
                   </Button>
                 </div>
+
+                {/* Switch para cartão de terceiros */}
+                {paymentMethod === 'card' && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label htmlFor="third-party-card" className="text-sm font-medium text-yellow-900">
+                        💳 Pagar com cartão de outra pessoa
+                      </Label>
+                      <input
+                        type="checkbox"
+                        id="third-party-card"
+                        checked={isThirdPartyCard}
+                        onChange={(e) => setIsThirdPartyCard(e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                    </div>
+                    <p className="text-xs text-yellow-700">
+                      Ative se o cartão não estiver no CPF de {formData.name.split(' ')[0]}. Você precisará informar os dados completos do titular.
+                    </p>
+                  </div>
+                )}
+
+                {/* Formulário do titular (cartão de terceiros) */}
+                {paymentMethod === 'card' && isThirdPartyCard && (
+                  <div className="space-y-3 bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <h4 className="font-semibold text-sm text-blue-900">Dados do Titular do Cartão</h4>
+                    <div>
+                      <Label htmlFor="payer-name">Nome Completo</Label>
+                      <Input
+                        id="payer-name"
+                        value={payerData.name}
+                        onChange={(e) => setPayerData({ ...payerData, name: e.target.value })}
+                        placeholder="Nome completo do titular"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="payer-cpf">CPF</Label>
+                      <Input
+                        id="payer-cpf"
+                        value={payerData.cpf}
+                        onChange={(e) => setPayerData({ ...payerData, cpf: e.target.value })}
+                        placeholder="000.000.000-00"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="payer-phone">Telefone</Label>
+                      <Input
+                        id="payer-phone"
+                        value={payerData.phone}
+                        onChange={(e) => setPayerData({ ...payerData, phone: e.target.value })}
+                        placeholder="+55 11 99999-9999"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="payer-cep">CEP</Label>
+                      <Input
+                        id="payer-cep"
+                        value={payerData.cep}
+                        onChange={(e) => setPayerData({ ...payerData, cep: e.target.value })}
+                        placeholder="00000-000"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="payer-street">Logradouro</Label>
+                      <Input
+                        id="payer-street"
+                        value={payerData.street_name}
+                        onChange={(e) => setPayerData({ ...payerData, street_name: e.target.value })}
+                        placeholder="Rua, Avenida, etc"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor="payer-number">Número</Label>
+                        <Input
+                          id="payer-number"
+                          value={payerData.street_number}
+                          onChange={(e) => setPayerData({ ...payerData, street_number: e.target.value })}
+                          placeholder="123"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="payer-neighborhood">Bairro</Label>
+                        <Input
+                          id="payer-neighborhood"
+                          value={payerData.neighborhood}
+                          onChange={(e) => setPayerData({ ...payerData, neighborhood: e.target.value })}
+                          placeholder="Centro"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label htmlFor="payer-city">Cidade</Label>
+                        <Input
+                          id="payer-city"
+                          value={payerData.city}
+                          onChange={(e) => setPayerData({ ...payerData, city: e.target.value })}
+                          placeholder="São Paulo"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="payer-state">UF</Label>
+                        <Input
+                          id="payer-state"
+                          value={payerData.state}
+                          onChange={(e) => setPayerData({ ...payerData, state: e.target.value.toUpperCase() })}
+                          placeholder="SP"
+                          maxLength={2}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Card Payment Brick */}
                 {paymentMethod === 'card' && (

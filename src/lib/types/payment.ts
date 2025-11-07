@@ -2,10 +2,30 @@
  * Tipos TypeScript para o sistema de pagamentos
  */
 
+export interface PayerOverride {
+  first_name: string;
+  last_name: string;
+  cpf: string;
+  phone: {
+    area_code: string;
+    number: string;
+  };
+  address: {
+    zip_code: string;
+    street_name: string;
+    street_number?: string;
+    neighborhood?: string;
+    city: string;
+    state: string;
+  };
+}
+
 export interface CardFormData {
   token: string;
   payment_method_id: string;
   installments: number;
+  payerOverride?: PayerOverride;
+  deviceId?: string;
 }
 
 export interface InstallmentOption {

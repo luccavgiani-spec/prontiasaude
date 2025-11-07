@@ -8,6 +8,24 @@ import { MercadoPagoConfig, Payment } from 'npm:mercadopago@2.0.15';
 
 const corsHeaders = getCorsHeaders();
 
+interface PayerOverride {
+  first_name: string;
+  last_name: string;
+  cpf: string;
+  phone: {
+    area_code: string;
+    number: string;
+  };
+  address: {
+    zip_code: string;
+    street_name: string;
+    street_number?: string;
+    neighborhood?: string;
+    city: string;
+    state: string;
+  };
+}
+
 interface PaymentRequest {
   items: Array<{
     id: string;
@@ -41,6 +59,7 @@ interface PaymentRequest {
     schedulePayload?: any;
   };
   device_id?: string;
+  payerOverride?: PayerOverride;
 }
 
 /**
@@ -170,20 +189,44 @@ Deno.serve(async (req) => {
     });
 
     // ✅ Usar valores validados do DB (não do cliente)
+    // ✅ NOVO: Priorizar payerOverride se presente (cartão de terceiros)
+    const finalPayer = paymentRequest.payerOverride ? {
+      email: paymentRequest.payer.email, // Email sempre do comprador
+      first_name: paymentRequest.payerOverride.first_name,
+      last_name: paymentRequest.payerOverride.last_name,
+      identification: {
+        type: 'CPF',
+        number: paymentRequest.payerOverride.cpf
+      },
+      phone: paymentRequest.payerOverride.phone,
+      address: {
+        zip_code: paymentRequest.payerOverride.address.zip_code,
+        street_name: paymentRequest.payerOverride.address.street_name,
+        street_number: paymentRequest.payerOverride.address.street_number ? parseInt(paymentRequest.payerOverride.address.street_number) : undefined
+      }
+    } : {
+      ...paymentRequest.payer,
+      address: paymentRequest.payer.address ? {
+        zip_code: paymentRequest.payer.address.zip_code,
+        street_name: paymentRequest.payer.address.street_name,
+        street_number: paymentRequest.payer.address.street_number,
+      } : undefined
+    };
+
     const paymentData: any = {
       transaction_amount: expectedAmount,
       description: service.name,
       external_reference: paymentRequest.metadata.order_id, // ✅ CRÍTICO: Reconciliação financeira (+14 pontos)
-      payer: {
-        ...paymentRequest.payer,
-        address: paymentRequest.payer.address ? {
-          zip_code: paymentRequest.payer.address.zip_code,
-          street_name: paymentRequest.payer.address.street_name,
-          street_number: paymentRequest.payer.address.street_number,
-          // ✅ Removido: city, state (causam bad_request 400)
-        } : undefined
+      payer: finalPayer,
+      metadata: {
+        ...paymentRequest.metadata,
+        user_id: paymentRequest.metadata?.schedulePayload?.user_id,
+        payer_cpf: finalPayer.identification?.number,
+        payer_name: `${finalPayer.first_name} ${finalPayer.last_name}`,
+        sku: sku,
+        source: 'web',
+        is_third_party_card: !!paymentRequest.payerOverride
       },
-      metadata: paymentRequest.metadata,
       notification_url: MP_NOTIFICATION_URL,
       // ✅ ETAPA 2: Additional Info COMPLETO com todos os campos
       additional_info: {
@@ -199,22 +242,22 @@ Deno.serve(async (req) => {
           }
         ],
         payer: {
-          first_name: paymentRequest.payer.first_name || '',
-          last_name: paymentRequest.payer.last_name || '',
-          phone: paymentRequest.payer.phone || {},
+          first_name: finalPayer.first_name || '',
+          last_name: finalPayer.last_name || '',
+          phone: finalPayer.phone || {},
           address: {
-            zip_code: paymentRequest.payer.address?.zip_code,
-            street_name: paymentRequest.payer.address?.street_name,
-            street_number: paymentRequest.payer.address?.street_number
+            zip_code: finalPayer.address?.zip_code,
+            street_name: finalPayer.address?.street_name,
+            street_number: finalPayer.address?.street_number
           },
           registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString() // ✅ FASE 2.2: Usar data real do metadata
         },
         // ✅ Informações sobre o negócio/envio (sem city/state que causam bad_request)
         shipments: {
           receiver_address: {
-            zip_code: paymentRequest.payer.address?.zip_code,
-            street_name: paymentRequest.payer.address?.street_name,
-            street_number: paymentRequest.payer.address?.street_number
+            zip_code: finalPayer.address?.zip_code,
+            street_name: finalPayer.address?.street_name,
+            street_number: finalPayer.address?.street_number
           }
         },
         // ✅ IP do cliente para análise antifraude
@@ -233,53 +276,62 @@ Deno.serve(async (req) => {
       paymentData.installments = paymentRequest.installments || 1;
       paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ RECOMENDADO: Nome na fatura (+10 pontos)
       
-      // ✅ NOVO: Normalização server-side para cartão + binary_mode
-      const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
-      const payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
-      
-      // ✅ Normalizar telefone server-side: string E.164 → { area_code, number }
-      let normalizedPhone: { area_code: string; number: string } | undefined;
-      if (paymentRequest.payer.phone) {
-        if (typeof paymentRequest.payer.phone === 'string') {
-          // Telefone veio como string (ex: "+5511999887766" ou "(11) 99988-7766")
-          const digitsOnly = paymentRequest.payer.phone.replace(/\D/g, '');
-          if (digitsOnly.length >= 10) {
-            // Assume Brasil: DDI 55 + DDD (2) + número (8-9 dígitos)
-            const cleanNumber = digitsOnly.startsWith('55') ? digitsOnly.slice(2) : digitsOnly;
+      // ✅ NOVO: Normalização server-side para cartão (apenas se NÃO for override)
+      if (!paymentRequest.payerOverride) {
+        const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
+        const payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
+        
+        // ✅ Normalizar telefone server-side: string E.164 → { area_code, number }
+        let normalizedPhone: { area_code: string; number: string } | undefined;
+        if (paymentRequest.payer.phone) {
+          if (typeof paymentRequest.payer.phone === 'string') {
+            // Telefone veio como string (ex: "+5511999887766" ou "(11) 99988-7766")
+            const digitsOnly = paymentRequest.payer.phone.replace(/\D/g, '');
+            if (digitsOnly.length >= 10) {
+              // Assume Brasil: DDI 55 + DDD (2) + número (8-9 dígitos)
+              const cleanNumber = digitsOnly.startsWith('55') ? digitsOnly.slice(2) : digitsOnly;
+              normalizedPhone = {
+                area_code: cleanNumber.slice(0, 2),
+                number: cleanNumber.slice(2)
+              };
+            }
+          } else if (paymentRequest.payer.phone.area_code && paymentRequest.payer.phone.number) {
+            // Já estruturado, apenas sanear
             normalizedPhone = {
-              area_code: cleanNumber.slice(0, 2),
-              number: cleanNumber.slice(2)
+              area_code: String(paymentRequest.payer.phone.area_code).replace(/\D/g, ''),
+              number: String(paymentRequest.payer.phone.number).replace(/\D/g, '')
             };
           }
-        } else if (paymentRequest.payer.phone.area_code && paymentRequest.payer.phone.number) {
-          // Já estruturado, apenas sanear
-          normalizedPhone = {
-            area_code: String(paymentRequest.payer.phone.area_code).replace(/\D/g, ''),
-            number: String(paymentRequest.payer.phone.number).replace(/\D/g, '')
-          };
         }
+        
+        paymentData.payer = {
+          ...paymentData.payer,
+          email: payerEmail,
+          identification: {
+            type: 'CPF',
+            number: payerCPF
+          },
+          phone: normalizedPhone
+        };
+        
+        console.log('[mp-create-payment] Card payment normalized (no override):', {
+          email: payerEmail,
+          cpf: payerCPF ? `${payerCPF.substring(0, 3)}***` : 'AUSENTE',
+          phone_structured: !!(normalizedPhone?.area_code && normalizedPhone?.number)
+        });
       }
       
-      paymentData.payer = {
-        ...paymentRequest.payer,
-        email: payerEmail,
-        identification: {
-          type: 'CPF',
-          number: payerCPF
-        },
-        phone: normalizedPhone,
-        address: paymentRequest.payer.address ? {
-          zip_code: paymentRequest.payer.address.zip_code,
-          street_name: paymentRequest.payer.address.street_name,
-          street_number: paymentRequest.payer.address.street_number,
-        } : undefined
-      };
-      
-      // ✅ binary_mode: true força resposta approved/rejected (evita in_process)
-      paymentData.binary_mode = true;
+      // ✅ binary_mode CONDICIONAL: false se override (permitir review), true caso contrário
+      paymentData.binary_mode = !paymentRequest.payerOverride;
       
       // ✅ Forçar 3DS 2.0 em modo REQUIRED para aumentar aprovação
       paymentData.three_d_secure_mode = 'required';
+      
+      console.log('[mp-create-payment] Card payment config:', {
+        binary_mode: paymentData.binary_mode,
+        three_d_secure_mode: 'required',
+        is_third_party: !!paymentRequest.payerOverride
+      });
       
       console.log('[mp-create-payment] Card payment normalized:', {
         email: payerEmail,
