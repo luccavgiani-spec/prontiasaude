@@ -79,8 +79,65 @@ export function ServicoCard({
     }
   };
   const handleAgendar = async () => {
-    // Se for psicóloga ou médicos especialistas, abrir modal de seleção de pacote primeiro
+    // ✅ PARA PSICÓLOGA E MÉDICOS ESPECIALISTAS: Verificar plano ativo ANTES de abrir modal
     if ((servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && servico.variantes) {
+      // Verificar se usuário está logado
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        const returnUrl = window.location.pathname + window.location.search;
+        localStorage.setItem('returnUrl', returnUrl);
+        localStorage.setItem('pendingService', JSON.stringify({
+          sku: servico.sku,
+          name: servico.nome,
+          amount: Math.round(precoComDesconto * 100)
+        }));
+        navigate('/area-do-paciente');
+        return;
+      }
+
+      // Verificar se perfil está completo
+      const { data: patient } = await supabase
+        .from('patients')
+        .select('profile_complete')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!patient?.profile_complete) {
+        const returnUrl = window.location.pathname + window.location.search;
+        localStorage.setItem('returnUrl', returnUrl);
+        localStorage.setItem('pendingService', JSON.stringify({
+          sku: servico.sku,
+          name: servico.nome,
+          amount: Math.round(precoComDesconto * 100)
+        }));
+        navigate('/completar-perfil');
+        return;
+      }
+
+      // ✅ Verificar plano ativo ANTES de abrir modal
+      const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+      const planStatus = await checkPatientPlanActive(user.email!);
+
+      if (planStatus.canBypassPayment) {
+        // ✅ COM PLANO ATIVO: Redirecionar direto (PULA O MODAL)
+        
+        if (servico.slug === "medicos_especialistas") {
+          // Médicos Especialistas → WhatsApp
+          toast('Redirecionando para agendamento via WhatsApp...', { duration: 2000 });
+          window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta%20com%20médico%20especialista';
+          return;
+        }
+        
+        if (servico.slug === "psicologa") {
+          // Psicóloga → WhatsApp
+          toast('Redirecionando para agendamento via WhatsApp...', { duration: 2000 });
+          window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20sessão%20de%20psicologia';
+          return;
+        }
+      }
+
+      // ❌ SEM PLANO: Abre modal de seleção de pacotes
       setIsPackageModalOpen(true);
       return;
     }
