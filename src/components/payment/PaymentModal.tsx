@@ -128,6 +128,42 @@ export function PaymentModal({
   const isMountingRef = useRef(false);
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Função de validação de data de validade do cartão
+  const validateCardExpiry = (cardData: any): { valid: boolean; error?: string } => {
+    if (!cardData.expiration_month || !cardData.expiration_year) {
+      return { valid: true };
+    }
+
+    const month = parseInt(cardData.expiration_month);
+    const year = parseInt(cardData.expiration_year);
+    
+    // Validar formato do mês
+    if (month < 1 || month > 12) {
+      return { 
+        valid: false, 
+        error: 'Mês de validade inválido. Use formato MM/AA (ex: 12/25)' 
+      };
+    }
+    
+    // Validar se não está expirado
+    const now = new Date();
+    const currentYear = now.getFullYear() % 100; // Últimos 2 dígitos
+    const currentMonth = now.getMonth() + 1;
+    
+    // Normalizar ano de 2 ou 4 dígitos
+    const normalizedYear = year < 100 ? year : year % 100;
+    
+    if (normalizedYear < currentYear || 
+        (normalizedYear === currentYear && month < currentMonth)) {
+      return { 
+        valid: false, 
+        error: 'Cartão vencido. Verifique a data de validade ou use outro cartão.' 
+      };
+    }
+    
+    return { valid: true };
+  };
+
   // Reset de segurança: liberar flag após 10 segundos (caso algo dê errado)
   useEffect(() => {
     if (isSubmittingRef.current) {
@@ -579,6 +615,16 @@ export function PaymentModal({
                 : brickSubmitData;
               
               console.log('[Brick onSubmit] Card data resolved:', cardData);
+              
+              // ✅ NOVO: Validar data de validade ANTES de processar
+              const expiryValidation = validateCardExpiry(cardData);
+              if (!expiryValidation.valid) {
+                console.error('[Brick onSubmit] Invalid card expiry:', cardData);
+                setError(expiryValidation.error || 'Data de validade inválida');
+                setPaymentStatus('idle');
+                toast.error(expiryValidation.error || 'Data de validade inválida');
+                return;
+              }
               
               if (!cardData || !cardData.token || !cardData.payment_method_id) {
                 console.error('[Brick onSubmit] Invalid card data:', cardData);
@@ -1527,10 +1573,10 @@ export function PaymentModal({
         showPix: false
       },
       'cc_rejected_bad_filled_date': {
-        title: '📅 Data de validade incorreta',
-        message: 'A data de validade do cartão está incorreta. Verifique o mês e ano no cartão.',
+        title: '⚠️ Data de validade incorreta ou cartão vencido',
+        message: 'Verifique se você digitou a data de validade corretamente (MM/AA) e se o cartão não está vencido. Caso persista, use outro cartão ou pague via PIX.',
         showRetry: true,
-        showPix: false
+        showPix: true
       },
       'cc_rejected_insufficient_amount': {
         title: '💳 Saldo insuficiente',
@@ -1992,11 +2038,18 @@ export function PaymentModal({
 
                 {/* Card Payment Brick */}
                 {paymentMethod === 'card' && (
-                  <div 
-                    key={`brick-${paymentMethod}`}
-                    id="cardPaymentBrick" 
-                    className="mp-brick-container min-h-[400px]"
-                  ></div>
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-blue-800">
+                        💡 <strong>Dica:</strong> Certifique-se de digitar a data de validade no formato MM/AA (ex: 12/25) e que o cartão não esteja vencido.
+                      </p>
+                    </div>
+                    <div 
+                      key={`brick-${paymentMethod}`}
+                      id="cardPaymentBrick" 
+                      className="mp-brick-container min-h-[400px]"
+                    ></div>
+                  </>
                 )}
 
                 {/* Botão PIX */}
@@ -2207,11 +2260,18 @@ export function PaymentModal({
 
                 {/* Card Payment Brick */}
                 {paymentMethod === 'card' && (
-                  <div 
-                    key={`brick-${paymentMethod}`}
-                    id="cardPaymentBrick" 
-                    className="mp-brick-container min-h-[400px]"
-                  ></div>
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <p className="text-sm text-blue-800">
+                        💡 <strong>Dica:</strong> Certifique-se de digitar a data de validade no formato MM/AA (ex: 12/25) e que o cartão não esteja vencido.
+                      </p>
+                    </div>
+                    <div 
+                      key={`brick-${paymentMethod}`}
+                      id="cardPaymentBrick" 
+                      className="mp-brick-container min-h-[400px]"
+                    ></div>
+                  </>
                 )}
 
                 {/* Botão PIX */}
