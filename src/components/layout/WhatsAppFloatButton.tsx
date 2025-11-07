@@ -7,12 +7,12 @@ const WhatsAppFloatButton = () => {
       target="_blank"
       rel="noopener noreferrer"
       style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        zIndex: 9999,
+        position: 'fixed !important' as any,
+        bottom: '24px !important' as any,
+        right: '24px !important' as any,
+        zIndex: '9999 !important' as any,
       }}
-      className="flex h-16 w-16 items-center justify-center rounded-full bg-[#25D366] shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(37,211,102,0.5)] animate-pulse hover:animate-none"
+      className="flex h-16 w-16 items-center justify-center rounded-full bg-[#25D366] shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(37,211,102,0.5)]"
       aria-label="Falar com suporte via WhatsApp"
     >
       {/* Logo oficial do WhatsApp em SVG */}
