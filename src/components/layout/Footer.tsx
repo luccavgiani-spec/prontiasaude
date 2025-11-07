@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, Instagram } from "lucide-react";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import prontiaLogo from "@/assets/prontia-logo-branca.webp";
 
@@ -23,6 +23,10 @@ export function Footer() {
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-white" />
                 <span>suporte@prontiasaude.com.br</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Instagram className="h-4 w-4 text-white" />
+                <a href="https://www.instagram.com/prontiasaude/" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">@prontiasaude</a>
               </div>
               <div className="flex items-center gap-2">
                 <Phone className="h-4 w-4 text-white" />
