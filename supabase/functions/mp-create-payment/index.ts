@@ -277,12 +277,21 @@ Deno.serve(async (req) => {
       paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ RECOMENDADO: Nome na fatura (+10 pontos)
       
       // ✅ NOVO: Normalização server-side para cartão (apenas se NÃO for override)
+      // Declarar variáveis no escopo correto ANTES do if
+      let payerEmail = '';
+      let payerCPF = '';
+      let normalizedPhone: { area_code: string; number: string } | undefined;
+      
       if (!paymentRequest.payerOverride) {
-        const payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
-        const payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
+        payerEmail = String(paymentRequest.payer?.email || '').trim().toLowerCase();
+        payerCPF = String(paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
+        
+        // Validar email obrigatório
+        if (!payerEmail) {
+          throw new Error('Email do pagador é obrigatório para pagamentos por cartão');
+        }
         
         // ✅ Normalizar telefone server-side: string E.164 → { area_code, number }
-        let normalizedPhone: { area_code: string; number: string } | undefined;
         if (paymentRequest.payer.phone) {
           if (typeof paymentRequest.payer.phone === 'string') {
             // Telefone veio como string (ex: "+5511999887766" ou "(11) 99988-7766")
@@ -331,15 +340,6 @@ Deno.serve(async (req) => {
         binary_mode: paymentData.binary_mode,
         three_d_secure_mode: 'required',
         is_third_party: !!paymentRequest.payerOverride
-      });
-      
-      console.log('[mp-create-payment] Card payment normalized:', {
-        email: payerEmail,
-        cpf: payerCPF ? `${payerCPF.substring(0, 3)}***` : 'AUSENTE',
-        phone_structured: !!(normalizedPhone?.area_code && normalizedPhone?.number),
-        phone_area_code: normalizedPhone?.area_code || 'N/A',
-        binary_mode: true,
-        three_d_secure_mode: 'required'
       });
     } else {
       // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO

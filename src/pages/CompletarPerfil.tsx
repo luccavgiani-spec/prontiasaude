@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, User, MapPin, Phone, Calendar, Home } from "lucide-react";
+import { Loader2, User, MapPin, Phone, Calendar, Home, LogOut } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
 import { upsertPatientBasic } from "@/lib/patients";
@@ -168,6 +168,20 @@ const CompletarPerfil = () => {
       return false;
     }
     return true;
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/entrar');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível sair. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -436,10 +450,21 @@ const CompletarPerfil = () => {
               </Label>
             </div>
             
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar e continuar
-            </Button>
+            <div className="flex gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleLogout}
+                className="flex-1"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Sair
+              </Button>
+              <Button type="submit" className="flex-1 bg-primary hover:bg-primary/90" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar e continuar
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
