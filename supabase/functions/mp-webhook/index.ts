@@ -162,15 +162,49 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // Buscar user_id pelo email
+      // ✅ GARANTIR que o registro do paciente existe
       let userId: string | null = null;
-      const { data: userData } = await supabaseAdmin
+      const { data: existingPatient } = await supabaseAdmin
         .from('patients')
         .select('id')
         .eq('email', schedulePayload.email)
         .maybeSingle();
-      
-      userId = userData?.id || null;
+
+      if (existingPatient) {
+        userId = existingPatient.id;
+        console.log('[mp-webhook] ✅ Patient já existe:', userId);
+      } else {
+        console.log('[mp-webhook] 🆕 Criando registro de paciente para:', schedulePayload.email);
+        
+        // Buscar user_id do auth.users
+        const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(schedulePayload.email);
+        
+        if (authUser?.user) {
+          // Criar registro básico do paciente
+          const { error: patientError } = await supabaseAdmin
+            .from('patients')
+            .insert({
+              id: authUser.user.id,
+              email: schedulePayload.email,
+              first_name: schedulePayload.nome?.split(' ')[0] || '',
+              last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || '',
+              cpf: schedulePayload.cpf || null,
+              phone_e164: schedulePayload.telefone || null,
+              profile_complete: false,
+              intake_complete: false,
+              clubeben_status: 'pending'
+            });
+          
+          if (patientError) {
+            console.error('[mp-webhook] ❌ Erro ao criar patient:', patientError);
+          } else {
+            console.log('[mp-webhook] ✅ Patient criado com sucesso');
+            userId = authUser.user.id;
+          }
+        } else {
+          console.warn('[mp-webhook] ⚠️ Auth user não encontrado para email:', schedulePayload.email);
+        }
+      }
 
       // Calcular data de expiração baseado no auto_recurring
       let planExpiresAt = new Date();

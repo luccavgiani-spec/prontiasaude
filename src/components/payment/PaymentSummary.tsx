@@ -134,19 +134,29 @@ export function PaymentSummary({
             </span>
           </Button>
 
-          <Button
-            onClick={() => onSelectPaymentMethod('pix')}
-            size="lg"
-            variant="outline"
-            className="w-full h-auto py-4 flex flex-col gap-2 hover:border-primary hover:bg-primary/5 transition-all group"
-          >
-            <QrCode className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
-            <span className="font-semibold">PIX</span>
-            <span className="text-xs text-muted-foreground">
-              Pagamento instantâneo
-            </span>
-          </Button>
+          {/* PIX disponível apenas para pagamentos únicos (não recorrentes) */}
+          {!recurring && (
+            <Button
+              onClick={() => onSelectPaymentMethod('pix')}
+              size="lg"
+              variant="outline"
+              className="w-full h-auto py-4 flex flex-col gap-2 hover:border-primary hover:bg-primary/5 transition-all group"
+            >
+              <QrCode className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
+              <span className="font-semibold">PIX</span>
+              <span className="text-xs text-muted-foreground">
+                Pagamento instantâneo
+              </span>
+            </Button>
+          )}
         </div>
+        
+        {/* Aviso quando PIX não está disponível */}
+        {recurring && (
+          <p className="text-xs text-center text-muted-foreground mt-2">
+            ℹ️ Para planos recorrentes, apenas cartão de crédito está disponível
+          </p>
+        )}
       </div>
 
       {/* Informações adicionais */}

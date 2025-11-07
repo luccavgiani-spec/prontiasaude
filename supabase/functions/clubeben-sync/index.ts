@@ -78,11 +78,15 @@ Deno.serve(async (req) => {
     );
 
     // Buscar dados do paciente
-    const { data: patient, error: fetchError } = await supabase
-      .from('patients')
-      .select('*')
-      .or(user_email ? `email.eq.${user_email}` : `id.eq.${user_id}`)
-      .single();
+    let query = supabase.from('patients').select('*');
+    
+    if (user_email) {
+      query = query.eq('email', user_email);
+    } else if (user_id) {
+      query = query.eq('id', user_id);
+    }
+    
+    const { data: patient, error: fetchError } = await query.single();
 
     if (fetchError || !patient) {
       console.error('[ClubeBen Sync] Patient not found:', fetchError);
