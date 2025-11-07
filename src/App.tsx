@@ -161,8 +161,8 @@ const App = () => (
             </Suspense>
           </main>
           <Footer />
-          <WhatsAppFloatButton />
         </div>
+        <WhatsAppFloatButton />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
