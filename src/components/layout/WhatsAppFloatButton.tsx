@@ -1,18 +1,14 @@
+import { createPortal } from 'react-dom';
+
 const WhatsAppFloatButton = () => {
   const whatsappUrl = "https://wa.me/5511933359187?text=Quero%20ajuda";
 
-  return (
+  const button = (
     <a
       href={whatsappUrl}
       target="_blank"
       rel="noopener noreferrer"
-      style={{
-        position: 'fixed !important' as any,
-        bottom: '24px !important' as any,
-        right: '24px !important' as any,
-        zIndex: '9999 !important' as any,
-      }}
-      className="flex h-16 w-16 items-center justify-center rounded-full bg-[#25D366] shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(37,211,102,0.5)]"
+      className="fixed bottom-6 right-6 z-[9999] flex h-16 w-16 items-center justify-center rounded-full bg-[#25D366] shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(37,211,102,0.5)]"
       aria-label="Falar com suporte via WhatsApp"
     >
       {/* Logo oficial do WhatsApp em SVG */}
@@ -26,6 +22,8 @@ const WhatsAppFloatButton = () => {
       </svg>
     </a>
   );
+
+  return createPortal(button, document.body);
 };
 
 export default WhatsAppFloatButton;
