@@ -9,6 +9,7 @@ import { initMetaTracking } from "@/lib/meta-tracking";
 import { initWebVitals } from "@/lib/web-vitals";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import WhatsAppFloatButton from "@/components/layout/WhatsAppFloatButton";
 
 // Critical Pages (loaded immediately)
 import Index from "./pages/Index";
@@ -160,6 +161,7 @@ const App = () => (
             </Suspense>
           </main>
           <Footer />
+          <WhatsAppFloatButton />
         </div>
       </BrowserRouter>
     </TooltipProvider>
