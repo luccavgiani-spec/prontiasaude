@@ -1266,16 +1266,7 @@ export function PaymentModal({
         setPaymentStatus('rejected');
         setPaymentId(data.payment_id || '');
         
-        // ✅ Ativar overlay de erro global
-        setShowErrorOverlay(true);
-        setErrorOverlayMessage(errorInfo.message);
-        console.error('[Overlay] showing with status_detail=', statusDetail);
-        
-        toast.dismiss();
-        
-        // Fechamento imediato do modal após rejeição + toast fora do modal
-        console.log('[PaymentModal] Closing immediately after rejection');
-        setPaymentStatus('idle');
+        // ✅ Desmontar Brick para evitar UI bug, mas manter modal aberto
         try {
           if (cardPaymentBrickRef.current) {
             cardPaymentBrickRef.current.unmount();
@@ -1286,49 +1277,13 @@ export function PaymentModal({
           cardPaymentBrickRef.current = null;
           isBrickMountedRef.current = false;
         }
-        onOpenChange(false);
-
-        // ✅ Exibir toast NA PÁGINA após fechar o modal (fica visível por 8s)
-        setTimeout(() => {
-          console.log('[Payment Rejected] Showing toast after modal close:', {
-            status_detail: statusDetail,
-            message: errorInfo.message
-          });
-          toast.error(errorInfo.message, {
-            duration: 8000,
-            action: errorInfo.showRetry ? {
-              label: 'Tentar Novamente',
-              onClick: () => {
-                setPaymentStatus('idle');
-                setError('');
-                setUserMessage('');
-                onOpenChange(true);
-              }
-            } : undefined
-          });
-        }, 200);
         
-        // Remontar Brick para evitar tela em branco
-        setTimeout(() => {
-          if (errorInfo.showRetry && paymentMethod === 'card') {
-            console.log('[handleCardSubmit] Remontando Brick após recusa...');
-            if (cardPaymentBrickRef.current) {
-              try {
-                cardPaymentBrickRef.current.unmount();
-              } catch (e) {
-                console.warn('[handleCardSubmit] Erro ao desmontar brick:', e);
-              }
-              cardPaymentBrickRef.current = null;
-              isBrickMountedRef.current = false;
-            }
-            // Trigger remontagem no próximo ciclo
-            setTimeout(() => {
-              if (open && !showSummary && paymentMethod === 'card' && mpInstanceRef.current) {
-                mountCardPaymentBrick();
-              }
-            }, 500);
-          }
-        }, 1000);
+        // ✅ Ativar overlay de erro global (modal continua aberto)
+        setShowErrorOverlay(true);
+        setErrorOverlayMessage(errorInfo.message);
+        console.log('[Overlay] Showing error overlay with status_detail:', statusDetail);
+        
+        toast.dismiss();
       }
     } catch (err: any) {
       console.error('[handleCardSubmit] Card payment error:', err);

@@ -405,9 +405,31 @@ Deno.serve(async (req) => {
       error: mpResponse.error
     };
 
-    if (mpResponse.status === 'rejected' || mpResponse.error) {
-      console.error('[mp-create-payment] MP API error:', responseData);
-      throw new Error(`Mercado Pago API error: ${responseData.error?.message || responseData.status_detail || 'Unknown error'}`);
+    // ✅ Se rejeitado, retornar 200 com status_detail para frontend tratar
+    if (mpResponse.status === 'rejected') {
+      console.warn('[mp-create-payment] Payment rejected:', {
+        id: responseData.id,
+        status_detail: responseData.status_detail
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          payment_id: responseData.id,
+          status: 'rejected',
+          status_detail: responseData.status_detail,
+          error_message: responseData.error?.message
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+    
+    // Erros técnicos reais (não pagamento rejeitado)
+    if (mpResponse.error) {
+      console.error('[mp-create-payment] MP API technical error:', responseData);
+      throw new Error(`Mercado Pago API error: ${responseData.error?.message || 'Unknown error'}`);
     }
 
     // ✅ ETAPA 7: Logs detalhados de validação de segurança
