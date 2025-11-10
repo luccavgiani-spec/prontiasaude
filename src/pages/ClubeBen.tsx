@@ -178,15 +178,12 @@ const ClubeBen = () => {
               Descontos em farmácias, laboratórios, lojas parceiras de diversos segmentos - bem estar, alimentação, educação - e mais de 450 parceiros para você.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex justify-center">
               <Button size="lg" asChild>
                 <Link to="/planos">
                   Assinar Agora
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
-              </Button>
-              <Button size="lg" variant="outline" onClick={handleAccessClub} disabled={accessing}>
-                {accessing ? 'Redirecionando...' : 'Acessar Clube'}
               </Button>
             </div>
           </div>
