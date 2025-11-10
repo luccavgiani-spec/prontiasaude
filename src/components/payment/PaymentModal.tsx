@@ -570,107 +570,116 @@ export function PaymentModal({
             // Device ID será capturado no onSubmit (não aqui)
             console.log('[Device ID] ⏳ Aguardando captura no momento do submit');
           },
-          onSubmit: async (brickSubmitData: any) => {
-            // NOVO: Resetar flag primeiro (caso esteja travada de submit anterior)
-            const wasSubmitting = isSubmittingRef.current;
-            if (wasSubmitting) {
-              console.warn('[Brick onSubmit] Flag já estava em true, resetando...');
-            }
-            
-            // Prevenir múltiplos submits simultâneos
-            if (isSubmittingRef.current) {
-              console.warn('[Brick onSubmit] Submit already in progress, ignoring');
-              return;
-            }
-
-            isSubmittingRef.current = true;
-            console.log('[Brick onSubmit] Flag setada, iniciando processamento...');
-
-            // ✅ CAPTURAR Device ID NO MOMENTO DO SUBMIT (não no onReady)
-            try {
-              const capturedDeviceId = await cardPaymentBrick.getDeviceId();
-              if (capturedDeviceId) {
-                console.log('[Device ID] ✅ Capturado no onSubmit:', capturedDeviceId);
-                setDeviceId(capturedDeviceId);
-              } else {
-                console.warn('[Device ID] ⚠️ Vazio no onSubmit, mas continuando (SDK envia automaticamente)');
+          onSubmit: (brickSubmitData: any) => {
+            console.log('[Brick onSubmit] start');
+            return new Promise<void>(async (resolve) => {
+              // NOVO: Resetar flag primeiro (caso esteja travada de submit anterior)
+              const wasSubmitting = isSubmittingRef.current;
+              if (wasSubmitting) {
+                console.warn('[Brick onSubmit] Flag já estava em true, resetando...');
               }
-            } catch (err) {
-              console.warn('[Device ID] ⚠️ Erro ao capturar, mas continuando:', err);
-            }
 
-            try {
-              console.log('[Brick onSubmit] Received data:', brickSubmitData);
-              
-              // Validar dados ANTES de processar
-              if (!validateForm()) {
-                setError('Preencha todos os campos antes de finalizar o pagamento');
-                setPaymentStatus('idle');
+              // Prevenir múltiplos submits simultâneos
+              if (isSubmittingRef.current) {
+                console.warn('[Brick onSubmit] Submit already in progress, ignoring');
+                resolve();
                 return;
               }
 
-              // Resolver wrapper do Brick
-              const cardData = brickSubmitData?.getCardFormData
-                ? await brickSubmitData.getCardFormData()
-                : brickSubmitData;
-              
-              console.log('[Brick onSubmit] Card data resolved:', cardData);
-              
-              // ✅ NOVO: Validar data de validade ANTES de processar
-              const expiryValidation = validateCardExpiry(cardData);
-              if (!expiryValidation.valid) {
-                console.error('[Brick onSubmit] Invalid card expiry:', cardData);
-                setError(expiryValidation.error || 'Data de validade inválida');
-                setPaymentStatus('idle');
-                toast.error(expiryValidation.error || 'Data de validade inválida');
-                return;
+              isSubmittingRef.current = true;
+              console.log('[Brick onSubmit] Flag setada, iniciando processamento...');
+
+              // ✅ CAPTURAR Device ID NO MOMENTO DO SUBMIT (não no onReady)
+              try {
+                const capturedDeviceId = await cardPaymentBrick.getDeviceId();
+                if (capturedDeviceId) {
+                  console.log('[Device ID] ✅ Capturado no onSubmit:', capturedDeviceId);
+                  setDeviceId(capturedDeviceId);
+                } else {
+                  console.warn('[Device ID] ⚠️ Vazio no onSubmit, mas continuando (SDK envia automaticamente)');
+                }
+              } catch (err) {
+                console.warn('[Device ID] ⚠️ Erro ao capturar, mas continuando:', err);
               }
-              
-              if (!cardData || !cardData.token || !cardData.payment_method_id) {
-                console.error('[Brick onSubmit] Invalid card data:', cardData);
-                setError('Erro ao processar dados do cartão. Tente novamente.');
+
+              try {
+                console.log('[Brick onSubmit] Received data:', brickSubmitData);
+
+                // Validar dados ANTES de processar
+                if (!validateForm()) {
+                  setError('Preencha todos os campos antes de finalizar o pagamento');
+                  setPaymentStatus('idle');
+                  resolve();
+                  return;
+                }
+
+                // Resolver wrapper do Brick
+                const cardData = brickSubmitData?.getCardFormData
+                  ? await brickSubmitData.getCardFormData()
+                  : brickSubmitData;
+
+                console.log('[Brick onSubmit] Card data resolved:', cardData);
+
+                // ✅ NOVO: Validar data de validade ANTES de processar
+                const expiryValidation = validateCardExpiry(cardData);
+                if (!expiryValidation.valid) {
+                  console.error('[Brick onSubmit] Invalid card expiry:', cardData);
+                  setError(expiryValidation.error || 'Data de validade inválida');
+                  setPaymentStatus('idle');
+                  toast.error(expiryValidation.error || 'Data de validade inválida');
+                  resolve();
+                  return;
+                }
+
+                if (!cardData || !cardData.token || !cardData.payment_method_id) {
+                  console.error('[Brick onSubmit] Invalid card data:', cardData);
+                  setError('Erro ao processar dados do cartão. Tente novamente.');
+                  setPaymentStatus('idle');
+                  toast.error('Dados do cartão inválidos');
+                  resolve();
+                  return;
+                }
+
+                await handleCardSubmit({
+                  token: cardData.token,
+                  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
+                  installments: cardData.installments || 1,
+                  deviceId: deviceId || undefined,
+                  payerOverride: isThirdPartyCard ? {
+                    first_name: payerData.name.split(' ')[0],
+                    last_name: payerData.name.split(' ').slice(1).join(' '),
+                    cpf: payerData.cpf.replace(/\D/g, ''),
+                    phone: (() => {
+                      const phoneClean = payerData.phone.replace(/\D/g, '');
+                      const areaCode = phoneClean.startsWith('55') ? phoneClean.substring(2, 4) : phoneClean.substring(0, 2);
+                      const number = phoneClean.startsWith('55') ? phoneClean.substring(4) : phoneClean.substring(2);
+                      return { area_code: areaCode, number: number };
+                    })(),
+                    address: {
+                      zip_code: payerData.cep.replace(/\D/g, ''),
+                      street_name: payerData.street_name,
+                      street_number: payerData.street_number,
+                      neighborhood: payerData.neighborhood,
+                      city: payerData.city,
+                      state: payerData.state
+                    }
+                  } : undefined
+                });
+              } catch (error) {
+                console.error('[Brick onSubmit] Uncaught error:', error);
+                setError('Erro ao processar pagamento. Tente novamente.');
                 setPaymentStatus('idle');
-                toast.error('Dados do cartão inválidos');
-                return;
+                toast.error('Erro ao processar pagamento');
+              } finally {
+                // Liberar flag após 1 segundo (era 2s)
+                setTimeout(() => {
+                  console.log('[Brick onSubmit] Liberando isSubmittingRef');
+                  isSubmittingRef.current = false;
+                }, 1000);
+                console.log('[Brick onSubmit] resolve() called');
+                resolve();
               }
-              
-              await handleCardSubmit({
-                token: cardData.token,
-                payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
-                installments: cardData.installments || 1,
-                deviceId: deviceId || undefined,
-                payerOverride: isThirdPartyCard ? {
-                  first_name: payerData.name.split(' ')[0],
-                  last_name: payerData.name.split(' ').slice(1).join(' '),
-                  cpf: payerData.cpf.replace(/\D/g, ''),
-                  phone: (() => {
-                    const phoneClean = payerData.phone.replace(/\D/g, '');
-                    const areaCode = phoneClean.startsWith('55') ? phoneClean.substring(2, 4) : phoneClean.substring(0, 2);
-                    const number = phoneClean.startsWith('55') ? phoneClean.substring(4) : phoneClean.substring(2);
-                    return { area_code: areaCode, number: number };
-                  })(),
-                  address: {
-                    zip_code: payerData.cep.replace(/\D/g, ''),
-                    street_name: payerData.street_name,
-                    street_number: payerData.street_number,
-                    neighborhood: payerData.neighborhood,
-                    city: payerData.city,
-                    state: payerData.state
-                  }
-                } : undefined
-              });
-            } catch (error) {
-              console.error('[Brick onSubmit] Uncaught error:', error);
-              setError('Erro ao processar pagamento. Tente novamente.');
-              setPaymentStatus('idle');
-              toast.error('Erro ao processar pagamento');
-            } finally {
-              // Liberar flag após 1 segundo (era 2s)
-              setTimeout(() => {
-                console.log('[Brick onSubmit] Liberando isSubmittingRef');
-                isSubmittingRef.current = false;
-              }, 1000);
-            }
+            });
           },
           onError: (error: any) => {
             console.error('[Card Payment Brick] Error:', error);
