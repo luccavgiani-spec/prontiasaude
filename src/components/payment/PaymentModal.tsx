@@ -179,6 +179,16 @@ export function PaymentModal({
       return () => clearTimeout(timeout);
     }
   }, [paymentStatus]);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      // Cria uma função global que abre o modal
+      (window as any).__openPaymentModal = (sku?: string) => {
+        // Se você guarda o serviço/SKU em estado, defina aqui também:
+        // setSelectedService?.(sku);
+        setShowPaymentModal(true);
+      };
+    }
+  }, []);
 
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {
