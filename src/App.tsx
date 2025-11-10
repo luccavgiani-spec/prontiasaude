@@ -15,6 +15,7 @@ import WhatsAppFloatButton from "@/components/layout/WhatsAppFloatButton";
 import Index from "./pages/Index";
 import Servicos from "./pages/Servicos";
 import NotFound from "./pages/NotFound";
+
 // Intercepta respostas 402 do schedule-redirect e abre o modal de pagamento
 if (typeof window !== "undefined" && !(window as any).__schedule402Patched) {
   (window as any).__schedule402Patched = true;
