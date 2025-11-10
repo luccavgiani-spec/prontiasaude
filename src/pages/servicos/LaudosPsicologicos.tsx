@@ -244,7 +244,22 @@ export default function LaudosPsicologicos() {
         especialidade={servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);
-          toast({ title: "Sucesso!", description: "Pagamento processado com sucesso" });
+          
+          // ✅ Redirecionar para WhatsApp APENAS após pagamento aprovado
+          const message = encodeURIComponent("Olá! Gostaria de agendar uma consulta para emissão de laudo psicológico.");
+          const whatsappUrl = `https://wa.me/5511933359187?text=${message}`;
+          
+          console.log('[Laudo] Redirecting to WhatsApp after approval:', whatsappUrl);
+          
+          toast({ 
+            title: "Pagamento aprovado!", 
+            description: "Redirecionando para WhatsApp em 2 segundos...",
+            duration: 3000
+          });
+          
+          setTimeout(() => {
+            window.location.href = whatsappUrl;
+          }, 2000);
         }}
       />
     </>

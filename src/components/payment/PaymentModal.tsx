@@ -1237,13 +1237,33 @@ export function PaymentModal({
         setPaymentId(data.payment_id || '');
         
         toast.dismiss();
-        toast.error(errorInfo.message, { duration: 8000 });
         
         // Auto-fechamento do modal após rejeição (2 segundos)
         setTimeout(() => {
           console.log('[PaymentModal] Auto-fechando modal após rejeição');
           setPaymentStatus('idle');
           onOpenChange(false);
+          
+          // ✅ Exibir toast NA PÁGINA após fechar o modal (fica visível por 8s)
+          setTimeout(() => {
+            console.log('[Payment Rejected] Showing toast after modal close:', {
+              status_detail: statusDetail,
+              message: errorInfo.message
+            });
+            
+            toast.error(errorInfo.message, { 
+              duration: 8000,
+              action: errorInfo.showRetry ? {
+                label: 'Tentar Novamente',
+                onClick: () => {
+                  setPaymentStatus('idle');
+                  setError('');
+                  setUserMessage('');
+                  onOpenChange(true);
+                }
+              } : undefined
+            });
+          }, 300);
         }, 2000);
         
         // Remontar Brick para evitar tela em branco
