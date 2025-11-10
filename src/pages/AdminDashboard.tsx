@@ -13,6 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import TestesRoteamento from "@/components/teste/TestesRoteamento";
+import TestesPagamentoMP from "@/components/teste/TestesPagamentoMP";
 import SpecialtiesSelector from "@/components/admin/SpecialtiesSelector";
 import RedirectFlowMap from "@/components/admin/RedirectFlowMap";
 import CompanyManagement from "@/components/admin/CompanyManagement";
@@ -329,7 +330,7 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="relatorios" className="space-y-6">
-          <TabsList className="grid w-full max-w-6xl grid-cols-8">
+          <TabsList className="grid w-full max-w-6xl grid-cols-9">
             <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
             <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
             <TabsTrigger value="planos">📋 Planos</TabsTrigger>
@@ -338,6 +339,7 @@ const AdminDashboard = () => {
             <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
             <TabsTrigger value="testes">Testes</TabsTrigger>
+            <TabsTrigger value="pagamentos">💳 Testes MP</TabsTrigger>
           </TabsList>
 
           <TabsContent value="conteudo">
@@ -628,6 +630,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="cadastros">
             <UserRegistrationsTab />
+          </TabsContent>
+
+          <TabsContent value="pagamentos">
+            <TestesPagamentoMP />
           </TabsContent>
         </Tabs>
       </div>
