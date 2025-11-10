@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -104,6 +105,10 @@ export function PaymentModal({
   } | null>(null);
   const [threeDSecureUrl, setThreeDSecureUrl] = useState<string | null>(null);
   const [patientCreatedAt, setPatientCreatedAt] = useState<string | null>(null);
+  
+  // Estados para overlay de erro global
+  const [showErrorOverlay, setShowErrorOverlay] = useState(false);
+  const [errorOverlayMessage, setErrorOverlayMessage] = useState<string>('');
   
   // Estados para cartão de terceiros
   const [isThirdPartyCard, setIsThirdPartyCard] = useState(false);
@@ -451,18 +456,21 @@ export function PaymentModal({
     }
   }, [paymentStatus, open]);
 
-  // Failsafe: garante fechamento do modal após recusa
+  // Failsafe: mostra overlay de erro se modal ainda estiver aberto após recusa
   useEffect(() => {
     if (open && paymentStatus === 'rejected') {
       const t = setTimeout(() => {
         if (open) {
-          console.warn('[PaymentModal] Failsafe close fired');
-          onOpenChange(false);
+          console.warn('[Overlay] Failsafe trigger while modal still open after rejection');
+          setShowErrorOverlay(true);
+          if (!errorOverlayMessage) {
+            setErrorOverlayMessage(userMessage || 'Pagamento recusado. Tente novamente.');
+          }
         }
-      }, 1000);
+      }, 800);
       return () => clearTimeout(t);
     }
-  }, [open, paymentStatus, onOpenChange]);
+  }, [open, paymentStatus, userMessage, errorOverlayMessage]);
 
   const mountCardPaymentBrick = async () => {
     // Guard: Prevenir montagens concorrentes
@@ -1257,6 +1265,11 @@ export function PaymentModal({
         setUserMessage(errorInfo.message);
         setPaymentStatus('rejected');
         setPaymentId(data.payment_id || '');
+        
+        // ✅ Ativar overlay de erro global
+        setShowErrorOverlay(true);
+        setErrorOverlayMessage(errorInfo.message);
+        console.error('[Overlay] showing with status_detail=', statusDetail);
         
         toast.dismiss();
         
@@ -2310,11 +2323,62 @@ export function PaymentModal({
     );
   }
 
+  // Renderizar overlay de erro global (sempre visível por cima do modal)
+  const renderErrorOverlay = () => {
+    if (!showErrorOverlay) return null;
+
+    return createPortal(
+      <div className="fixed inset-0 z-[99999] flex items-center justify-center" role="alertdialog" aria-live="assertive">
+        <div className="absolute inset-0 bg-black/60" />
+        <div className="relative z-[100000] max-w-md w-[90%] rounded-lg bg-white p-5 shadow-2xl">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-base text-gray-900">Pagamento não aprovado</h3>
+              <p className="text-sm text-gray-600 mt-1">{errorOverlayMessage}</p>
+              <div className="mt-4 flex gap-2 flex-wrap">
+                <Button 
+                  variant="secondary" 
+                  onClick={() => {
+                    console.log('[Overlay] close modal now');
+                    setShowErrorOverlay(false);
+                    setErrorOverlayMessage('');
+                    onOpenChange(false);
+                  }}
+                >
+                  Fechar modal
+                </Button>
+                <Button 
+                  onClick={() => {
+                    console.log('[Overlay] retry flow');
+                    setShowErrorOverlay(false);
+                    setErrorOverlayMessage('');
+                    setError('');
+                    setUserMessage('');
+                    setPaymentStatus('idle');
+                    setShowSummary(true);
+                    setPaymentMethod(undefined);
+                  }}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby="payment-desc">
-        {modalBodyRadix}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6" aria-describedby="payment-desc">
+          {modalBodyRadix}
+        </DialogContent>
+      </Dialog>
+      {renderErrorOverlay()}
+    </>
   );
 }
