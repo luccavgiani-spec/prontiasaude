@@ -1623,17 +1623,25 @@ export function PaymentModal({
     if (paymentStatus === 'rejected') {
       const statusInfo = getStatusMessage(error);
       
-      // ✅ Auto-fechar modal após 4 segundos
+      // ✅ CORREÇÃO: Auto-fechar modal após 2 segundos + Reset imediato
       useEffect(() => {
-        const timer = setTimeout(() => {
+        // Reset imediato do estado
+        const immediateReset = setTimeout(() => {
+          setPaymentStatus('idle');
+        }, 0);
+        
+        // Fechar modal após 2 segundos
+        const closeTimer = setTimeout(() => {
           console.log('[PaymentModal] Auto-fechando modal após erro');
           onOpenChange(false);
-          setPaymentStatus('idle');
           setShowSummary(true);
           setPaymentMethod(undefined);
-        }, 4000);
+        }, 2000); // Reduzido de 4s para 2s
         
-        return () => clearTimeout(timer);
+        return () => {
+          clearTimeout(immediateReset);
+          clearTimeout(closeTimer);
+        };
       }, []);
       
       return (
@@ -1649,7 +1657,7 @@ export function PaymentModal({
                     {statusInfo.title}
                   </p>
                   <p className="text-red-700 text-base leading-relaxed">{statusInfo.message}</p>
-                  <p className="text-red-600 text-sm mt-2">Esta janela fechará automaticamente em 4 segundos...</p>
+                  <p className="text-red-600 text-sm mt-2">Esta janela fechará automaticamente em 2 segundos...</p>
                 </div>
               </div>
               

@@ -548,21 +548,23 @@ const AreaDoPaciente = () => {
           </Card>
         </div>
 
-        {/* Minhas Consultas */}
-        <div className="mt-8" id="consultas">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                Minhas Consultas
-              </CardTitle>
-              
-            </CardHeader>
-            <CardContent>
-              {currentUser?.email && <MeusAgendamentos userEmail={currentUser.email} />}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Minhas Consultas - APENAS para usuários SEM plano ativo */}
+        {!patientPlan && currentUser?.email && (
+          <div className="mt-8" id="consultas">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  Minhas Consultas
+                </CardTitle>
+                
+              </CardHeader>
+              <CardContent>
+                <MeusAgendamentos userEmail={currentUser.email} />
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Rótulos de Bem-Estar */}
         <div className="mt-8">

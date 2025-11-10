@@ -446,36 +446,10 @@ Deno.serve(async (req) => {
     if (payload.sku === 'OVM9892') {
       console.log('[schedule-redirect] ✓ LAUDOS PSICOLÓGICOS detectado → WhatsApp dedicado (SEMPRE)');
       
-      // Buscar nome do paciente se não estiver no payload
-      let nomeCompleto = payload.nome || '';
-      
-      if (!nomeCompleto) {
-        try {
-          const { data: patientData } = await supabase
-            .from('patients')
-            .select('first_name, last_name')
-            .eq('email', payload.email)
-            .maybeSingle();
-          
-          if (patientData) {
-            nomeCompleto = `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
-            console.log('[schedule-redirect] Nome obtido da tabela patients:', nomeCompleto);
-          }
-        } catch (err) {
-          console.error('[schedule-redirect] Erro ao buscar nome do paciente:', err);
-        }
-      }
-      
-      // Fallback se nome ainda estiver vazio
-      if (!nomeCompleto) {
-        nomeCompleto = 'Cliente Prontia';
-        console.warn('[schedule-redirect] Nome não encontrado, usando fallback');
-      }
-      
-      // Criar URL do WhatsApp com mensagem personalizada
-      const mensagem = `Olá, meu nome é ${nomeCompleto} e eu comprei um Laudo Psicólogo na Prontìa Saúde! 💚`;
+      // Criar URL do WhatsApp com mensagem padrão
+      const mensagem = 'Olá! Gostaria de agendar uma consulta para emissão de laudo psicológico.';
       const mensagemEncoded = encodeURIComponent(mensagem);
-      const whatsappUrl = `https://wa.me/5511975102072?text=${mensagemEncoded}`;
+      const whatsappUrl = `https://wa.me/5511933359187?text=${mensagemEncoded}`;
       
       console.log('[schedule-redirect] WhatsApp URL gerada:', whatsappUrl);
       console.log('[schedule-redirect] Mensagem:', mensagem);

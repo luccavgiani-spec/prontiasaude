@@ -478,26 +478,31 @@ Deno.serve(async (req) => {
 
       // ✅ ENVIAR EMAIL AUTOMÁTICO de boas-vindas com link de senha
       try {
-        const { data: resetLinkData } = await supabaseClient.auth.admin.generateLink({
+        const { data: resetLinkData, error: linkError } = await supabaseClient.auth.admin.generateLink({
           type: 'recovery',
           email: employeeData.email,
         });
         
-        if (resetLinkData?.properties?.action_link) {
-          const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
-            body: {
-              type: 'employee-welcome',
-              data: {
-                email: employeeData.email,
-                nome: employeeData.nome,
-                empresa: companyData.razao_social || 'Sua empresa',
-                cpf: employeeData.cpf,
-                reset_link: resetLinkData.properties.action_link
-              }
+        if (linkError || !resetLinkData?.properties?.action_link) {
+          console.error('[company-operations] Failed to generate reset link:', linkError);
+          throw new Error('Failed to generate password reset link');
+        }
+        
+        const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
+          body: {
+            type: 'employee-welcome',
+            data: {
+              email: employeeData.email,
+              nome: employeeData.nome,
+              empresa: companyData.razao_social || 'Sua empresa',
+              cpf: employeeData.cpf,
+              reset_link: resetLinkData.properties.action_link,
+              login_url: 'https://prontiasaude.com.br/entrar'
             }
-          });
-          
-          if (emailResult.error) {
+          }
+        });
+        
+        if (emailResult.error) {
             console.error('[company-operations] Employee welcome email failed:', emailResult.error);
           } else {
             console.log('[company-operations] ✅ Employee welcome email sent successfully');

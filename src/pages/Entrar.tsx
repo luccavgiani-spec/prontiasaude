@@ -51,18 +51,26 @@ const Entrar = () => {
       // Show user-friendly error messages only (don't log sensitive auth details)
       if (error.message === "Invalid login credentials") {
         toast({
-          title: "Erro no login",
-          description: "Email ou senha incorretos.",
+          title: "❌ Erro no login",
+          description: "Email ou senha incorretos. Verifique seus dados e tente novamente.",
           variant: "destructive",
+          duration: 5000,
         });
       } else if (error.message.includes("Email not confirmed")) {
         toast({
-          title: "Email não confirmado",
+          title: "⚠️ Email não confirmado",
           description: "Verifique sua caixa de entrada para confirmar seu email.",
           variant: "destructive",
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: "❌ Erro no login",
+          description: "Não foi possível fazer login. Tente novamente.",
+          variant: "destructive",
+          duration: 5000,
         });
       }
-      // Don't show generic errors to users
     } else {
       navigate('/auth/callback');
     }

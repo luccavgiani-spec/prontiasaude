@@ -166,9 +166,9 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const response = await supabase.functions.invoke('company-operations/create', {
-          method: 'POST',
+        const response = await supabase.functions.invoke('company-operations', {
           body: {
+            operation: 'create',
             company: {
               razao_social: formData.razao_social,
               cnpj: formData.cnpj.replace(/\D/g, ''),
