@@ -78,10 +78,13 @@ export default function LaudosPsicologicos() {
       return;
     }
 
+    // ✅ EXCEÇÃO: Laudos psicológicos SEMPRE cobram, mesmo com plano ativo
+    // Motivo: Exame específico não incluso no plano padrão
     const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
 
-    if (planStatus.canBypassPayment) {
+    // Laudos psicológicos não permitem bypass de pagamento
+    if (false && planStatus.canBypassPayment) { // Desabilitado para laudos
       const { data: patient } = await supabase
         .from('patients')
         .select('cpf, first_name, last_name, phone_e164, gender')

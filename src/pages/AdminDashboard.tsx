@@ -601,6 +601,82 @@ const AdminDashboard = () => {
 
           <TabsContent value="configuracoes">
             <div className="space-y-6">
+              {/* BOTÃO OVERRIDE CLICKLIFE */}
+              <Card className="border-2 border-red-500/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-red-600">
+                    🚨 FORÇAR PRONTO ATENDIMENTO → CLICKLIFE
+                  </CardTitle>
+                  <CardDescription>
+                    Sobrescreve TODA a lógica de redirecionamento e força o Pronto Atendimento exclusivamente para ClickLife.
+                    <br />
+                    ⚠️ <strong>Use apenas em emergências!</strong> Isso afeta TODOS os usuários.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Button 
+                    variant="destructive" 
+                    onClick={async () => {
+                      try {
+                        const { error } = await supabase
+                          .from('admin_settings')
+                          .upsert({ key: 'force_clicklife_pronto_atendimento', value: 'true' });
+                        
+                        if (error) throw error;
+                        
+                        toast({
+                          title: '🚨 Override ativado!',
+                          description: 'Pronto Atendimento agora vai SEMPRE para ClickLife',
+                        });
+                      } catch (err) {
+                        toast({
+                          title: 'Erro',
+                          description: 'Não foi possível ativar o override',
+                          variant: 'destructive'
+                        });
+                      }
+                    }}
+                    className="w-full"
+                  >
+                    Ativar Override ClickLife
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={async () => {
+                      try {
+                        const { error } = await supabase
+                          .from('admin_settings')
+                          .upsert({ key: 'force_clicklife_pronto_atendimento', value: 'false' });
+                        
+                        if (error) throw error;
+                        
+                        toast({
+                          title: '✅ Override desativado',
+                          description: 'Lógica de redirecionamento voltou ao normal',
+                        });
+                      } catch (err) {
+                        toast({
+                          title: 'Erro',
+                          description: 'Não foi possível desativar o override',
+                          variant: 'destructive'
+                        });
+                      }
+                    }}
+                    className="w-full"
+                  >
+                    Desativar Override
+                  </Button>
+                  
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs text-red-800">
+                      <strong>Atenção:</strong> Quando ativo, TODO Pronto Atendimento (ITC6534) será direcionado para ClickLife, 
+                      ignorando horários, especialidades testadas, e lógica Communicare.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+              
               <SpecialtiesSelector isAdmin={true} />
               <RedirectFlowMap />
             </div>

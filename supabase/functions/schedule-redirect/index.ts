@@ -393,9 +393,31 @@ Deno.serve(async (req) => {
 
     // ✅ Inicializar cliente Supabase ANTES de qualquer uso
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+    
+    // ✅ OVERRIDE ADMIN: Forçar ClickLife para Pronto Atendimento
+    const { data: overrideSettings } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'force_clicklife_pronto_atendimento')
+      .maybeSingle();
+    
+    if (overrideSettings?.value === 'true' && payload.sku === 'ITC6534') {
+      console.log('[schedule-redirect] 🚨 OVERRIDE ATIVO: Forçando ClickLife para Pronto Atendimento');
+      
+      const redirectResult = await redirectClickLife(payload, 8);
+      
+      if (redirectResult.ok && redirectResult.url) {
+        await saveAppointment(payload, 'clicklife', redirectResult.url, supabase);
+      }
+      
+      return new Response(
+        JSON.stringify(redirectResult),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
 
     // ✅ GUARD: Nunca processar SKUs de PLANO (assinaturas)
     if (payload.sku?.match(/^(IND_|FAM_)/)) {

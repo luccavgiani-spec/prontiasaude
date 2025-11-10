@@ -59,7 +59,29 @@ interface ClubeBenParceiroRequest {
   };
 }
 
-type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest | ClubeBenParceiroRequest;
+interface CompanyCredentialsRequest {
+  type: "company-credentials";
+  data: {
+    email: string;
+    cnpj: string;
+    razao_social: string;
+    password: string;
+    login_url: string;
+  };
+}
+
+interface EmployeeWelcomeRequest {
+  type: "employee-welcome";
+  data: {
+    email: string;
+    nome: string;
+    empresa: string;
+    cpf?: string;
+    reset_link: string;
+  };
+}
+
+type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest | ClubeBenParceiroRequest | CompanyCredentialsRequest | EmployeeWelcomeRequest;
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
@@ -235,6 +257,140 @@ const handler = async (req: Request): Promise<Response> => {
           "Content-Type": "application/json",
           ...corsHeaders,
         },
+      });
+      
+    } else if (formData.type === "company-credentials") {
+      const emailResponse = await resend.emails.send({
+        from: "Prontia Saúde <onboarding@resend.dev>",
+        to: [formData.data.email],
+        subject: "🔑 Credenciais de Acesso - Prontia Saúde Empresas",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">Bem-vindo à Prontia Saúde!</h1>
+            </div>
+            
+            <div style="padding: 30px; background: #f9f9f9;">
+              <h2 style="color: #333;">Olá, ${formData.data.razao_social}!</h2>
+              <p style="color: #666; line-height: 1.6;">
+                Sua empresa foi cadastrada com sucesso na plataforma Prontia Saúde Empresas. 
+                Abaixo estão suas credenciais de acesso:
+              </p>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+                <h3 style="margin-top: 0; color: #667eea;">Dados de Acesso</h3>
+                <p style="margin: 10px 0;"><strong>CNPJ:</strong> ${formData.data.cnpj}</p>
+                <p style="margin: 10px 0;"><strong>Senha temporária:</strong> 
+                  <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 4px; font-size: 16px;">${formData.data.password}</code>
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${formData.data.login_url}" 
+                   style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                  Acessar Painel da Empresa
+                </a>
+              </div>
+              
+              <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404;">
+                  ⚠️ <strong>Importante:</strong> Por segurança, você deverá alterar sua senha no primeiro acesso.
+                </p>
+              </div>
+              
+              <p style="color: #666; line-height: 1.6; margin-top: 30px;">
+                Se tiver alguma dúvida, nossa equipe está à disposição para ajudar.
+              </p>
+              
+              <p style="color: #666;">
+                Atenciosamente,<br>
+                <strong>Equipe Prontia Saúde</strong>
+              </p>
+            </div>
+            
+            <div style="background: #333; color: #999; padding: 20px; text-align: center; font-size: 12px;">
+              <p>Este é um email automático. Por favor, não responda.</p>
+              <p>© ${new Date().getFullYear()} Prontia Saúde - Todos os direitos reservados</p>
+            </div>
+          </div>
+        `,
+      });
+
+      console.log("Company credentials email sent:", emailResponse);
+      return new Response(JSON.stringify({ success: true, type: "company-credentials" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+      
+    } else if (formData.type === "employee-welcome") {
+      const emailResponse = await resend.emails.send({
+        from: "Prontia Saúde <onboarding@resend.dev>",
+        to: [formData.data.email],
+        subject: "🎉 Bem-vindo à Prontia Saúde - Seu plano foi ativado!",
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
+              <h1 style="color: white; margin: 0;">Bem-vindo à Prontia Saúde!</h1>
+            </div>
+            
+            <div style="padding: 30px; background: #f9f9f9;">
+              <h2 style="color: #333;">Olá, ${formData.data.nome}!</h2>
+              <p style="color: #666; line-height: 1.6;">
+                Você foi cadastrado(a) pela empresa <strong>${formData.data.empresa}</strong> e seu plano já está ativo!
+              </p>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
+                <h3 style="margin-top: 0; color: #28a745;">✅ Seu Plano Está Ativo</h3>
+                <p style="color: #666;">Você já pode começar a usar todos os nossos serviços de saúde.</p>
+              </div>
+              
+              <div style="background: #e7f3ff; border: 1px solid #0066cc; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p style="margin: 0; color: #004085;">
+                  🔐 <strong>Defina sua senha de acesso:</strong><br>
+                  Para acessar sua área do paciente e agendar consultas, você precisa criar uma senha.
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${formData.data.reset_link}" 
+                   style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
+                  Criar Minha Senha
+                </a>
+              </div>
+              
+              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h4 style="color: #667eea; margin-top: 0;">O que você pode fazer:</h4>
+                <ul style="color: #666; line-height: 1.8;">
+                  <li>✅ Agendar consultas médicas online</li>
+                  <li>✅ Acessar especialistas</li>
+                  <li>✅ Renovar receitas</li>
+                  <li>✅ Solicitar exames</li>
+                  <li>✅ Acessar o Clube de Benefícios</li>
+                </ul>
+              </div>
+              
+              <p style="color: #666; line-height: 1.6; margin-top: 30px;">
+                Qualquer dúvida, estamos aqui para ajudar!
+              </p>
+              
+              <p style="color: #666;">
+                Atenciosamente,<br>
+                <strong>Equipe Prontia Saúde</strong>
+              </p>
+            </div>
+            
+            <div style="background: #333; color: #999; padding: 20px; text-align: center; font-size: 12px;">
+              <p>Este é um email automático. Por favor, não responda.</p>
+              <p>© ${new Date().getFullYear()} Prontia Saúde - Todos os direitos reservados</p>
+            </div>
+          </div>
+        `,
+      });
+
+      console.log("Employee welcome email sent:", emailResponse);
+      return new Response(JSON.stringify({ success: true, type: "employee-welcome" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
 

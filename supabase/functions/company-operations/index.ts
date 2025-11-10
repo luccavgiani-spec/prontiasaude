@@ -233,6 +233,31 @@ Deno.serve(async (req) => {
         expires_at: planExpiryDate.toISOString()
       });
 
+      // ✅ ENVIAR EMAIL AUTOMÁTICO com senha
+      try {
+        const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
+          body: {
+            type: 'company-credentials',
+            data: {
+              email: company.contato_email || email,
+              cnpj: company.cnpj,
+              razao_social: company.razao_social,
+              password: password,
+              login_url: 'https://prontiasaude.com.br/empresa/login'
+            }
+          }
+        });
+        
+        if (emailResult.error) {
+          console.error('[company-operations] Email failed:', emailResult.error);
+        } else {
+          console.log('[company-operations] ✅ Credentials email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('[company-operations] Exception sending email:', emailError);
+        // Não bloqueia a criação da empresa
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -451,14 +476,36 @@ Deno.serve(async (req) => {
         // Não bloqueia criação
       }
 
-      // ✅ NOVO: Enviar email de redefinição de senha
-      const { error: resetError } = await supabaseClient.auth.admin.generateLink({
-        type: 'recovery',
-        email: employeeData.email,
-      });
-
-      if (resetError) {
-        console.error('[company-operations] Password reset email failed:', resetError.message);
+      // ✅ ENVIAR EMAIL AUTOMÁTICO de boas-vindas com link de senha
+      try {
+        const { data: resetLinkData } = await supabaseClient.auth.admin.generateLink({
+          type: 'recovery',
+          email: employeeData.email,
+        });
+        
+        if (resetLinkData?.properties?.action_link) {
+          const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
+            body: {
+              type: 'employee-welcome',
+              data: {
+                email: employeeData.email,
+                nome: employeeData.nome,
+                empresa: companyData.razao_social || 'Sua empresa',
+                cpf: employeeData.cpf,
+                reset_link: resetLinkData.properties.action_link
+              }
+            }
+          });
+          
+          if (emailResult.error) {
+            console.error('[company-operations] Employee welcome email failed:', emailResult.error);
+          } else {
+            console.log('[company-operations] ✅ Employee welcome email sent successfully');
+          }
+        }
+      } catch (emailError) {
+        console.error('[company-operations] Exception sending employee email:', emailError);
+        // Não bloqueia criação do funcionário
       }
 
       console.log('[company-operations] Employee created successfully:', {

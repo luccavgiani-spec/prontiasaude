@@ -164,6 +164,24 @@ Deno.serve(async (req) => {
 
       // ✅ GARANTIR que o registro do paciente existe
       let userId: string | null = null;
+      
+      // 🔍 VERIFICAR DUPLICAÇÃO: Checar se já existe um appointment com este order_id
+      if (orderId) {
+        const { data: existingAppointment } = await supabaseAdmin
+          .from('appointments')
+          .select('id, appointment_id')
+          .eq('order_id', orderId)
+          .maybeSingle();
+        
+        if (existingAppointment) {
+          console.log('[mp-webhook] ⚠️ Appointment duplicado detectado! Order já processado:', orderId);
+          return new Response(
+            JSON.stringify({ ok: true, message: 'Order already processed', appointment_id: existingAppointment.appointment_id }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+          );
+        }
+      }
+      
       const { data: existingPatient } = await supabaseAdmin
         .from('patients')
         .select('id')

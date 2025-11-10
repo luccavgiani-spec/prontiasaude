@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom';
 
 const WhatsAppFloatButton = () => {
-  const whatsappUrl = "https://wa.me/5511933359187?text=w46530642";
+  const whatsappUrl = "https://wa.me/5511933359187?text=Olá!%20Preciso%20de%20ajuda%20com%20meu%20atendimento.%20Nossa%20equipe%20está%20aqui%20para%20te%20ajudar%20💬";
 
   const button = (
     <a

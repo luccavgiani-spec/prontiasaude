@@ -192,6 +192,46 @@ const CompletarPerfil = () => {
     setIsLoading(true);
     
     try {
+      // ✅ VERIFICAR CPF DUPLICADO
+      const { data: existingCPF } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('cpf', formData.cpf.replace(/\D/g, ''))
+        .neq('id', currentUser.id)
+        .maybeSingle();
+
+      if (existingCPF) {
+        toast({
+          title: "⚠️ CPF já cadastrado",
+          description: "Este CPF já está vinculado a outra conta. Entre em contato com o suporte se precisar de ajuda.",
+          variant: "destructive",
+          className: "bg-yellow-50 border-yellow-500 text-yellow-900"
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // ✅ VERIFICAR EMAIL DUPLICADO (se mudou)
+      if (currentUser.email !== formData.first_name) { // Verificar se email mudou
+        const { data: existingEmail } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('email', currentUser.email)
+          .neq('id', currentUser.id)
+          .maybeSingle();
+
+        if (existingEmail) {
+          toast({
+            title: "⚠️ Email já cadastrado",
+            description: "Este email já está em uso por outra conta.",
+            variant: "destructive",
+            className: "bg-yellow-50 border-yellow-500 text-yellow-900"
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       await upsertPatientBasic({
         first_name: formData.first_name,
         last_name: formData.last_name,
