@@ -1239,6 +1239,13 @@ export function PaymentModal({
         toast.dismiss();
         toast.error(errorInfo.message, { duration: 8000 });
         
+        // Auto-fechamento do modal após rejeição (2 segundos)
+        setTimeout(() => {
+          console.log('[PaymentModal] Auto-fechando modal após rejeição');
+          setPaymentStatus('idle');
+          onOpenChange(false);
+        }, 2000);
+        
         // Remontar Brick para evitar tela em branco
         setTimeout(() => {
           if (errorInfo.showRetry && paymentMethod === 'card') {
