@@ -446,10 +446,23 @@ export function PaymentModal({
     if (paymentStatus === 'rejected' && open) {
       const modalContent = document.querySelector('[role="dialog"]');
       if (modalContent) {
-        modalContent.scrollTop = 0;
+        (modalContent as HTMLElement).scrollTop = 0;
       }
     }
   }, [paymentStatus, open]);
+
+  // Failsafe: garante fechamento do modal após recusa
+  useEffect(() => {
+    if (open && paymentStatus === 'rejected') {
+      const t = setTimeout(() => {
+        if (open) {
+          console.warn('[PaymentModal] Failsafe close fired');
+          onOpenChange(false);
+        }
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+  }, [open, paymentStatus, onOpenChange]);
 
   const mountCardPaymentBrick = async () => {
     // Guard: Prevenir montagens concorrentes
@@ -1247,33 +1260,40 @@ export function PaymentModal({
         
         toast.dismiss();
         
-        // Auto-fechamento do modal após rejeição (2 segundos)
+        // Fechamento imediato do modal após rejeição + toast fora do modal
+        console.log('[PaymentModal] Closing immediately after rejection');
+        setPaymentStatus('idle');
+        try {
+          if (cardPaymentBrickRef.current) {
+            cardPaymentBrickRef.current.unmount();
+          }
+        } catch (e) {
+          console.warn('[PaymentModal] Erro ao desmontar brick após recusa:', e);
+        } finally {
+          cardPaymentBrickRef.current = null;
+          isBrickMountedRef.current = false;
+        }
+        onOpenChange(false);
+
+        // ✅ Exibir toast NA PÁGINA após fechar o modal (fica visível por 8s)
         setTimeout(() => {
-          console.log('[PaymentModal] Auto-fechando modal após rejeição');
-          setPaymentStatus('idle');
-          onOpenChange(false);
-          
-          // ✅ Exibir toast NA PÁGINA após fechar o modal (fica visível por 8s)
-          setTimeout(() => {
-            console.log('[Payment Rejected] Showing toast after modal close:', {
-              status_detail: statusDetail,
-              message: errorInfo.message
-            });
-            
-            toast.error(errorInfo.message, { 
-              duration: 8000,
-              action: errorInfo.showRetry ? {
-                label: 'Tentar Novamente',
-                onClick: () => {
-                  setPaymentStatus('idle');
-                  setError('');
-                  setUserMessage('');
-                  onOpenChange(true);
-                }
-              } : undefined
-            });
-          }, 300);
-        }, 2000);
+          console.log('[Payment Rejected] Showing toast after modal close:', {
+            status_detail: statusDetail,
+            message: errorInfo.message
+          });
+          toast.error(errorInfo.message, {
+            duration: 8000,
+            action: errorInfo.showRetry ? {
+              label: 'Tentar Novamente',
+              onClick: () => {
+                setPaymentStatus('idle');
+                setError('');
+                setUserMessage('');
+                onOpenChange(true);
+              }
+            } : undefined
+          });
+        }, 200);
         
         // Remontar Brick para evitar tela em branco
         setTimeout(() => {
