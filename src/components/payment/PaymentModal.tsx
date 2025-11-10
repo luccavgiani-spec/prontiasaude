@@ -290,6 +290,7 @@ export function PaymentModal({
 
       if (planStatus.canBypassPayment) {
         toast.info("Você já tem um plano ativo! Redirecionando...");
+        setPaymentStatus("idle");
         onOpenChange(false);
 
         // Mapear gender para 'M' ou 'F'
@@ -457,6 +458,20 @@ export function PaymentModal({
       }
     }
   }, [paymentStatus, open]);
+
+  // Cleanup when modal closes: reset error/overlay/state so it doesn't reopen automatically
+  useEffect(() => {
+    if (!open) {
+      setPaymentStatus("idle");
+      setShowErrorOverlay(false);
+      setErrorOverlayMessage("");
+      setError("");
+      setUserMessage("");
+      setPixData(null);
+      setPaymentMethod(undefined);
+      setShowSummary(true);
+    }
+  }, [open]);
 
   // Failsafe: mostra overlay de erro se modal ainda estiver aberto após recusa
   useEffect(() => {
@@ -2323,6 +2338,7 @@ export function PaymentModal({
               e.preventDefault();
               return;
             }
+            setPaymentStatus("idle");
             onOpenChange(false);
           }}
         />
@@ -2357,6 +2373,7 @@ export function PaymentModal({
                     console.log("[Overlay] close modal now");
                     setShowErrorOverlay(false);
                     setErrorOverlayMessage("");
+                    setPaymentStatus("idle");
                     onOpenChange(false);
                   }}
                 >
