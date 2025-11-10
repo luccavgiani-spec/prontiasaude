@@ -33,17 +33,23 @@ if (typeof window !== "undefined" && !(window as any).__schedule402Patched) {
           .clone()
           .json()
           .catch(() => null);
-        if (data?.require_payment && typeof (window as any).__openPaymentModal === "function") {
-          let sku: string | undefined;
-          try {
-            const bodyStr = typeof init?.body === "string" ? (init.body as string) : undefined;
-            sku = bodyStr ? JSON.parse(bodyStr)?.sku : undefined;
-          } catch {}
+        if (data?.require_payment) {
+  let sku: string | undefined;
+  try {
+    const bodyStr =
+      typeof init?.body === "string" ? (init.body as string) : undefined;
+    sku = bodyStr ? JSON.parse(bodyStr)?.sku : undefined;
+  } catch {}
 
-          (window as any).__openPaymentModal(sku);
-        }
-      }
-    } catch {}
+  // ⬇️ NOVO BLOCO: tenta abrir o modal imediatamente, ou guarda para abrir depois
+  if ((window as any).__openPaymentModal) {
+    (window as any).__openPaymentModal(sku);
+  } else {
+    console.warn("[patch] PaymentModal ainda não montou. Guardando requisição...");
+    (window as any).__paymentModalQueue = sku || true;
+  }
+}
+
 
     return res;
   };
