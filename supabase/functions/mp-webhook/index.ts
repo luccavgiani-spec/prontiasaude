@@ -146,10 +146,9 @@ Deno.serve(async (req) => {
     console.log('[mp-webhook] Processing payment for SKU:', schedulePayload.sku);
     console.log('[mp-webhook] Source:', schedulePayload.source);
 
-    // ✅ IDENTIFICAR SE É PLANO (assinatura recorrente)
-    const isPlanPurchase = schedulePayload.sku?.match(/^(IND_|FAM_)/) || 
-                           payment.metadata?.recurring === true ||
-                           payment.auto_recurring !== undefined;
+    // ✅ IDENTIFICAR SE É PLANO (apenas SKUs IND_* e FAM_*)
+    const isPlanPurchase = schedulePayload.sku?.startsWith('IND_') || 
+                           schedulePayload.sku?.startsWith('FAM_');
 
     // ✅ FLUXO ESPECÍFICO PARA COMPRA DE PLANO
     if (isPlanPurchase) {
@@ -494,19 +493,6 @@ Deno.serve(async (req) => {
           .eq('order_id', payment.metadata.order_id);
       }
 
-      // Sincronizar ClubeBen (fire-and-forget)
-      const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!
-      );
-      
-      supabase.functions.invoke('clubeben-sync', {
-        body: {
-          user_email: schedulePayload.email,
-          trigger_source: 'payment_approved'
-        }
-      }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
-
       console.log('[mp-webhook] ✅ Redirecionamento WhatsApp configurado');
       
       return new Response(JSON.stringify({ 
@@ -691,6 +677,86 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ✅ FALLBACK: Consultar DB se schedule-redirect não retornou dados
+      if (!scheduleError && payment.metadata?.order_id) {
+        console.log('[mp-webhook] 🔍 Tentando fallback via DB para order_id:', payment.metadata.order_id);
+        
+        const { data: appointmentFromDB, error: dbError } = await supabaseAdmin
+          .from('appointments')
+          .select('appointment_id, redirect_url, provider')
+          .eq('order_id', payment.metadata.order_id)
+          .maybeSingle();
+        
+        if (!dbError && appointmentFromDB?.redirect_url) {
+          console.log('[mp-webhook] ✅ Success by DB fallback');
+          console.log('[mp-webhook] Appointment details from DB:', {
+            appointment_id: appointmentFromDB.appointment_id,
+            redirect_url: appointmentFromDB.redirect_url,
+            provider: appointmentFromDB.provider
+          });
+          
+          // Atualizar scheduleData com dados do DB
+          scheduleData = {
+            appointment_id: appointmentFromDB.appointment_id,
+            url: appointmentFromDB.redirect_url,
+            provider: appointmentFromDB.provider
+          };
+          
+          // ✅ Enviar link via WhatsApp com assinatura HMAC
+          if (scheduleData.url && schedulePayload.telefone) {
+            console.log('[mp-webhook] 📲 Enviando link da consulta via WhatsApp (DB fallback)...');
+            
+            try {
+              const whatsappBody = {
+                phone_e164: schedulePayload.telefone,
+                patient_email: schedulePayload.email,
+                service_name: 'Consulta Médica',
+                redirect_url: scheduleData.url,
+                order_id: payment.metadata.order_id,
+                use_template: false
+              };
+
+              // Gerar assinatura HMAC-SHA256
+              const MC_HMAC_SECRET = Deno.env.get('MC_HMAC_SECRET') || '';
+              const encoder = new TextEncoder();
+              const bodyString = JSON.stringify(whatsappBody);
+              const key = await crypto.subtle.importKey(
+                'raw',
+                encoder.encode(MC_HMAC_SECRET),
+                { name: 'HMAC', hash: 'SHA-256' },
+                false,
+                ['sign']
+              );
+              const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyString));
+              const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+
+              console.log('[mp-webhook] 🔐 HMAC signature generated (DB fallback)');
+
+              const whatsappResult = await supabase.functions.invoke('mc-send-consultation-link', {
+                body: whatsappBody,
+                headers: {
+                  'x-client-signature': signatureHex
+                }
+              });
+              
+              if (whatsappResult.error) {
+                console.error('[mp-webhook] ⚠️ Erro ao enviar WhatsApp (DB fallback):', whatsappResult.error);
+              } else {
+                console.log('[mp-webhook] ✅ WhatsApp enviado com sucesso (DB fallback)');
+              }
+            } catch (whatsappError) {
+              console.error('[mp-webhook] ❌ Exceção ao enviar WhatsApp (DB fallback):', whatsappError);
+            }
+          }
+          
+          break;
+        } else {
+          console.warn('[mp-webhook] ⚠️ DB fallback não encontrou appointment ou redirect_url');
+        }
+      }
+
       if (attempt < maxScheduleRetries) {
         const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
         console.log(`[mp-webhook] ⚠️ Falha na tentativa ${attempt}, aguardando ${delayMs}ms antes de retentar...`);
@@ -746,17 +812,6 @@ Deno.serve(async (req) => {
     console.log('[mp-webhook] SKU:', schedulePayload.sku);
     console.log('[mp-webhook] Appointment ID:', scheduleData?.appointment_id || 'N/A');
     console.log('[mp-webhook] ========================================');
-
-    // ✅ Sincronizar com ClubeBen (fire-and-forget)
-    if (schedulePayload.email || schedulePayload.cpf) {
-      console.log('[mp-webhook] Iniciando sincronização ClubeBen');
-      supabase.functions.invoke('clubeben-sync', {
-        body: {
-          user_email: schedulePayload.email,
-          trigger_source: 'payment_approved'
-        }
-      }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
-    }
 
     // Sempre retornar 200 OK para MP não retentar
     return new Response(JSON.stringify({ success: true, payment_id: paymentId }), {
