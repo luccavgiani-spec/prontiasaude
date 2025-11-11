@@ -195,33 +195,27 @@ Deno.serve(async (req) => {
       } else {
         console.log('[mp-webhook] 🆕 Criando registro de paciente para:', schedulePayload.email);
         
-        // Buscar user_id do auth.users
-        const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(schedulePayload.email);
+        // Criar registro básico do paciente (sem id - Supabase gera automaticamente)
+        const { data: newPatient, error: patientError } = await supabaseAdmin
+          .from('patients')
+          .insert({
+            email: schedulePayload.email,
+            first_name: schedulePayload.nome?.split(' ')[0] || '',
+            last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || '',
+            cpf: schedulePayload.cpf || null,
+            phone_e164: schedulePayload.telefone || null,
+            profile_complete: false,
+            intake_complete: false,
+            clubeben_status: 'pending'
+          })
+          .select('id')
+          .single();
         
-        if (authUser?.user) {
-          // Criar registro básico do paciente
-          const { error: patientError } = await supabaseAdmin
-            .from('patients')
-            .insert({
-              id: authUser.user.id,
-              email: schedulePayload.email,
-              first_name: schedulePayload.nome?.split(' ')[0] || '',
-              last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || '',
-              cpf: schedulePayload.cpf || null,
-              phone_e164: schedulePayload.telefone || null,
-              profile_complete: false,
-              intake_complete: false,
-              clubeben_status: 'pending'
-            });
-          
-          if (patientError) {
-            console.error('[mp-webhook] ❌ Erro ao criar patient:', patientError);
-          } else {
-            console.log('[mp-webhook] ✅ Patient criado com sucesso');
-            userId = authUser.user.id;
-          }
-        } else {
-          console.warn('[mp-webhook] ⚠️ Auth user não encontrado para email:', schedulePayload.email);
+        if (patientError) {
+          console.error('[mp-webhook] ❌ Erro ao criar patient:', patientError);
+        } else if (newPatient) {
+          console.log('[mp-webhook] ✅ Patient criado com sucesso');
+          userId = newPatient.id;
         }
       }
 
@@ -547,12 +541,8 @@ Deno.serve(async (req) => {
     if (!patientData) {
       console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
       
-      // Buscar user_id do auth.users
-      const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(schedulePayload.email);
-      
-      // Preparar dados do novo paciente
+      // Preparar dados do novo paciente (sem id - Supabase gera automaticamente)
       const newPatientData = {
-        id: authUser?.user?.id || undefined,
         email: schedulePayload.email,
         cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
         first_name: schedulePayload.nome?.split(' ')[0] || payment.payer?.first_name || 'Nome',
