@@ -422,17 +422,7 @@ Deno.serve(async (req) => {
     
     if (overrideSettings?.value === 'true' && payload.sku === 'ITC6534') {
       console.log('[schedule-redirect] 🚨 OVERRIDE ATIVO: Forçando ClickLife para Pronto Atendimento');
-      
-      const redirectResult = await redirectClickLife(payload, 8);
-      
-      if (redirectResult.ok && redirectResult.url) {
-        await saveAppointment(payload, 'clicklife', redirectResult.url, supabase);
-      }
-      
-      return new Response(
-        JSON.stringify(redirectResult),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-      );
+      return await redirectClickLife(payload, '8', corsHeaders);
     }
 
     // ✅ GUARD: Nunca processar SKUs de PLANO (assinaturas)
@@ -929,11 +919,11 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
       .insert({
         metric_type: 'appointment',
         plan_code: planoId.toString(),
-        specialty: especialidade,
+        specialty: payload.especialidade || 'clinico-geral',
         platform: 'clicklife',
         status: 'scheduled',
-        patient_email: email,
-        metadata: { cpf: cpf.slice(0, 3) + '***', atendimento_id: data.atendimento }
+        patient_email: payload.email,
+        metadata: { cpf: payload.cpf.slice(0, 3) + '***', atendimento_id: data.atendimento }
       });
     console.log('[ClickLife] ✅ Métrica de agendamento gravada');
   } catch (metricError) {
