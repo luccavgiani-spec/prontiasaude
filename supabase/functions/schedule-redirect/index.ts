@@ -144,6 +144,7 @@ interface SchedulePayload {
   horario_iso?: string;
   plano_ativo: boolean;
   sexo?: string;
+  birth_date?: string; // ✅ NOVO: Data de nascimento (formato YYYY-MM-DD)
   order_id?: string;
   payment_id?: string;
 }
@@ -161,19 +162,34 @@ async function registerClickLifePatient(
   email: string,
   telefone: string,
   planoId: number,
-  sexo: string
+  sexo: string,
+  birthDate?: string // ✅ NOVO: Data de nascimento opcional (formato YYYY-MM-DD)
 ): Promise<{ success: boolean; error?: string }> {
   const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE')!;
   
   const cpfClean = cpf.replace(/\D/g, '');
   const phoneClean = telefone.replace(/\D/g, '').replace(/^\+55/, '');
   
+  // ✅ Converter YYYY-MM-DD para DD-MM-YYYY (formato ClickLife)
+  let datanascimento = "01-01-1990"; // Fallback
+  if (birthDate) {
+    try {
+      const [year, month, day] = birthDate.split('-');
+      if (year && month && day) {
+        datanascimento = `${day}-${month}-${year}`;
+        console.log('[ClickLife] Data de nascimento convertida:', birthDate, '→', datanascimento);
+      }
+    } catch (e) {
+      console.warn('[ClickLife] Erro ao converter birth_date, usando fallback:', e);
+    }
+  }
+  
   const payload = {
     nome,
     cpf: cpfClean,
     email,
     senha: "Pr0ntia!2025",
-    datanascimento: "01-01-1990",
+    datanascimento, // ✅ Agora usa valor real ou fallback
     sexo,
     telefone: phoneClean,
     logradouro: "Rua Exemplo",
@@ -776,7 +792,8 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     payload.email,
     payload.telefone,
     planoId,
-    sexoFinal
+    sexoFinal,
+    payload.birth_date // ✅ NOVO: Passar data de nascimento
   );
 
   if (!registration.success) {

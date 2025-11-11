@@ -538,29 +538,73 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const { data: patientData } = await supabaseAdmin
+    let patientData = (await supabaseAdmin
       .from('patients')
       .select('first_name, last_name, cpf, phone_e164, gender, birth_date')
       .eq('email', schedulePayload.email)
-      .maybeSingle();
+      .maybeSingle()).data;
+
+    if (!patientData) {
+      console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
+      
+      // Buscar user_id do auth.users
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserByEmail(schedulePayload.email);
+      
+      // Preparar dados do novo paciente
+      const newPatientData = {
+        id: authUser?.user?.id || undefined,
+        email: schedulePayload.email,
+        cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
+        first_name: schedulePayload.nome?.split(' ')[0] || payment.payer?.first_name || 'Nome',
+        last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || payment.payer?.last_name || 'Sobrenome',
+        phone_e164: schedulePayload.telefone || payment.payer?.phone?.area_code + payment.payer?.phone?.number,
+        gender: schedulePayload.sexo || 'F', // Fallback para feminino
+        birth_date: schedulePayload.birth_date || '1990-01-01', // Fallback genérico
+        profile_complete: false,
+        source: 'pix_payment'
+      };
+      
+      console.log('[mp-webhook] Dados do novo paciente:', {
+        email: newPatientData.email,
+        cpf: newPatientData.cpf?.substring(0, 3) + '***',
+        nome: `${newPatientData.first_name} ${newPatientData.last_name}`,
+        gender: newPatientData.gender,
+        birth_date: newPatientData.birth_date
+      });
+      
+      const { data: createdPatient, error: createError } = await supabaseAdmin
+        .from('patients')
+        .upsert(newPatientData)
+        .select('first_name, last_name, cpf, phone_e164, gender, birth_date')
+        .single();
+      
+      if (createError) {
+        console.error('[mp-webhook] ❌ Erro ao criar paciente:', createError);
+      } else {
+        console.log('[mp-webhook] ✅ Paciente criado com sucesso');
+        patientData = createdPatient;
+      }
+    }
 
     if (patientData) {
-      console.log('[mp-webhook] ✅ Dados do paciente encontrados no banco');
+      console.log('[mp-webhook] ✅ Enriquecendo payload com dados do paciente');
       
       // Enriquecer schedulePayload com dados completos
-      schedulePayload.nome = schedulePayload.nome || `${patientData.first_name} ${patientData.last_name}`;
-      schedulePayload.cpf = schedulePayload.cpf || patientData.cpf;
-      schedulePayload.telefone = schedulePayload.telefone || patientData.phone_e164;
-      schedulePayload.sexo = schedulePayload.sexo || patientData.gender;
+      schedulePayload.nome = `${patientData.first_name} ${patientData.last_name}`;
+      schedulePayload.cpf = patientData.cpf;
+      schedulePayload.telefone = patientData.phone_e164;
+      schedulePayload.sexo = patientData.gender;
+      schedulePayload.birth_date = patientData.birth_date;
       
       console.log('[mp-webhook] 📋 Payload enriquecido:', {
         nome: schedulePayload.nome,
         cpf: schedulePayload.cpf?.substring(0, 3) + '***',
         telefone: schedulePayload.telefone,
-        sexo: schedulePayload.sexo
+        sexo: schedulePayload.sexo,
+        birth_date: schedulePayload.birth_date
       });
     } else {
-      console.warn('[mp-webhook] ⚠️ Paciente não encontrado no banco:', schedulePayload.email);
+      console.error('[mp-webhook] ❌ Falha ao obter dados do paciente');
     }
 
     console.log('[mp-webhook] 📞 Chamando schedule-redirect para payment:', payment.id);
@@ -580,6 +624,7 @@ Deno.serve(async (req) => {
           nome: schedulePayload.nome,
           telefone: schedulePayload.telefone,
           sexo: schedulePayload.sexo,
+          birth_date: schedulePayload.birth_date, // ✅ NOVO: Enviar data de nascimento
           especialidade: schedulePayload.especialidade || 'Clínico Geral',
           sku: schedulePayload.sku,
           horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
