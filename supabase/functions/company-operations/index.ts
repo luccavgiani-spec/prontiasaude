@@ -503,10 +503,9 @@ Deno.serve(async (req) => {
         });
         
         if (emailResult.error) {
-            console.error('[company-operations] Employee welcome email failed:', emailResult.error);
-          } else {
-            console.log('[company-operations] ✅ Employee welcome email sent successfully');
-          }
+          console.error('[company-operations] Employee welcome email failed:', emailResult.error);
+        } else {
+          console.log('[company-operations] ✅ Employee welcome email sent successfully');
         }
       } catch (emailError) {
         console.error('[company-operations] Exception sending employee email:', emailError);
