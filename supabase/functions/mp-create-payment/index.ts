@@ -188,9 +188,20 @@ Deno.serve(async (req) => {
       amount: expectedAmount
     });
 
-    // ✅ Usar valores validados do DB (não do cliente)
-    // ✅ NOVO: Priorizar payerOverride se presente (cartão de terceiros)
+    // ✅ Construir objeto payer explicitamente (sem spread operator)
+    // Para evitar campos inválidos como 'full_name' que o cliente pode enviar
+    const basePayer = {
+      email: paymentRequest.payer.email,
+      identification: paymentRequest.payer.identification ? {
+        type: 'CPF',
+        number: String(paymentRequest.payer.identification.number || '').replace(/\D/g, '')
+      } : undefined
+    };
+
+    // ✅ Para PIX: apenas email e CPF (API do MP não aceita outros campos)
+    // ✅ Para cartão: adicionar first_name, last_name, phone, address
     const finalPayer = paymentRequest.payerOverride ? {
+      ...basePayer,
       email: paymentRequest.payer.email, // Email sempre do comprador
       first_name: paymentRequest.payerOverride.first_name,
       last_name: paymentRequest.payerOverride.last_name,
@@ -205,7 +216,10 @@ Deno.serve(async (req) => {
         street_number: paymentRequest.payerOverride.address.street_number ? parseInt(paymentRequest.payerOverride.address.street_number) : undefined
       }
     } : {
-      ...paymentRequest.payer,
+      ...basePayer,
+      first_name: paymentRequest.payer.first_name,
+      last_name: paymentRequest.payer.last_name,
+      phone: paymentRequest.payer.phone,
       address: paymentRequest.payer.address ? {
         zip_code: paymentRequest.payer.address.zip_code,
         street_name: paymentRequest.payer.address.street_name,
@@ -269,6 +283,14 @@ Deno.serve(async (req) => {
     if (paymentRequest.payment_method_id === 'pix' || (!paymentRequest.token && !paymentRequest.payment_method_id)) {
       // PIX payment (explícito ou quando não há dados de cartão)
       paymentData.payment_method_id = 'pix';
+      
+      // ✅ CRÍTICO: Para PIX, remover campos não aceitos pela API do MP
+      paymentData.payer = {
+        email: finalPayer.email,
+        identification: finalPayer.identification
+      };
+      
+      console.log('[mp-create-payment] PIX payment - usando apenas email e CPF no payer');
     } else if (paymentRequest.token && paymentRequest.payment_method_id) {
       // Card payment (PRECISA ter token E payment_method_id)
       paymentData.token = paymentRequest.token;
