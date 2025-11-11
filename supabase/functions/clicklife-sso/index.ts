@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
     const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
     const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD') || 'Pr0ntia!2025';
     const JWT_SECRET = Deno.env.get('AUTH_JWT_SECRET');
-    const BASE_URL = Deno.env.get('BASE_CONSULTAS_URL') || 'https://consultas.prontiasaude.com.br';
+    const BASE_URL = Deno.env.get('BASE_CONSULTAS_URL') || 'https://prontiasaude.com.br';
 
     if (!INTEGRATOR_TOKEN || !JWT_SECRET) {
       console.error('[clicklife-sso] Variáveis de ambiente ausentes');
