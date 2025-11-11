@@ -166,6 +166,7 @@ Deno.serve(async (req) => {
       let userId: string | null = null;
       
       // 🔍 VERIFICAR DUPLICAÇÃO: Checar se já existe um appointment com este order_id
+      const orderId = payment.metadata?.order_id;
       if (orderId) {
         const { data: existingAppointment } = await supabaseAdmin
           .from('appointments')
@@ -531,6 +532,37 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY')!
     );
 
+    // ✅ ENRIQUECER schedulePayload com dados completos do paciente
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    const { data: patientData } = await supabaseAdmin
+      .from('patients')
+      .select('first_name, last_name, cpf, phone_e164, gender, birth_date')
+      .eq('email', schedulePayload.email)
+      .maybeSingle();
+
+    if (patientData) {
+      console.log('[mp-webhook] ✅ Dados do paciente encontrados no banco');
+      
+      // Enriquecer schedulePayload com dados completos
+      schedulePayload.nome = schedulePayload.nome || `${patientData.first_name} ${patientData.last_name}`;
+      schedulePayload.cpf = schedulePayload.cpf || patientData.cpf;
+      schedulePayload.telefone = schedulePayload.telefone || patientData.phone_e164;
+      schedulePayload.sexo = schedulePayload.sexo || patientData.gender;
+      
+      console.log('[mp-webhook] 📋 Payload enriquecido:', {
+        nome: schedulePayload.nome,
+        cpf: schedulePayload.cpf?.substring(0, 3) + '***',
+        telefone: schedulePayload.telefone,
+        sexo: schedulePayload.sexo
+      });
+    } else {
+      console.warn('[mp-webhook] ⚠️ Paciente não encontrado no banco:', schedulePayload.email);
+    }
+
     console.log('[mp-webhook] 📞 Chamando schedule-redirect para payment:', payment.id);
 
     // ✅ RETRY AUTOMÁTICO: Tentar 3 vezes com delay exponencial
@@ -547,6 +579,7 @@ Deno.serve(async (req) => {
           email: schedulePayload.email,
           nome: schedulePayload.nome,
           telefone: schedulePayload.telefone,
+          sexo: schedulePayload.sexo,
           especialidade: schedulePayload.especialidade || 'Clínico Geral',
           sku: schedulePayload.sku,
           horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
