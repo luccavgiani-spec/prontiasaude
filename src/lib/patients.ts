@@ -53,6 +53,7 @@ export async function upsertPatientBasic(payload: {
 
   const update = {
     id: userId,
+    email: userEmail,
     first_name: payload.first_name,
     last_name: payload.last_name,
     address_line: payload.address_line,
