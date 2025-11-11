@@ -608,6 +608,36 @@ export type Database = {
         }
         Relationships: []
       }
+      sso_tokens: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          jti: string
+          patient_id: string
+          phone_hash: string
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          jti: string
+          patient_id: string
+          phone_hash: string
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          jti?: string
+          patient_id?: string
+          phone_hash?: string
+          used_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null

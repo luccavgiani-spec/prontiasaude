@@ -21,9 +21,15 @@ export default function ClickLifeSSO() {
       try {
         console.log('[ClickLifeSSO] Validando token...');
 
-        const { data, error: invokeError } = await supabase.functions.invoke('validate-sso-token', {
-          body: { token }
-        });
+        // Timeout de 10 segundos para validação
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout ao validar token (10s)')), 10000)
+        );
+
+        const { data, error: invokeError } = await Promise.race([
+          supabase.functions.invoke('validate-sso-token', { body: { token } }),
+          timeoutPromise
+        ]) as any;
 
         if (invokeError || !data?.ok) {
           throw new Error(data?.error || 'Token inválido');

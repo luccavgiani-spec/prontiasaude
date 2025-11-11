@@ -418,7 +418,7 @@ Deno.serve(async (req) => {
       exp: Math.floor(Date.now() / 1000) + (5 * 60)
     };
 
-    await supabase
+    const { error: insertError } = await supabase
       .from('sso_tokens')
       .insert({
         jti: jti,
@@ -426,6 +426,23 @@ Deno.serve(async (req) => {
         phone_hash: phoneHash,
         expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString()
       });
+
+    if (insertError) {
+      console.error(JSON.stringify({
+        request_id: requestId,
+        event: 'sso_token_insert_failed',
+        error: insertError.message
+      }));
+      return new Response(
+        JSON.stringify({ 
+          ok: false, 
+          error: 'Erro ao gerar link SSO',
+          stage: 'sso_token_creation',
+          details: insertError.message
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const secret = new TextEncoder().encode(JWT_SECRET);
     const jwt = await new jose.SignJWT(jwtPayload)
