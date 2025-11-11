@@ -1,5 +1,8 @@
 project_id = "ploqujuhpwutpcibedbr"
 
+[functions.mc-clicklife-sso-proxy]
+verify_jwt = false
+
 [functions.clubeben-sync]
 verify_jwt = false
 
