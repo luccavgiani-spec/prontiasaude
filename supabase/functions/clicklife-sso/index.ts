@@ -228,24 +228,56 @@ Deno.serve(async (req) => {
     let alreadyExists = false;
 
     if (![200, 201, 409].includes(registerRes.status)) {
-      // Verificar se é erro de "já cadastrado"
-      const lowerText = registerText.toLowerCase();
-      if ((registerRes.status === 400 || registerRes.status === 422) && 
-          (lowerText.includes('já cadastrado') || 
-           lowerText.includes('ja cadastrado') ||
-           lowerText.includes('already exists') ||
-           lowerText.includes('cpf já existe') ||
-           lowerText.includes('email já existe'))) {
-        console.log(JSON.stringify({
+      // Plano A (pragmático): qualquer 400 = soft fail → prossegue para login
+      if (registerRes.status === 400) {
+        console.warn(JSON.stringify({
           request_id: requestId,
-          event: 'patient_already_exists',
-          status: registerRes.status
+          event: 'registration_soft_fail_400',
+          vendor_status: registerRes.status,
+          vendor_body: registerText.substring(0, 800),
+          note: 'Prosseguindo para login (usuário já existe no funil)'
         }));
         alreadyExists = true;
-      } else {
+      } 
+      // 422 com mensagens específicas também tolera (mantém compatibilidade)
+      else if (registerRes.status === 422) {
+        const lowerText = registerText.toLowerCase();
+        if (lowerText.includes('já cadastrado') || 
+            lowerText.includes('ja cadastrado') ||
+            lowerText.includes('already exists') ||
+            lowerText.includes('cpf já existe') ||
+            lowerText.includes('email já existe')) {
+          console.log(JSON.stringify({
+            request_id: requestId,
+            event: 'patient_already_exists',
+            status: registerRes.status
+          }));
+          alreadyExists = true;
+        } else {
+          // 422 sem mensagem conhecida → erro
+          console.error(JSON.stringify({
+            request_id: requestId,
+            event: 'registration_failed_422',
+            status: registerRes.status,
+            response: registerText.substring(0, 500)
+          }));
+          return new Response(
+            JSON.stringify({ 
+              ok: false, 
+              error: `Cadastro falhou: HTTP ${registerRes.status}`,
+              stage: 'registration',
+              vendor_status: registerRes.status,
+              vendor_body: registerText.substring(0, 500)
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      // Outros status (5xx, 403, etc.) → erro fatal
+      else {
         console.error(JSON.stringify({
           request_id: requestId,
-          event: 'registration_failed',
+          event: 'registration_failed_other',
           status: registerRes.status,
           response: registerText.substring(0, 500)
         }));
