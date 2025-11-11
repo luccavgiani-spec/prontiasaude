@@ -627,27 +627,52 @@ Deno.serve(async (req) => {
       scheduleData = result.data;
       scheduleError = result.error;
 
-      if (!scheduleError && scheduleData?.ok) {
+      // ✅ Sucesso se temos URL ou appointment_id (schedule-redirect não retorna .ok)
+      if (!scheduleError && (scheduleData?.url || scheduleData?.appointment_id)) {
         console.log(`[mp-webhook] ✅ Agendamento bem-sucedido na tentativa ${attempt}`);
+        console.log('[mp-webhook] ✅ Success by URL/appointment_id fallback');
         console.log('[mp-webhook] Appointment details:', {
           appointment_id: scheduleData.appointment_id,
           redirect_url: scheduleData.url,
           provider: scheduleData.provider
         });
         
-        // ✅ Enviar link via WhatsApp
+        // ✅ Enviar link via WhatsApp com assinatura HMAC
         if (scheduleData.url && schedulePayload.telefone) {
           console.log('[mp-webhook] 📲 Enviando link da consulta via WhatsApp...');
           
           try {
+            const whatsappBody = {
+              phone_e164: schedulePayload.telefone,
+              patient_email: schedulePayload.email,
+              service_name: 'Consulta Médica',
+              redirect_url: scheduleData.url,
+              order_id: payment.metadata?.order_id,
+              use_template: false
+            };
+
+            // Gerar assinatura HMAC-SHA256
+            const MC_HMAC_SECRET = Deno.env.get('MC_HMAC_SECRET') || '';
+            const encoder = new TextEncoder();
+            const bodyString = JSON.stringify(whatsappBody);
+            const key = await crypto.subtle.importKey(
+              'raw',
+              encoder.encode(MC_HMAC_SECRET),
+              { name: 'HMAC', hash: 'SHA-256' },
+              false,
+              ['sign']
+            );
+            const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyString));
+            const signatureHex = Array.from(new Uint8Array(signatureBuffer))
+              .map(b => b.toString(16).padStart(2, '0'))
+              .join('');
+
+            console.log('[mp-webhook] 🔐 HMAC signature generated');
+
             const whatsappResult = await supabase.functions.invoke('mc-send-consultation-link', {
-              body: {
-                phone_e164: schedulePayload.telefone,
-                patient_email: schedulePayload.email,
-                service_name: 'Consulta Médica',
-                redirect_url: scheduleData.url,
-                order_id: payment.metadata?.order_id,
-                use_template: false
+              body: whatsappBody,
+              headers: {
+                'x-client-signature': signatureHex
               }
             });
             
