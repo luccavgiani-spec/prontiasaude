@@ -26,14 +26,40 @@ function validateAndNormalizeCPF(cpf: string): string | null {
 
 function validateBirthDate(dateStr: string): string | null {
   const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!isoRegex.test(dateStr)) return null;
+  const brRegex = /^\d{2}-\d{2}-\d{4}$/;
   
-  const date = new Date(dateStr);
+  // Aceita YYYY-MM-DD ou DD-MM-YYYY
+  if (!isoRegex.test(dateStr) && !brRegex.test(dateStr)) return null;
+  
+  let date: Date;
+  if (isoRegex.test(dateStr)) {
+    date = new Date(dateStr);
+  } else {
+    // DD-MM-YYYY -> YYYY-MM-DD para validação
+    const [day, month, year] = dateStr.split('-');
+    date = new Date(`${year}-${month}-${day}`);
+  }
+  
   if (isNaN(date.getTime())) return null;
   
   const now = new Date();
   const minDate = new Date('1900-01-01');
   if (date >= now || date < minDate) return null;
+  
+  return dateStr;
+}
+
+function convertToClickLifeDate(dateStr: string): string {
+  // Se já está em DD-MM-YYYY, retorna
+  const brRegex = /^\d{2}-\d{2}-\d{4}$/;
+  if (brRegex.test(dateStr)) return dateStr;
+  
+  // Se está em YYYY-MM-DD, converte
+  const isoRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (isoRegex.test(dateStr)) {
+    const [year, month, day] = dateStr.split('-');
+    return `${day}-${month}-${year}`;
+  }
   
   return dateStr;
 }
@@ -107,7 +133,11 @@ Deno.serve(async (req) => {
 
     if (!payload.cpf || !payload.email || !payload.nome || !payload.telefone) {
       return new Response(
-        JSON.stringify({ ok: false, error: 'Campos obrigatórios: cpf, email, nome, telefone' }),
+        JSON.stringify({ 
+          ok: false, 
+          error: 'Campos obrigatórios: cpf, email, nome, telefone',
+          stage: 'validation'
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -121,7 +151,11 @@ Deno.serve(async (req) => {
     if (!INTEGRATOR_TOKEN || !JWT_SECRET) {
       console.error('[clicklife-sso] Variáveis de ambiente ausentes');
       return new Response(
-        JSON.stringify({ ok: false, error: 'Configuração incompleta' }),
+        JSON.stringify({ 
+          ok: false, 
+          error: 'Configuração incompleta',
+          stage: 'config'
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -129,24 +163,31 @@ Deno.serve(async (req) => {
     const cpfClean = validateAndNormalizeCPF(payload.cpf);
     if (!cpfClean) {
       return new Response(
-        JSON.stringify({ ok: false, error: 'CPF inválido' }),
+        JSON.stringify({ ok: false, error: 'CPF inválido', stage: 'validation' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const phoneClean = payload.telefone.replace(/\D/g, '');
+    // Normalização de telefone com validação
+    let phoneClean = (payload.telefone ?? '').toString().replace(/\D/g, '');
+    if (phoneClean.startsWith('55')) phoneClean = phoneClean.slice(2);
+    if (phoneClean.length < 10 || phoneClean.length > 11) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'Telefone inválido (10-11 dígitos)', stage: 'validation' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     let birthDate = '01-01-1990';
     if (payload.birth_date) {
       const validDate = validateBirthDate(payload.birth_date);
       if (!validDate) {
         return new Response(
-          JSON.stringify({ ok: false, error: 'birth_date inválido (formato: YYYY-MM-DD)' }),
+          JSON.stringify({ ok: false, error: 'birth_date inválido (formato: YYYY-MM-DD ou DD-MM-YYYY)', stage: 'validation' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      const [year, month, day] = validDate.split('-');
-      birthDate = `${day}-${month}-${year}`;
+      birthDate = convertToClickLifeDate(validDate);
     }
     
     const gender = (payload.sexo === 'M' || payload.sexo === 'F') ? payload.sexo : 'M';
@@ -158,7 +199,7 @@ Deno.serve(async (req) => {
       senha: PATIENT_PASSWORD,
       datanascimento: birthDate,
       sexo: gender,
-      telefone: phoneClean.replace(/^55/, ''),
+      telefone: phoneClean,
       logradouro: 'Rua Principal',
       numero: '0',
       bairro: 'Centro',
@@ -184,18 +225,41 @@ Deno.serve(async (req) => {
     });
 
     const registerText = await registerRes.text();
+    let alreadyExists = false;
 
     if (![200, 201, 409].includes(registerRes.status)) {
-      console.error(JSON.stringify({
-        request_id: requestId,
-        event: 'registration_failed',
-        status: registerRes.status,
-        response: registerText
-      }));
-      return new Response(
-        JSON.stringify({ ok: false, error: `Cadastro falhou: HTTP ${registerRes.status}` }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Verificar se é erro de "já cadastrado"
+      const lowerText = registerText.toLowerCase();
+      if ((registerRes.status === 400 || registerRes.status === 422) && 
+          (lowerText.includes('já cadastrado') || 
+           lowerText.includes('ja cadastrado') ||
+           lowerText.includes('already exists') ||
+           lowerText.includes('cpf já existe') ||
+           lowerText.includes('email já existe'))) {
+        console.log(JSON.stringify({
+          request_id: requestId,
+          event: 'patient_already_exists',
+          status: registerRes.status
+        }));
+        alreadyExists = true;
+      } else {
+        console.error(JSON.stringify({
+          request_id: requestId,
+          event: 'registration_failed',
+          status: registerRes.status,
+          response: registerText.substring(0, 500)
+        }));
+        return new Response(
+          JSON.stringify({ 
+            ok: false, 
+            error: `Cadastro falhou: HTTP ${registerRes.status}`,
+            stage: 'registration',
+            vendor_status: registerRes.status,
+            vendor_body: registerText.substring(0, 500)
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     const activationPayload = {
@@ -226,10 +290,16 @@ Deno.serve(async (req) => {
         request_id: requestId,
         event: 'activation_failed',
         status: activationRes.status,
-        response: activationError
+        response: activationError.substring(0, 500)
       }));
       return new Response(
-        JSON.stringify({ ok: false, error: `Ativação falhou: HTTP ${activationRes.status}` }),
+        JSON.stringify({ 
+          ok: false, 
+          error: `Ativação falhou: HTTP ${activationRes.status}`,
+          stage: 'activation',
+          vendor_status: activationRes.status,
+          vendor_body: activationError.substring(0, 500)
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -258,10 +328,16 @@ Deno.serve(async (req) => {
         request_id: requestId,
         event: 'login_failed',
         status: loginRes.status,
-        response: loginError
+        response: loginError.substring(0, 500)
       }));
       return new Response(
-        JSON.stringify({ ok: false, error: `Login falhou: HTTP ${loginRes.status}` }),
+        JSON.stringify({ 
+          ok: false, 
+          error: `Login falhou: HTTP ${loginRes.status}`,
+          stage: 'login',
+          vendor_status: loginRes.status,
+          vendor_body: loginError.substring(0, 500)
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -272,7 +348,12 @@ Deno.serve(async (req) => {
     if (!clicklifeToken) {
       console.error('[clicklife-sso] Login não retornou token');
       return new Response(
-        JSON.stringify({ ok: false, error: 'Login não retornou authtoken' }),
+        JSON.stringify({ 
+          ok: false, 
+          error: 'Login não retornou authtoken',
+          stage: 'login',
+          vendor_status: loginRes.status
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -358,7 +439,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[clicklife-sso] Exception:', error);
     return new Response(
-      JSON.stringify({ ok: false, error: error.message || 'Internal error' }),
+      JSON.stringify({ 
+        ok: false, 
+        error: error.message || 'Internal error',
+        stage: 'exception'
+      }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
