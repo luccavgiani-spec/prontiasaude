@@ -634,6 +634,35 @@ Deno.serve(async (req) => {
           redirect_url: scheduleData.url,
           provider: scheduleData.provider
         });
+        
+        // ✅ Enviar link via WhatsApp
+        if (scheduleData.url && schedulePayload.telefone) {
+          console.log('[mp-webhook] 📲 Enviando link da consulta via WhatsApp...');
+          
+          try {
+            const whatsappResult = await supabase.functions.invoke('mc-send-consultation-link', {
+              body: {
+                phone_e164: schedulePayload.telefone,
+                patient_email: schedulePayload.email,
+                service_name: 'Consulta Médica',
+                redirect_url: scheduleData.url,
+                order_id: payment.metadata?.order_id,
+                use_template: false
+              }
+            });
+            
+            if (whatsappResult.error) {
+              console.error('[mp-webhook] ⚠️ Erro ao enviar WhatsApp:', whatsappResult.error);
+            } else {
+              console.log('[mp-webhook] ✅ WhatsApp enviado com sucesso');
+            }
+          } catch (whatsappError) {
+            console.error('[mp-webhook] ❌ Exceção ao enviar WhatsApp:', whatsappError);
+          }
+        } else {
+          console.warn('[mp-webhook] ⚠️ WhatsApp não enviado: redirect_url ou telefone ausente');
+        }
+        
         break;
       }
 
