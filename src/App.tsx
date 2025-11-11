@@ -34,22 +34,25 @@ if (typeof window !== "undefined" && !(window as any).__schedule402Patched) {
           .json()
           .catch(() => null);
         if (data?.require_payment) {
-  let sku: string | undefined;
-  try {
-    const bodyStr =
-      typeof init?.body === "string" ? (init.body as string) : undefined;
-    sku = bodyStr ? JSON.parse(bodyStr)?.sku : undefined;
-  } catch {}
+          let sku: string | undefined;
+          try {
+            const bodyStr =
+              typeof init?.body === "string" ? (init.body as string) : undefined;
+            sku = bodyStr ? JSON.parse(bodyStr)?.sku : undefined;
+          } catch {}
 
-  // ⬇️ NOVO BLOCO: tenta abrir o modal imediatamente, ou guarda para abrir depois
-  if ((window as any).__openPaymentModal) {
-    (window as any).__openPaymentModal(sku);
-  } else {
-    console.warn("[patch] PaymentModal ainda não montou. Guardando requisição...");
-    (window as any).__paymentModalQueue = sku || true;
-  }
-}
-
+          // ⬇️ NOVO BLOCO: tenta abrir o modal imediatamente, ou guarda para abrir depois
+          if ((window as any).__openPaymentModal) {
+            (window as any).__openPaymentModal(sku);
+          } else {
+            console.warn("[patch] PaymentModal ainda não montou. Guardando requisição...");
+            (window as any).__paymentModalQueue = sku || true;
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[schedule-redirect-patch] Error:', err);
+    }
 
     return res;
   };
@@ -100,6 +103,7 @@ const EmpresaTrocarSenha = lazy(() => import("./pages/empresa/TrocarSenha"));
 const EmpresaFuncionarios = lazy(() => import("./pages/empresa/Funcionarios"));
 const ClubeBen = lazy(() => import("./pages/ClubeBen"));
 const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
+const ClickLifeSSO = lazy(() => import("./pages/ClickLifeSSO"));
 
 const queryClient = new QueryClient();
 
@@ -179,6 +183,9 @@ const App = () => (
                 {/* ClubeBen routes */}
                 <Route path="/clubeben" element={<ClubeBen />} />
                 <Route path="/auth" element={<ClubeBenAuth />} />
+                
+                {/* SSO route */}
+                <Route path="/sso" element={<ClickLifeSSO />} />
 
                 {/* Footer pages */}
                 <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />

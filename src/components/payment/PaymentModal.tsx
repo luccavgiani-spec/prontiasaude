@@ -185,10 +185,10 @@ export function PaymentModal({
       (window as any).__openPaymentModal = (sku?: string) => {
         // Se você guarda o serviço/SKU em estado, defina aqui também:
         // setSelectedService?.(sku);
-        setShowPaymentModal(true);
+        onOpenChange(true);
       };
     }
-  }, []);
+  }, [onOpenChange]);
 
   // Carregar dados do usuário e inicializar MP quando modal abre
   useEffect(() => {

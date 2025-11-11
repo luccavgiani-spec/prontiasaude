@@ -1,0 +1,335 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-client-signature',
+};
+
+interface SendLinkRequest {
+  contact_id?: string;
+  phone_e164?: string;
+  patient_email: string;
+  service_name: string;
+  redirect_url: string;
+  order_id?: string;
+  use_template?: boolean;
+  request_id?: string;
+}
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length === 11 && !digits.startsWith('55')) {
+    return `+55${digits}`;
+  }
+  if (digits.length === 13 && digits.startsWith('55')) {
+    return `+${digits}`;
+  }
+  return phone;
+}
+
+function validateHMAC(body: string, signature: string | null, secret: string): boolean {
+  if (!signature) return false;
+  
+  const encoder = new TextEncoder();
+  const key = encoder.encode(secret);
+  const data = encoder.encode(body);
+  
+  return crypto.subtle.importKey(
+    'raw',
+    key,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  ).then(cryptoKey =>
+    crypto.subtle.sign('HMAC', cryptoKey, data)
+  ).then(signatureBuffer => {
+    const signatureArray = Array.from(new Uint8Array(signatureBuffer));
+    const signatureHex = signatureArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return signatureHex === signature;
+  }).catch(() => false);
+}
+
+async function checkRateLimit(supabase: any, orderId: string): Promise<boolean> {
+  const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
+  
+  const { data, error } = await supabase
+    .from('whatsapp_rate_limits')
+    .select('attempt_count')
+    .eq('order_id', orderId)
+    .gte('last_attempt_at', oneMinuteAgo)
+    .single();
+  
+  if (error && error.code !== 'PGRST116') {
+    console.error('[mc-send-consultation-link] Rate limit check error:', error);
+    return true;
+  }
+  
+  if (data && data.attempt_count >= 1) {
+    console.warn('[mc-send-consultation-link] Rate limit: 1 attempt/minute exceeded');
+    return false;
+  }
+  
+  const { data: totalData } = await supabase
+    .from('whatsapp_rate_limits')
+    .select('attempt_count')
+    .eq('order_id', orderId)
+    .single();
+  
+  if (totalData && totalData.attempt_count >= 3) {
+    console.warn('[mc-send-consultation-link] Rate limit: 3 total attempts exceeded');
+    return false;
+  }
+  
+  return true;
+}
+
+async function updateRateLimit(supabase: any, orderId: string): Promise<void> {
+  await supabase.rpc('increment_whatsapp_rate_limit', { p_order_id: orderId });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const bodyText = await req.text();
+    const payload: SendLinkRequest = JSON.parse(bodyText);
+    
+    const requestId = payload.request_id || `req-${Date.now()}`;
+    
+    console.log(JSON.stringify({
+      request_id: requestId,
+      function: 'mc-send-consultation-link',
+      event: 'request_received',
+      phone: payload.phone_e164 || payload.contact_id,
+      order_id: payload.order_id
+    }));
+
+    // HMAC validation
+    const MC_HMAC_SECRET = Deno.env.get('MC_HMAC_SECRET');
+    if (MC_HMAC_SECRET) {
+      const signature = req.headers.get('x-client-signature');
+      const isValid = await validateHMAC(bodyText, signature, MC_HMAC_SECRET);
+      if (!isValid) {
+        console.error('[mc-send-consultation-link] Invalid HMAC signature');
+        return new Response(
+          JSON.stringify({ ok: false, error: 'Invalid signature' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Validations
+    if (!payload.contact_id && !payload.phone_e164) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'contact_id ou phone_e164 obrigatório' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!payload.patient_email || !payload.service_name || !payload.redirect_url) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'Campos obrigatórios: patient_email, service_name, redirect_url' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Normalize phone
+    if (payload.phone_e164) {
+      payload.phone_e164 = normalizePhone(payload.phone_e164);
+      if (!payload.phone_e164.match(/^\+55[1-9][1-9]\d{8,9}$/)) {
+        return new Response(
+          JSON.stringify({ ok: false, error: 'phone_e164 inválido (formato: +5511999999999)' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
+    // Check idempotency
+    if (payload.order_id) {
+      const { data: existing } = await supabase
+        .from('metrics')
+        .select('id')
+        .eq('metric_type', 'whatsapp_link_dispatched')
+        .eq('metadata->>order_id', payload.order_id)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(JSON.stringify({
+          request_id: requestId,
+          event: 'duplicate_skipped',
+          order_id: payload.order_id
+        }));
+        return new Response(
+          JSON.stringify({ ok: true, message: 'Already sent', duplicate: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check rate limit
+      const canProceed = await checkRateLimit(supabase, payload.order_id);
+      if (!canProceed) {
+        return new Response(
+          JSON.stringify({ ok: false, error: 'Rate limit exceeded' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      await updateRateLimit(supabase, payload.order_id);
+    }
+
+    const MANYCHAT_API_KEY = Deno.env.get('MANYCHAT_API_KEY');
+    const MANYCHAT_API_URL = Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com';
+    const MANYCHAT_WHATSAPP_ENDPOINT = Deno.env.get('MANYCHAT_WHATSAPP_ENDPOINT') || '/fb/sending/sendContent';
+    const USE_TEMPLATE = payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true');
+    
+    if (!MANYCHAT_API_KEY) {
+      console.error('[mc-send-consultation-link] MANYCHAT_API_KEY não configurado');
+      return new Response(
+        JSON.stringify({ ok: false, error: 'MANYCHAT_API_KEY não configurado' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const subscriberId = payload.contact_id || payload.phone_e164;
+    let manychatPayload: any;
+
+    if (USE_TEMPLATE) {
+      const TEMPLATE_NAME = Deno.env.get('MANYCHAT_TEMPLATE_NAME') || 'payment_approved_link';
+      const TEMPLATE_NAMESPACE = Deno.env.get('MANYCHAT_TEMPLATE_NAMESPACE') || 'your_namespace';
+      
+      manychatPayload = {
+        subscriber_id: subscriberId,
+        message_tag: 'CONFIRMED_EVENT_UPDATE',
+        template: {
+          namespace: TEMPLATE_NAMESPACE,
+          name: TEMPLATE_NAME,
+          language: { code: 'pt_BR' },
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: payload.patient_email.split('@')[0] },
+                { type: 'text', text: payload.service_name },
+                { type: 'text', text: payload.redirect_url }
+              ]
+            }
+          ]
+        }
+      };
+    } else {
+      manychatPayload = {
+        subscriber_id: subscriberId,
+        message_tag: 'POST_PURCHASE_UPDATE',
+        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
+      };
+    }
+
+    console.log(JSON.stringify({
+      request_id: requestId,
+      event: 'sending_to_manychat',
+      endpoint: MANYCHAT_WHATSAPP_ENDPOINT,
+      use_template: USE_TEMPLATE
+    }));
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const manychatRes = await fetch(`${MANYCHAT_API_URL}${MANYCHAT_WHATSAPP_ENDPOINT}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${MANYCHAT_API_KEY}`
+      },
+      body: JSON.stringify(manychatPayload),
+      signal: controller.signal
+    }).catch(async (error) => {
+      clearTimeout(timeoutId);
+      
+      // Save to DLQ
+      await supabase
+        .from('outbox_whatsapp')
+        .insert({
+          payload: manychatPayload,
+          error: error.message,
+          status: 'pending',
+          scheduled_for: new Date(Date.now() + 60000).toISOString()
+        });
+      
+      throw error;
+    });
+
+    clearTimeout(timeoutId);
+
+    const manychatResText = await manychatRes.text();
+
+    if (!manychatRes.ok) {
+      console.error(JSON.stringify({
+        request_id: requestId,
+        event: 'manychat_error',
+        status: manychatRes.status,
+        response: manychatResText
+      }));
+      return new Response(
+        JSON.stringify({ 
+          ok: false, 
+          error: `ManyChat API error: ${manychatRes.status}`,
+          details: manychatResText
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const manychatData = JSON.parse(manychatResText);
+    const messageId = manychatData.message_id || manychatData.id || 'unknown';
+
+    await supabase
+      .from('metrics')
+      .insert({
+        metric_type: 'whatsapp_link_dispatched',
+        platform: 'manychat',
+        status: 'sent',
+        patient_email: payload.patient_email,
+        metadata: {
+          request_id: requestId,
+          phone: payload.phone_e164,
+          contact_id: payload.contact_id,
+          service_name: payload.service_name,
+          redirect_url: payload.redirect_url,
+          order_id: payload.order_id || null,
+          message_id: messageId,
+          use_template: USE_TEMPLATE,
+          timestamp: new Date().toISOString()
+        }
+      });
+
+    console.log(JSON.stringify({
+      request_id: requestId,
+      event: 'message_sent',
+      message_id: messageId,
+      order_id: payload.order_id
+    }));
+
+    return new Response(
+      JSON.stringify({ 
+        ok: true, 
+        message_id: messageId,
+        order_id: payload.order_id || null
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('[mc-send-consultation-link] Exception:', error);
+    return new Response(
+      JSON.stringify({ ok: false, error: error.message || 'Internal error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
