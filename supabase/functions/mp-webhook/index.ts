@@ -614,11 +614,8 @@ Deno.serve(async (req) => {
     }
 
     // ✅ Gravar métrica de venda e atualizar pending_payments
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
+    // Reutilizando a instância supabaseAdmin criada anteriormente (linha 536)
+    
     await supabaseAdmin
       .from('metrics')
       .insert({
