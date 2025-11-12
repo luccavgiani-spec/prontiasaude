@@ -251,20 +251,13 @@ Deno.serve(async (req) => {
     // Se template não está configurado, usar texto simples
     const USE_TEMPLATE = TEMPLATE_NAME && TEMPLATE_NAMESPACE && (payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true'));
     
-    // Normalize URL construction to avoid path duplication
+    // Define endpoints for template and text messages
     const baseUrl = (Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com').replace(/\/+$/, '');
-    let endpoint = Deno.env.get('MANYCHAT_WHATSAPP_ENDPOINT') || '/fb/sending/sendContent';
+    const templateEndpoint = Deno.env.get('MANYCHAT_TEMPLATE_ENDPOINT') || '/whatsapp/sending/sendTemplate';
+    const textEndpoint = Deno.env.get('MANYCHAT_TEXT_ENDPOINT') || '/fb/sending/sendMessage';
     
-    // Ensure endpoint starts with /
-    if (!endpoint.startsWith('/')) {
-      endpoint = `/${endpoint}`;
-    }
-    
-    // Prevent /whatsapp duplication
-    if (baseUrl.endsWith('/whatsapp') && endpoint.startsWith('/whatsapp')) {
-      endpoint = endpoint.replace(/^\/whatsapp/, '');
-    }
-    
+    // Select endpoint based on message type
+    const endpoint = USE_TEMPLATE ? templateEndpoint : textEndpoint;
     const manychatUrl = `${baseUrl}${endpoint}`;
     
     if (!MANYCHAT_API_KEY) {
@@ -343,6 +336,7 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({
       request_id: requestId,
       event: 'sending_to_manychat',
+      mode: USE_TEMPLATE ? 'template' : 'text',
       endpoint: endpoint,
       url: manychatUrl,
       use_template: USE_TEMPLATE
@@ -388,12 +382,12 @@ Deno.serve(async (req) => {
         response: manychatResText.substring(0, 200)
       }));
 
-      // Fallback: try plain text message via /fb/sending/sendMessage
-      const fallbackUrl = `${baseUrl}/fb/sending/sendMessage`;
+      // Fallback: try plain text message via text endpoint
+      const fallbackUrl = `${baseUrl}${textEndpoint}`;
       const fallbackPayload = {
         subscriber_id: subscriberId,
         message_tag: 'POST_PURCHASE_UPDATE',
-        text: `Olá! Seu pagamento foi aprovido ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
+        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
       };
 
       console.log(JSON.stringify({
