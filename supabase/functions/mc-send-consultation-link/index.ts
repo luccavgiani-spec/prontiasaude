@@ -311,11 +311,13 @@ Deno.serve(async (req) => {
       
       manychatPayload = {
         subscriber_id: subscriberId,
-        message_tag: 'CONFIRMED_EVENT_UPDATE',
-        template: {
+        data: {
           namespace: TEMPLATE_NAMESPACE,
           name: TEMPLATE_NAME,
-          language: { code: 'pt_BR' },
+          language: {
+            policy: 'deterministic',
+            code: 'pt_BR'
+          },
           components: [
             {
               type: 'body',
