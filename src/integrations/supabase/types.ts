@@ -339,6 +339,36 @@ export type Database = {
           },
         ]
       }
+      manychat_contacts: {
+        Row: {
+          contact_id: string
+          cpf: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          phone_e164: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone_e164?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone_e164?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       metrics: {
         Row: {
           amount_cents: number | null
@@ -447,6 +477,7 @@ export type Database = {
           id: string
           intake_complete: boolean | null
           last_name: string | null
+          manychat_contact_id: string | null
           marketing_opt_in: boolean | null
           phone_e164: string | null
           pregnancy_status: string | null
@@ -482,6 +513,7 @@ export type Database = {
           id: string
           intake_complete?: boolean | null
           last_name?: string | null
+          manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           phone_e164?: string | null
           pregnancy_status?: string | null
@@ -517,6 +549,7 @@ export type Database = {
           id?: string
           intake_complete?: boolean | null
           last_name?: string | null
+          manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           phone_e164?: string | null
           pregnancy_status?: string | null

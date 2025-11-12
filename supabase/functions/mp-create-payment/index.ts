@@ -93,6 +93,83 @@ Deno.serve(async (req) => {
 
     const paymentRequest: PaymentRequest = await req.json();
     
+    // ✅ PERSISTIR CONTACT_ID DO MANYCHAT (ETAPA 2 do plano)
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const schedulePayload = paymentRequest.metadata?.schedulePayload;
+    const contactId = schedulePayload?.contact_id;
+
+    if (contactId) {
+      console.log('[mp-create-payment] 📌 contact_id recebido:', contactId);
+      
+      // Normalizar dados
+      const email = (schedulePayload.email || paymentRequest.payer?.email || '').trim().toLowerCase();
+      const cpf = (schedulePayload.cpf || paymentRequest.payer?.identification?.number || '').replace(/\D/g, '');
+      
+      // Normalizar telefone para +55DDNNNNNNNNN
+      let phoneE164 = schedulePayload.telefone || '';
+      if (phoneE164) {
+        const digitsOnly = phoneE164.replace(/\D/g, '');
+        if (digitsOnly.length >= 10) {
+          const cleanNumber = digitsOnly.startsWith('55') ? digitsOnly : '55' + digitsOnly;
+          phoneE164 = '+' + cleanNumber;
+        }
+      }
+
+      // 1) Atualizar patients.manychat_contact_id se existir
+      if (email || cpf) {
+        const { data: patient } = await supabaseAdmin
+          .from('patients')
+          .select('id, manychat_contact_id')
+          .or(email ? `email.eq.${email}` : `cpf.eq.${cpf}`)
+          .maybeSingle();
+
+        if (patient?.id && !patient.manychat_contact_id) {
+          await supabaseAdmin
+            .from('patients')
+            .update({ manychat_contact_id: contactId })
+            .eq('id', patient.id);
+          
+          console.log('[mp-create-payment] ✅ patient.manychat_contact_id atualizado');
+        }
+      }
+
+      // 2) Upsert em manychat_contacts
+      const contactData = {
+        email: email || null,
+        cpf: cpf || null,
+        phone_e164: phoneE164 || null,
+        contact_id: contactId
+      };
+
+      try {
+        if (email) {
+          await supabaseAdmin.from('manychat_contacts').upsert(contactData, {
+            onConflict: 'email',
+            ignoreDuplicates: false
+          });
+          console.log('[mp-create-payment] 📌 contact_id persistido (key: email)');
+        } else if (cpf) {
+          await supabaseAdmin.from('manychat_contacts').upsert(contactData, {
+            onConflict: 'cpf',
+            ignoreDuplicates: false
+          });
+          console.log('[mp-create-payment] 📌 contact_id persistido (key: cpf)');
+        } else if (phoneE164) {
+          await supabaseAdmin.from('manychat_contacts').upsert(contactData, {
+            onConflict: 'phone_e164',
+            ignoreDuplicates: false
+          });
+          console.log('[mp-create-payment] 📌 contact_id persistido (key: phone)');
+        }
+      } catch (upsertError) {
+        console.error('[mp-create-payment] ⚠️ Erro ao persistir contact_id:', upsertError);
+      }
+    }
+    
     // ✅ Extrair IP do cliente para additional_info.ip_address
     const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
                      req.headers.get('cf-connecting-ip') ||
@@ -121,11 +198,7 @@ Deno.serve(async (req) => {
       // Não bloquear - o SDK do MP já está enviando o Device ID nos headers automaticamente
     }
     
-    // ✅ NOVO: Conectar ao Supabase para validar preço
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // ✅ NOVO: Validar preço usando supabaseAdmin já instanciado acima
 
     const sku = paymentRequest.items?.[0]?.id;
     if (!sku) {
@@ -143,7 +216,7 @@ Deno.serve(async (req) => {
     });
 
     // ✅ NOVO: Buscar preço validado do banco
-    const { data: service, error: serviceError } = await supabaseClient
+    const { data: service, error: serviceError } = await supabaseAdmin
       .from('services')
       .select('sku, name, price_cents, allows_recurring, recurring_frequency, recurring_frequency_type')
       .eq('sku', sku)

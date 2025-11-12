@@ -215,6 +215,16 @@ Deno.serve(async (req) => {
         } else if (newPatient) {
           console.log('[mp-webhook] ✅ Patient criado com sucesso');
           userId = newPatient.id;
+          
+          // ✅ Se temos contact_id no schedulePayload, atualizar
+          if (schedulePayload.contact_id) {
+            await supabaseAdmin
+              .from('patients')
+              .update({ manychat_contact_id: schedulePayload.contact_id })
+              .eq('id', newPatient.id);
+            
+            console.log('[mp-webhook] ✅ manychat_contact_id atualizado (plano)');
+          }
         }
       }
 
@@ -559,6 +569,16 @@ Deno.serve(async (req) => {
       } else {
         console.log('[mp-webhook] ✅ Paciente criado com sucesso');
         patientData = createdPatient;
+        
+        // ✅ Se temos contact_id no schedulePayload, atualizar o patient recém-criado
+        if (schedulePayload.contact_id && createdPatient) {
+          await supabaseAdmin
+            .from('patients')
+            .update({ manychat_contact_id: schedulePayload.contact_id })
+            .eq('email', schedulePayload.email);
+          
+          console.log('[mp-webhook] ✅ manychat_contact_id atualizado no patient recém-criado');
+        }
       }
     }
 
@@ -622,6 +642,88 @@ Deno.serve(async (req) => {
           provider: scheduleData.provider
         });
         
+        // ✅ RESOLVER CONTACT_ID (ETAPA 3 do plano)
+        let contactId = schedulePayload.contact_id;
+        let contactIdSource = 'schedulePayload';
+
+        // Se não veio no payload, buscar no banco
+        if (!contactId && schedulePayload.email) {
+          // Buscar em patients
+          const { data: patient } = await supabaseAdmin
+            .from('patients')
+            .select('manychat_contact_id')
+            .eq('email', schedulePayload.email)
+            .maybeSingle();
+          
+          if (patient?.manychat_contact_id) {
+            contactId = patient.manychat_contact_id;
+            contactIdSource = 'patients';
+          }
+        }
+
+        // Se ainda não tem, buscar em manychat_contacts
+        if (!contactId) {
+          const email = schedulePayload.email?.trim().toLowerCase();
+          const cpf = schedulePayload.cpf?.replace(/\D/g, '');
+          
+          // Normalizar telefone
+          let phoneE164 = schedulePayload.telefone || '';
+          if (phoneE164) {
+            const digitsOnly = phoneE164.replace(/\D/g, '');
+            if (digitsOnly.length >= 10) {
+              phoneE164 = digitsOnly.startsWith('55') ? '+' + digitsOnly : '+55' + digitsOnly;
+            }
+          }
+
+          // Tentar por email
+          if (email && !contactId) {
+            const { data: mc } = await supabaseAdmin
+              .from('manychat_contacts')
+              .select('contact_id')
+              .eq('email', email)
+              .maybeSingle();
+            
+            if (mc?.contact_id) {
+              contactId = mc.contact_id;
+              contactIdSource = 'manychat_contacts.email';
+            }
+          }
+
+          // Tentar por CPF
+          if (cpf && !contactId) {
+            const { data: mc } = await supabaseAdmin
+              .from('manychat_contacts')
+              .select('contact_id')
+              .eq('cpf', cpf)
+              .maybeSingle();
+            
+            if (mc?.contact_id) {
+              contactId = mc.contact_id;
+              contactIdSource = 'manychat_contacts.cpf';
+            }
+          }
+
+          // Tentar por telefone
+          if (phoneE164 && !contactId) {
+            const { data: mc } = await supabaseAdmin
+              .from('manychat_contacts')
+              .select('contact_id')
+              .eq('phone_e164', phoneE164)
+              .maybeSingle();
+            
+            if (mc?.contact_id) {
+              contactId = mc.contact_id;
+              contactIdSource = 'manychat_contacts.phone';
+            }
+          }
+        }
+
+        console.log('[mp-webhook] 🔍 contact_id resolvido:', {
+          found: contactId ? 'ENCONTRADO' : 'NÃO ENCONTRADO',
+          source: contactIdSource,
+          email: schedulePayload.email
+        });
+        
         // ✅ Enviar link via WhatsApp com assinatura HMAC
         if (scheduleData.url && schedulePayload.telefone) {
           console.log('[mp-webhook] 📲 Enviando link da consulta via WhatsApp...');
@@ -634,7 +736,7 @@ Deno.serve(async (req) => {
               redirect_url: scheduleData.url,
               order_id: payment.metadata?.order_id,
               use_template: true,
-              contact_id: schedulePayload.contact_id
+              contact_id: contactId // ✅ Sempre tentará incluir
             };
 
             // Gerar assinatura HMAC-SHA256
