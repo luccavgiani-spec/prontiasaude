@@ -87,6 +87,66 @@ async function updateRateLimit(supabase: any, orderId: string): Promise<void> {
   await supabase.rpc('increment_whatsapp_rate_limit', { p_order_id: orderId });
 }
 
+async function getSubscriberIdByPhone(phone: string, apiKey: string, requestId: string): Promise<string | null> {
+  try {
+    console.log(JSON.stringify({
+      request_id: requestId,
+      event: 'looking_up_subscriber',
+      phone: phone
+    }));
+
+    const response = await fetch('https://api.manychat.com/fb/subscriber/findBySystemField', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        field_name: 'phone',
+        field_value: phone
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(JSON.stringify({
+        request_id: requestId,
+        event: 'subscriber_lookup_failed',
+        status: response.status,
+        error: errorText.substring(0, 200)
+      }));
+      return null;
+    }
+
+    const data = await response.json();
+    const subscriberId = data?.data?.id?.toString();
+
+    if (subscriberId) {
+      console.log(JSON.stringify({
+        request_id: requestId,
+        event: 'subscriber_found',
+        subscriber_id: subscriberId,
+        phone: phone
+      }));
+      return subscriberId;
+    }
+
+    console.warn(JSON.stringify({
+      request_id: requestId,
+      event: 'subscriber_not_found',
+      phone: phone
+    }));
+    return null;
+  } catch (error) {
+    console.error(JSON.stringify({
+      request_id: requestId,
+      event: 'subscriber_lookup_exception',
+      error: error.message
+    }));
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -211,7 +271,38 @@ Deno.serve(async (req) => {
       );
     }
 
-    const subscriberId = payload.contact_id || payload.phone_e164;
+    let subscriberId = payload.contact_id;
+    
+    // Se não temos contact_id, buscar subscriber_id pelo telefone
+    if (!subscriberId && payload.phone_e164) {
+      subscriberId = await getSubscriberIdByPhone(payload.phone_e164, MANYCHAT_API_KEY, requestId);
+      
+      if (!subscriberId) {
+        console.error(JSON.stringify({
+          request_id: requestId,
+          event: 'subscriber_id_not_found',
+          phone: payload.phone_e164
+        }));
+        
+        return new Response(
+          JSON.stringify({ 
+            ok: false, 
+            error: 'Subscriber not found in ManyChat',
+            details: `Phone ${payload.phone_e164} is not registered as a ManyChat subscriber`
+          }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+    
+    console.log(JSON.stringify({
+      request_id: requestId,
+      event: 'subscriber_id_resolved',
+      subscriber_id: subscriberId,
+      from_contact_id: !!payload.contact_id,
+      from_phone_lookup: !payload.contact_id && !!payload.phone_e164
+    }));
+    
     let manychatPayload: any;
 
     if (USE_TEMPLATE) {
