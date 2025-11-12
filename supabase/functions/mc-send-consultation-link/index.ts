@@ -245,7 +245,11 @@ Deno.serve(async (req) => {
     }
 
     const MANYCHAT_API_KEY = Deno.env.get('MANYCHAT_API_KEY');
-    const USE_TEMPLATE = payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true');
+    const TEMPLATE_NAME = Deno.env.get('MANYCHAT_TEMPLATE_NAME');
+    const TEMPLATE_NAMESPACE = Deno.env.get('MANYCHAT_TEMPLATE_NAMESPACE');
+    
+    // Se template não está configurado, usar texto simples
+    const USE_TEMPLATE = TEMPLATE_NAME && TEMPLATE_NAMESPACE && (payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true'));
     
     // Normalize URL construction to avoid path duplication
     const baseUrl = (Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com').replace(/\/+$/, '');
@@ -306,8 +310,6 @@ Deno.serve(async (req) => {
     let manychatPayload: any;
 
     if (USE_TEMPLATE) {
-      const TEMPLATE_NAME = Deno.env.get('MANYCHAT_TEMPLATE_NAME') || 'payment_approved_link';
-      const TEMPLATE_NAMESPACE = Deno.env.get('MANYCHAT_TEMPLATE_NAMESPACE') || 'your_namespace';
       
       manychatPayload = {
         subscriber_id: subscriberId,
@@ -386,17 +388,17 @@ Deno.serve(async (req) => {
         response: manychatResText.substring(0, 200)
       }));
 
-      // Fallback: try plain text message via /fb/sending/sendContent
-      const fallbackUrl = `${baseUrl}/fb/sending/sendContent`;
+      // Fallback: try plain text message via /fb/sending/sendMessage
+      const fallbackUrl = `${baseUrl}/fb/sending/sendMessage`;
       const fallbackPayload = {
         subscriber_id: subscriberId,
         message_tag: 'POST_PURCHASE_UPDATE',
-        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
+        text: `Olá! Seu pagamento foi aprovido ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
       };
 
       console.log(JSON.stringify({
         request_id: requestId,
-        event: 'fallback_to_plain_text',
+        event: 'fallback_to_sendMessage',
         url: fallbackUrl
       }));
 
