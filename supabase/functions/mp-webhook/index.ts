@@ -633,7 +633,8 @@ Deno.serve(async (req) => {
               service_name: 'Consulta Médica',
               redirect_url: scheduleData.url,
               order_id: payment.metadata?.order_id,
-              use_template: true
+              use_template: true,
+              contact_id: schedulePayload.contact_id
             };
 
             // Gerar assinatura HMAC-SHA256
