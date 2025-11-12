@@ -185,9 +185,23 @@ Deno.serve(async (req) => {
     }
 
     const MANYCHAT_API_KEY = Deno.env.get('MANYCHAT_API_KEY');
-    const MANYCHAT_API_URL = Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com';
-    const MANYCHAT_WHATSAPP_ENDPOINT = Deno.env.get('MANYCHAT_WHATSAPP_ENDPOINT') || '/fb/sending/sendContent';
     const USE_TEMPLATE = payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true');
+    
+    // Normalize URL construction to avoid path duplication
+    const baseUrl = (Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com').replace(/\/+$/, '');
+    let endpoint = Deno.env.get('MANYCHAT_WHATSAPP_ENDPOINT') || '/fb/sending/sendContent';
+    
+    // Ensure endpoint starts with /
+    if (!endpoint.startsWith('/')) {
+      endpoint = `/${endpoint}`;
+    }
+    
+    // Prevent /whatsapp duplication
+    if (baseUrl.endsWith('/whatsapp') && endpoint.startsWith('/whatsapp')) {
+      endpoint = endpoint.replace(/^\/whatsapp/, '');
+    }
+    
+    const manychatUrl = `${baseUrl}${endpoint}`;
     
     if (!MANYCHAT_API_KEY) {
       console.error('[mc-send-consultation-link] MANYCHAT_API_KEY não configurado');
@@ -234,14 +248,15 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({
       request_id: requestId,
       event: 'sending_to_manychat',
-      endpoint: MANYCHAT_WHATSAPP_ENDPOINT,
+      endpoint: endpoint,
+      url: manychatUrl,
       use_template: USE_TEMPLATE
     }));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-    const manychatRes = await fetch(`${MANYCHAT_API_URL}${MANYCHAT_WHATSAPP_ENDPOINT}`, {
+    let manychatRes = await fetch(manychatUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -267,7 +282,61 @@ Deno.serve(async (req) => {
 
     clearTimeout(timeoutId);
 
-    const manychatResText = await manychatRes.text();
+    let manychatResText = await manychatRes.text();
+
+    // Handle 404 with retry fallback
+    if (manychatRes.status === 404) {
+      console.warn(JSON.stringify({
+        request_id: requestId,
+        event: 'manychat_404_retry',
+        original_url: manychatUrl,
+        response: manychatResText.substring(0, 200)
+      }));
+
+      // Fallback: try plain text message via /fb/sending/sendContent
+      const fallbackUrl = `${baseUrl}/fb/sending/sendContent`;
+      const fallbackPayload = {
+        subscriber_id: subscriberId,
+        message_tag: 'POST_PURCHASE_UPDATE',
+        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
+      };
+
+      console.log(JSON.stringify({
+        request_id: requestId,
+        event: 'fallback_to_plain_text',
+        url: fallbackUrl
+      }));
+
+      const fallbackController = new AbortController();
+      const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 8000);
+
+      manychatRes = await fetch(fallbackUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${MANYCHAT_API_KEY}`
+        },
+        body: JSON.stringify(fallbackPayload),
+        signal: fallbackController.signal
+      }).catch(async (error) => {
+        clearTimeout(fallbackTimeoutId);
+        
+        // Save to DLQ
+        await supabase
+          .from('outbox_whatsapp')
+          .insert({
+            payload: fallbackPayload,
+            error: error.message,
+            status: 'pending',
+            scheduled_for: new Date(Date.now() + 60000).toISOString()
+          });
+        
+        throw error;
+      });
+
+      clearTimeout(fallbackTimeoutId);
+      manychatResText = await manychatRes.text();
+    }
 
     if (!manychatRes.ok) {
       console.error(JSON.stringify({
