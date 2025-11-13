@@ -31,7 +31,7 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
       toast({
         title: "Nome obrigatório",
         description: "Por favor, informe seu nome completo.",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }
@@ -40,7 +40,7 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
       toast({
         title: "Email inválido",
         description: "Por favor, informe um email válido.",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }
@@ -49,7 +49,7 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
       toast({
         title: "Telefone inválido",
         description: "Por favor, informe um telefone válido.",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }
@@ -83,14 +83,14 @@ export function CadastroModal({ open, onOpenChange, onSuccess }: CadastroModalPr
         toast({
           title: "Erro no cadastro",
           description: result.error || "Tente novamente em alguns instantes.",
-          variant: "destructive",
+          variant: "warning",
         });
       }
     } catch (error) {
       toast({
         title: "Erro inesperado",
         description: "Não foi possível processar seu cadastro. Tente novamente.",
-        variant: "destructive",
+        variant: "warning",
       });
     } finally {
       setIsLoading(false);
