@@ -183,7 +183,8 @@ export function ServicoCard({
     const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
 
-    if (planStatus.canBypassPayment) {
+    // ✅ EXCEÇÃO: Laudos psicológicos SEMPRE cobram, mesmo com plano ativo
+    if (planStatus.canBypassPayment && servico.slug !== 'laudos_psicologicos') {
       // Tem plano ativo: buscar dados completos do paciente
       const { data: patient } = await supabase
         .from('patients')
