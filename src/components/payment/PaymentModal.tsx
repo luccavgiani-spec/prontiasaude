@@ -298,7 +298,13 @@ export function PaymentModal({
       const { checkPatientPlanActive } = await import("@/lib/patient-plan");
       const planStatus = await checkPatientPlanActive(user.email!);
 
-      if (planStatus.canBypassPayment) {
+      // ✅ REGRA DE NEGÓCIO: Laudos Psicológicos SEMPRE cobram, mesmo com plano ativo
+      const isLaudo = 
+        sku === 'OVM9892' || 
+        serviceName?.toLowerCase().includes('laudo') || 
+        especialidade?.toLowerCase().includes('laudo');
+
+      if (planStatus.canBypassPayment && !isLaudo) {
         toast.info("Você já tem um plano ativo! Redirecionando...");
         setPaymentStatus("idle");
         onOpenChange(false);
@@ -324,6 +330,8 @@ export function PaymentModal({
           toast.error(result.error || "Erro ao agendar");
         }
         return;
+      } else if (planStatus.canBypassPayment && isLaudo) {
+        console.log("[PaymentModal] Bypass desativado para Laudos Psicológicos (sempre cobrado).");
       }
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
