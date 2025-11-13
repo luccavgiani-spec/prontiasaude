@@ -35,7 +35,7 @@ const Entrar = () => {
       toast({
         title: "Email inválido",
         description: "Por favor, informe um email válido.",
-        variant: "destructive",
+        variant: "warning",
       });
       return;
     }
@@ -53,21 +53,21 @@ const Entrar = () => {
         toast({
           title: "❌ Erro no login",
           description: "Email ou senha incorretos. Verifique seus dados e tente novamente.",
-          variant: "destructive",
+          variant: "warning",
           duration: 5000,
         });
       } else if (error.message.includes("Email not confirmed")) {
         toast({
           title: "⚠️ Email não confirmado",
           description: "Verifique sua caixa de entrada para confirmar seu email.",
-          variant: "destructive",
+          variant: "warning",
           duration: 5000,
         });
       } else {
         toast({
           title: "❌ Erro no login",
           description: "Não foi possível fazer login. Tente novamente.",
-          variant: "destructive",
+          variant: "warning",
           duration: 5000,
         });
       }
@@ -110,7 +110,7 @@ const Entrar = () => {
               toast({
                 title: "Erro no login",
                 description: "Não foi possível fazer login com Google. Tente novamente.",
-                variant: "destructive",
+                variant: "warning",
               });
               setIsLoading(false);
               return;

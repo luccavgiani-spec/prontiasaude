@@ -151,51 +151,51 @@ const Cadastrar = () => {
 
   const validateForm = () => {
     if (!formData.first_name.trim()) {
-      toast({ title: "Erro", description: "Nome é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "Nome é obrigatório.", variant: "warning" });
       return false;
     }
     if (!formData.last_name.trim()) {
-      toast({ title: "Erro", description: "Sobrenome é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "Sobrenome é obrigatório.", variant: "warning" });
       return false;
     }
     if (!validateEmail(formData.email)) {
-      toast({ title: "Erro", description: "Email inválido.", variant: "destructive" });
+      toast({ title: "Erro", description: "Email inválido.", variant: "warning" });
       return false;
     }
     if (!formData.cep.trim()) {
-      toast({ title: "Erro", description: "CEP é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "CEP é obrigatório.", variant: "warning" });
       return false;
     }
     if (!validateCEP(formData.cep)) {
-      toast({ title: "Erro", description: "CEP deve ter 8 dígitos.", variant: "destructive" });
+      toast({ title: "Erro", description: "CEP deve ter 8 dígitos.", variant: "warning" });
       return false;
     }
     if (!formData.logradouro.trim()) {
-      toast({ title: "Erro", description: "Logradouro é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "Logradouro é obrigatório.", variant: "warning" });
       return false;
     }
     if (!formData.numero.trim()) {
-      toast({ title: "Erro", description: "Número é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "Número é obrigatório.", variant: "warning" });
       return false;
     }
     if (!validateCPF(formData.cpf)) {
-      toast({ title: "Erro", description: "CPF deve ter 11 dígitos.", variant: "destructive" });
+      toast({ title: "Erro", description: "CPF deve ter 11 dígitos.", variant: "warning" });
       return false;
     }
     if (!validatePhoneE164(formData.phone_e164)) {
-      toast({ title: "Erro", description: "Telefone inválido. Use o formato: +5511999999999", variant: "destructive" });
+      toast({ title: "Erro", description: "Telefone inválido. Use o formato: +5511999999999", variant: "warning" });
       return false;
     }
     if (!validateBirthDate(formData.birth_date)) {
-      toast({ title: "Erro", description: "Data de nascimento inválida.", variant: "destructive" });
+      toast({ title: "Erro", description: "Data de nascimento inválida.", variant: "warning" });
       return false;
     }
     if (!formData.gender) {
-      toast({ title: "Erro", description: "Gênero é obrigatório.", variant: "destructive" });
+      toast({ title: "Erro", description: "Gênero é obrigatório.", variant: "warning" });
       return false;
     }
     if (!formData.terms_accepted) {
-      toast({ title: "Erro", description: "Você deve aceitar os termos de uso.", variant: "destructive" });
+      toast({ title: "Erro", description: "Você deve aceitar os termos de uso.", variant: "warning" });
       return false;
     }
     return true;
@@ -249,13 +249,13 @@ const Cadastrar = () => {
     
     if (!validateForm() || !formData.password.trim()) {
       if (!formData.password.trim()) {
-        toast({ title: "Erro", description: "Senha é obrigatória.", variant: "destructive" });
+        toast({ title: "Erro", description: "Senha é obrigatória.", variant: "warning" });
       }
       return;
     }
 
     if (!isPasswordValid(formData.password)) {
-      toast({ title: "Erro", description: "Senha deve atender todos os requisitos.", variant: "destructive" });
+      toast({ title: "Erro", description: "Senha deve atender todos os requisitos.", variant: "warning" });
       return;
     }
 
@@ -272,7 +272,7 @@ const Cadastrar = () => {
       toast({
         title: "CPF já cadastrado",
         description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
-        variant: "destructive",
+        variant: "warning",
       });
       setIsLoading(false);
       return;
@@ -306,7 +306,7 @@ const Cadastrar = () => {
       toast({
         title: "Erro no cadastro",
         description: translateAuthError(error),
-        variant: "destructive",
+        variant: "warning",
       });
       setIsLoading(false);
       return;
@@ -373,7 +373,7 @@ const Cadastrar = () => {
       toast({
         title: "CPF já cadastrado",
         description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
-        variant: "destructive",
+        variant: "warning",
       });
       setIsLoading(false);
       return;
@@ -408,7 +408,7 @@ const Cadastrar = () => {
       toast({
         title: "Erro no cadastro",
         description: translateAuthError(signUpError),
-        variant: "destructive",
+        variant: "warning",
       });
     } else {
       // Send magic link for login
@@ -423,7 +423,7 @@ const Cadastrar = () => {
         toast({
           title: "Erro ao enviar magic link",
           description: translateAuthError(magicError),
-          variant: "destructive",
+          variant: "warning",
         });
       } else {
         toast({
