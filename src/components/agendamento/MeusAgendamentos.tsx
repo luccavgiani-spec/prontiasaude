@@ -133,9 +133,9 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
     const createdDate = new Date(apt.created_at);
     const isRecent = createdDate >= last24Hours;
     
-    // ✅ FILTRAR APENAS COMMUNICARE (que tem teams_join_url)
-    // Excluir: ClickLife (só redirect_url) e WhatsApp (sem nenhum link)
-    const isCommunicare = !!apt.teams_join_url;
+    // ✅ FILTRAR APENAS COMMUNICARE (baseado no campo provider)
+    // Excluir: ClickLife (provider='clicklife') e WhatsApp (outros valores)
+    const isCommunicare = apt.provider?.toLowerCase() === 'communicare';
     
     // Log de comparação de datas
     console.log('[MeusAgendamentos] Recent filter:', {
@@ -143,6 +143,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       created_at: createdDate.toISOString(),
       last_24h: last24Hours.toISOString(),
       is_recent: isRecent,
+      provider: apt.provider,
       is_communicare: isCommunicare,
       has_teams: !!apt.teams_join_url,
       has_redirect: !!apt.redirect_url,
