@@ -6,7 +6,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { toast } from "sonner";
-import heroImage from "@/assets/hero-doctor-realistic.jpg";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -157,7 +156,7 @@ export function HeroSection() {
             <div className="relative w-full max-w-lg" style={{
             width: '100%',
             maxWidth: '512px',
-            aspectRatio: '16/9',
+            minHeight: '288px',
             contain: 'layout'
           }}>
               {/* Enhanced background effects */}
@@ -167,23 +166,32 @@ export function HeroSection() {
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl h-full">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10 pointer-events-none" />
             <picture className="hero-picture">
-              <source type="image/webp" srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" />
-              <img src="/assets/hero-doctor-realistic-1200.webp" srcSet="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" alt="Médico especialista em telemedicina realizando consulta online" width="1200" height="675" loading="eager" decoding="async" fetchPriority="high" style={{
+              <source 
+                type="image/avif" 
+                srcSet="/assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-600.avif 600w, /assets/hero-doctor-realistic-1200.avif 1200w" 
+                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" 
+              />
+              <source 
+                type="image/webp" 
+                srcSet="/assets/hero-doctor-realistic-512.webp 512w, /assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" 
+                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" 
+              />
+              <img 
+                src="/assets/hero-doctor-realistic-600.webp" 
+                alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
+                className="w-full h-full object-cover object-center" 
+                width={512} 
+                height={288} 
+                loading="eager" 
+                fetchPriority="high" 
+                decoding="async" 
+                style={{
                   aspectRatio: '16/9',
-                  objectFit: 'cover',
-                  width: '100%',
-                  height: 'auto',
-                  display: 'block'
-                }} className="w-full h-auto object-cover" />
+                  objectFit: 'cover'
+                }} 
+              />
             </picture>
           </div>
-              
-              {/* Modern floating badges */}
-              
-              
-              
-              
-              
             </div>
           </div>
         </div>
