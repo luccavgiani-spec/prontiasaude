@@ -157,7 +157,8 @@ export function HeroSection() {
             <div className="relative w-full max-w-lg" style={{
             width: '100%',
             maxWidth: '512px',
-            aspectRatio: '16/9'
+            aspectRatio: '16/9',
+            contain: 'layout'
           }}>
               {/* Enhanced background effects */}
               <div className="hidden sm:block absolute inset-0 bg-gradient-to-br from-primary/30 via-secondary/20 to-accent/20 rounded-3xl blur-3xl scale-110 pulse-glow" />
