@@ -18,6 +18,28 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				sans: [
+					'Poppins',
+					'system-ui',
+					'-apple-system',
+					'BlinkMacSystemFont',
+					'Segoe UI',
+					'Roboto',
+					'Arial',
+					'sans-serif',
+				],
+				nunito: [
+					'Nunito',
+					'system-ui',
+					'-apple-system',
+					'BlinkMacSystemFont',
+					'Segoe UI',
+					'Roboto',
+					'Arial',
+					'sans-serif',
+				],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',

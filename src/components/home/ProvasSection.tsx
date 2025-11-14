@@ -28,7 +28,7 @@ export function ProvasSection() {
             <div className="medical-card p-8 text-center">
               {/* Estrelas */}
               <div className="flex justify-center gap-1 mb-4">
-                {[...Array(5)].map((_, i) => <Star key={i} className="h-5 w-5 text-accent fill-current" />)}
+                {[...Array(5)].map((_, i) => <Star key={i} className="h-5 w-5 text-accent fill-current" width="20" height="20" aria-hidden="true" />)}
               </div>
               
               {/* Depoimento */}
