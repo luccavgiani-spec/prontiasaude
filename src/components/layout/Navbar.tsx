@@ -41,13 +41,20 @@ export function Navbar() {
   return <nav className="sticky top-0 z-50 bg-primary backdrop-blur-md supports-[backdrop-filter]:bg-primary/95 border-b border-primary-glow/20 shadow-lg">
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
         <div className="flex justify-between items-center h-12 lg:h-14">
-          {/* Logo Prontìa Oficial */}
+          {/* Logo Prontìa Oficial - Optimized AVIF */}
           <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
-            <img 
-              src={prontiaLogo} 
-              alt="Prontìa Saúde" 
-              className="h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105"
-            />
+            <picture>
+              <source type="image/avif" srcSet="/assets/prontia-logo-branca-200.avif" />
+              <img 
+                src={prontiaLogo} 
+                alt="Prontìa Saúde" 
+                className="h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105"
+                width="180"
+                height="42"
+                loading="eager"
+                fetchPriority="high"
+              />
+            </picture>
           </Link>
 
           {/* Desktop Navigation */}
