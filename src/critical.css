@@ -7,6 +7,9 @@
   font-weight: 400;
   font-display: swap;
   src: url('/fonts/poppins-400.woff2') format('woff2');
+  size-adjust: 100.06%;
+  ascent-override: 100%;
+  descent-override: 30%;
 }
 
 @font-face {
@@ -15,6 +18,9 @@
   font-weight: 600;
   font-display: swap;
   src: url('/fonts/poppins-600.woff2') format('woff2');
+  size-adjust: 100.06%;
+  ascent-override: 100%;
+  descent-override: 30%;
 }
 
 @font-face {
@@ -23,6 +29,9 @@
   font-weight: 700;
   font-display: swap;
   src: url('/fonts/poppins-700.woff2') format('woff2');
+  size-adjust: 100.06%;
+  ascent-override: 100%;
+  descent-override: 30%;
 }
 
 @font-face {
@@ -31,6 +40,9 @@
   font-weight: 400;
   font-display: swap;
   src: url('/fonts/nunito-400.woff2') format('woff2');
+  size-adjust: 95%;
+  ascent-override: 105%;
+  descent-override: 35%;
 }
 
 /* Reset mínimo */

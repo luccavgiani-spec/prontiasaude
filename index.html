@@ -48,20 +48,21 @@
     }
     </script>
 
-    <!-- Preload imagem hero crítica AVIF (mobile-first) -->
+    <!-- Preload imagem hero crítica AVIF (mobile-first optimized) -->
     <link 
       rel="preload" 
       as="image" 
-      href="/assets/hero-doctor-realistic-512.avif"
-      imagesrcset="/assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-600.avif 600w, /assets/hero-doctor-realistic-1200.avif 1200w"
-      imagesizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
+      href="/assets/hero-doctor-realistic-320.avif"
+      imagesrcset="/assets/hero-doctor-realistic-320.avif 320w, /assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-1200.avif 1200w"
+      imagesizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px"
       type="image/avif"
       fetchpriority="high"
     />
 
     <!-- Pré-conexões otimizadas -->
-    <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co">
+    <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co" crossorigin>
     <link rel="dns-prefetch" href="https://connect.facebook.net">
+    <link rel="dns-prefetch" href="https://accounts.google.com">
     <link rel="dns-prefetch" href="https://www.mercadopago.com">
     
     <!-- CSS Crítico Inline - Otimizado para LCP/FCP Mobile e CLS ≤ 0.05 -->
@@ -129,22 +130,18 @@
     </script>
     <!-- End Meta Pixel Code -->
     
-    <!-- Google Identity Services - Carregamento otimizado -->
+    <!-- Google Identity Services - Carregamento diferido após window.load -->
     <script>
-      // ✅ Carregar GSI imediatamente quando o DOM estiver pronto
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', loadGSI);
-      } else {
-        loadGSI();
-      }
-      
-      function loadGSI() {
-        var script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      }
+      // Carregar GSI SOMENTE após window.load completo
+      window.addEventListener('load', function(){
+        setTimeout(function(){
+          var script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        }, 200);
+      });
     </script>
   </head>
 

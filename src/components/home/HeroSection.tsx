@@ -102,19 +102,17 @@ export function HeroSection() {
     alignItems: 'center',
     justifyContent: 'center'
   }}>
-      {/* Modern geometric background */}
+      {/* Modern geometric background - Using transform for GPU acceleration to prevent CLS */}
       <div className="absolute inset-0 geometric-pattern" />
-      <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl floating-animation" />
-      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl floating-animation" style={{
-      animationDelay: '2s'
-    }} />
+      <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl" style={{ transform: 'translate3d(0, 0, 0)', willChange: 'transform' }} />
+      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl" style={{ transform: 'translate3d(0, 0, 0)', willChange: 'transform' }} />
       
       <div className="container mx-auto px-4 py-6 md:py-10 relative z-10">
         <div className="grid lg:grid-cols-2 gap-8 md:gap-16 items-center min-h-[500px] md:min-h-[600px]">
           {/* Content Column */}
           <div className="space-y-6 md:space-y-10">
-            {/* Modern badge */}
-            <div className="inline-flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg text-sm md:text-base">
+            {/* Modern badge with fixed height to prevent CLS */}
+            <div className="inline-flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg text-sm md:text-base" style={{ height: '44px' }}>
               <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
               Plataforma Médica Certificada
             </div>
@@ -168,13 +166,13 @@ export function HeroSection() {
             <picture className="hero-picture">
               <source 
                 type="image/avif" 
-                srcSet="/assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-600.avif 600w, /assets/hero-doctor-realistic-1200.avif 1200w" 
-                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" 
+                srcSet="/assets/hero-doctor-realistic-320.avif 320w, /assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-1200.avif 1200w" 
+                sizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px" 
               />
               <source 
                 type="image/webp" 
                 srcSet="/assets/hero-doctor-realistic-512.webp 512w, /assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" 
-                sizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px" 
+                sizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px" 
               />
               <img 
                 src="/assets/hero-doctor-realistic-600.webp" 
