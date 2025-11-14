@@ -100,7 +100,7 @@ export default defineConfig(({ mode }) => ({
     },
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     cssCodeSplit: true,
-    cssMinify: 'lightningcss',
+    cssMinify: true,
     reportCompressedSize: false,
     sourcemap: false,
   },
