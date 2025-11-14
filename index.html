@@ -111,38 +111,31 @@
       .animate-fade-in{opacity:1;transform:none}
     </style>
 
-    <!-- Meta Pixel Code - Carregamento diferido após window.load -->
+    <!-- Meta Pixel Code - Lazy Load on User Interaction -->
     <script>
-      window.__fbq_defer = true;
-      !function(f,b,e,v,n,t,s)
-      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-      n.queue=[];
-      // Carregar SOMENTE após window.load completo
-      window.addEventListener('load', function(){
-        setTimeout(function(){
-          t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
-          s.parentNode.insertBefore(t,s);
-        }, 100);
-      });
-      }(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      let fbqLoaded = false;
+      function loadFBQ() {
+        if (fbqLoaded) return;
+        fbqLoaded = true;
+        
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '1489396668966676');
+        fbq('track', 'PageView');
+      }
+      
+      // Load on first scroll, click, or touch
+      window.addEventListener('scroll', loadFBQ, { once: true, passive: true });
+      window.addEventListener('click', loadFBQ, { once: true });
+      window.addEventListener('touchstart', loadFBQ, { once: true, passive: true });
     </script>
     <!-- End Meta Pixel Code -->
-    
-    <!-- Google Identity Services - Carregamento diferido após window.load -->
-    <script>
-      // Carregar GSI SOMENTE após window.load completo
-      window.addEventListener('load', function(){
-        setTimeout(function(){
-          var script = document.createElement('script');
-          script.src = 'https://accounts.google.com/gsi/client';
-          script.async = true;
-          script.defer = true;
-          document.head.appendChild(script);
-        }, 200);
-      });
-    </script>
   </head>
 
   <body>
