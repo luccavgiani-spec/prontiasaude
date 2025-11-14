@@ -38,6 +38,7 @@ function cacheHeadersPlugin(): Plugin {
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  logLevel: 'info',
   server: {
     host: "::",
     port: 8080,
@@ -78,26 +79,7 @@ export default defineConfig(({ mode }) => ({
       }
     },
     chunkSizeWarningLimit: 600,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug'],
-        passes: 3,
-        ecma: 2020,
-        unsafe: true,
-        unsafe_arrows: true,
-        unsafe_methods: true,
-      },
-      mangle: {
-        safari10: true,
-      },
-      format: {
-        comments: false,
-        ecma: 2020,
-      },
-    },
+    minify: true,
     target: ['es2020', 'edge88', 'firefox78', 'chrome87', 'safari14'],
     cssCodeSplit: true,
     cssMinify: true,
