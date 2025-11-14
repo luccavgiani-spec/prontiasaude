@@ -11,12 +11,11 @@
     <!-- Favicon -->
     <link rel="icon" type="image/webp" href="/favicon.webp" />
 
-    <!-- Google Fonts - Otimizado com font-display: swap -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'; this.onload=null;">
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet"></noscript>
+    <!-- Fontes Self-Hosted - Otimização LCP/FCP -->
+    <link rel="preload" href="/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/poppins-600.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/nunito-400.woff2" as="font" type="font/woff2" crossorigin>
 
     <meta property="og:title" content="PRONTIA SAÚDE - Consultas Online Acessíveis" />
     <meta property="og:description" content="Conecte-se com médicos qualificados através de consultas online seguras e acessíveis. Consulta clínica a partir de R$ 15,90." />
@@ -49,19 +48,19 @@
     }
     </script>
 
-    <!-- Preload imagem hero crítica (mobile-first) -->
+    <!-- Preload imagem hero crítica AVIF (mobile-first) -->
     <link 
       rel="preload" 
       as="image" 
-      href="/assets/hero-doctor-realistic-600.webp"
-      imagesrcset="/assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w"
+      href="/assets/hero-doctor-realistic-512.avif"
+      imagesrcset="/assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-600.avif 600w, /assets/hero-doctor-realistic-1200.avif 1200w"
       imagesizes="(max-width: 480px) 100vw, (max-width: 768px) 100vw, 512px"
+      type="image/avif"
       fetchpriority="high"
     />
 
-    <!-- Pré-conexões otimizadas SOMENTE para recursos críticos primeiro paint -->
+    <!-- Pré-conexões otimizadas -->
     <link rel="preconnect" href="https://ploqujuhpwutpcibedbr.supabase.co">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="dns-prefetch" href="https://connect.facebook.net">
     <link rel="dns-prefetch" href="https://www.mercadopago.com">
     

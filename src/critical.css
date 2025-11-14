@@ -1,5 +1,38 @@
 /* Critical CSS - Carregado inline para melhor LCP */
 
+/* Self-hosted fonts com font-display: swap - Otimização CLS */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/poppins-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/poppins-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/nunito-400.woff2') format('woff2');
+}
+
 /* Reset mínimo */
 *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid}
 html{line-height:1.5;-webkit-text-size-adjust:100%;font-family:'Nunito',system-ui,sans-serif}
