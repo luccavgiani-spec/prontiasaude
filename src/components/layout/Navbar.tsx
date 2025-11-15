@@ -44,23 +44,23 @@ export function Navbar() {
         <div className="flex justify-between items-center h-12 lg:h-14">
           {/* Logo Prontìa Oficial */}
           <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
-            {/* Mobile Logo */}
+            {/* Mobile Logo - 36px */}
             <img 
               src={prontiaLogoMobile} 
               alt="Prontìa Saúde" 
-              className="block lg:hidden h-[42px] w-auto transition-all duration-300 group-hover:scale-105"
-              width="360"
-              height="84"
+              className="block lg:hidden h-9 w-auto transition-all duration-300 group-hover:scale-[1.02]"
+              width="135"
+              height="36"
               loading="eager"
               fetchPriority="high"
             />
-            {/* Desktop Logo */}
+            {/* Desktop Logo - 48px */}
             <img 
               src={prontiaLogoDesktop} 
               alt="Prontìa Saúde" 
-              className="hidden lg:block h-[63px] w-auto transition-all duration-300 group-hover:scale-105"
-              width="540"
-              height="126"
+              className="hidden lg:block h-12 w-auto transition-all duration-300 group-hover:scale-[1.02]"
+              width="180"
+              height="48"
               loading="eager"
               fetchPriority="high"
             />
