@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import prontiaLogo from "@/assets/prontia-logo-branca.webp";
+import prontiaLogoMobile from "@/assets/prontia-logo-header-mobile.webp";
+import prontiaLogoDesktop from "@/assets/prontia-logo-header-desktop.webp";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -41,20 +42,28 @@ export function Navbar() {
   return <nav className="sticky top-0 z-50 bg-primary backdrop-blur-md supports-[backdrop-filter]:bg-primary/95 border-b border-primary-glow/20 shadow-lg">
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
         <div className="flex justify-between items-center h-12 lg:h-14">
-          {/* Logo Prontìa Oficial - Optimized AVIF */}
+          {/* Logo Prontìa Oficial */}
           <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
-            <picture>
-              <source type="image/avif" srcSet="/assets/prontia-logo-branca-200.avif" />
-              <img 
-                src={prontiaLogo} 
-                alt="Prontìa Saúde" 
-                className="h-14 lg:h-16 w-auto transition-all duration-300 group-hover:scale-105"
-                width="180"
-                height="42"
-                loading="eager"
-                fetchPriority="high"
-              />
-            </picture>
+            {/* Mobile Logo */}
+            <img 
+              src={prontiaLogoMobile} 
+              alt="Prontìa Saúde" 
+              className="block lg:hidden h-[42px] w-auto transition-all duration-300 group-hover:scale-105"
+              width="360"
+              height="84"
+              loading="eager"
+              fetchPriority="high"
+            />
+            {/* Desktop Logo */}
+            <img 
+              src={prontiaLogoDesktop} 
+              alt="Prontìa Saúde" 
+              className="hidden lg:block h-[63px] w-auto transition-all duration-300 group-hover:scale-105"
+              width="540"
+              height="126"
+              loading="eager"
+              fetchPriority="high"
+            />
           </Link>
 
           {/* Desktop Navigation */}
