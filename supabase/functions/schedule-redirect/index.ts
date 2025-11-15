@@ -1,6 +1,34 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../common/cors.ts';
 
+// ✅ ETAPA 4: Função de retry para operações críticas
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxAttempts: number = 3,
+  delayMs: number = 1000,
+  operationName: string = 'operation'
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      console.warn(`[Retry:${operationName}] Tentativa ${attempt}/${maxAttempts} falhou:`, error);
+      
+      if (attempt < maxAttempts) {
+        const waitTime = delayMs * attempt;
+        console.log(`[Retry:${operationName}] Aguardando ${waitTime}ms antes da próxima tentativa...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  console.error(`[Retry:${operationName}] ❌ Todas as ${maxAttempts} tentativas falharam`);
+  throw lastError;
+}
+
 // Mapeamento SKU → especialidadeId ClickLife (padrão: 8 para todos)
 const SKU_TO_CLICKLIFE_ID: Record<string, number> = {
   'ITC6534': 8, // Clínico Geral
@@ -218,9 +246,22 @@ async function registerClickLifePatient(
   const resText = await res.text();
   console.log('[ClickLife] Response status:', res.status);
   
-  // 200 = atualizado, 201 = criado, 409 = já existe (todos são sucesso)
-  if (res.status === 200 || res.status === 201 || res.status === 409) {
-    console.log('[ClickLife] ✓ Paciente cadastrado ou já existente');
+  // ✅ ETAPA 1: Detectar duplicate key mesmo em HTTP 500
+  const isDuplicateKey = resText.includes('duplicate key') || 
+                         resText.includes('Unique violation') ||
+                         resText.includes('usuarios_email_key') ||
+                         resText.includes('already exists');
+  
+  // 200 = atualizado, 201 = criado, 409 = já existe
+  // ✅ NOVO: 500 com duplicate key também é tratado como "já existe"
+  if (res.status === 200 || res.status === 201 || res.status === 409 || 
+      (res.status === 500 && isDuplicateKey)) {
+    
+    if (res.status === 500 && isDuplicateKey) {
+      console.log('[ClickLife] ⚠️ HTTP 500 com duplicate key - tratando como usuário existente');
+    } else {
+      console.log('[ClickLife] ✓ Paciente cadastrado ou já existente');
+    }
     try {
       const data = JSON.parse(resText);
       console.log('[ClickLife] Resposta:', JSON.stringify(data));
@@ -316,6 +357,22 @@ async function saveAppointment(
   supabase: any
 ): Promise<void> {
   try {
+    // ✅ ETAPA 3: Sincronizar email no Supabase antes de salvar
+    if (payload.email && payload.cpf) {
+      console.log('[saveAppointment] 🔄 Sincronizando email no Supabase:', payload.email);
+      
+      const { error: updateError } = await supabase
+        .from('patients')
+        .update({ email: payload.email, updated_at: new Date().toISOString() })
+        .eq('cpf', payload.cpf.replace(/\D/g, ''));
+      
+      if (updateError) {
+        console.error('[saveAppointment] ⚠️ Erro ao atualizar email:', updateError);
+      } else {
+        console.log('[saveAppointment] ✓ Email sincronizado com sucesso');
+      }
+    }
+    
     const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     console.log('[saveAppointment] 💾 Salvando appointment no banco de dados...');
@@ -786,23 +843,88 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     payload.birth_date // ✅ NOVO: Passar data de nascimento
   );
 
+  // ✅ ETAPA 2: Se falhar, tentar apenas ativar sem re-cadastrar
   if (!registration.success) {
-    console.error('[ClickLife] Cadastro falhou:', registration.error);
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        provider: 'clicklife',
-        error: `Falha no cadastro: ${registration.error}`,
-        details: {
-          reason: 'Não foi possível cadastrar o paciente',
-          endpoint: '/usuarios/usuarios'
-        }
-      }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    console.warn('[ClickLife] Cadastro falhou, tentando apenas ativar:', registration.error);
+    
+    // Tentar ativação direta (assume que usuário já existe)
+    const cpfClean = payload.cpf.replace(/\D/g, '');
+    const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
+    
+    const activationPayload = {
+      authtoken: INTEGRATOR_TOKEN,
+      cpf: cpfClean,
+      empresaid: 9083,
+      planoid: planoId,
+      proposito: "Ativar"
+    };
+    
+    try {
+      const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'authtoken': INTEGRATOR_TOKEN
+        },
+        body: JSON.stringify(activationPayload)
+      });
+      
+      if (!activationRes.ok) {
+        const errorText = await activationRes.text();
+        console.error('[ClickLife] Ativação direta falhou:', activationRes.status, errorText);
+        
+        // ✅ ETAPA 5: Registrar métrica de erro
+        const supabase = createClient(
+          Deno.env.get('SUPABASE_URL') ?? '',
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+        );
+        
+        await supabase.from('metrics').insert({
+          metric_type: 'registration_failure',
+          patient_email: payload.email,
+          status: 'error',
+          platform: 'clicklife',
+          metadata: {
+            error: registration.error,
+            cpf_masked: payload.cpf.substring(0, 3) + '***',
+            timestamp: new Date().toISOString(),
+            http_status: activationRes.status,
+            response_body: errorText.substring(0, 500)
+          }
+        });
+        
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            provider: 'clicklife',
+            error: `Erro ao ativar usuário existente: ${registration.error}`,
+            details: {
+              reason: 'Não foi possível cadastrar nem ativar o paciente',
+              endpoint: '/usuarios/usuarios e /usuarios/ativacao'
+            }
+          }),
+          { 
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
       }
-    );
+      
+      console.log('[ClickLife] ✓ Usuário ativado diretamente (fallback)');
+    } catch (error) {
+      console.error('[ClickLife] Exceção na ativação direta:', error);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          provider: 'clicklife',
+          error: 'Erro ao processar ativação do usuário'
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
   }
 
   console.log('[ClickLife] ✓ Paciente cadastrado, prosseguindo com criação de atendimento');
