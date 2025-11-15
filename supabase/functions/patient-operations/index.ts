@@ -152,6 +152,15 @@ interface DisablePlanRequest {
   email: string;
 }
 
+interface ActivatePlanManualRequest {
+  operation: 'activate_plan_manual';
+  patient_email: string;
+  patient_id?: string;
+  plan_code: string;
+  duration_days: number;
+  send_email?: boolean;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -612,6 +621,132 @@ serve(async (req) => {
             plan: updatedPlan[0]
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'activate_plan_manual': {
+        // Validar admin
+        const token = authHeader!.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+          return new Response(
+            JSON.stringify({ error: 'Unauthorized' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Verificar se é admin
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
+        
+        if (!roles?.some((r: any) => r.role === 'admin')) {
+          return new Response(
+            JSON.stringify({ error: 'Forbidden - Admin only' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { 
+          patient_email, 
+          patient_id, 
+          plan_code, 
+          duration_days,
+          send_email 
+        } = body;
+
+        // Validar dados
+        if (!patient_email || !plan_code || !duration_days) {
+          return new Response(
+            JSON.stringify({ 
+              error: 'Missing required fields: patient_email, plan_code, duration_days' 
+            }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Calcular data de expiração
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + parseInt(duration_days));
+
+        // Buscar user_id se não fornecido
+        let userId = patient_id;
+        if (!userId) {
+          const { data: patient } = await supabase
+            .from('patients')
+            .select('id')
+            .eq('email', patient_email)
+            .single();
+          
+          userId = patient?.id;
+        }
+
+        // Upsert plano na tabela patient_plans
+        const { error: upsertError } = await supabase
+          .from('patient_plans')
+          .upsert({
+            user_id: userId,
+            email: patient_email.toLowerCase().trim(),
+            plan_code: plan_code,
+            status: 'active',
+            plan_expires_at: expiresAt.toISOString(),
+            updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'email'
+          });
+
+        if (upsertError) {
+          console.error('[activate_plan_manual] Error upserting plan:', upsertError);
+          return new Response(
+            JSON.stringify({ error: upsertError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Sincronizar email na tabela patients (se necessário)
+        if (userId) {
+          await supabase
+            .from('patients')
+            .update({ email: patient_email })
+            .eq('id', userId);
+        }
+
+        // Registrar métrica de auditoria
+        await supabase.from('metrics').insert({
+          metric_type: 'manual_plan_activation',
+          patient_email: patient_email,
+          plan_code: plan_code,
+          status: 'success',
+          platform: 'admin_dashboard',
+          metadata: {
+            activated_by_admin: user.email,
+            duration_days: duration_days,
+            expires_at: expiresAt.toISOString(),
+            timestamp: new Date().toISOString()
+          }
+        });
+
+        console.log('[activate_plan_manual] Plan activated successfully:', {
+          patient_email,
+          plan_code,
+          expires_at: expiresAt.toISOString(),
+          activated_by: user.email
+        });
+
+        // TODO: Enviar email (opcional)
+        if (send_email) {
+          console.log('[activate_plan_manual] Email notification queued for:', patient_email);
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'Plan activated successfully',
+            expires_at: expiresAt.toISOString()
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 

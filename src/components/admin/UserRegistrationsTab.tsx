@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
+import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 
 interface User {
   id: string;
@@ -36,6 +37,8 @@ export default function UserRegistrationsTab() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [page, setPage] = useState(1);
+  const [activationModalOpen, setActivationModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const limit = 50;
 
   useEffect(() => {
@@ -90,58 +93,29 @@ export default function UserRegistrationsTab() {
   };
 
   const handleDelete = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este usuário?')) return;
+    if (!confirm('Tem certeza que deseja deletar este usuário? Esta ação não pode ser desfeita.')) {
+      return;
+    }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const { error } = await supabase.functions.invoke(`user-management?operation=delete&user_id=${userId}`, {
-        method: 'DELETE',
+      const { error } = await supabase.functions.invoke('user-management', {
+        body: {
+          operation: 'delete_user',
+          user_id: userId
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error deleting user:', error);
+        toast.error('Erro ao deletar usuário');
+        return;
+      }
 
-      toast.success('Usuário excluído');
+      toast.success('Usuário deletado com sucesso');
       loadUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
-      toast.error('Erro ao excluir usuário');
-    }
-  };
-
-  const handleActivatePlan = async (userId: string, email: string, userName: string) => {
-    if (!confirm(`Ativar plano básico (Individual com Especialistas) para ${userName}?`)) return;
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      // Normalizar email
-      const normalizedEmail = email.trim().toLowerCase();
-
-      // Calcular data de expiração: 30 dias a partir de hoje
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 30);
-
-      // Upsert na tabela patient_plans
-      const { error } = await supabase
-        .from('patient_plans')
-        .upsert({
-          user_id: userId,
-          email: normalizedEmail,
-          plan_code: 'IND_COM_ESP_1M',
-          plan_expires_at: expiresAt.toISOString(),
-          status: 'active'
-        }, { onConflict: 'email' });
-
-      if (error) throw error;
-
-      toast.success(`Plano ativado com sucesso para ${userName}! Válido por 30 dias.`);
-      loadUsers(); // Recarregar lista
-    } catch (error: any) {
-      console.error('Error activating plan:', error);
-      toast.error(error.message || 'Erro ao ativar plano');
+      toast.error('Erro ao deletar usuário');
     }
   };
 
@@ -363,18 +337,17 @@ export default function UserRegistrationsTab() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {/* ✅ NOVO: Botão para ativar plano */}
-                          {!user.activePlan && user.patient && (
+                          {/* ✅ NOVO: Botão para ativar/renovar plano */}
+                          {user.patient && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleActivatePlan(
-                                user.id, 
-                                user.email, 
-                                `${user.patient.first_name} ${user.patient.last_name}`
-                              )}
-                              title="Ativar Plano Básico (30 dias)"
-                              className="text-green-600 hover:text-green-700"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setActivationModalOpen(true);
+                              }}
+                              title={user.activePlan ? "Renovar/Alterar Plano" : "Ativar Plano"}
+                              className="text-green-600 hover:text-green-700 hover:bg-green-50"
                             >
                               <Shield className="h-4 w-4" />
                             </Button>
@@ -417,6 +390,30 @@ export default function UserRegistrationsTab() {
           Próxima
         </Button>
       </div>
+
+      {/* Modal de Ativação Manual */}
+      {selectedUser && (
+        <ManualPlanActivationModal
+          open={activationModalOpen}
+          onOpenChange={setActivationModalOpen}
+          user={{
+            id: selectedUser.id,
+            email: selectedUser.email,
+            name: `${selectedUser.patient?.first_name || ''} ${selectedUser.patient?.last_name || ''}`.trim(),
+            cpf: selectedUser.patient?.cpf,
+            currentPlan: selectedUser.activePlan ? {
+              code: selectedUser.planCode || '',
+              expiresAt: ''
+            } : undefined
+          }}
+          onSuccess={() => {
+            setActivationModalOpen(false);
+            setSelectedUser(null);
+            loadUsers();
+            toast.success('Plano ativado com sucesso!');
+          }}
+        />
+      )}
     </div>
   );
 }
