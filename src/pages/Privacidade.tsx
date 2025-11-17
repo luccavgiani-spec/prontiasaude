@@ -48,7 +48,7 @@ const Privacidade = () => {
 
               <h3 className="font-semibold mt-4 mb-2">1.2 Dados de Saúde</h3>
               <ul className="list-disc list-inside space-y-2 text-muted-foreground ml-4">
-                <li>Histórico médico e antecedentes</li>
+                <li>Dados pessoais e de saúde</li>
                 <li>Sintomas relatados</li>
                 <li>Medicamentos em uso</li>
                 <li>Alergias e condições pré-existentes</li>

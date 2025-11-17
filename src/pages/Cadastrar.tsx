@@ -334,8 +334,7 @@ const Cadastrar = () => {
             state: formData.uf,
             terms_accepted_at: new Date().toISOString(),
             marketing_opt_in: formData.marketing_opt_in,
-            profile_complete: true,
-            intake_complete: false
+            profile_complete: true
           });
 
         if (insertError && insertError.code !== '23505') {

@@ -80,7 +80,6 @@ const AuthCallback = lazy(() => import("./pages/auth/Callback"));
 const ResetPassword = lazy(() => import("./pages/auth/Reset"));
 const NovaSenha = lazy(() => import("./pages/NovaSenha"));
 const CompletarPerfil = lazy(() => import("./pages/CompletarPerfil"));
-const Antecedentes = lazy(() => import("./pages/intake/Antecedentes"));
 const AreaDoPaciente = lazy(() => import("./pages/AreaDoPaciente"));
 const Agendamento = lazy(() => import("./pages/Agendamento"));
 const ConfirmacaoExame = lazy(() => import("./pages/ConfirmacaoExame"));
@@ -171,7 +170,6 @@ const App = () => (
                 <Route path="/auth/reset" element={<ResetPassword />} />
                 <Route path="/nova-senha" element={<NovaSenha />} />
                 <Route path="/completar-perfil" element={<CompletarPerfil />} />
-                <Route path="/intake/antecedentes" element={<Antecedentes />} />
                 <Route path="/agendamento" element={<Agendamento />} />
                 <Route path="/area-do-paciente" element={<AreaDoPaciente />} />
                 {/* Wellness pages */}

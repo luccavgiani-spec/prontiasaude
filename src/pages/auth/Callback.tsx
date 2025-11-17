@@ -60,7 +60,7 @@ const AuthCallback = () => {
       // Busca flags pra decidir o redirecionamento
       const { data, error } = await supabase
         .from('patients')
-        .select('profile_complete,intake_complete')
+        .select('profile_complete')
         .eq('id', session.user.id)
         .maybeSingle();
 

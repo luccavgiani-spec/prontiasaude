@@ -19,14 +19,6 @@ export interface Patient {
   terms_accepted_at?: string;
   marketing_opt_in?: boolean;
   profile_complete: boolean;
-  intake_complete: boolean;
-  has_allergies?: boolean;
-  allergies?: string;
-  pregnancy_status?: 'never' | 'pregnant_now' | 'pregnant_past';
-  has_comorbidities?: boolean;
-  comorbidities?: string;
-  has_chronic_meds?: boolean;
-  chronic_meds?: string;
   clubeben_status?: string;
   clubeben_last_sync?: string;
   clubeben_retry_count?: number;
