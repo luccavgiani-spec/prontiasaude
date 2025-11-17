@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,11 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Upload, FileText, Video, Link as LinkIcon, MessageSquare, LogOut, Plus, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { CouponsTab } from "@/components/admin/CouponsTab";
 import TestesRoteamento from "@/components/teste/TestesRoteamento";
 import TestesPagamentoMP from "@/components/teste/TestesPagamentoMP";
 import SpecialtiesSelector from "@/components/admin/SpecialtiesSelector";
@@ -330,10 +331,11 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="relatorios" className="space-y-6">
-          <TabsList className="grid w-full max-w-6xl grid-cols-9">
+          <TabsList className="grid w-full max-w-6xl grid-cols-10">
             <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
             <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
             <TabsTrigger value="planos">📋 Planos</TabsTrigger>
+            <TabsTrigger value="cupons">🎟️ Cupons</TabsTrigger>
             <TabsTrigger value="empresas">Empresas</TabsTrigger>
             <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
             <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
@@ -626,6 +628,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="planos">
             <PlansManagement />
+          </TabsContent>
+
+          <TabsContent value="cupons">
+            <CouponsTab />
           </TabsContent>
 
           <TabsContent value="cadastros">

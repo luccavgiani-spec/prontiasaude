@@ -339,6 +339,74 @@ export type Database = {
           },
         ]
       }
+      coupon_uses: {
+        Row: {
+          amount_discounted: number
+          amount_original: number
+          coupon_code: string
+          coupon_id: string
+          discount_percentage: number
+          id: string
+          order_id: string | null
+          owner_email: string
+          owner_pix_key: string | null
+          owner_user_id: string
+          payment_id: string
+          service_or_plan_id: string | null
+          service_or_plan_name: string
+          used_at: string
+          used_by_email: string
+          used_by_name: string
+          used_by_user_id: string | null
+        }
+        Insert: {
+          amount_discounted: number
+          amount_original: number
+          coupon_code: string
+          coupon_id: string
+          discount_percentage: number
+          id?: string
+          order_id?: string | null
+          owner_email: string
+          owner_pix_key?: string | null
+          owner_user_id: string
+          payment_id: string
+          service_or_plan_id?: string | null
+          service_or_plan_name: string
+          used_at?: string
+          used_by_email: string
+          used_by_name: string
+          used_by_user_id?: string | null
+        }
+        Update: {
+          amount_discounted?: number
+          amount_original?: number
+          coupon_code?: string
+          coupon_id?: string
+          discount_percentage?: number
+          id?: string
+          order_id?: string | null
+          owner_email?: string
+          owner_pix_key?: string | null
+          owner_user_id?: string
+          payment_id?: string
+          service_or_plan_id?: string | null
+          service_or_plan_name?: string
+          used_at?: string
+          used_by_email?: string
+          used_by_name?: string
+          used_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_uses_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "user_coupons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manychat_contacts: {
         Row: {
           contact_id: string
@@ -566,7 +634,11 @@ export type Database = {
       pending_payments: {
         Row: {
           amount_cents: number | null
+          amount_original: number | null
+          coupon_code: string | null
+          coupon_id: string | null
           created_at: string | null
+          discount_percentage: number | null
           email: string
           id: string
           order_id: string | null
@@ -578,7 +650,11 @@ export type Database = {
         }
         Insert: {
           amount_cents?: number | null
+          amount_original?: number | null
+          coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string | null
+          discount_percentage?: number | null
           email: string
           id?: string
           order_id?: string | null
@@ -590,7 +666,11 @@ export type Database = {
         }
         Update: {
           amount_cents?: number | null
+          amount_original?: number | null
+          coupon_code?: string | null
+          coupon_id?: string | null
           created_at?: string | null
+          discount_percentage?: number | null
           email?: string
           id?: string
           order_id?: string | null
@@ -600,7 +680,15 @@ export type Database = {
           sku?: string | null
           status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pending_payments_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "user_coupons"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       services: {
         Row: {
@@ -668,6 +756,42 @@ export type Database = {
           patient_id?: string
           phone_hash?: string
           used_at?: string | null
+        }
+        Relationships: []
+      }
+      user_coupons: {
+        Row: {
+          code: string
+          coupon_type: string
+          created_at: string
+          discount_percentage: number
+          id: string
+          is_active: boolean
+          owner_user_id: string
+          pix_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          coupon_type: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          owner_user_id: string
+          pix_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          coupon_type?: string
+          created_at?: string
+          discount_percentage?: number
+          id?: string
+          is_active?: boolean
+          owner_user_id?: string
+          pix_key?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

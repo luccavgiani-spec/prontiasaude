@@ -3,6 +3,39 @@ import { getWebhookCorsHeaders } from '../common/cors.ts';
 
 const corsHeaders = getWebhookCorsHeaders(); // Webhooks need wildcard CORS
 
+// Helper function to map SKU to service name
+function mapSkuToName(sku: string): string {
+  const SERVICE_NAMES: Record<string, string> = {
+    'BIR7668': 'Personal Trainer',
+    'VPN5132': 'Nutricionista',
+    'TQP5720': 'Cardiologista',
+    'HGG3503': 'Dermatologista',
+    'VHH8883': 'Endocrinologista',
+    'TSB0751': 'Gastroenterologista',
+    'CCP1566': 'Ginecologista',
+    'FKS5964': 'Oftalmologista',
+    'TVQ5046': 'Ortopedista',
+    'HMG9544': 'Pediatra',
+    'HME8366': 'Otorrinolaringologista',
+    'DYY8522': 'Médico da Família',
+    'QOP1101': 'Psiquiatra',
+    'LZF3879': 'Nutrólogo',
+    'YZD9932': 'Geriatria',
+    'UDH3250': 'Reumatologista',
+    'PKS9388': 'Neurologista',
+    'MYX5186': 'Infectologista',
+    'ZXW2165': 'Psicólogo - 1 sessão',
+    'HXR8516': 'Psicólogo - 4 sessões',
+    'YME9025': 'Psicólogo - 8 sessões',
+    'OVM9892': 'Laudo Psicológico',
+  };
+  
+  if (sku.startsWith('IND_')) return 'Plano Individual';
+  if (sku.startsWith('FAM_')) return 'Plano Familiar';
+  
+  return SERVICE_NAMES[sku] || sku;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -762,6 +795,63 @@ Deno.serve(async (req) => {
       });
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
+
+    // ✅ CUPOM: Criar registro em coupon_uses se houver cupom aplicado
+    if (payment.metadata?.coupon_id && payment.metadata?.coupon_code) {
+      try {
+        console.log('[mp-webhook] 🎟️ Cupom detectado, criando registro de uso...');
+        
+        // Buscar dados completos do cupom
+        const { data: coupon } = await supabaseAdmin
+          .from('user_coupons')
+          .select('*')
+          .eq('id', payment.metadata.coupon_id)
+          .single();
+
+        if (coupon) {
+          // Buscar nome de quem usou
+          const { data: buyer } = await supabaseAdmin
+            .from('patients')
+            .select('first_name, last_name')
+            .eq('email', schedulePayload.email)
+            .maybeSingle();
+
+          const buyerName = buyer 
+            ? `${buyer.first_name || ''} ${buyer.last_name || ''}`.trim()
+            : schedulePayload.nome || 'Usuário';
+
+          // Criar registro de uso do cupom
+          const { error: couponUseError } = await supabaseAdmin
+            .from('coupon_uses')
+            .insert({
+              coupon_id: payment.metadata.coupon_id,
+              coupon_code: payment.metadata.coupon_code,
+              used_by_user_id: userId || null,
+              used_by_name: buyerName,
+              used_by_email: schedulePayload.email,
+              service_or_plan_id: schedulePayload.sku,
+              service_or_plan_name: mapSkuToName(schedulePayload.sku),
+              owner_user_id: coupon.owner_user_id,
+              owner_email: payment.metadata.owner_email || '',
+              owner_pix_key: coupon.pix_key,
+              payment_id: String(payment.id),
+              order_id: payment.metadata.order_id || null,
+              used_at: new Date().toISOString(),
+              amount_original: payment.metadata.amount_original || Math.round(payment.transaction_amount * 100),
+              amount_discounted: payment.metadata.amount_discounted || Math.round(payment.transaction_amount * 100),
+              discount_percentage: payment.metadata.discount_percentage || 0
+            });
+
+          if (couponUseError) {
+            console.error('[mp-webhook] ❌ Erro ao criar coupon_use:', couponUseError);
+          } else {
+            console.log('[mp-webhook] ✅ Cupom registrado em coupon_uses');
+          }
+        }
+      } catch (err) {
+        console.error('[mp-webhook] ⚠️ Erro ao processar cupom:', err);
+      }
+    }
 
     // ✅ Marcar pending_payment como processado
     if (payment.metadata?.order_id) {
