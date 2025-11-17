@@ -718,68 +718,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        console.log('[mp-webhook] 🔍 contact_id resolvido:', {
-          found: contactId ? 'ENCONTRADO' : 'NÃO ENCONTRADO',
-          source: contactIdSource,
+        console.log('[mc-get-consultation-link] ✅ Agendamento criado:', {
+          url: scheduleData.url,
+          order_id: payment.metadata?.order_id,
           email: schedulePayload.email
         });
         
-        // ✅ Enviar link via WhatsApp com assinatura HMAC
-        if (scheduleData.url && schedulePayload.telefone) {
-          console.log('[mp-webhook] 📲 Enviando link da consulta via WhatsApp...');
-          
-          try {
-            const whatsappBody = {
-              phone_e164: schedulePayload.telefone,
-              patient_email: schedulePayload.email,
-              patient_name: schedulePayload.nome,
-              service_name: 'Consulta Médica',
-              redirect_url: scheduleData.url,
-              order_id: payment.metadata?.order_id,
-              use_template: true,
-              contact_id: contactId // ✅ Sempre tentará incluir
-            };
-
-            // Gerar assinatura HMAC-SHA256
-            const MC_HMAC_SECRET = Deno.env.get('MC_HMAC_SECRET') || '';
-            if (!MC_HMAC_SECRET) {
-              console.warn('[mp-webhook] ⚠️ MC_HMAC_SECRET ausente, enviando sem assinatura');
-            }
-            
-            const encoder = new TextEncoder();
-            const bodyString = JSON.stringify(whatsappBody);
-            const key = await crypto.subtle.importKey(
-              'raw',
-              encoder.encode(MC_HMAC_SECRET),
-              { name: 'HMAC', hash: 'SHA-256' },
-              false,
-              ['sign']
-            );
-            const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(bodyString));
-            const signatureHex = Array.from(new Uint8Array(signatureBuffer))
-              .map(b => b.toString(16).padStart(2, '0'))
-              .join('');
-
-            console.log('[mp-webhook] 🔐 HMAC signature generated');
-
-            const whatsappResult = await supabase.functions.invoke('mc-send-consultation-link', {
-              body: whatsappBody,
-              headers: {
-                'x-client-signature': signatureHex
-              }
-            });
-            
-            if (whatsappResult.error) {
-              console.error('[mp-webhook] ⚠️ Erro ao enviar WhatsApp:', whatsappResult.error);
-            } else {
-              console.log('[mp-webhook] ✅ WhatsApp enviado com sucesso');
-            }
-          } catch (whatsappError) {
-            console.error('[mp-webhook] ❌ Exceção ao enviar WhatsApp:', whatsappError);
-          }
-        } else {
-          console.warn('[mp-webhook] ⚠️ WhatsApp não enviado: redirect_url ou telefone ausente');
-        }
+        console.log('[mc-webhook] 📲 Link salvo no banco para ManyChat buscar via mc-get-consultation-link');
         
         break;
       }
