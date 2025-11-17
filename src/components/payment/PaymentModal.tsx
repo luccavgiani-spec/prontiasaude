@@ -1903,6 +1903,9 @@ export function PaymentModal({
     return null;
   };
 
+  // Calcular valor final considerando cupom aplicado
+  const finalAmount = appliedCoupon ? appliedCoupon.amount_discounted : amount;
+
   const modalBody = (
     <>
       {/* Overlay de loading durante processamento */}
@@ -1925,7 +1928,7 @@ export function PaymentModal({
           {showSummary ? "Finalizar Compra" : serviceName}
         </h2>
         {!showSummary && (
-          <p className="text-2xl font-bold text-primary">R$ {(amount / 100).toFixed(2).replace(".", ",")}</p>
+          <p className="text-2xl font-bold text-primary">R$ {(finalAmount / 100).toFixed(2).replace(".", ",")}</p>
         )}
       </div>
 
@@ -2299,7 +2302,7 @@ export function PaymentModal({
       <DialogHeader>
         <DialogTitle>{showSummary ? "Finalizar Compra" : serviceName}</DialogTitle>
         {!showSummary && (
-          <p className="text-2xl font-bold text-primary">R$ {(amount / 100).toFixed(2).replace(".", ",")}</p>
+          <p className="text-2xl font-bold text-primary">R$ {(finalAmount / 100).toFixed(2).replace(".", ",")}</p>
         )}
       </DialogHeader>
 
