@@ -525,30 +525,22 @@ export type Database = {
           address_complement: string | null
           address_line: string | null
           address_number: string | null
-          allergies: string | null
           birth_date: string | null
           cep: string | null
-          chronic_meds: string | null
           city: string | null
           clubeben_last_sync: string | null
           clubeben_retry_count: number | null
           clubeben_status: string | null
-          comorbidities: string | null
           cpf: string | null
           created_at: string | null
           email: string | null
           first_name: string | null
           gender: string | null
-          has_allergies: boolean | null
-          has_chronic_meds: boolean | null
-          has_comorbidities: boolean | null
           id: string
-          intake_complete: boolean | null
           last_name: string | null
           manychat_contact_id: string | null
           marketing_opt_in: boolean | null
           phone_e164: string | null
-          pregnancy_status: string | null
           profile_complete: boolean | null
           source: string | null
           state: string | null
@@ -561,30 +553,22 @@ export type Database = {
           address_complement?: string | null
           address_line?: string | null
           address_number?: string | null
-          allergies?: string | null
           birth_date?: string | null
           cep?: string | null
-          chronic_meds?: string | null
           city?: string | null
           clubeben_last_sync?: string | null
           clubeben_retry_count?: number | null
           clubeben_status?: string | null
-          comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
           gender?: string | null
-          has_allergies?: boolean | null
-          has_chronic_meds?: boolean | null
-          has_comorbidities?: boolean | null
           id: string
-          intake_complete?: boolean | null
           last_name?: string | null
           manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           phone_e164?: string | null
-          pregnancy_status?: string | null
           profile_complete?: boolean | null
           source?: string | null
           state?: string | null
@@ -597,30 +581,22 @@ export type Database = {
           address_complement?: string | null
           address_line?: string | null
           address_number?: string | null
-          allergies?: string | null
           birth_date?: string | null
           cep?: string | null
-          chronic_meds?: string | null
           city?: string | null
           clubeben_last_sync?: string | null
           clubeben_retry_count?: number | null
           clubeben_status?: string | null
-          comorbidities?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
           first_name?: string | null
           gender?: string | null
-          has_allergies?: boolean | null
-          has_chronic_meds?: boolean | null
-          has_comorbidities?: boolean | null
           id?: string
-          intake_complete?: boolean | null
           last_name?: string | null
           manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           phone_e164?: string | null
-          pregnancy_status?: string | null
           profile_complete?: boolean | null
           source?: string | null
           state?: string | null

@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { User, Heart, Baby, Pill, Stethoscope, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall } from "lucide-react";
+import { User, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall, Stethoscope, Pill } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPatientPlanActive } from "@/lib/patient-plan";
@@ -262,14 +262,6 @@ const AreaDoPaciente = () => {
           </Button>
         </div>
 
-        {/* Status Alert */}
-        {!patient?.intake_complete && <Alert className="mb-8 border-blue-200 bg-blue-50">
-            <AlertCircle className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-800">
-              Complete seus antecedentes médicos para melhorar a qualidade do seu atendimento.
-            </AlertDescription>
-          </Alert>}
-
         {/* Quick Actions Section */}
         <div className="mb-8">
           <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
@@ -488,65 +480,6 @@ const AreaDoPaciente = () => {
             </CardContent>
           </Card>
 
-          {/* Antecedentes Médicos */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Heart className="h-5 w-5 text-destructive" />
-                Antecedentes Médicos
-                <Badge variant={patient?.intake_complete ? "default" : "secondary"}>
-                  {patient?.intake_complete ? <><CheckCircle className="h-3 w-3 mr-1" /> Completo</> : <><AlertCircle className="h-3 w-3 mr-1" /> Pendente</>}
-                </Badge>
-              </CardTitle>
-              <CardDescription>
-                Informações importantes para seu atendimento
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Heart className="h-3 w-3" /> Alergias
-                </Label>
-                <p className="text-foreground">
-                  {patient?.has_allergies ? patient.allergies || 'Sim, mas não especificado' : 'Não possui alergias'}
-                </p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Baby className="h-3 w-3" /> Status de gestação
-                </Label>
-                <p className="text-foreground">
-                  {getPregnancyStatusText(patient?.pregnancy_status)}
-                </p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Stethoscope className="h-3 w-3" /> Comorbidades
-                </Label>
-                <p className="text-foreground">
-                  {patient?.has_comorbidities ? patient.comorbidities || 'Sim, mas não especificado' : 'Não possui comorbidades'}
-                </p>
-              </div>
-              
-              <div>
-                <Label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Pill className="h-3 w-3" /> Medicamentos contínuos
-                </Label>
-                <p className="text-foreground">
-                  {patient?.has_chronic_meds ? patient.chronic_meds || 'Sim, mas não especificado' : 'Não usa medicamentos contínuos'}
-                </p>
-              </div>
-              
-              <Button asChild variant="outline" className="w-full">
-                <Link to="/intake/antecedentes">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Editar antecedentes
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Minhas Consultas - APENAS para usuários SEM plano ativo */}

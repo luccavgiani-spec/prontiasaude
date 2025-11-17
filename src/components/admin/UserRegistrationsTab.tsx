@@ -25,7 +25,6 @@ interface User {
     cpf?: string;
     phone_e164?: string;
     profile_complete: boolean;
-    intake_complete: boolean;
   };
   activePlan?: boolean;
   planCode?: string;
@@ -196,16 +195,6 @@ export default function UserRegistrationsTab() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Intakes Completos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.patient?.intake_complete).length}
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}
@@ -270,7 +259,6 @@ export default function UserRegistrationsTab() {
                     <TableHead>Status</TableHead>
                     <TableHead>Role</TableHead>
                     <TableHead>Perfil</TableHead>
-                    <TableHead>Intake</TableHead>
                     <TableHead>Plano Ativo</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -312,13 +300,6 @@ export default function UserRegistrationsTab() {
                       </TableCell>
                       <TableCell>
                         {user.patient?.profile_complete ? (
-                          <Badge variant="default">✓</Badge>
-                        ) : (
-                          <Badge variant="secondary">✗</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.patient?.intake_complete ? (
                           <Badge variant="default">✓</Badge>
                         ) : (
                           <Badge variant="secondary">✗</Badge>

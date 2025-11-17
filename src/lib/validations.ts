@@ -231,21 +231,3 @@ export const isProfileComplete = (patient: any): boolean => {
     patient?.terms_accepted_at
   );
 };
-
-export const isIntakeComplete = (patient: any): boolean => {
-  const hasAllergiesValid = patient?.has_allergies === false || 
-    (patient?.has_allergies === true && patient?.allergies?.trim());
-    
-  const hasComorbiditiesValid = patient?.has_comorbidities === false || 
-    (patient?.has_comorbidities === true && patient?.comorbidities?.trim());
-    
-  const hasChronicMedsValid = patient?.has_chronic_meds === false || 
-    (patient?.has_chronic_meds === true && patient?.chronic_meds?.trim());
-    
-  return !!(
-    patient?.pregnancy_status &&
-    hasAllergiesValid &&
-    hasComorbiditiesValid &&
-    hasChronicMedsValid
-  );
-};
