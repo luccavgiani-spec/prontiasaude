@@ -65,7 +65,7 @@ export function MeusCuponsCard() {
   const generateCouponCode = (userName: string, userId: string, type: 'SERVICE' | 'PLAN'): string => {
     const cleanName = userName.toUpperCase().replace(/\s+/g, '').slice(0, 6);
     const userSuffix = userId.slice(0, 4).toUpperCase();
-    const typeSuffix = type === 'SERVICE' ? 'S10' : 'P15';
+    const typeSuffix = type === 'SERVICE' ? 'S10' : 'P10';
     return `${cleanName}${userSuffix}${typeSuffix}`;
   };
 
@@ -113,7 +113,7 @@ export function MeusCuponsCard() {
 
       const userName = patient?.first_name || 'USER';
       const code = generateCouponCode(userName, user.id, type);
-      const discountPercentage = type === 'SERVICE' ? 10 : 15;
+      const discountPercentage = type === 'SERVICE' ? 10 : 10;
 
       // Tentar criar cupom
       const { data, error } = await supabase
