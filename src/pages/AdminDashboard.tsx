@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Upload, FileText, Video, Link as LinkIcon, MessageSquare, LogOut, Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { CouponsTab } from "@/components/admin/CouponsTab";
 import TestesRoteamento from "@/components/teste/TestesRoteamento";
 import TestesPagamentoMP from "@/components/teste/TestesPagamentoMP";
@@ -41,6 +42,7 @@ interface ContentItem {
 
 const AdminDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeTab, setActiveTab] = useState("relatorios");
   const [contentForm, setContentForm] = useState({
     title: '',
     description: '',
@@ -56,6 +58,7 @@ const AdminDashboard = () => {
   const [publishedContent, setPublishedContent] = useState<ContentItem[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const checkAdminAccess = async () => {
@@ -330,19 +333,39 @@ const AdminDashboard = () => {
           </Button>
         </div>
 
-        <Tabs defaultValue="relatorios" className="space-y-6">
-          <TabsList className="grid w-full max-w-6xl grid-cols-10">
-            <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
-            <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
-            <TabsTrigger value="planos">📋 Planos</TabsTrigger>
-            <TabsTrigger value="cupons">🎟️ Cupons</TabsTrigger>
-            <TabsTrigger value="empresas">Empresas</TabsTrigger>
-            <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
-            <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
-            <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
-            <TabsTrigger value="testes">Testes</TabsTrigger>
-            <TabsTrigger value="pagamentos">💳 Testes MP</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          {isMobile ? (
+            <Select value={activeTab} onValueChange={setActiveTab}>
+              <SelectTrigger className="w-full max-w-md mx-auto bg-background">
+                <SelectValue placeholder="Selecione uma seção" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="relatorios">📊 Relatórios</SelectItem>
+                <SelectItem value="vendas">💰 Vendas</SelectItem>
+                <SelectItem value="planos">📋 Planos</SelectItem>
+                <SelectItem value="cupons">🎟️ Cupons</SelectItem>
+                <SelectItem value="empresas">Empresas</SelectItem>
+                <SelectItem value="conteudo">Gerenciar Conteúdo</SelectItem>
+                <SelectItem value="cadastros">👥 Pacientes</SelectItem>
+                <SelectItem value="configuracoes">Configurações</SelectItem>
+                <SelectItem value="testes">Testes</SelectItem>
+                <SelectItem value="pagamentos">💳 Testes MP</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <TabsList className="grid w-full max-w-6xl grid-cols-10">
+              <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
+              <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
+              <TabsTrigger value="planos">📋 Planos</TabsTrigger>
+              <TabsTrigger value="cupons">🎟️ Cupons</TabsTrigger>
+              <TabsTrigger value="empresas">Empresas</TabsTrigger>
+              <TabsTrigger value="conteudo">Gerenciar Conteúdo</TabsTrigger>
+              <TabsTrigger value="cadastros">👥 Pacientes</TabsTrigger>
+              <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+              <TabsTrigger value="testes">Testes</TabsTrigger>
+              <TabsTrigger value="pagamentos">💳 Testes MP</TabsTrigger>
+            </TabsList>
+          )}
 
           <TabsContent value="conteudo">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
