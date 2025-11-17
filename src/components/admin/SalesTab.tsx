@@ -118,6 +118,19 @@ const SalesTab = () => {
     });
   };
 
+  const simplifyUrl = (url: string): string => {
+    try {
+      const urlObj = new URL(url);
+      // Retorna o domínio + últimos 8 caracteres do path
+      const path = urlObj.pathname + urlObj.hash;
+      const shortPath = path.length > 20 ? '...' + path.slice(-15) : path;
+      return urlObj.hostname + shortPath;
+    } catch {
+      // Se não for URL válida, retorna os primeiros e últimos caracteres
+      return url.length > 30 ? url.slice(0, 15) + '...' + url.slice(-15) : url;
+    }
+  };
+
   const exportCSV = () => {
     const headers = [
       "Email",
@@ -313,15 +326,14 @@ const SalesTab = () => {
                   <TableHead>Data Agendamento</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Provider</TableHead>
-                  <TableHead>Order ID</TableHead>
+                  <TableHead>Link da Consulta</TableHead>
                   <TableHead>Data Venda</TableHead>
-                  <TableHead>Link</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAppointments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       Nenhuma venda encontrada
                     </TableCell>
                   </TableRow>
@@ -340,41 +352,33 @@ const SalesTab = () => {
                       </TableCell>
                       <TableCell>{getStatusBadge(apt.status)}</TableCell>
                       <TableCell>{getProviderBadge(apt.provider)}</TableCell>
-                      <TableCell className="text-xs">{apt.order_id || "-"}</TableCell>
-                      <TableCell>
-                        {format(parseISO(apt.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                      </TableCell>
                       <TableCell>
                         {(apt.redirect_url || apt.teams_join_url) ? (
-                          <div className="flex gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-muted-foreground truncate max-w-[200px]" title={apt.redirect_url || apt.teams_join_url}>
+                              {simplifyUrl(apt.redirect_url || apt.teams_join_url || "")}
+                            </span>
                             <Button
                               size="sm"
-                              variant="outline"
+                              variant="ghost"
                               onClick={() =>
                                 handleCopyLink(
                                   apt.redirect_url || apt.teams_join_url || "",
                                   apt.service_name || apt.service_code
                                 )
                               }
-                              title="Copiar link"
+                              className="h-6 w-6 p-0"
+                              title="Copiar link completo"
                             >
                               <Copy className="h-3 w-3" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={() =>
-                                window.open(apt.redirect_url || apt.teams_join_url, "_blank")
-                              }
-                              title="Abrir consulta"
-                            >
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              Abrir
-                            </Button>
                           </div>
                         ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {format(parseISO(apt.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </TableCell>
                     </TableRow>
                   ))
