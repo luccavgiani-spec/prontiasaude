@@ -57,6 +57,14 @@ interface PaymentRequest {
   metadata: {
     order_id: string;
     schedulePayload?: any;
+    coupon_id?: string;
+    coupon_code?: string;
+    amount_original?: number;
+    amount_discounted?: number;
+    discount_percentage?: number;
+    owner_user_id?: string;
+    owner_email?: string;
+    owner_pix_key?: string;
   };
   device_id?: string;
   payerOverride?: PayerOverride;
@@ -205,14 +213,23 @@ Deno.serve(async (req) => {
       throw new Error('Missing SKU in payment request');
     }
 
-    const clientAmount = paymentRequest.items.reduce(
-      (sum, item) => sum + (item.unit_price * item.quantity), 
-      0
-    );
+    // ✅ CUPOM: Se houver cupom aplicado, usar amount_discounted
+    const hasCoupon = paymentRequest.metadata?.coupon_id && paymentRequest.metadata?.amount_discounted;
+    
+    const clientAmount = hasCoupon 
+      ? (paymentRequest.metadata.amount_discounted! / 100) // converter centavos para reais
+      : paymentRequest.items.reduce(
+          (sum, item) => sum + (item.unit_price * item.quantity), 
+          0
+        );
 
     console.log('[mp-create-payment] Items received:', {
       items_count: paymentRequest.items?.length || 0,
-      client_amount: clientAmount
+      client_amount: clientAmount,
+      has_coupon: hasCoupon,
+      coupon_code: paymentRequest.metadata?.coupon_code,
+      amount_original: paymentRequest.metadata?.amount_original,
+      amount_discounted: paymentRequest.metadata?.amount_discounted
     });
 
     // ✅ NOVO: Buscar preço validado do banco
@@ -233,25 +250,51 @@ Deno.serve(async (req) => {
 
     const expectedAmount = service.price_cents / 100; // Converter para reais
 
-    // ✅ CORRIGIDO: Tolerar clientAmount ausente/zero (usar apenas preço do DB)
-    if (clientAmount === 0 || !paymentRequest.items || paymentRequest.items.length === 0) {
-      console.log('[mp-create-payment] Client amount missing or zero, using DB price:', {
-        sku,
-        expected: expectedAmount
-      });
-    } else {
-      // Se cliente enviou amount, validar com tolerância de 1 centavo
-      const priceDifference = Math.abs(clientAmount - expectedAmount);
+    // ✅ CUPOM: Se houver cupom, validar amount_discounted vs amount_original
+    if (hasCoupon) {
+      const originalAmount = paymentRequest.metadata.amount_original! / 100;
+      const discountedAmount = paymentRequest.metadata.amount_discounted! / 100;
+      
+      // Validar que o amount_original bate com o preço do DB
+      const priceDifference = Math.abs(originalAmount - expectedAmount);
       if (priceDifference > 0.01) {
-        console.error('[mp-create-payment] Price mismatch detected:', {
+        console.error('[mp-create-payment] Coupon price mismatch:', {
           sku,
-          client_sent: clientAmount,
           expected: expectedAmount,
+          original_sent: originalAmount,
           difference: priceDifference
         });
         throw new Error(
-          `Price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${clientAmount.toFixed(2)}`
+          `Coupon price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${originalAmount.toFixed(2)}`
         );
+      }
+      
+      console.log('[mp-create-payment] ✅ Coupon validation passed:', {
+        original: originalAmount,
+        discounted: discountedAmount,
+        discount_percentage: paymentRequest.metadata.discount_percentage
+      });
+    } else {
+      // ✅ CORRIGIDO: Tolerar clientAmount ausente/zero (usar apenas preço do DB)
+      if (clientAmount === 0 || !paymentRequest.items || paymentRequest.items.length === 0) {
+        console.log('[mp-create-payment] Client amount missing or zero, using DB price:', {
+          sku,
+          expected: expectedAmount
+        });
+      } else {
+        // Se cliente enviou amount, validar com tolerância de 1 centavo
+        const priceDifference = Math.abs(clientAmount - expectedAmount);
+        if (priceDifference > 0.01) {
+          console.error('[mp-create-payment] Price mismatch detected:', {
+            sku,
+            client_sent: clientAmount,
+            expected: expectedAmount,
+            difference: priceDifference
+          });
+          throw new Error(
+            `Price validation failed: expected R$ ${expectedAmount.toFixed(2)}, received R$ ${clientAmount.toFixed(2)}`
+          );
+        }
       }
     }
 
@@ -557,6 +600,34 @@ Deno.serve(async (req) => {
         incomplete_additional_info: !paymentData.additional_info?.items?.[0]?.description ? '🟡 YES' : '✅ NO'
       }
     });
+
+    // ✅ CUPOM: Salvar em pending_payments se houver cupom aplicado
+    if (hasCoupon && paymentRequest.metadata?.coupon_id) {
+      try {
+        const { error: pendingPaymentError } = await supabaseAdmin
+          .from('pending_payments')
+          .insert({
+            payment_id: String(responseData.id),
+            email: paymentRequest.payer.email,
+            status: responseData.status || 'pending',
+            order_id: paymentRequest.metadata.order_id,
+            sku: sku,
+            amount_cents: service.price_cents,
+            coupon_id: paymentRequest.metadata.coupon_id,
+            coupon_code: paymentRequest.metadata.coupon_code,
+            amount_original: paymentRequest.metadata.amount_original,
+            discount_percentage: paymentRequest.metadata.discount_percentage
+          });
+
+        if (pendingPaymentError) {
+          console.error('[mp-create-payment] ⚠️ Erro ao salvar pending_payment com cupom:', pendingPaymentError);
+        } else {
+          console.log('[mp-create-payment] ✅ Pending payment com cupom salvo');
+        }
+      } catch (err) {
+        console.error('[mp-create-payment] ⚠️ Erro ao processar pending_payment:', err);
+      }
+    }
 
     return new Response(
       JSON.stringify({
