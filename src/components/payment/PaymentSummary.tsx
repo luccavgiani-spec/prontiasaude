@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, QrCode, User, Mail, Phone, FileText } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CreditCard, QrCode, User, Mail, Phone, FileText, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { formataPreco } from "@/lib/utils";
 
 interface PaymentSummaryProps {
@@ -17,6 +19,25 @@ interface PaymentSummaryProps {
   frequency?: number;
   frequencyType?: 'months' | 'days';
   onSelectPaymentMethod: (method: 'card' | 'pix') => void;
+  
+  // Props de cupom
+  couponCode: string;
+  setCouponCode: (code: string) => void;
+  appliedCoupon: {
+    is_valid: boolean;
+    coupon_id: string;
+    coupon_code: string;
+    discount_percentage: number;
+    amount_original: number;
+    amount_discounted: number;
+    owner_user_id: string;
+    owner_email: string;
+    owner_pix_key: string;
+  } | null;
+  isValidatingCoupon: boolean;
+  couponError: string;
+  onApplyCoupon: () => void;
+  onRemoveCoupon: () => void;
 }
 
 export function PaymentSummary({
@@ -26,7 +47,14 @@ export function PaymentSummary({
   recurring,
   frequency,
   frequencyType,
-  onSelectPaymentMethod
+  onSelectPaymentMethod,
+  couponCode,
+  setCouponCode,
+  appliedCoupon,
+  isValidatingCoupon,
+  couponError,
+  onApplyCoupon,
+  onRemoveCoupon
 }: PaymentSummaryProps) {
   const formatRecurringText = () => {
     if (!recurring || !frequency) return null;
@@ -113,6 +141,61 @@ export function PaymentSummary({
           </div>
         </CardContent>
       </Card>
+
+      {/* Campo de Cupom */}
+      <div className="border-t pt-4">
+        <Label htmlFor="coupon">Cupom de desconto (opcional)</Label>
+        <div className="flex gap-2 mt-2">
+          <Input
+            id="coupon"
+            placeholder="Digite o código do cupom"
+            value={couponCode}
+            onChange={(e) => {
+              setCouponCode(e.target.value.toUpperCase());
+            }}
+            disabled={!!appliedCoupon || isValidatingCoupon}
+            className="uppercase"
+          />
+          {!appliedCoupon && (
+            <Button
+              onClick={onApplyCoupon}
+              disabled={!couponCode || isValidatingCoupon}
+              variant="outline"
+            >
+              {isValidatingCoupon ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aplicar"}
+            </Button>
+          )}
+          {appliedCoupon && (
+            <Button
+              onClick={onRemoveCoupon}
+              variant="ghost"
+              size="icon"
+              title="Remover cupom"
+            >
+              <AlertCircle className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        
+        {couponError && (
+          <p className="text-sm text-destructive mt-2">{couponError}</p>
+        )}
+        
+        {appliedCoupon && (
+          <div className="mt-2 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-md">
+            <div className="flex items-center gap-2 text-green-800 dark:text-green-200">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                Cupom aplicado! Desconto de {appliedCoupon.discount_percentage}%
+              </span>
+            </div>
+            <div className="text-sm text-green-700 dark:text-green-300 mt-1">
+              De <span className="line-through">R$ {(appliedCoupon.amount_original / 100).toFixed(2)}</span> por{" "}
+              <span className="font-semibold">R$ {(appliedCoupon.amount_discounted / 100).toFixed(2)}</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Métodos de Pagamento */}
       <div className="space-y-3">
