@@ -254,7 +254,7 @@ Deno.serve(async (req) => {
     
     // Define endpoints for template and text messages
     const baseUrl = (Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com').replace(/\/+$/, '');
-    const templateEndpoint = Deno.env.get('MANYCHAT_TEMPLATE_ENDPOINT') || '/fb/sending/sendContent';
+    const templateEndpoint = Deno.env.get('MANYCHAT_TEMPLATE_ENDPOINT') || '/fb/sending/sendTemplate';
     const textEndpoint = Deno.env.get('MANYCHAT_TEXT_ENDPOINT') || '/fb/sending/sendMessage';
     
     // Select endpoint based on message type
@@ -310,38 +310,35 @@ Deno.serve(async (req) => {
       manychatPayload = {
         subscriber_id: subscriberId,
         data: {
-          version: 'v2',
-          content: {
-            messages: [
-              {
-                type: 'text',
-                text: `Olá ${patientName}! 🎉\nSeu pagamento foi aprovado ✅\n\nAcesse sua consulta através do botão abaixo:\n\nSe precisar de ajuda, estamos por aqui 💚`,
-                buttons: [
-                  {
-                    type: 'url',
-                    caption: 'Acessar Consulta',
-                    url: payload.redirect_url
-                  }
-                ]
-              }
-            ]
-          }
+          template_name: TEMPLATE_NAME,  // 'consultation_link'
+          language_code: 'pt_BR',
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: patientName }  // {{1}} = nome completo
+              ]
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [
+                { type: 'text', text: payload.redirect_url }  // {{3}} = URL dinâmica
+              ]
+            }
+          ]
         }
       };
       
       console.log(JSON.stringify({
         request_id: requestId,
-        event: 'manychat_content_payload_constructed',
+        event: 'manychat_template_payload_constructed',
+        template_name: TEMPLATE_NAME,
         patient_name: patientName,
         redirect_url: payload.redirect_url,
         subscriber_id: subscriberId
       }));
-    } else {
-      manychatPayload = {
-        subscriber_id: subscriberId,
-        message_tag: 'POST_PURCHASE_UPDATE',
-        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
-      };
     }
 
     console.log(JSON.stringify({
