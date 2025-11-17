@@ -1,4 +1,3 @@
-import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,11 +181,6 @@ const Paciente = () => {
           </div>
         ) : dadosPaciente ? (
           <>
-            {/* Card de Cupons */}
-            <div className="mb-8">
-              <MeusCuponsCard />
-            </div>
-
             <div className="grid md:grid-cols-3 gap-8">
               {/* Próximas Consultas */}
               <div className="medical-card p-6">

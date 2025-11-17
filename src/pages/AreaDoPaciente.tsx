@@ -13,6 +13,7 @@ import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPat
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
+import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -605,6 +606,11 @@ const AreaDoPaciente = () => {
               </div>
             </Link>
           </div>
+        </div>
+
+        {/* Meus Cupons Section */}
+        <div className="mt-8">
+          <MeusCuponsCard />
         </div>
 
         {/* Disque Denúncia Section - Only for users with active plan */}
