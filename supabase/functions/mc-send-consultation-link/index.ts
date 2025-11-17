@@ -307,24 +307,37 @@ Deno.serve(async (req) => {
       // Extrair nome do paciente (fallback para email se ausente)
       const patientName = payload.patient_name || payload.patient_email.split('@')[0];
       
+      // **CRÍTICO**: Para botões URL dinâmicos, enviar apenas o SUFIXO ou URL completa
+      // dependendo de como o template está configurado no WhatsApp Business Manager
+      const urlSuffix = payload.redirect_url;
+      
+      // Estrutura EXATA da WhatsApp Business API (encapsulada pelo ManyChat)
       manychatPayload = {
         subscriber_id: subscriberId,
         data: {
-          template_name: TEMPLATE_NAME,  // 'consultation_link'
-          language_code: 'pt_BR',
+          name: TEMPLATE_NAME,  // ✅ 'name', NÃO 'template_name'
+          language: {           // ✅ Objeto 'language', NÃO 'language_code'
+            code: 'pt_BR'
+          },
           components: [
             {
               type: 'body',
               parameters: [
-                { type: 'text', text: patientName }  // {{1}} = nome completo
+                { 
+                  type: 'text', 
+                  text: patientName  // {{1}} = nome completo do paciente
+                }
               ]
             },
             {
               type: 'button',
               sub_type: 'url',
-              index: 0,
+              index: "0",         // ✅ String "0", NÃO number 0
               parameters: [
-                { type: 'text', text: payload.redirect_url }  // {{3}} = URL dinâmica
+                { 
+                  type: 'text', 
+                  text: urlSuffix  // {{3}} = URL do agendamento (sufixo ou completa)
+                }
               ]
             }
           ]
@@ -333,11 +346,12 @@ Deno.serve(async (req) => {
       
       console.log(JSON.stringify({
         request_id: requestId,
-        event: 'manychat_template_payload_constructed',
+        event: 'manychat_whatsapp_template_payload',
         template_name: TEMPLATE_NAME,
         patient_name: patientName,
-        redirect_url: payload.redirect_url,
-        subscriber_id: subscriberId
+        url_suffix: urlSuffix,
+        subscriber_id: subscriberId,
+        structure: 'whatsapp_business_api_format'
       }));
     }
 
@@ -387,52 +401,111 @@ Deno.serve(async (req) => {
         request_id: requestId,
         event: 'manychat_404_retry',
         original_url: manychatUrl,
+        endpoint_attempted: endpoint,
         response: manychatResText.substring(0, 200)
       }));
 
-      // Fallback: try plain text message via text endpoint
-      const fallbackUrl = `${baseUrl}${textEndpoint}`;
-      const fallbackPayload = {
-        subscriber_id: subscriberId,
-        message_tag: 'POST_PURCHASE_UPDATE',
-        text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
-      };
+      // **Fallback para /fb/sending/sendContent se /fb/sending/sendTemplate não existir**
+      // Tenta novamente com endpoint alternativo usando a MESMA estrutura de template
+      if (USE_TEMPLATE && endpoint === '/fb/sending/sendTemplate') {
+        const contentEndpoint = '/fb/sending/sendContent';
+        const contentUrl = `${baseUrl}${contentEndpoint}`;
+        
+        console.log(JSON.stringify({
+          request_id: requestId,
+          event: 'template_endpoint_404_fallback',
+          trying_endpoint: contentEndpoint,
+          url: contentUrl
+        }));
 
-      console.log(JSON.stringify({
-        request_id: requestId,
-        event: 'fallback_to_sendMessage',
-        url: fallbackUrl
-      }));
+        const contentController = new AbortController();
+        const contentTimeoutId = setTimeout(() => contentController.abort(), 8000);
 
-      const fallbackController = new AbortController();
-      const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 8000);
+        manychatRes = await fetch(contentUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${MANYCHAT_API_KEY}`
+          },
+          body: JSON.stringify(manychatPayload),  // Mesma estrutura de template
+          signal: contentController.signal
+        }).catch(async (error) => {
+          clearTimeout(contentTimeoutId);
+          
+          await supabase
+            .from('outbox_whatsapp')
+            .insert({
+              payload: manychatPayload,
+              error: error.message,
+              status: 'pending',
+              scheduled_for: new Date(Date.now() + 60000).toISOString()
+            });
+          
+          throw error;
+        });
 
-      manychatRes = await fetch(fallbackUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${MANYCHAT_API_KEY}`
-        },
-        body: JSON.stringify(fallbackPayload),
-        signal: fallbackController.signal
-      }).catch(async (error) => {
+        clearTimeout(contentTimeoutId);
+        manychatResText = await manychatRes.text();
+        
+        console.log(JSON.stringify({
+          request_id: requestId,
+          event: 'template_fallback_response',
+          status: manychatRes.status,
+          endpoint: contentEndpoint
+        }));
+      }
+
+      // **Fallback final**: Se ainda está 404, tentar mensagem de texto simples
+      if (manychatRes.status === 404) {
+        console.warn(JSON.stringify({
+          request_id: requestId,
+          event: 'final_fallback_to_text_message',
+          reason: 'template_endpoints_unavailable'
+        }));
+
+        const fallbackUrl = `${baseUrl}${textEndpoint}`;
+        const fallbackPayload = {
+          subscriber_id: subscriberId,
+          message_tag: 'POST_PURCHASE_UPDATE',
+          text: `Olá! Seu pagamento foi aprovado ✅\n\n🩺 *Serviço*: ${payload.service_name}\n\n📲 *Acesse sua consulta*:\n${payload.redirect_url}\n\n_Equipe Prontia Saúde_`
+        };
+
+        console.log(JSON.stringify({
+          request_id: requestId,
+          event: 'fallback_to_sendMessage',
+          url: fallbackUrl
+        }));
+
+        const fallbackController = new AbortController();
+        const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), 8000);
+
+        manychatRes = await fetch(fallbackUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${MANYCHAT_API_KEY}`
+          },
+          body: JSON.stringify(fallbackPayload),
+          signal: fallbackController.signal
+        }).catch(async (error) => {
+          clearTimeout(fallbackTimeoutId);
+          
+          // Save to DLQ
+          await supabase
+            .from('outbox_whatsapp')
+            .insert({
+              payload: fallbackPayload,
+              error: error.message,
+              status: 'pending',
+              scheduled_for: new Date(Date.now() + 60000).toISOString()
+            });
+          
+          throw error;
+        });
+
         clearTimeout(fallbackTimeoutId);
-        
-        // Save to DLQ
-        await supabase
-          .from('outbox_whatsapp')
-          .insert({
-            payload: fallbackPayload,
-            error: error.message,
-            status: 'pending',
-            scheduled_for: new Date(Date.now() + 60000).toISOString()
-          });
-        
-        throw error;
-      });
-
-      clearTimeout(fallbackTimeoutId);
-      manychatResText = await manychatRes.text();
+        manychatResText = await manychatRes.text();
+      }
     }
 
     if (!manychatRes.ok) {
