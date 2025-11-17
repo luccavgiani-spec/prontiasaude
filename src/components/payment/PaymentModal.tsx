@@ -1954,61 +1954,6 @@ export function PaymentModal({
               </div>
             )}
 
-            {/* Campo de Cupom */}
-            <div className="border-t pt-4 mb-4">
-              <Label htmlFor="coupon">Cupom de desconto (opcional)</Label>
-              <div className="flex gap-2 mt-2">
-                <Input
-                  id="coupon"
-                  placeholder="Digite o código do cupom"
-                  value={couponCode}
-                  onChange={(e) => {
-                    setCouponCode(e.target.value.toUpperCase());
-                    setCouponError("");
-                  }}
-                  disabled={!!appliedCoupon || isValidatingCoupon}
-                  className="uppercase"
-                />
-                {!appliedCoupon && (
-                  <Button
-                    onClick={handleApplyCoupon}
-                    disabled={!couponCode || isValidatingCoupon}
-                    variant="outline"
-                  >
-                    {isValidatingCoupon ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aplicar"}
-                  </Button>
-                )}
-                {appliedCoupon && (
-                  <Button
-                    onClick={handleRemoveCoupon}
-                    variant="ghost"
-                    size="icon"
-                  >
-                    <AlertCircle className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              
-              {couponError && (
-                <p className="text-sm text-destructive mt-2">{couponError}</p>
-              )}
-              
-              {appliedCoupon && (
-                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
-                  <div className="flex items-center gap-2 text-green-800">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      Cupom aplicado! Desconto de {appliedCoupon.discount_percentage}%
-                    </span>
-                  </div>
-                  <div className="text-sm text-green-700 mt-1">
-                    De <span className="line-through">R$ {(appliedCoupon.amount_original / 100).toFixed(2)}</span> por{" "}
-                    <span className="font-semibold">R$ {(appliedCoupon.amount_discounted / 100).toFixed(2)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
             <PaymentSummary
               serviceName={serviceName}
               amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
@@ -2017,6 +1962,13 @@ export function PaymentModal({
               frequency={frequency}
               frequencyType={frequencyType}
               onSelectPaymentMethod={handlePaymentMethodSelect}
+              couponCode={couponCode}
+              setCouponCode={setCouponCode}
+              appliedCoupon={appliedCoupon}
+              isValidatingCoupon={isValidatingCoupon}
+              couponError={couponError}
+              onApplyCoupon={handleApplyCoupon}
+              onRemoveCoupon={handleRemoveCoupon}
             />
           </>
         )}
@@ -2340,12 +2292,19 @@ export function PaymentModal({
             {paymentMethod === undefined && (
               <PaymentSummary
                 serviceName={serviceName}
-                amount={amount}
+                amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
                 formData={formData}
                 recurring={recurring}
                 frequency={frequency}
                 frequencyType={frequencyType}
                 onSelectPaymentMethod={handlePaymentMethodSelect}
+                couponCode={couponCode}
+                setCouponCode={setCouponCode}
+                appliedCoupon={appliedCoupon}
+                isValidatingCoupon={isValidatingCoupon}
+                couponError={couponError}
+                onApplyCoupon={handleApplyCoupon}
+                onRemoveCoupon={handleRemoveCoupon}
               />
             )}
           </>
