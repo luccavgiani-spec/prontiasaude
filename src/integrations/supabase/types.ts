@@ -352,6 +352,9 @@ export type Database = {
           owner_pix_key: string | null
           owner_user_id: string
           payment_id: string
+          reviewed: boolean | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           service_or_plan_id: string | null
           service_or_plan_name: string
           used_at: string
@@ -371,6 +374,9 @@ export type Database = {
           owner_pix_key?: string | null
           owner_user_id: string
           payment_id: string
+          reviewed?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           service_or_plan_id?: string | null
           service_or_plan_name: string
           used_at?: string
@@ -390,6 +396,9 @@ export type Database = {
           owner_pix_key?: string | null
           owner_user_id?: string
           payment_id?: string
+          reviewed?: boolean | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           service_or_plan_id?: string | null
           service_or_plan_name?: string
           used_at?: string
