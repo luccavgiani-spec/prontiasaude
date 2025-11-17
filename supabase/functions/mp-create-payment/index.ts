@@ -568,6 +568,7 @@ Deno.serve(async (req) => {
         qr_code: responseData.point_of_interaction?.transaction_data?.qr_code,
         qr_code_base64: responseData.point_of_interaction?.transaction_data?.qr_code_base64,
         ticket_url: responseData.point_of_interaction?.transaction_data?.ticket_url,
+        order_id: paymentRequest.metadata?.order_id,
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
