@@ -14,7 +14,7 @@ interface MetricsData {
   revenueByMonth: Array<{ month: string; revenue: number }>;
   appointmentsByPlatform: Array<{ platform: string; count: number }>;
   salesByPlan: Array<{ plan: string; count: number }>;
-  registrationsByDate: Array<{ date: string; count: number }>;
+  couponsByService: Array<{ service: string; count: number }>;
 }
 
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--muted))'];
@@ -31,7 +31,7 @@ export default function ReportsTab() {
     revenueByMonth: [],
     appointmentsByPlatform: [],
     salesByPlan: [],
-    registrationsByDate: [],
+    couponsByService: [],
   });
 
   useEffect(() => {
@@ -91,11 +91,31 @@ export default function ReportsTab() {
         revenueByMonth[month] = (revenueByMonth[month] || 0) + 14.90;
       });
 
-      // Atendimentos por plataforma
-      const appointmentsByPlatform: Record<string, number> = {};
+      // Atendimentos por plataforma (3 categorias: Communicare, ClickLife, WhatsApp)
+      const platformGroups = {
+        'Communicare': 0,
+        'ClickLife': 0,
+        'WhatsApp': 0
+      };
+      
       appointments.forEach((m: any) => {
-        const plat = m.platform || 'unknown';
-        appointmentsByPlatform[plat] = (appointmentsByPlatform[plat] || 0) + 1;
+        const provider = (m.platform || '').toLowerCase();
+        
+        if (provider === 'communicare' || provider === 'agendar_cc') {
+          platformGroups['Communicare']++;
+        } else if (
+          provider === 'clicklife' || 
+          provider === 'whatsapp_manual' || 
+          provider === 'plan_purchase'
+        ) {
+          platformGroups['ClickLife']++;
+        } else if (
+          provider === 'whatsapp' || 
+          provider === 'whatsapp_laudos' || 
+          provider === 'whatsapp_exames'
+        ) {
+          platformGroups['WhatsApp']++;
+        }
       });
 
       // Vendas por plano (baseada em planos reais)
@@ -105,11 +125,17 @@ export default function ReportsTab() {
         salesByPlan[plan] = (salesByPlan[plan] || 0) + 1;
       });
 
-      // Cadastros por data (baseada em pacientes reais)
-      const registrationsByDate: Record<string, number> = {};
-      patients?.forEach((p: any) => {
-        const date = new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-        registrationsByDate[date] = (registrationsByDate[date] || 0) + 1;
+      // Cupons utilizados por serviço/plano
+      const { data: couponUses } = await supabase
+        .from('coupon_uses')
+        .select('service_or_plan_name')
+        .gte('used_at', startDate.toISOString())
+        .lte('used_at', endDate.toISOString());
+      
+      const couponsByService: Record<string, number> = {};
+      couponUses?.forEach((c: any) => {
+        const service = c.service_or_plan_name || 'Outros';
+        couponsByService[service] = (couponsByService[service] || 0) + 1;
       });
 
       setMetrics({
@@ -118,9 +144,9 @@ export default function ReportsTab() {
         totalPatients,
         totalAppointments,
         revenueByMonth: Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })),
-        appointmentsByPlatform: Object.entries(appointmentsByPlatform).map(([platform, count]) => ({ platform, count })),
+        appointmentsByPlatform: Object.entries(platformGroups).map(([platform, count]) => ({ platform, count })),
         salesByPlan: Object.entries(salesByPlan).map(([plan, count]) => ({ plan, count })),
-        registrationsByDate: Object.entries(registrationsByDate).map(([date, count]) => ({ date, count })),
+        couponsByService: Object.entries(couponsByService).map(([service, count]) => ({ service, count })),
       });
     } catch (error) {
       console.error('Error loading metrics:', error);
@@ -279,21 +305,37 @@ export default function ReportsTab() {
           </CardContent>
         </Card>
 
+        {/* Cupons Utilizados */}
         <Card>
           <CardHeader>
-            <CardTitle>Novos Cadastros</CardTitle>
+            <CardTitle>Cupons Utilizados por Serviço/Plano</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={metrics.registrationsByDate}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Area type="monotone" dataKey="count" stroke={COLORS[2]} fill={COLORS[2]} name="Cadastros" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {metrics.couponsByService.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={metrics.couponsByService}
+                    dataKey="count"
+                    nameKey="service"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    label={(entry) => `${entry.service}: ${entry.count}`}
+                  >
+                    {metrics.couponsByService.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                Nenhum cupom utilizado no período selecionado
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
