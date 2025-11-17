@@ -732,6 +732,7 @@ Deno.serve(async (req) => {
             const whatsappBody = {
               phone_e164: schedulePayload.telefone,
               patient_email: schedulePayload.email,
+              patient_name: schedulePayload.nome,
               service_name: 'Consulta Médica',
               redirect_url: scheduleData.url,
               order_id: payment.metadata?.order_id,
