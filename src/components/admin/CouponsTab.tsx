@@ -51,18 +51,35 @@ interface ActiveCoupon {
   owner_name?: string;
 }
 
+interface PendingCoupon {
+  id: string;
+  payment_id: string;
+  order_id: string | null;
+  email: string;
+  coupon_code: string;
+  sku: string | null;
+  amount_cents: number;
+  amount_original: number | null;
+  discount_percentage: number | null;
+  status: string;
+  created_at: string;
+}
+
 export function CouponsTab() {
   const [couponUses, setCouponUses] = useState<CouponUse[]>([]);
   const [activeCoupons, setActiveCoupons] = useState<ActiveCoupon[]>([]);
+  const [pendingCoupons, setPendingCoupons] = useState<PendingCoupon[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingActive, setIsLoadingActive] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [couponToDelete, setCouponToDelete] = useState<string | null>(null);
+  const [verifyingPayment, setVerifyingPayment] = useState<string | null>(null);
 
   useEffect(() => {
     loadCouponUses();
     loadActiveCoupons();
+    loadPendingCoupons();
   }, []);
 
   const loadCouponUses = async () => {
@@ -128,6 +145,65 @@ export function CouponsTab() {
       toast.error("Erro ao carregar cupons ativos");
     } finally {
       setIsLoadingActive(false);
+    }
+  };
+
+  const loadPendingCoupons = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_payments')
+        .select('*')
+        .not('coupon_code', 'is', null)
+        .eq('status', 'pending')
+        .eq('processed', false)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao carregar cupons pendentes:', error);
+        return;
+      }
+
+      setPendingCoupons(data || []);
+      console.log(`Cupons pendentes carregados: ${data?.length || 0}`);
+    } catch (error) {
+      console.error('Erro ao carregar cupons pendentes:', error);
+    }
+  };
+
+  const handleVerifyPayment = async (paymentId: string, email: string) => {
+    setVerifyingPayment(paymentId);
+    
+    try {
+      console.log(`Verificando pagamento ${paymentId}...`);
+      
+      const { data, error } = await supabase.functions.invoke(
+        'process-pending-coupon',
+        { body: { payment_id: paymentId } }
+      );
+      
+      if (error) {
+        console.error('Erro na função:', error);
+        throw error;
+      }
+
+      console.log('Resposta da função:', data);
+      
+      if (data.success && data.status === 'approved') {
+        toast.success(`✅ Pagamento confirmado! Cupom de ${email} processado.`);
+        await loadPendingCoupons();
+        await loadCouponUses();
+      } else if (data.status === 'pending') {
+        toast.warning('⏳ Pagamento ainda está pendente no Mercado Pago');
+      } else if (data.status === 'rejected') {
+        toast.error('❌ Pagamento foi rejeitado');
+      } else {
+        toast.error(`Status: ${data.status} - ${data.message}`);
+      }
+    } catch (err) {
+      console.error('Erro ao verificar pagamento:', err);
+      toast.error('Erro ao verificar pagamento. Veja o console.');
+    } finally {
+      setVerifyingPayment(null);
     }
   };
 
@@ -210,6 +286,90 @@ export function CouponsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Cupons Pendentes */}
+      {pendingCoupons.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 text-yellow-600 animate-spin" />
+              Cupons Pendentes
+            </CardTitle>
+            <CardDescription>
+              Pagamentos PIX com cupons aplicados aguardando confirmação - Clique em "Verificar" para processar manualmente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Código do Cupom</TableHead>
+                    <TableHead>Serviço/Plano</TableHead>
+                    <TableHead className="text-right">Valor Original</TableHead>
+                    <TableHead className="text-right">Valor com Desconto</TableHead>
+                    <TableHead>Data da Solicitação</TableHead>
+                    <TableHead className="text-center">Ação</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingCoupons.map((pending) => (
+                    <TableRow key={pending.id}>
+                      <TableCell className="font-medium text-xs">
+                        {pending.email}
+                      </TableCell>
+                      
+                      <TableCell>
+                        <code className="text-xs font-mono bg-yellow-100 px-2 py-1 rounded">
+                          {pending.coupon_code}
+                        </code>
+                      </TableCell>
+                      
+                      <TableCell className="text-sm">
+                        {pending.sku || 'N/A'}
+                      </TableCell>
+                      
+                      <TableCell className="text-right text-muted-foreground">
+                        R$ {((pending.amount_original || 0) / 100).toFixed(2)}
+                      </TableCell>
+                      
+                      <TableCell className="text-right font-semibold text-yellow-600">
+                        R$ {(pending.amount_cents / 100).toFixed(2)}
+                      </TableCell>
+                      
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {format(parseISO(pending.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </TableCell>
+                      
+                      <TableCell className="text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleVerifyPayment(pending.payment_id, pending.email)}
+                          disabled={verifyingPayment === pending.payment_id}
+                          className="h-8"
+                        >
+                          {verifyingPayment === pending.payment_id ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Verificando...
+                            </>
+                          ) : (
+                            <>
+                              🔍 Verificar
+                            </>
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Cupons Utilizados */}
       <Card>
         <CardHeader>
