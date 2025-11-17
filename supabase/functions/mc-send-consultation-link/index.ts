@@ -9,6 +9,7 @@ interface SendLinkRequest {
   contact_id?: string;
   phone_e164?: string;
   patient_email: string;
+  patient_name?: string;
   service_name: string;
   redirect_url: string;
   order_id?: string;
@@ -303,6 +304,8 @@ Deno.serve(async (req) => {
     let manychatPayload: any;
 
     if (USE_TEMPLATE) {
+      // Extrair nome do paciente (fallback para email se ausente)
+      const patientName = payload.patient_name || payload.patient_email.split('@')[0];
       
       manychatPayload = {
         subscriber_id: subscriberId,
@@ -317,14 +320,28 @@ Deno.serve(async (req) => {
             {
               type: 'body',
               parameters: [
-                { type: 'text', text: payload.patient_email.split('@')[0] },
-                { type: 'text', text: payload.service_name },
-                { type: 'text', text: payload.redirect_url }
+                { type: 'text', text: patientName }  // {{1}} = full_name
+              ]
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [
+                { type: 'text', text: payload.redirect_url }  // {{3}} = URL dinâmica
               ]
             }
           ]
         }
       };
+      
+      console.log(JSON.stringify({
+        request_id: requestId,
+        event: 'template_payload_constructed',
+        patient_name: patientName,
+        redirect_url: payload.redirect_url,
+        subscriber_id: subscriberId
+      }));
     } else {
       manychatPayload = {
         subscriber_id: subscriberId,
