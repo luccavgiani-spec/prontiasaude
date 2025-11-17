@@ -250,11 +250,11 @@ Deno.serve(async (req) => {
     const TEMPLATE_NAMESPACE = Deno.env.get('MANYCHAT_TEMPLATE_NAMESPACE');
     
     // Se template não está configurado, usar texto simples
-    const USE_TEMPLATE = TEMPLATE_NAME && TEMPLATE_NAMESPACE && (payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true'));
+    const USE_TEMPLATE = TEMPLATE_NAME && (payload.use_template ?? (Deno.env.get('MANYCHAT_USE_TEMPLATE') === 'true'));
     
     // Define endpoints for template and text messages
     const baseUrl = (Deno.env.get('MANYCHAT_API_URL') || 'https://api.manychat.com').replace(/\/+$/, '');
-    const templateEndpoint = Deno.env.get('MANYCHAT_TEMPLATE_ENDPOINT') || '/whatsapp/sending/sendTemplate';
+    const templateEndpoint = Deno.env.get('MANYCHAT_TEMPLATE_ENDPOINT') || '/fb/sending/sendContent';
     const textEndpoint = Deno.env.get('MANYCHAT_TEXT_ENDPOINT') || '/fb/sending/sendMessage';
     
     // Select endpoint based on message type
@@ -310,34 +310,28 @@ Deno.serve(async (req) => {
       manychatPayload = {
         subscriber_id: subscriberId,
         data: {
-          namespace: TEMPLATE_NAMESPACE,
-          name: TEMPLATE_NAME,
-          language: {
-            policy: 'deterministic',
-            code: 'pt_BR'
-          },
-          components: [
-            {
-              type: 'body',
-              parameters: [
-                { type: 'text', text: patientName }  // {{1}} = full_name
-              ]
-            },
-            {
-              type: 'button',
-              sub_type: 'url',
-              index: 0,
-              parameters: [
-                { type: 'text', text: payload.redirect_url }  // {{3}} = URL dinâmica
-              ]
-            }
-          ]
+          version: 'v2',
+          content: {
+            messages: [
+              {
+                type: 'text',
+                text: `Olá ${patientName}! 🎉\nSeu pagamento foi aprovado ✅\n\nAcesse sua consulta através do botão abaixo:\n\nSe precisar de ajuda, estamos por aqui 💚`,
+                buttons: [
+                  {
+                    type: 'url',
+                    caption: 'Acessar Consulta',
+                    url: payload.redirect_url
+                  }
+                ]
+              }
+            ]
+          }
         }
       };
       
       console.log(JSON.stringify({
         request_id: requestId,
-        event: 'template_payload_constructed',
+        event: 'manychat_content_payload_constructed',
         patient_name: patientName,
         redirect_url: payload.redirect_url,
         subscriber_id: subscriberId
