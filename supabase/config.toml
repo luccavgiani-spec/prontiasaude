@@ -42,6 +42,9 @@ verify_jwt = true
 [functions.mc-send-consultation-link]
 verify_jwt = false
 
+[functions.mc-get-consultation-link]
+verify_jwt = false
+
 [functions.clicklife-sso]
 verify_jwt = false
 
