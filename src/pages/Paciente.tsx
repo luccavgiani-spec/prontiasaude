@@ -181,9 +181,15 @@ const Paciente = () => {
             ))}
           </div>
         ) : dadosPaciente ? (
-          <div className="grid md:grid-cols-3 gap-8">
-            {/* Próximas Consultas */}
-            <div className="medical-card p-6">
+          <>
+            {/* Card de Cupons */}
+            <div className="mb-8">
+              <MeusCuponsCard />
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              {/* Próximas Consultas */}
+              <div className="medical-card p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Calendar className="h-5 w-5 text-primary" />
                 <h2 className="text-xl font-semibold text-foreground">Próximas Consultas</h2>
@@ -293,7 +299,9 @@ const Paciente = () => {
                 </div>
               )}
             </div>
-          </div>
+
+            </div>
+          </>
         ) : (
           <div className="text-center py-16">
             <User className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
