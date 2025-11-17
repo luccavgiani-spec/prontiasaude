@@ -110,6 +110,32 @@ export function PaymentModal({
   const [showErrorOverlay, setShowErrorOverlay] = useState(false);
   const [errorOverlayMessage, setErrorOverlayMessage] = useState<string>("");
 
+  // Estados para cupom de desconto
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    is_valid: boolean;
+    coupon_id: string;
+    coupon_code: string;
+    discount_percentage: number;
+    amount_original: number;
+    amount_discounted: number;
+    owner_user_id: string;
+    owner_email: string;
+    owner_pix_key: string;
+  } | null>(null);
+  const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState("");
+
+  // Limpar estados de cupom quando o modal fechar
+  useEffect(() => {
+    if (!open) {
+      setCouponCode("");
+      setAppliedCoupon(null);
+      setCouponError("");
+      setIsValidatingCoupon(false);
+    }
+  }, [open]);
+
   // Estados para cartão de terceiros
   const [isThirdPartyCard, setIsThirdPartyCard] = useState(false);
   const [payerData, setPayerData] = useState<PayerFormData>({
@@ -1146,6 +1172,16 @@ export function PaymentModal({
         metadata: {
           order_id: orderId,
           schedulePayload,
+          ...(appliedCoupon && {
+            coupon_id: appliedCoupon.coupon_id,
+            coupon_code: appliedCoupon.coupon_code,
+            amount_original: appliedCoupon.amount_original,
+            amount_discounted: appliedCoupon.amount_discounted,
+            discount_percentage: appliedCoupon.discount_percentage,
+            owner_user_id: appliedCoupon.owner_user_id,
+            owner_email: appliedCoupon.owner_email,
+            owner_pix_key: appliedCoupon.owner_pix_key
+          })
         },
         // Device ID: usar capturado ou indicar que SDK envia automaticamente
         device_id: deviceId || "mp_sdk_auto",
@@ -1508,6 +1544,16 @@ export function PaymentModal({
         metadata: {
           order_id: orderId,
           schedulePayload,
+          ...(appliedCoupon && {
+            coupon_id: appliedCoupon.coupon_id,
+            coupon_code: appliedCoupon.coupon_code,
+            amount_original: appliedCoupon.amount_original,
+            amount_discounted: appliedCoupon.amount_discounted,
+            discount_percentage: appliedCoupon.discount_percentage,
+            owner_user_id: appliedCoupon.owner_user_id,
+            owner_email: appliedCoupon.owner_email,
+            owner_pix_key: appliedCoupon.owner_pix_key
+          })
         },
         device_id: deviceId || "mp_sdk_auto",
       };
@@ -1689,6 +1735,51 @@ export function PaymentModal({
     }
   };
 
+  const handleApplyCoupon = async () => {
+    setIsValidatingCoupon(true);
+    setCouponError("");
+    
+    try {
+      // Determinar tipo de item (SERVICE ou PLAN)
+      const itemType = sku.startsWith('IND_') || sku.startsWith('FAM_') ? 'PLAN' : 'SERVICE';
+      
+      // Chamar edge function validate-coupon
+      const { data, error } = await supabase.functions.invoke('validate-coupon', {
+        body: {
+          coupon_code: couponCode,
+          item_type: itemType,
+          amount_original: amount, // em centavos
+          user_id: (await supabase.auth.getUser()).data.user?.id
+        }
+      });
+      
+      if (error || !data.is_valid) {
+        setCouponError(data?.error_message || "Cupom inválido ou não aplicável");
+        return;
+      }
+      
+      // Aplicar cupom
+      setAppliedCoupon(data);
+      
+      toast("Cupom aplicado com sucesso!", {
+        description: `Desconto de ${data.discount_percentage}% aplicado`,
+      });
+      
+    } catch (err) {
+      console.error("Erro ao validar cupom:", err);
+      setCouponError("Erro ao validar cupom. Tente novamente.");
+    } finally {
+      setIsValidatingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+    toast("Cupom removido");
+  };
+
   // Mapeamento de status_detail para mensagens claras
   const getStatusMessage = (statusDetail: string) => {
     const statusMessages: Record<string, { title: string; message: string; showRetry: boolean; showPix: boolean }> = {
@@ -1854,15 +1945,70 @@ export function PaymentModal({
 
             {/* Indicador de carregamento */}
             {isLoadingUserData && (
-              <div className="flex items_center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
+              <div className="flex items-center gap-2 p-4 bg-muted/50 rounded-lg mb-4">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm text-muted-foreground">Carregando seus dados...</span>
               </div>
             )}
 
+            {/* Campo de Cupom */}
+            <div className="border-t pt-4 mb-4">
+              <Label htmlFor="coupon">Cupom de desconto (opcional)</Label>
+              <div className="flex gap-2 mt-2">
+                <Input
+                  id="coupon"
+                  placeholder="Digite o código do cupom"
+                  value={couponCode}
+                  onChange={(e) => {
+                    setCouponCode(e.target.value.toUpperCase());
+                    setCouponError("");
+                  }}
+                  disabled={!!appliedCoupon || isValidatingCoupon}
+                  className="uppercase"
+                />
+                {!appliedCoupon && (
+                  <Button
+                    onClick={handleApplyCoupon}
+                    disabled={!couponCode || isValidatingCoupon}
+                    variant="outline"
+                  >
+                    {isValidatingCoupon ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aplicar"}
+                  </Button>
+                )}
+                {appliedCoupon && (
+                  <Button
+                    onClick={handleRemoveCoupon}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <AlertCircle className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              
+              {couponError && (
+                <p className="text-sm text-destructive mt-2">{couponError}</p>
+              )}
+              
+              {appliedCoupon && (
+                <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-md">
+                  <div className="flex items-center gap-2 text-green-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="text-sm font-medium">
+                      Cupom aplicado! Desconto de {appliedCoupon.discount_percentage}%
+                    </span>
+                  </div>
+                  <div className="text-sm text-green-700 mt-1">
+                    De <span className="line-through">R$ {(appliedCoupon.amount_original / 100).toFixed(2)}</span> por{" "}
+                    <span className="font-semibold">R$ {(appliedCoupon.amount_discounted / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <PaymentSummary
               serviceName={serviceName}
-              amount={amount}
+              amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
               formData={formData}
               recurring={recurring}
               frequency={frequency}
