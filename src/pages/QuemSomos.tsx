@@ -26,7 +26,7 @@ Conheça Nossos Serviços</p>
               </div>
               
               <Button variant="medical" size="lg" asChild>
-                <a href="/#servicos">Conheça Nossos Serviços</a>
+                
               </Button>
             </div>
           </div>
