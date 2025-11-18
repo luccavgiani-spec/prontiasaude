@@ -30,7 +30,15 @@ const QuemSomos = () => {
             </div>
             <div className="my-[32px]">
               <div className="text-muted-foreground mb-8 text-center mx-[13px] my-0 text-lg md:text-xl leading-relaxed">
-                <p>A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde cedo, acompanhei meus pais em ações sociais, especialmente minha mãe, e aprendi que cuidar do próximo é um chamado. A missão da Prontia Saúde é democratizar o acesso à saúde de forma simples, humana e contínua. Mais do que consultas rápidas, a marca existe para transformar a experiência do paciente, unindo tecnologia e acolhimento em um cuidado que não se encerra no diagnóstico. Queremos que cada pessoa tenha acesso a profissionais de qualidade, receba acompanhamento real e se sinta amparada em todos os momentos: do atendimento clínico ao apoio emocional e educativo. Nossa missão é clara: oferecer saúde acessível e confiável, tornando o cuidado médico um gesto de proximidade, e não um privilégio distante.</p>
+                <p className="mb-6">A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde cedo, acompanhei meus pais em ações sociais, especialmente minha mãe, e aprendi que cuidar do próximo é um chamado.</p>
+                
+                <p className="mb-6">Foi dela que herdei a vontade de fazer a diferença e a certeza de que o cuidado vai muito além da medicina — ele começa no coração. Inspirada por seu exemplo e pelos valores que ela me transmitiu, encontrei na medicina o meu propósito de vida.</p>
+                
+                <p className="mb-6">Minha trajetória no SUS foi fundamental para compreender tanto a grandeza quanto os desafios do sistema público. Acompanhei filas extensas, pacientes que aguardavam meses por atendimento e famílias que, por estarem distantes dos grandes centros, não conseguiam acesso a cuidados básicos no tempo adequado. Percebi, então, que não seria possível mudar todo o sistema sozinha, mas que poderia desenvolver alternativas reais para levar saúde de forma justa, ágil e humanizada a quem mais precisa.</p>
+                
+                <p className="mb-6">Assim surgiu a Prontìa Saúde: um projeto construído com amor, propósito e parceria. Ao lado da minha mãe transformamos um sonho em realidade. Nosso objetivo é democratizar o acesso à saúde no Brasil, oferecendo atendimento médico de qualidade, de forma simples, acessível e a baixo custo. Acreditamos na tecnologia como instrumento para aproximar pessoas, superar barreiras geográficas e fortalecer a relação médico-paciente.</p>
+                
+                <p>A Prontìa Saúde não é apenas telemedicina. É um compromisso da nossa família com todas as famílias de trazer dignidade, inclusão, proximidade, acolhimento, e eficiência.</p>
               </div>
             </div>
           </div>
