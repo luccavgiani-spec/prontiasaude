@@ -57,10 +57,29 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
+          // Core (always needed)
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-accordion', '@radix-ui/react-select'],
+          
+          // UI - Critical (used in home - Dialog for modals)
+          'vendor-ui-critical': ['@radix-ui/react-dialog', '@radix-ui/react-toast'],
+          
+          // UI - Lazy (used in lazy sections or internal pages)
+          'vendor-ui-lazy': [
+            '@radix-ui/react-accordion', 
+            '@radix-ui/react-select',
+            '@radix-ui/react-tabs',
+            '@radix-ui/react-checkbox',
+            '@radix-ui/react-radio-group'
+          ],
+          
+          // Backend
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-query': ['@tanstack/react-query'],
+          
+          // Forms (lazy - used in signup/login)
+          'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          
+          // Icons (common, but can be optimized)
           'vendor-icons': ['lucide-react'],
         },
         assetFileNames: (assetInfo) => {

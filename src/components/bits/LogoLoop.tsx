@@ -37,15 +37,17 @@ export default function LogoLoop({
     const container = containerRef.current;
     if (!container) return;
 
-    // Set CSS variables
-    container.style.setProperty("--logo-height", `${logoHeight}px`);
-    container.style.setProperty("--gap", `${gap}px`);
-    container.style.setProperty("--speed", `${speed * 2}s`);
-    container.style.setProperty("--direction", direction === "left" ? "normal" : "reverse");
-    
-    if (fadeOut) {
-      container.style.setProperty("--fade-color", fadeOutColor);
-    }
+    // Defer CSS updates to avoid reflow during render
+    requestAnimationFrame(() => {
+      container.style.setProperty("--logo-height", `${logoHeight}px`);
+      container.style.setProperty("--gap", `${gap}px`);
+      container.style.setProperty("--speed", `${speed * 2}s`);
+      container.style.setProperty("--direction", direction === "left" ? "normal" : "reverse");
+      
+      if (fadeOut) {
+        container.style.setProperty("--fade-color", fadeOutColor);
+      }
+    });
   }, [logoHeight, gap, speed, direction, fadeOut, fadeOutColor]);
 
   return (
