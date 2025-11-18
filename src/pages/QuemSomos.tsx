@@ -1,13 +1,18 @@
 import { Heart, Users, Award, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import quemSomosHero from "@/assets/quem-somos-hero.jpg";
+import prontiaLogoQuemSomos from "@/assets/prontia-logo-quem-somos-temp.png";
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
         {/* Hero */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-6 mx-0 py-[15px]">Prontìa Saúde</h1>
-          
+          <img 
+            src={prontiaLogoQuemSomos} 
+            alt="Prontìa Saúde" 
+            className="mx-auto w-[300px] md:w-[500px] h-auto py-[15px]"
+            loading="eager"
+          />
         </div>
 
         {/* Nossa Missão com Imagem */}
