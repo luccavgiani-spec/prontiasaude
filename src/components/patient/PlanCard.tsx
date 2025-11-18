@@ -1,4 +1,5 @@
 import prontiaLogo from "@/assets/prontia-icon-misto.webp";
+import prontiaIcon from "@/assets/prontia-icon-misto.webp";
 
 interface PlanCardProps {
   patientName: string;
@@ -74,9 +75,9 @@ export const PlanCard = (props: PlanCardProps) => {
           </div>
 
           <img 
-            src="/favicon.png" 
+            src={prontiaIcon} 
             alt="Prontia" 
-            className="absolute bottom-4 right-4 w-24 h-24 md:w-28 md:h-28 opacity-80"
+            className="absolute bottom-4 right-4 w-24 h-24 md:w-28 md:h-28"
           />
         </div>
       </div>
