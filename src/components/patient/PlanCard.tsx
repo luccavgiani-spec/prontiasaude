@@ -1,4 +1,4 @@
-import prontiaLogo from "@/assets/prontia-logo-horizontal-verde.webp";
+import prontiaLogo from "@/assets/prontia-icon-misto.webp";
 
 interface PlanCardProps {
   patientName: string;
@@ -35,7 +35,7 @@ export const PlanCard = (props: PlanCardProps) => {
             <img 
               src={prontiaLogo}
               alt="Prontia Saúde"
-              className="w-52 md:w-64 h-auto object-contain"
+              className="w-32 md:w-40 h-auto object-contain"
             />
             <div className="text-right">
               <div className="text-xs md:text-sm font-medium" style={{ color: '#fbaa03' }}>Plano de Saúde</div>
@@ -73,18 +73,11 @@ export const PlanCard = (props: PlanCardProps) => {
             </div>
           </div>
 
-          <div className="absolute bottom-4 right-4 w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center" 
-            style={{ 
-              background: 'linear-gradient(135deg, #fbaa03 0%, rgba(251,170,3,0.8) 100%)',
-              boxShadow: '0 4px 12px rgba(251,170,3,0.3)'
-            }}
-          >
-            <img 
-              src="/favicon.png" 
-              alt="Prontia" 
-              className="w-8 h-8 md:w-10 md:h-10"
-            />
-          </div>
+          <img 
+            src="/favicon.png" 
+            alt="Prontia" 
+            className="absolute bottom-4 right-4 w-24 h-24 md:w-28 md:h-28 opacity-80"
+          />
         </div>
       </div>
     </div>
