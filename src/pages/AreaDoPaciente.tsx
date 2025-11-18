@@ -14,6 +14,7 @@ import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
+import { PlanCard } from "@/components/patient/PlanCard";
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -481,6 +482,18 @@ const AreaDoPaciente = () => {
           </Card>
 
         </div>
+
+        {/* Carteirinha do Plano - APENAS para usuários COM plano ativo */}
+        {patientPlan && patient && currentUser?.email && (
+          <div className="mt-8">
+            <PlanCard
+              patientName={`${patient.first_name || ''} ${patient.last_name || ''}`.trim() || currentUser.email}
+              planCode={patientPlan.plan_code || ''}
+              planCreatedAt={patientPlan.created_at || new Date().toISOString()}
+              cpf={patient.cpf || ''}
+            />
+          </div>
+        )}
 
         {/* Minhas Consultas - APENAS para usuários SEM plano ativo */}
         {!patientPlan && currentUser?.email && (
