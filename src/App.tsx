@@ -11,9 +11,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import WhatsAppFloatButton from "@/components/layout/WhatsAppFloatButton";
 
-// Critical Pages (loaded immediately)
+// Critical Pages (loaded immediately - apenas homepage)
 import Index from "./pages/Index";
-import Servicos from "./pages/Servicos";
 import NotFound from "./pages/NotFound";
 
 // Intercepta respostas 402 do schedule-redirect e abre o modal de pagamento
@@ -58,7 +57,8 @@ if (typeof window !== "undefined" && !(window as any).__schedule402Patched) {
   };
 }
 
-// Lazy-loaded Pages (code splitting)
+// Lazy-loaded Pages (code splitting para melhor performance)
+const Servicos = lazy(() => import("./pages/Servicos"));
 const QuemSomos = lazy(() => import("./pages/QuemSomos"));
 const ServicoDetalhe = lazy(() => import("./pages/ServicoDetalhe"));
 const Consulta = lazy(() => import("./pages/servicos/Consulta"));
