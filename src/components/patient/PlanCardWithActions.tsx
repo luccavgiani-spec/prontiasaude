@@ -21,7 +21,19 @@ export const PlanCardWithActions = (props: PlanCardWithActionsProps) => {
     setIsDownloading(true);
     toast.info("Gerando imagem...");
     try {
-      const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null });
+      // Aguardar 100ms para garantir que tudo foi renderizado
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 3,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#00675e',
+        logging: false,
+        imageTimeout: 0,
+        removeContainer: true
+      });
+      
       canvas.toBlob((blob) => {
         if (!blob) { toast.error("Erro"); setIsDownloading(false); return; }
         const url = URL.createObjectURL(blob);
@@ -33,7 +45,11 @@ export const PlanCardWithActions = (props: PlanCardWithActionsProps) => {
         toast.success("Baixado!");
         setIsDownloading(false);
       }, 'image/png');
-    } catch { toast.error("Erro"); setIsDownloading(false); }
+    } catch (error) {
+      console.error('Erro ao gerar imagem:', error);
+      toast.error("Erro ao gerar imagem");
+      setIsDownloading(false);
+    }
   };
 
   return (
