@@ -42,7 +42,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
         {/* Conteúdo principal */}
         <div className="relative p-6 md:p-8">
           {/* Header: Logo + Título */}
-          <div className="flex items-start justify-between mb-6">
+          <div className="flex items-start justify-between mb-3">
             <img 
               src={prontiaLogo}
               alt="Prontìa Saúde"
@@ -107,7 +107,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
           <img 
             src="/favicon.png"
             alt="Prontìa"
-            className="absolute bottom-4 right-4 h-8 w-8 opacity-60"
+            className="absolute bottom-4 right-4 h-8 w-8 md:h-10 md:w-10 opacity-60"
             loading="lazy"
           />
         </div>
