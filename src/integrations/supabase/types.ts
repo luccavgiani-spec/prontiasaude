@@ -752,6 +752,7 @@ export type Database = {
           discount_percentage: number
           id: string
           is_active: boolean
+          is_admin_coupon: boolean
           owner_user_id: string
           pix_key: string | null
           updated_at: string
@@ -763,6 +764,7 @@ export type Database = {
           discount_percentage?: number
           id?: string
           is_active?: boolean
+          is_admin_coupon?: boolean
           owner_user_id: string
           pix_key?: string | null
           updated_at?: string
@@ -774,6 +776,7 @@ export type Database = {
           discount_percentage?: number
           id?: string
           is_active?: boolean
+          is_admin_coupon?: boolean
           owner_user_id?: string
           pix_key?: string | null
           updated_at?: string
