@@ -1,13 +1,4 @@
-import { formatCPF } from "@/lib/cpf-validator";
-import { formatPlanName } from "@/lib/patient-plan";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { CheckCircle, Download, Share2 } from "lucide-react";
-import prontiaLogo from "@/assets/prontia-logo-horizontal-misto.webp";
-import html2canvas from "html2canvas";
-import { useState, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import prontiaLogo from "@/assets/prontia-logo-horizontal-verde.webp";
 
 interface PlanCardProps {
   patientName: string;
@@ -16,164 +7,71 @@ interface PlanCardProps {
   cpf: string;
 }
 
-export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCardProps) => {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [isDownloading, setIsDownloading] = useState(false);
-
+export const PlanCard = (props: PlanCardProps) => {
   const formatInscriptionDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), "dd/MM/yyyy", { locale: ptBR });
-    } catch {
-      return "Data não disponível";
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!cardRef.current) return;
-    setIsDownloading(true);
-    toast.info("Gerando imagem da carteirinha...");
-    try {
-      const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null, logging: false });
-      canvas.toBlob((blob) => {
-        if (!blob) { toast.error("Erro ao gerar imagem"); setIsDownloading(false); return; }
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `carteirinha-prontia-${cpf.replace(/\D/g, '')}.png`;
-        link.click();
-        URL.revokeObjectURL(url);
-        toast.success("Carteirinha baixada com sucesso!");
-        setIsDownloading(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error("Erro:", error);
-      toast.error("Erro ao baixar a carteirinha");
-      setIsDownloading(false);
-    }
-  };
-
-  const handleShare = async () => {
-    if (!cardRef.current) return;
-    setIsDownloading(true);
-    toast.info("Preparando para compartilhar...");
-    try {
-      const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null, logging: false });
-      canvas.toBlob(async (blob) => {
-        if (!blob) { toast.error("Erro ao gerar imagem"); setIsDownloading(false); return; }
-        const file = new File([blob], `carteirinha-prontia-${cpf.replace(/\D/g, '')}.png`, { type: 'image/png' });
-        if (navigator.share && navigator.canShare({ files: [file] })) {
-          try {
-            await navigator.share({ files: [file], title: 'Minha Carteirinha Prontìa', text: 'Confira minha carteirinha do plano de saúde Prontìa' });
-            toast.success("Carteirinha compartilhada!");
-          } catch (err) {
-            if ((err as Error).name !== 'AbortError') handleDownload();
-          }
-        } else { handleDownload(); }
-        setIsDownloading(false);
-      }, 'image/png');
-    } catch (error) {
-      console.error("Erro:", error);
-      toast.error("Erro ao compartilhar a carteirinha");
-      setIsDownloading(false);
-    }
+    const date = new Date(dateString);
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      <div className="flex gap-3 mb-4 justify-end">
-        <Button onClick={handleShare} disabled={isDownloading} variant="outline" size="sm" className="gap-2">
-          <Share2 className="h-4 w-4" />Compartilhar
-        </Button>
-        <Button onClick={handleDownload} disabled={isDownloading} variant="default" size="sm" className="gap-2">
-          <Download className="h-4 w-4" />{isDownloading ? "Gerando..." : "Baixar PNG"}
-        </Button>
-      </div>
-      {/* Container da carteirinha */}
-      <div ref={cardRef}
-        className="relative overflow-hidden rounded-xl shadow-2xl"
+      <div 
+        className="relative w-full overflow-hidden rounded-2xl shadow-2xl"
         style={{
-          background: "linear-gradient(135deg, #00766A 0%, #009688 50%, #00766A 100%)",
-          border: "1px solid rgba(255, 255, 255, 0.2)"
+          background: 'linear-gradient(135deg, hsl(172, 100%, 23%) 0%, hsl(172, 100%, 28%) 100%)'
         }}
       >
-        {/* Barra superior colorida */}
-        <div 
-          className="h-2 md:h-3"
-          style={{
-            background: "linear-gradient(90deg, #DE6545 0%, #FBAA03 100%)"
-          }}
-        />
-
-        {/* Conteúdo principal */}
-        <div className="relative p-6 md:p-8">
-          {/* Header: Logo + Título */}
-          <div className="flex items-start justify-between mb-3">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/90 via-primary to-primary-glow/80" />
+        
+        <div className="relative z-10 p-4 md:p-6 text-white">
+          <div className="flex items-center justify-between mb-2">
             <img 
               src={prontiaLogo}
-              alt="Prontìa Saúde"
-              className="w-52 md:w-64 h-auto object-contain"
-              loading="lazy"
+              alt="Prontia Saúde"
+              className="w-40 md:w-48 h-auto object-contain"
             />
-            <p className="text-xs md:text-sm text-white/80 uppercase tracking-wide font-semibold text-right">
-              Carteirinha de<br />Plano de Saúde
-            </p>
+            <div className="text-right">
+              <div className="text-xs md:text-sm font-medium opacity-90">Plano de Saúde</div>
+              <div className="text-base md:text-lg font-bold">Plano Ativo</div>
+            </div>
           </div>
 
-          {/* Linha divisória */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mb-3" />
+          <div className="w-full h-[1px] bg-white/30 mb-2" />
 
-          {/* Nome do Titular */}
-          <div className="mb-6">
-            <p className="text-xs text-white/70 mb-1 uppercase tracking-wide">Nome do Titular</p>
-            <p className="text-2xl md:text-3xl font-bold text-white tracking-wide">
-              {patientName.toUpperCase()}
-            </p>
-          </div>
-
-          {/* Grid de informações (2 colunas) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {/* Tipo de Plano */}
-            <div>
-              <p className="text-xs text-white/70 mb-1 uppercase tracking-wide">Plano</p>
-              <p className="text-base md:text-lg font-semibold text-white">
-                {formatPlanName(planCode)}
-              </p>
+          <div className="space-y-4">
+            <div className="mb-4">
+              <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Nome do Titular</div>
+              <div className="text-lg md:text-xl font-bold">{props.patientName}</div>
             </div>
 
-            {/* CPF */}
-            <div>
-              <p className="text-xs text-white/70 mb-1 uppercase tracking-wide">CPF</p>
-              <p className="text-base md:text-lg font-mono font-semibold text-white">
-                {formatCPF(cpf)}
-              </p>
-            </div>
-
-            {/* Data de Inscrição */}
-            <div>
-              <p className="text-xs text-white/70 mb-1 uppercase tracking-wide">Inscrito em</p>
-              <p className="text-base md:text-lg font-medium text-white">
-                {formatInscriptionDate(planCreatedAt)}
-              </p>
-            </div>
-
-            {/* Status */}
-            <div>
-              <p className="text-xs text-white/70 mb-1 uppercase tracking-wide">Status</p>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-4 w-4 text-green-300" />
-                <span className="text-base md:text-lg font-semibold text-green-300">
-                  Plano Ativo
-                </span>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Código do Plano</div>
+                <div className="text-sm md:text-base font-semibold">{props.planCode}</div>
+              </div>
+              
+              <div>
+                <div className="text-xs md:text-sm font-medium opacity-80 mb-1">CPF</div>
+                <div className="text-sm md:text-base font-semibold">
+                  {props.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
+                </div>
               </div>
             </div>
+
+            <div>
+              <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Data de Inscrição</div>
+              <div className="text-sm md:text-base font-semibold">{formatInscriptionDate(props.planCreatedAt)}</div>
+            </div>
           </div>
 
-          {/* Favicon no canto inferior direito */}
           <img 
-            src="/favicon.png"
-            alt="Prontìa"
-            className="absolute bottom-4 right-4 h-5 w-5 md:h-6 md:w-6 opacity-60"
-            loading="lazy"
+            src="/favicon.png" 
+            alt="Prontia" 
+            className="absolute bottom-4 right-4 h-8 w-8 md:h-10 md:w-10 opacity-70"
           />
         </div>
       </div>
