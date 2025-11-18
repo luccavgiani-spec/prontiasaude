@@ -166,15 +166,15 @@ export function HeroSection() {
             <picture className="hero-picture">
               <source 
                 type="image/webp" 
-                srcSet="/assets/hero-doctor-optimized-512.webp 512w, /assets/hero-doctor-optimized-768.webp 768w, /assets/hero-doctor-optimized-1200.webp 1200w" 
-                sizes="(max-width: 640px) 512px, (max-width: 1024px) 768px, 1200px" 
+                srcSet="/assets/hero-mobile-420.webp 672w, /assets/hero-tablet-768.webp 768w, /assets/hero-desktop-1600.webp 1600w" 
+                sizes="(max-width: 600px) 672px, (max-width: 1024px) 768px, 1600px" 
               />
               <img 
-                src="/assets/hero-doctor-optimized-768.webp" 
+                src="/assets/hero-mobile-420.webp" 
                 alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
                 className="w-full h-full object-cover object-center" 
-                width={768} 
-                height={432} 
+                width={672} 
+                height={416} 
                 loading="eager" 
                 fetchPriority="high" 
                 decoding="async" 
