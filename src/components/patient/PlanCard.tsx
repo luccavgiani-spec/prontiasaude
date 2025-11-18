@@ -1,4 +1,4 @@
-import { formatCPF } from "@/lib/validations";
+import { formatCPF } from "@/lib/cpf-validator";
 import { formatPlanName } from "@/lib/patient-plan";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -26,7 +26,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
       <div 
         className="relative overflow-hidden rounded-xl shadow-2xl"
         style={{
-          background: "linear-gradient(135deg, rgba(0, 118, 106, 0.06) 0%, #EFE3D5 50%, rgba(251, 170, 3, 0.08) 100%)",
+          background: "linear-gradient(135deg, rgba(0, 118, 106, 0.1) 0%, #F5F5F5 50%, rgba(0, 150, 136, 0.08) 100%)",
           border: "1px solid rgba(0, 118, 106, 0.15)"
         }}
       >
@@ -45,12 +45,8 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
             <img 
               src="/assets/prontia-logo-horizontal-misto.webp"
               alt="Prontìa Saúde"
-              className="h-10 md:h-12 w-auto object-contain"
+              className="w-32 md:w-40 h-auto object-contain"
               loading="lazy"
-              onError={(e) => {
-                // Fallback para logo alternativa se a horizontal não existir
-                e.currentTarget.src = "/assets/prontia-logo-branca.webp";
-              }}
             />
             <p className="text-xs md:text-sm text-gray-500 uppercase tracking-wide font-semibold text-right">
               Carteirinha de<br />Plano de Saúde
@@ -81,7 +77,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
             {/* CPF */}
             <div>
               <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">CPF</p>
-              <p className="text-base md:text-lg font-mono font-medium text-gray-800">
+              <p className="text-base md:text-lg font-mono font-semibold text-gray-900">
                 {formatCPF(cpf)}
               </p>
             </div>
