@@ -165,21 +165,16 @@ export function HeroSection() {
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10 pointer-events-none" />
             <picture className="hero-picture">
               <source 
-                type="image/avif" 
-                srcSet="/assets/hero-doctor-realistic-320.avif 320w, /assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-1200.avif 1200w" 
-                sizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px" 
-              />
-              <source 
                 type="image/webp" 
-                srcSet="/assets/hero-doctor-realistic-512.webp 512w, /assets/hero-doctor-realistic-600.webp 600w, /assets/hero-doctor-realistic-1200.webp 1200w" 
-                sizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px" 
+                srcSet="/assets/hero-doctor-optimized-512.webp 512w, /assets/hero-doctor-optimized-768.webp 768w, /assets/hero-doctor-optimized-1200.webp 1200w" 
+                sizes="(max-width: 640px) 512px, (max-width: 1024px) 768px, 1200px" 
               />
               <img 
-                src="/assets/hero-doctor-realistic-600.webp" 
+                src="/assets/hero-doctor-optimized-768.webp" 
                 alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
                 className="w-full h-full object-cover object-center" 
-                width={512} 
-                height={288} 
+                width={768} 
+                height={432} 
                 loading="eager" 
                 fetchPriority="high" 
                 decoding="async" 

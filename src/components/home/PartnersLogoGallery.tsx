@@ -58,8 +58,11 @@ export const PartnersLogoGallery: React.FC = () => {
               <img
                 src={logo.src}
                 alt={logo.alt}
+                width="120"
+                height="120"
                 loading="lazy"
                 className="partner-logo-image"
+                style={{ aspectRatio: '1/1' }}
               />
             </div>
           ))}

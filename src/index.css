@@ -174,10 +174,6 @@
     transition: var(--transition-smooth);
   }
 
-  .medical-card {
-    will-change: box-shadow, border-color;
-  }
-
   .medical-card:hover {
     box-shadow: var(--shadow-xl);
     border-color: hsl(var(--primary) / 0.2);
