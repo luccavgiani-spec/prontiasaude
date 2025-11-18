@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import quemSomosHero from "@/assets/quem-somos-hero.jpg";
 import prontiaLogoDesktop from "@/assets/prontia-logo-quem-somos-desktop.webp";
 import prontiaLogoMobile from "@/assets/prontia-logo-quem-somos-mobile.webp";
+
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
@@ -28,15 +29,9 @@ const QuemSomos = () => {
               <img src={quemSomosHero} alt="Equipe médica Prontia Saúde - Cuidado humanizado e acessível" className="rounded-2xl shadow-lg w-full" />
             </div>
             <div className="my-[32px]">
-              
-              
               <div className="text-muted-foreground mb-8 text-center mx-[13px] my-0 text-lg md:text-xl leading-relaxed">
-                <p>A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde cedo, acompanhei meus pais em ações sociais, especialmente minha mãe, e aprendi que cuidar do próximo é um chamado.   </p>
+                <p>A Prontìa Saúde nasceu de uma história de vida e de um legado de cuidado. Desde cedo, acompanhei meus pais em ações sociais, especialmente minha mãe, e aprendi que cuidar do próximo é um chamado. A missão da Prontia Saúde é democratizar o acesso à saúde de forma simples, humana e contínua. Mais do que consultas rápidas, a marca existe para transformar a experiência do paciente, unindo tecnologia e acolhimento em um cuidado que não se encerra no diagnóstico. Queremos que cada pessoa tenha acesso a profissionais de qualidade, receba acompanhamento real e se sinta amparada em todos os momentos: do atendimento clínico ao apoio emocional e educativo. Nossa missão é clara: oferecer saúde acessível e confiável, tornando o cuidado médico um gesto de proximidade, e não um privilégio distante.</p>
               </div>
-              
-              <Button variant="medical" size="lg" asChild>
-                
-              </Button>
             </div>
           </div>
         </div>
@@ -75,17 +70,8 @@ const QuemSomos = () => {
             </div>
           </div>
         </div>
-
-        {/* Nossa História */}
-        <div className="bg-muted/30 rounded-2xl p-8 md:p-12 text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-6">Missão</h2>
-          <p className="text-muted-foreground max-w-3xl mx-auto mb-8">A missão da Prontia Saúde é democratizar o acesso à saúde de forma simples, humana e contínua. Mais do que consultas rápidas, a marca existe para transformar a experiência do paciente, unindo tecnologia e acolhimento em um cuidado que não se encerra no diagnóstico. 
-
-
-Queremos que cada pessoa tenha acesso a profissionais de qualidade, receba acompanhamento real e se sinta amparada em todos os momentos: do atendimento clínico ao apoio emocional e educativo. Nossa missão é clara: oferecer saúde acessível e confiável, tornando o cuidado médico um gesto de proximidade, e não um privilégio distante.</p>
-          
-        </div>
       </div>
     </div>;
 };
+
 export default QuemSomos;
