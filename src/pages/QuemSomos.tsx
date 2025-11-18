@@ -7,7 +7,7 @@ import prontiaLogoMobile from "@/assets/prontia-logo-quem-somos-mobile.webp";
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
-        {/* Hero */}
+        {/* ========== SEÇÃO HERO - NÃO REMOVER ========== */}
         <div className="text-center mb-16">
           <img 
             src={prontiaLogoDesktop}
@@ -22,7 +22,7 @@ const QuemSomos = () => {
           />
         </div>
 
-        {/* Nossa Missão com Imagem */}
+        {/* ========== NOSSA HISTÓRIA COM IMAGEM - NÃO REMOVER ========== */}
         <div className="mb-16">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div>
@@ -44,7 +44,7 @@ const QuemSomos = () => {
           </div>
         </div>
 
-        {/* Nossos Valores */}
+        {/* ========== PILARES - NÃO REMOVER ========== */}
         <div className="mb-16">
           <h2 className="text-3xl font-bold text-center text-foreground mb-12">Pilares</h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -76,6 +76,16 @@ const QuemSomos = () => {
                 Construir relacionamentos sólidos baseados em ética, clareza e competência, transmitindo segurança em cada atendimento.
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* ========== MISSÃO - NÃO REMOVER ========== */}
+        <div className="mb-16">
+          <h2 className="text-3xl font-bold text-center text-foreground mb-12">Missão</h2>
+          <div className="max-w-4xl mx-auto">
+            <p className="text-muted-foreground text-center text-lg md:text-xl leading-relaxed">
+              A missão da Prontia Saúde é democratizar o acesso à saúde de forma simples, humana e contínua. Mais do que consultas rápidas, a marca existe para transformar a experiência do paciente, unindo tecnologia e acolhimento em um cuidado que não se encerra no diagnóstico. Queremos que cada pessoa tenha acesso a profissionais de qualidade, receba acompanhamento real e se sinta amparada em todos os momentos: do atendimento clínico ao apoio emocional e educativo. Nossa missão é clara: oferecer saúde acessível e confiável, tornando o cuidado médico um gesto de proximidade, e não um privilégio distante.
+            </p>
           </div>
         </div>
       </div>
