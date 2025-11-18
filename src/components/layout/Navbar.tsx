@@ -39,7 +39,7 @@ export function Navbar() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
-  return <nav className="sticky top-0 z-50 bg-primary backdrop-blur-md supports-[backdrop-filter]:bg-primary/95 border-b border-primary-glow/20 shadow-lg">
+  return <nav className="sticky top-0 z-50 bg-primary backdrop-blur-md supports-[backdrop-filter]:bg-primary/95 border-b border-primary-glow/20 shadow-lg" style={{ minHeight: '64px' }}>
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
         <div className="flex justify-between items-center h-12 lg:h-14">
           {/* Logo Prontìa Oficial */}

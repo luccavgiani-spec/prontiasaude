@@ -48,14 +48,13 @@
     }
     </script>
 
-    <!-- Preload imagem hero crítica AVIF (mobile-first optimized) -->
+    <!-- Preload imagem hero crítica - Otimizada para LCP Mobile -->
     <link 
       rel="preload" 
       as="image" 
-      href="/assets/hero-doctor-realistic-320.avif"
-      imagesrcset="/assets/hero-doctor-realistic-320.avif 320w, /assets/hero-doctor-realistic-512.avif 512w, /assets/hero-doctor-realistic-1200.avif 1200w"
-      imagesizes="(max-width: 400px) 320px, (max-width: 768px) 512px, 1200px"
-      type="image/avif"
+      href="/assets/hero-doctor-optimized-768.webp"
+      imagesrcset="/assets/hero-doctor-optimized-512.webp 512w, /assets/hero-doctor-optimized-768.webp 768w, /assets/hero-doctor-optimized-1200.webp 1200w"
+      imagesizes="(max-width: 640px) 512px, (max-width: 1024px) 768px, 1200px"
       fetchpriority="high"
     />
 

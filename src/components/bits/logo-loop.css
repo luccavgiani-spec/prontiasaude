@@ -50,6 +50,9 @@
   position: relative;
   z-index: 2;
   animation: scroll var(--speed) linear infinite var(--direction);
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .logo-item {
