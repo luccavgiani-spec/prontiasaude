@@ -187,7 +187,6 @@
     box-shadow: var(--button-shadow);
     min-height: 48px;
     min-width: 48px;
-    will-change: transform, box-shadow;
   }
 
   .medical-button-primary:hover {
@@ -203,7 +202,6 @@
     box-shadow: 0 4px 14px 0 hsl(var(--secondary), 0.39);
     min-height: 48px;
     min-width: 48px;
-    will-change: transform, box-shadow;
   }
 
   .medical-button-secondary:hover {
@@ -242,7 +240,7 @@
     }
     
     /* Otimizar animações para mobile */
-    .floating-animation, .pulse-glow {
+    .pulse-glow {
       animation-duration: 4s;
     }
   }
@@ -257,7 +255,6 @@
       transition-duration: 0.01ms !important;
     }
     
-    .floating-animation,
     .pulse-glow {
       animation: none !important;
     }
@@ -298,14 +295,6 @@
     -webkit-text-fill-color: transparent;
   }
 
-  .floating-animation {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-10px); }
-  }
 
   .pulse-glow {
     position: relative;
