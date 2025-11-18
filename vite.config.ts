@@ -16,9 +16,9 @@ function cacheHeadersPlugin(): Plugin {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
           res.setHeader('Vary', 'Accept-Encoding');
         }
-        // Imagens sem hash (1 semana)
+        // Imagens sem hash (30 dias)
         else if (/\.(jpg|jpeg|png|svg|webp)$/.test(url)) {
-          res.setHeader('Cache-Control', 'public, max-age=604800');
+          res.setHeader('Cache-Control', 'public, max-age=2592000');
           res.setHeader('Vary', 'Accept-Encoding');
         }
         // Fontes (1 ano)
