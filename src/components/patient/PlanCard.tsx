@@ -2,7 +2,6 @@ import { formatCPF } from "@/lib/validations";
 import { formatPlanName } from "@/lib/patient-plan";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import { CheckCircle } from "lucide-react";
 
 interface PlanCardProps {
@@ -22,104 +21,99 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full max-w-4xl mx-auto">
+      {/* Container da carteirinha */}
       <div 
-        className="relative overflow-hidden rounded-2xl shadow-lg"
+        className="relative overflow-hidden rounded-xl shadow-2xl"
         style={{
-          background: "linear-gradient(135deg, #00766A 0%, #005550 100%)"
+          background: "linear-gradient(135deg, rgba(0, 118, 106, 0.06) 0%, #EFE3D5 50%, rgba(251, 170, 3, 0.08) 100%)",
+          border: "1px solid rgba(0, 118, 106, 0.15)"
         }}
       >
-        {/* Pattern decorativo sutil */}
+        {/* Barra superior colorida */}
         <div 
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(239, 227, 213, 0.1) 35px, rgba(239, 227, 213, 0.1) 70px)`
-          }}
-        />
-
-        {/* Conteúdo principal */}
-        <div className="relative z-10 p-6 md:p-8">
-          <div className="grid md:grid-cols-[200px_1fr] gap-6 md:gap-8 items-center">
-            
-            {/* Coluna Esquerda: Logo */}
-            <div className="flex justify-center md:justify-start">
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-xl bg-white/10 backdrop-blur-sm p-4 flex items-center justify-center">
-                <img 
-                  src="/assets/prontia-logo-branca-200.avif"
-                  alt="Prontìa Saúde"
-                  className="w-full h-full object-contain"
-                  loading="lazy"
-                />
-              </div>
-            </div>
-
-            {/* Coluna Direita: Dados do paciente */}
-            <div className="space-y-4 text-white">
-              {/* Selo "Carteirinha do Plano" */}
-              <div className="inline-block mb-2">
-                <span 
-                  className="text-xs font-semibold px-3 py-1 rounded-full"
-                  style={{ backgroundColor: "#FBAA03", color: "#1a1a1a" }}
-                >
-                  Carteirinha do Plano Prontìa Saúde
-                </span>
-              </div>
-
-              {/* Nome do paciente */}
-              <div>
-                <p className="text-sm text-white/70 mb-1">Nome do Titular</p>
-                <p className="text-xl md:text-2xl font-bold tracking-wide">
-                  {patientName.toUpperCase()}
-                </p>
-              </div>
-
-              {/* Grid de informações */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                {/* Tipo de Plano */}
-                <div>
-                  <p className="text-xs text-white/70 mb-1">Tipo de Plano</p>
-                  <p className="text-base md:text-lg font-semibold" style={{ color: "#DE6545" }}>
-                    {formatPlanName(planCode)}
-                  </p>
-                </div>
-
-                {/* Data de Inscrição */}
-                <div>
-                  <p className="text-xs text-white/70 mb-1">Inscrito em</p>
-                  <p className="text-base md:text-lg font-medium">
-                    {formatInscriptionDate(planCreatedAt)}
-                  </p>
-                </div>
-
-                {/* CPF */}
-                <div>
-                  <p className="text-xs text-white/70 mb-1">CPF</p>
-                  <p className="text-base md:text-lg font-mono">
-                    {formatCPF(cpf)}
-                  </p>
-                </div>
-
-                {/* Status */}
-                <div className="flex items-end">
-                  <Badge 
-                    className="bg-green-500/20 text-green-200 border-green-300/30 hover:bg-green-500/30"
-                  >
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Plano Ativo
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Barra inferior decorativa */}
-        <div 
-          className="h-2"
+          className="h-2 md:h-3"
           style={{
             background: "linear-gradient(90deg, #DE6545 0%, #FBAA03 100%)"
           }}
         />
+
+        {/* Conteúdo principal */}
+        <div className="relative p-6 md:p-8">
+          {/* Header: Logo + Título */}
+          <div className="flex items-start justify-between mb-6">
+            <img 
+              src="/assets/prontia-logo-horizontal-misto.webp"
+              alt="Prontìa Saúde"
+              className="h-10 md:h-12 w-auto object-contain"
+              loading="lazy"
+              onError={(e) => {
+                // Fallback para logo alternativa se a horizontal não existir
+                e.currentTarget.src = "/assets/prontia-logo-branca.webp";
+              }}
+            />
+            <p className="text-xs md:text-sm text-gray-500 uppercase tracking-wide font-semibold text-right">
+              Carteirinha de<br />Plano de Saúde
+            </p>
+          </div>
+
+          {/* Linha divisória */}
+          <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent mb-6" />
+
+          {/* Nome do Titular */}
+          <div className="mb-6">
+            <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Nome do Titular</p>
+            <p className="text-2xl md:text-3xl font-bold text-[#00766A] tracking-wide">
+              {patientName.toUpperCase()}
+            </p>
+          </div>
+
+          {/* Grid de informações (2 colunas) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+            {/* Tipo de Plano */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Plano</p>
+              <p className="text-base md:text-lg font-semibold text-gray-800">
+                {formatPlanName(planCode)}
+              </p>
+            </div>
+
+            {/* CPF */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">CPF</p>
+              <p className="text-base md:text-lg font-mono font-medium text-gray-800">
+                {formatCPF(cpf)}
+              </p>
+            </div>
+
+            {/* Data de Inscrição */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Inscrito em</p>
+              <p className="text-base md:text-lg font-medium text-gray-800">
+                {formatInscriptionDate(planCreatedAt)}
+              </p>
+            </div>
+
+            {/* Status */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1 uppercase tracking-wide">Status</p>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-base md:text-lg font-semibold text-green-600">
+                  Plano Ativo
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Favicon no canto inferior direito */}
+          <img 
+            src="/favicon.png"
+            alt="Prontìa"
+            className="absolute bottom-4 right-4 h-8 w-8 opacity-60"
+            loading="lazy"
+          />
+        </div>
       </div>
     </div>
   );
