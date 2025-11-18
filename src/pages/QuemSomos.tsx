@@ -1,17 +1,23 @@
 import { Heart, Users, Award, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import quemSomosHero from "@/assets/quem-somos-hero.jpg";
-import prontiaLogoQuemSomos from "@/assets/prontia-logo-quem-somos-temp.png";
+import prontiaLogoDesktop from "@/assets/prontia-logo-quem-somos-desktop.webp";
+import prontiaLogoMobile from "@/assets/prontia-logo-quem-somos-mobile.webp";
 const QuemSomos = () => {
   return <div className="py-0">
       <div className="container mx-auto px-4">
         {/* Hero */}
         <div className="text-center mb-16">
           <img 
-            src={prontiaLogoQuemSomos} 
+            src={prontiaLogoDesktop}
+            srcSet={`${prontiaLogoMobile} 400w, ${prontiaLogoDesktop} 600w`}
+            sizes="(max-width: 768px) 300px, 500px"
             alt="Prontìa Saúde" 
+            width="600"
+            height="120"
             className="mx-auto w-[300px] md:w-[500px] h-auto py-[15px]"
             loading="eager"
+            fetchPriority="high"
           />
         </div>
 
