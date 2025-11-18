@@ -2,8 +2,12 @@ import { formatCPF } from "@/lib/cpf-validator";
 import { formatPlanName } from "@/lib/patient-plan";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Download, Share2 } from "lucide-react";
 import prontiaLogo from "@/assets/prontia-logo-horizontal-misto.webp";
+import html2canvas from "html2canvas";
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface PlanCardProps {
   patientName: string;
@@ -13,6 +17,9 @@ interface PlanCardProps {
 }
 
 export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCardProps) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   const formatInscriptionDate = (dateString: string) => {
     try {
       return format(new Date(dateString), "dd/MM/yyyy", { locale: ptBR });
@@ -21,10 +28,68 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
     }
   };
 
+  const handleDownload = async () => {
+    if (!cardRef.current) return;
+    setIsDownloading(true);
+    toast.info("Gerando imagem da carteirinha...");
+    try {
+      const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null, logging: false });
+      canvas.toBlob((blob) => {
+        if (!blob) { toast.error("Erro ao gerar imagem"); setIsDownloading(false); return; }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `carteirinha-prontia-${cpf.replace(/\D/g, '')}.png`;
+        link.click();
+        URL.revokeObjectURL(url);
+        toast.success("Carteirinha baixada com sucesso!");
+        setIsDownloading(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao baixar a carteirinha");
+      setIsDownloading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!cardRef.current) return;
+    setIsDownloading(true);
+    toast.info("Preparando para compartilhar...");
+    try {
+      const canvas = await html2canvas(cardRef.current, { scale: 2, backgroundColor: null, logging: false });
+      canvas.toBlob(async (blob) => {
+        if (!blob) { toast.error("Erro ao gerar imagem"); setIsDownloading(false); return; }
+        const file = new File([blob], `carteirinha-prontia-${cpf.replace(/\D/g, '')}.png`, { type: 'image/png' });
+        if (navigator.share && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: 'Minha Carteirinha Prontìa', text: 'Confira minha carteirinha do plano de saúde Prontìa' });
+            toast.success("Carteirinha compartilhada!");
+          } catch (err) {
+            if ((err as Error).name !== 'AbortError') handleDownload();
+          }
+        } else { handleDownload(); }
+        setIsDownloading(false);
+      }, 'image/png');
+    } catch (error) {
+      console.error("Erro:", error);
+      toast.error("Erro ao compartilhar a carteirinha");
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto">
+      <div className="flex gap-3 mb-4 justify-end">
+        <Button onClick={handleShare} disabled={isDownloading} variant="outline" size="sm" className="gap-2">
+          <Share2 className="h-4 w-4" />Compartilhar
+        </Button>
+        <Button onClick={handleDownload} disabled={isDownloading} variant="default" size="sm" className="gap-2">
+          <Download className="h-4 w-4" />{isDownloading ? "Gerando..." : "Baixar PNG"}
+        </Button>
+      </div>
       {/* Container da carteirinha */}
-      <div 
+      <div ref={cardRef}
         className="relative overflow-hidden rounded-xl shadow-2xl"
         style={{
           background: "linear-gradient(135deg, #00766A 0%, #009688 50%, #00766A 100%)",
@@ -46,7 +111,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
             <img 
               src={prontiaLogo}
               alt="Prontìa Saúde"
-              className="w-32 md:w-40 h-auto object-contain"
+              className="w-52 md:w-64 h-auto object-contain"
               loading="lazy"
             />
             <p className="text-xs md:text-sm text-white/80 uppercase tracking-wide font-semibold text-right">
@@ -55,7 +120,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
           </div>
 
           {/* Linha divisória */}
-          <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mb-6" />
+          <div className="h-px bg-gradient-to-r from-transparent via-white/30 to-transparent mb-3" />
 
           {/* Nome do Titular */}
           <div className="mb-6">
@@ -107,7 +172,7 @@ export const PlanCard = ({ patientName, planCode, planCreatedAt, cpf }: PlanCard
           <img 
             src="/favicon.png"
             alt="Prontìa"
-            className="absolute bottom-4 right-4 h-8 w-8 md:h-10 md:w-10 opacity-60"
+            className="absolute bottom-4 right-4 h-5 w-5 md:h-6 md:w-6 opacity-60"
             loading="lazy"
           />
         </div>
