@@ -43,7 +43,7 @@ export function Navbar() {
       className="sticky top-0 z-50 backdrop-blur-md border-b border-primary-glow/20 shadow-lg" 
       style={{ 
         minHeight: '80px',
-        backgroundColor: 'hsl(172, 85%, 30%)'
+        backgroundColor: 'hsl(172, 100%, 23%)'
       }}
     >
       <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[12px]">
