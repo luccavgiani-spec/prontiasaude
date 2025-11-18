@@ -65,7 +65,7 @@ export function MeusCuponsCard() {
   const generateCouponCode = (userName: string, userId: string, type: 'SERVICE' | 'PLAN'): string => {
     const cleanName = userName.toUpperCase().replace(/\s+/g, '').slice(0, 6);
     const userSuffix = userId.slice(0, 4).toUpperCase();
-    const typeSuffix = type === 'SERVICE' ? 'S10' : 'P10';
+    const typeSuffix = type === 'SERVICE' ? 'S5' : 'P5';
     return `${cleanName}${userSuffix}${typeSuffix}`;
   };
 
@@ -113,7 +113,7 @@ export function MeusCuponsCard() {
 
       const userName = patient?.first_name || 'USER';
       const code = generateCouponCode(userName, user.id, type);
-      const discountPercentage = type === 'SERVICE' ? 10 : 10;
+      const discountPercentage = 5;
 
       // Tentar criar cupom
       const { data, error } = await supabase
@@ -215,7 +215,7 @@ export function MeusCuponsCard() {
               ) : (
                 "🛍️ "
               )}
-              {serviceCoupon ? "Cupom já gerado" : "Gerar cupom para serviços (10% OFF)"}
+              {serviceCoupon ? "Cupom já gerado" : "Gerar cupom para serviços (5% OFF)"}
             </Button>
 
             <Button
@@ -228,13 +228,13 @@ export function MeusCuponsCard() {
               ) : (
                 "💎 "
               )}
-              {planCoupon ? "Cupom já gerado" : "Gerar cupom para planos (15% OFF)"}
+              {planCoupon ? "Cupom já gerado" : "Gerar cupom para planos (5% OFF)"}
             </Button>
           </div>
 
           {serviceCoupon && (
             <div className="p-4 bg-muted rounded-lg space-y-2">
-              <Label className="text-sm font-semibold">Cupom para serviços avulsos (10% OFF):</Label>
+              <Label className="text-sm font-semibold">Cupom para serviços avulsos (5% OFF):</Label>
               <div className="flex items-center gap-2">
                 <Input
                   value={serviceCoupon.code}
@@ -254,7 +254,7 @@ export function MeusCuponsCard() {
 
           {planCoupon && (
             <div className="p-4 bg-muted rounded-lg space-y-2">
-              <Label className="text-sm font-semibold">Cupom para planos (15% OFF):</Label>
+              <Label className="text-sm font-semibold">Cupom para planos (5% OFF):</Label>
               <div className="flex items-center gap-2">
                 <Input
                   value={planCoupon.code}

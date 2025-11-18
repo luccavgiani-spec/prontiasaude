@@ -96,6 +96,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Verificar se o usuário já usou este cupom
+    if (user_id) {
+      const { data: existingUse, error: useError } = await supabase
+        .from('coupon_uses')
+        .select('id')
+        .eq('coupon_id', coupon.id)
+        .eq('used_by_user_id', user_id)
+        .limit(1);
+
+      if (useError) {
+        console.log('[validate-coupon] Erro ao verificar uso anterior:', useError);
+      }
+
+      if (existingUse && existingUse.length > 0) {
+        console.log('[validate-coupon] Usuário já usou este cupom');
+        return new Response(
+          JSON.stringify({
+            is_valid: false,
+            error_message: 'Você já usou este cupom anteriormente',
+          } as ValidateCouponResponse),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     // Calcular desconto
     const discount_percentage = coupon.discount_percentage;
     const amount_discounted = Math.round(amount_original * (1 - discount_percentage / 100));
