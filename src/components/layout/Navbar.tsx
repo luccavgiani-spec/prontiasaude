@@ -39,28 +39,34 @@ export function Navbar() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
-  return <nav className="sticky top-0 z-50 bg-primary backdrop-blur-md supports-[backdrop-filter]:bg-primary/95 border-b border-primary-glow/20 shadow-lg" style={{ minHeight: '64px' }}>
-      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[8px]">
-        <div className="flex justify-between items-center h-12 lg:h-14">
+  return <nav 
+      className="sticky top-0 z-50 backdrop-blur-md border-b border-primary-glow/20 shadow-lg" 
+      style={{ 
+        minHeight: '80px',
+        backgroundColor: 'hsl(172, 85%, 30%)'
+      }}
+    >
+      <div className="container mx-auto sm:px-8 lg:px-12 px-[16px] my-[12px]">
+        <div className="flex justify-between items-center h-16 lg:h-20">
           {/* Logo Prontìa Oficial */}
           <Link to="/" className="flex items-center group" onClick={handleHomeClick}>
-            {/* Mobile Logo - 36px */}
+            {/* Mobile Logo - 48px */}
             <img 
               src={prontiaLogoMobile} 
               alt="Prontìa Saúde" 
-              className="block lg:hidden h-9 w-auto transition-all duration-300 group-hover:scale-[1.02]"
-              width="135"
-              height="36"
+              className="block lg:hidden h-12 w-auto transition-all duration-300 group-hover:scale-[1.02]"
+              width="180"
+              height="48"
               loading="eager"
               fetchPriority="high"
             />
-            {/* Desktop Logo - 48px */}
+            {/* Desktop Logo - 64px */}
             <img 
               src={prontiaLogoDesktop} 
               alt="Prontìa Saúde" 
-              className="hidden lg:block h-12 w-auto transition-all duration-300 group-hover:scale-[1.02]"
-              width="180"
-              height="48"
+              className="hidden lg:block h-16 w-auto transition-all duration-300 group-hover:scale-[1.02]"
+              width="240"
+              height="64"
               loading="eager"
               fetchPriority="high"
             />

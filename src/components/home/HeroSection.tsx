@@ -151,9 +151,9 @@ export function HeroSection() {
           
           {/* Modern Image Column */}
           <div className="relative flex justify-center lg:justify-end">
-            <div className="relative w-full max-w-lg" style={{
+            <div className="relative w-full" style={{
             width: '100%',
-            maxWidth: '512px',
+            maxWidth: '100%',
             minHeight: '288px',
             contain: 'layout'
           }}>
@@ -172,15 +172,16 @@ export function HeroSection() {
               <img 
                 src="/assets/hero-mobile-420.webp" 
                 alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
-                className="w-full h-full object-cover object-center" 
+                className="w-full h-full object-contain object-center" 
                 width={672} 
                 height={416} 
                 loading="eager" 
                 fetchPriority="high" 
                 decoding="async" 
                 style={{
-                  aspectRatio: '16/9',
-                  objectFit: 'cover'
+                  aspectRatio: '672/416',
+                  objectFit: 'contain',
+                  maxHeight: '400px'
                 }} 
               />
             </picture>
