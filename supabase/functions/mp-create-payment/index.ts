@@ -344,7 +344,9 @@ Deno.serve(async (req) => {
     };
 
     const paymentData: any = {
-      transaction_amount: expectedAmount,
+      transaction_amount: hasCoupon 
+        ? (paymentRequest.metadata.amount_discounted! / 100) 
+        : expectedAmount,
       description: service.name,
       external_reference: paymentRequest.metadata.order_id, // ✅ CRÍTICO: Reconciliação financeira (+14 pontos)
       payer: finalPayer,
@@ -364,11 +366,15 @@ Deno.serve(async (req) => {
           {
             id: sku,
             title: service.name,
-            description: service.name,
+            description: hasCoupon 
+              ? `${service.name} (${paymentRequest.metadata.discount_percentage}% desconto)` 
+              : service.name,
             picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`, // ✅ FASE 5.1: URL específica do serviço
             category_id: getCategoryIdBySKU(sku),
             quantity: 1,
-            unit_price: expectedAmount
+            unit_price: hasCoupon 
+              ? (paymentRequest.metadata.amount_discounted! / 100) 
+              : expectedAmount
           }
         ],
         payer: {
@@ -394,6 +400,17 @@ Deno.serve(async (req) => {
         ip_address: clientIp
       }
     };
+
+    // Log de confirmação de cupom aplicado
+    if (hasCoupon) {
+      console.log('[mp-create-payment] 🎫 Cupom aplicado:', {
+        coupon_code: paymentRequest.metadata.coupon_code,
+        original_amount: expectedAmount,
+        discounted_amount: paymentRequest.metadata.amount_discounted! / 100,
+        discount_percentage: paymentRequest.metadata.discount_percentage,
+        transaction_amount_sent_to_mp: paymentData.transaction_amount
+      });
+    }
 
     // ✅ Determinar método de pagamento sem fallback silencioso
     if (paymentRequest.payment_method_id === 'pix' || (!paymentRequest.token && !paymentRequest.payment_method_id)) {
