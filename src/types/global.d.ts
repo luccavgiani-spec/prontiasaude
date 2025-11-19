@@ -4,6 +4,12 @@ declare global {
   interface Window {
     // Facebook Pixel native function
     fbq?: (command: string, eventName: string, data?: any) => void;
+    
+    // Google Analytics 4 & Google Ads (gtag.js)
+    gtag?: (...args: any[]) => void;
+    dataLayer?: any[];
+    gtagEvent?: (eventName: string, params?: Record<string, any>) => void;
+    
     // Meta Pixel tracking functions
     trackPageView?: () => void;
     trackViewContent?: (data?: {

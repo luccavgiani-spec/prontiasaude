@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import './lib/gtag-events'; // Registra helper global de eventos do Google
 
 createRoot(document.getElementById("root")!).render(<App />);
 
