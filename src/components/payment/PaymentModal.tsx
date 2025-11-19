@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { PixPaymentForm } from "./PixPaymentForm";
 import { PaymentSummary } from "./PaymentSummary";
 import { MP_PUBLIC_KEY } from "@/lib/constants";
+import { trackInitiateCheckout } from "@/lib/meta-tracking";
 
 declare global {
   interface Window {
@@ -158,6 +159,7 @@ export function PaymentModal({
   const brickRecoverAttemptsRef = useRef(0);
   const isMountingRef = useRef(false);
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasTrackedInitiateCheckoutRef = useRef(false);
 
   // Função de validação de data de validade do cartão
   const validateCardExpiry = (cardData: any): { valid: boolean; error?: string } => {
@@ -225,6 +227,16 @@ export function PaymentModal({
       isSubmittingRef.current = false; // NOVO: Reset de segurança
       loadUserData();
       loadMercadoPagoSDK();
+
+      // Google Ads - Track Begin Checkout (apenas uma vez por abertura)
+      if (!hasTrackedInitiateCheckoutRef.current) {
+        hasTrackedInitiateCheckoutRef.current = true;
+        trackInitiateCheckout({
+          value: amount / 100, // Converter de centavos para reais
+          content_name: serviceName,
+          content_category: especialidade,
+        });
+      }
     } else {
       // Reset ao fechar
       console.log("[Modal] Fechando modal, limpando estado...");
@@ -240,6 +252,7 @@ export function PaymentModal({
       isSubmittingRef.current = false; // Garantir reset ao fechar
       setIsLoadingUserData(false);
       setIsPollingPayment(false);
+      hasTrackedInitiateCheckoutRef.current = false; // Reset flag de tracking
 
       // Limpar timeouts
       if (validationTimeoutRef.current) {
@@ -253,7 +266,7 @@ export function PaymentModal({
         isBrickMountedRef.current = false;
       }
     }
-  }, [open]);
+  }, [open, amount, serviceName, especialidade]);
 
   const loadUserData = async () => {
     console.log("[loadUserData] Starting...");

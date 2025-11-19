@@ -268,6 +268,20 @@ export function trackInitiateCheckout(data?: {
     (window as any).fbq('track', 'InitiateCheckout', data);
   }
 
+  // Google Ads Conversion Tracking - Begin Checkout
+  gtagEvent('conversion', {
+    send_to: 'AW-17744564489/DZTucUlo6lsMbElmioo1C',
+    currency: 'BRL',
+    ...(data?.value && { value: data.value }),
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[Google Ads] Início de checkout enviado:', {
+      value: data?.value || 'sem valor',
+      content_name: data?.content_name,
+    });
+  }
+
   // Also send to GTM Server for redundancy
   const event: MetaEvent = {
     event_name: 'InitiateCheckout',
