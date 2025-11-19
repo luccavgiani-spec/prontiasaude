@@ -1,4 +1,6 @@
 // Meta Pixel tracking via GTM Server-Side
+import { gtagEvent } from './gtag-events';
+
 const GTM_SERVER_URL = 'https://sgtm.prontiasaude.com.br';
 const PIXEL_ID = '1489396668966676';
 
@@ -340,6 +342,20 @@ export function trackPurchase(data: {
       content_name: data.content_name
     });
   }
+
+  // Google Ads Conversion Tracking
+  gtagEvent('conversion', {
+    send_to: 'AW-17744564489/L0OCPGgnMMbElmioo1C',
+    value: data.value,
+    currency: 'BRL',
+    transaction_id: data.order_id,
+  });
+
+  console.log('[Google Ads] Conversão "Consulta realizada" enviada:', {
+    value: data.value,
+    order_id: data.order_id,
+    content_name: data.content_name
+  });
 
   // Also send to GTM Server for redundancy
   const event: MetaEvent = {
