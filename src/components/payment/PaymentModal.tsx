@@ -154,6 +154,7 @@ export function PaymentModal({
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
   const cardPaymentBrickController = useRef<any>(null);
+  const forceRemountRef = useRef(false);
   const isBrickMountedRef = useRef(false);
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -521,6 +522,8 @@ export function PaymentModal({
   // Cleanup when modal closes: reset error/overlay/state so it doesn't reopen automatically
   useEffect(() => {
     if (!open) {
+      console.log("[Modal Cleanup] Modal fechado, resetando estados");
+      console.log("[Modal Cleanup] Stack trace:", new Error().stack);
       setPaymentStatus("idle");
       setShowErrorOverlay(false);
       setErrorOverlayMessage("");
@@ -554,12 +557,22 @@ export function PaymentModal({
       console.warn("[mountCardPaymentBrick] Montagem já em andamento, ignorando");
       return;
     }
-    if (isBrickMountedRef.current || !mpInstanceRef.current) {
-      console.log("[mountCardPaymentBrick] Skipping:", {
-        isBrickMounted: isBrickMountedRef.current,
-        hasMPInstance: !!mpInstanceRef.current,
-      });
+    
+    // ✅ NOVO: Permitir re-montagem se flag forceRemount estiver ativa
+    if (isBrickMountedRef.current && !forceRemountRef.current) {
+      console.log("[mountCardPaymentBrick] Skipping (already mounted, no force remount)");
       return;
+    }
+    
+    if (!mpInstanceRef.current) {
+      console.log("[mountCardPaymentBrick] Skipping (no MP instance)");
+      return;
+    }
+    
+    // Resetar flag de force remount
+    if (forceRemountRef.current) {
+      console.log("[mountCardPaymentBrick] Force remount requested");
+      forceRemountRef.current = false;
     }
 
     isMountingRef.current = true;
@@ -1743,6 +1756,9 @@ export function PaymentModal({
     if (brickContainer) {
       brickContainer.innerHTML = "";
     }
+    
+    // Sinalizar que uma remontagem será necessária
+    forceRemountRef.current = true;
   };
 
   const handleTryAgain = () => {
@@ -2557,6 +2573,12 @@ export function PaymentModal({
                   onClick={(e) => {
                     e.stopPropagation();
                     console.log("[Overlay] retry flow - event captured:", e.type);
+                    console.log("[Overlay] Current state:", {
+                      paymentMethod,
+                      paymentStatus,
+                      showSummary,
+                      open,
+                    });
                     
                     // Fechar o overlay de erro
                     setShowErrorOverlay(false);
@@ -2571,23 +2593,25 @@ export function PaymentModal({
                     
                     // Se estava usando cartão, resetar o Brick
                     if (paymentMethod === "card") {
+                      console.log("[Overlay] Resetting card payment Brick");
                       resetPaymentBrick();
                       
-                      // Pequeno delay para garantir que o Brick foi desmontado
+                      // Aguardar limpeza e re-montar
                       setTimeout(() => {
-                        // Forçar re-renderização mantendo o método selecionado
-                        const currentMethod = paymentMethod;
-                        setPaymentMethod(undefined);
-                        setTimeout(() => {
-                          setPaymentMethod(currentMethod);
-                        }, 50);
-                      }, 100);
+                        console.log("[Overlay] Attempting to remount Brick");
+                        if (paymentMethod === "card" && !isBrickMountedRef.current) {
+                          mountCardPaymentBrick();
+                        }
+                      }, 200);
                     } else if (paymentMethod === "pix") {
+                      console.log("[Overlay] Resetting PIX data");
                       // Para PIX, apenas limpar os dados
                       setPixData(null);
                       setPixPaymentId(null);
                       setIsPollingPayment(false);
                     }
+                    
+                    console.log("[Overlay] Retry flow completed - modal should remain open");
                   }}
                 >
                   Tentar novamente
