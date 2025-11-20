@@ -153,6 +153,7 @@ export function PaymentModal({
 
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
+  const cardPaymentBrickController = useRef<any>(null);
   const isBrickMountedRef = useRef(false);
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -435,6 +436,7 @@ export function PaymentModal({
         console.warn("[PaymentModal] Erro ao desmontar brick:", err);
       } finally {
         cardPaymentBrickRef.current = null;
+        cardPaymentBrickController.current = null;
         isBrickMountedRef.current = false;
       }
     }
@@ -652,9 +654,10 @@ export function PaymentModal({
           },
         },
         callbacks: {
-          onReady: async () => {
+          onReady: async (controller: any) => {
             console.log("[Brick onReady] ✅ Card Payment Brick montado com sucesso");
             console.log("[Brick onReady] Container:", document.getElementById("cardPaymentBrick"));
+            cardPaymentBrickController.current = controller;
             isBrickMountedRef.current = true;
             brickRecoverAttemptsRef.current = 0;
             isMountingRef.current = false;
@@ -1711,6 +1714,37 @@ export function PaymentModal({
     };
   }, [open, paymentStatus, formData.email]);
 
+  const resetPaymentBrick = () => {
+    console.log("[Retry] Resetting Payment Brick...");
+    
+    // Unmount o brick atual se existir
+    if (cardPaymentBrickController.current) {
+      try {
+        cardPaymentBrickController.current.unmount();
+        console.log("[Retry] Brick unmounted successfully");
+      } catch (error) {
+        console.error("[Retry] Error unmounting brick:", error);
+      }
+      cardPaymentBrickController.current = null;
+    }
+    
+    if (cardPaymentBrickRef.current) {
+      try {
+        cardPaymentBrickRef.current.unmount();
+      } catch (error) {
+        console.error("[Retry] Error unmounting brick ref:", error);
+      }
+      cardPaymentBrickRef.current = null;
+      isBrickMountedRef.current = false;
+    }
+    
+    // Limpar o container do brick
+    const brickContainer = document.getElementById("cardPaymentBrick");
+    if (brickContainer) {
+      brickContainer.innerHTML = "";
+    }
+  };
+
   const handleTryAgain = () => {
     setShowSummary(true); // Voltar para o resumo
     setPaymentMethod(undefined);
@@ -2523,13 +2557,37 @@ export function PaymentModal({
                   onClick={(e) => {
                     e.stopPropagation();
                     console.log("[Overlay] retry flow - event captured:", e.type);
+                    
+                    // Fechar o overlay de erro
                     setShowErrorOverlay(false);
                     setErrorOverlayMessage("");
+                    
+                    // Limpar mensagens de erro
                     setError("");
                     setUserMessage("");
+                    
+                    // Resetar o status de pagamento
                     setPaymentStatus("idle");
-                    setShowSummary(true);
-                    setPaymentMethod(undefined);
+                    
+                    // Se estava usando cartão, resetar o Brick
+                    if (paymentMethod === "card") {
+                      resetPaymentBrick();
+                      
+                      // Pequeno delay para garantir que o Brick foi desmontado
+                      setTimeout(() => {
+                        // Forçar re-renderização mantendo o método selecionado
+                        const currentMethod = paymentMethod;
+                        setPaymentMethod(undefined);
+                        setTimeout(() => {
+                          setPaymentMethod(currentMethod);
+                        }, 50);
+                      }, 100);
+                    } else if (paymentMethod === "pix") {
+                      // Para PIX, apenas limpar os dados
+                      setPixData(null);
+                      setPixPaymentId(null);
+                      setIsPollingPayment(false);
+                    }
                   }}
                 >
                   Tentar novamente
