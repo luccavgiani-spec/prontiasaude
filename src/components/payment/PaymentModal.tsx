@@ -2498,8 +2498,8 @@ export function PaymentModal({
         role="alertdialog"
         aria-live="assertive"
       >
-        <div className="absolute inset-0 bg-black/60" />
-        <div className="relative z-[100000] max-w-md w-[90%] rounded-lg bg-white p-5 shadow-2xl">
+        <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+        <div className="relative z-[100000] max-w-md w-[90%] rounded-lg bg-white p-5 shadow-2xl pointer-events-auto">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0" />
             <div className="flex-1">
@@ -2508,8 +2508,9 @@ export function PaymentModal({
               <div className="mt-4 flex gap-2 flex-wrap">
                 <Button
                   variant="secondary"
-                  onClick={() => {
-                    console.log("[Overlay] close modal now");
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("[Overlay] close modal now - event captured:", e.type);
                     setShowErrorOverlay(false);
                     setErrorOverlayMessage("");
                     setPaymentStatus("idle");
@@ -2519,8 +2520,9 @@ export function PaymentModal({
                   Fechar modal
                 </Button>
                 <Button
-                  onClick={() => {
-                    console.log("[Overlay] retry flow");
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log("[Overlay] retry flow - event captured:", e.type);
                     setShowErrorOverlay(false);
                     setErrorOverlayMessage("");
                     setError("");
@@ -2545,7 +2547,7 @@ export function PaymentModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className="sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6"
+          className={`sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 ${showErrorOverlay ? 'pointer-events-none' : ''}`}
           aria-describedby="payment-desc"
         >
           {modalBodyRadix}
