@@ -297,7 +297,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
                   Nenhum convite encontrado
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-visible">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -326,13 +326,13 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
                               : '-'}
                           </TableCell>
                           <TableCell className="text-right">
-                            <DropdownMenu>
+                            <DropdownMenu modal={false}>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
+                              <DropdownMenuContent align="end" className="z-[200] bg-background">
                                 {invite.status === 'pending' && (
                                   <>
                                     <DropdownMenuItem 
