@@ -99,15 +99,54 @@ const CompletarPerfil = () => {
       if (authError) {
         console.error('[CompletarPerfil] Auth error:', authError);
         
-        // Tratar erro de email duplicado especificamente
+        // Tratar erro de email duplicado - buscar usuário existente e continuar
         if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-          toast({
-            title: "⚠️ Email já cadastrado",
-            description: "Este email já possui uma conta. Por favor, faça login ou entre em contato com a empresa.",
-            variant: "destructive",
+          console.log('[CompletarPerfil] Email já cadastrado, buscando usuário existente...');
+          
+          // Buscar dados do paciente pelo email
+          const { data: patientData } = await supabase
+            .from('patients')
+            .select('*, id')
+            .eq('email', invite.email)
+            .maybeSingle();
+          
+          if (!patientData) {
+            toast({
+              title: "Erro",
+              description: "Não foi possível localizar sua conta. Entre em contato com o suporte.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+          
+          // Simular sessão do usuário existente
+          setCurrentUser({ id: patientData.id, email: invite.email });
+          
+          // Preencher formulário com dados existentes
+          setFormData({
+            first_name: patientData.first_name || '',
+            last_name: patientData.last_name || '',
+            address_line: patientData.address_line || '',
+            cpf: patientData.cpf || '',
+            phone_e164: patientData.phone_e164 || '',
+            birth_date: patientData.birth_date || '',
+            gender: patientData.gender || 'F',
+            cep: patientData.cep || '',
+            city: patientData.city || '',
+            state: patientData.state || '',
+            address_number: patientData.address_number || '',
+            address_complement: patientData.address_complement || '',
+            terms_accepted: true
           });
+          
+          toast({
+            title: "✅ Bem-vindo(a) de volta!",
+            description: "Você já possui uma conta. Vamos vincular seu plano empresarial.",
+            variant: "default",
+          });
+          
           setIsLoading(false);
-          navigate('/entrar');
           return;
         }
         
@@ -360,22 +399,42 @@ const CompletarPerfil = () => {
         const planExpiryDate = new Date();
         planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
         
-        // Criar plano ativo
+        // Verificar se já existe plano empresarial
         try {
-          const { error: planError } = await supabase.from('patient_plans').insert({
-            email: currentUser.email,
-            user_id: currentUser.id,
-            plan_code: companyPlanCode,
-            plan_expires_at: planExpiryDate.toISOString(),
-            status: 'active'
-          });
+          const { data: existingPlan } = await supabase
+            .from('patient_plans')
+            .select('id, plan_code')
+            .eq('user_id', currentUser.id)
+            .eq('plan_code', companyPlanCode)
+            .eq('status', 'active')
+            .maybeSingle();
           
-          if (planError) {
-            console.error('❌ Error creating plan:', planError);
-            throw new Error(`Falha ao ativar plano: ${planError.message}`);
+          if (existingPlan) {
+            console.log('✅ Plano empresarial já existe, pulando criação');
+          } else {
+            // Desativar planos antigos para evitar conflitos
+            await supabase
+              .from('patient_plans')
+              .update({ status: 'inactive' })
+              .eq('user_id', currentUser.id)
+              .eq('status', 'active');
+            
+            // Criar novo plano empresarial
+            const { error: planError } = await supabase.from('patient_plans').insert({
+              email: currentUser.email,
+              user_id: currentUser.id,
+              plan_code: companyPlanCode,
+              plan_expires_at: planExpiryDate.toISOString(),
+              status: 'active'
+            });
+            
+            if (planError) {
+              console.error('❌ Error creating plan:', planError);
+              throw new Error(`Falha ao ativar plano: ${planError.message}`);
+            }
+            
+            console.log('✅ Plano empresarial criado:', companyPlanCode);
           }
-          
-          console.log('✅ Plano criado com sucesso:', companyPlanCode);
         } catch (planErr: any) {
           console.error('❌ Exception creating plan:', planErr);
           toast({

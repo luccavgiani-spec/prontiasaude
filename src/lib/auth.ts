@@ -3,6 +3,7 @@ import { User, Session } from "@supabase/supabase-js";
 
 export interface Patient {
   id: string;
+  email?: string;
   first_name?: string;
   last_name?: string;
   address_line?: string;

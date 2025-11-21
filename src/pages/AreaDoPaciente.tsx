@@ -335,7 +335,7 @@ const AreaDoPaciente = () => {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Email</Label>
-                  <p className="text-foreground">{currentUser?.email}</p>
+                  <p className="text-foreground">{patient?.email || currentUser?.email}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">CPF</Label>

@@ -1,5 +1,6 @@
 import prontiaLogo from "@/assets/prontia-icon-misto.webp";
 import prontiaIcon from "@/assets/prontia-icon-misto.webp";
+import { formatPlanName } from "@/lib/patient-plan";
 
 interface PlanCardProps {
   patientName: string;
@@ -56,8 +57,8 @@ export const PlanCard = (props: PlanCardProps) => {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Código do Plano</div>
-                <div className="text-sm md:text-base font-semibold">{props.planCode}</div>
+                <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Plano</div>
+                <div className="text-sm md:text-base font-semibold">{formatPlanName(props.planCode)}</div>
               </div>
               
               <div>
