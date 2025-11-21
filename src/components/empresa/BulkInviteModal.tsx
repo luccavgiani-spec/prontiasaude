@@ -60,12 +60,66 @@ export default function BulkInviteModal({
           .map(line => line.trim())
           .filter(line => line && validateEmail(line));
       } else {
-        const workbook = XLSX.read(fileContent, { type: 'array' });
+        console.log('[XLSX] Starting parse...');
+        
+        // Forçar leitura de valores (não hyperlinks/fórmulas)
+        const workbook = XLSX.read(fileContent, { 
+          type: 'array',
+          cellText: false,
+          cellFormula: false,
+          cellHTML: false
+        });
+        
+        console.log('[XLSX] Workbook loaded:', {
+          sheetNames: workbook.SheetNames,
+          totalSheets: workbook.SheetNames.length
+        });
+        
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        console.log('[XLSX] First sheet range:', firstSheet['!ref']);
+        
+        // Tentar parsear via sheet_to_json
         const data = XLSX.utils.sheet_to_json<{ email: string }>(firstSheet);
+        console.log('[XLSX] Parsed via sheet_to_json:', {
+          totalRows: data.length,
+          firstRow: data[0]
+        });
+        
         parsedEmails = data
-          .map(row => row.email?.trim())
-          .filter(email => email && validateEmail(email));
+          .map(row => {
+            const email = row.email?.trim();
+            console.log('[XLSX] Processing row:', { raw: row, extracted: email });
+            return email;
+          })
+          .filter(email => {
+            const isValid = email && validateEmail(email);
+            if (!isValid && email) {
+              console.log('[XLSX] Invalid email filtered:', email);
+            }
+            return isValid;
+          });
+        
+        // Fallback: Se não encontrou nada, tentar ler coluna A diretamente
+        if (parsedEmails.length === 0) {
+          console.log('[XLSX] Fallback: reading column A directly...');
+          const range = XLSX.utils.decode_range(firstSheet['!ref'] || 'A1');
+          
+          for (let row = 1; row <= range.e.r; row++) { // Pula linha 0 (cabeçalho)
+            const cellAddress = XLSX.utils.encode_cell({ r: row, c: 0 }); // Coluna A
+            const cell = firstSheet[cellAddress];
+            
+            if (cell && cell.v) {
+              const email = String(cell.v).trim();
+              console.log('[XLSX] Fallback found:', { cellAddress, value: email });
+              
+              if (validateEmail(email)) {
+                parsedEmails.push(email);
+              }
+            }
+          }
+        }
+        
+        console.log('[XLSX] Final parsed emails:', parsedEmails);
       }
 
       if (parsedEmails.length === 0) {
@@ -81,7 +135,7 @@ export default function BulkInviteModal({
       
     } catch (error) {
       toast.error('Erro ao processar arquivo');
-      console.error(error);
+      console.error('[Upload] Error:', error);
     }
   };
 
@@ -90,51 +144,105 @@ export default function BulkInviteModal({
     setStep('processing');
     setProgress(0);
     
+    // Validar sessão antes de iniciar
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      toast.error('❌ Sessão expirada. Faça login novamente.');
+      setProcessing(false);
+      onClose();
+      return;
+    }
+    
+    console.log('[BulkInvite] Session valid:', {
+      user: session.user.email,
+      expiresAt: session.expires_at
+    });
+    
     const inviteResults: BulkInviteResult[] = [];
     
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i];
       
-      try {
-        console.log('[BulkInvite] Sending invite for:', email);
-        
-        const { data, error } = await supabase.functions.invoke('company-operations', {
-          body: {
-            operation: 'invite-employee',
-            company_id: companyId,
-            email
+      const MAX_RETRIES = 2;
+      let attempt = 0;
+      let lastError: any;
+      
+      while (attempt < MAX_RETRIES) {
+        try {
+          console.log(`[BulkInvite] Sending invite for: ${email} (attempt ${attempt + 1}/${MAX_RETRIES})`);
+          
+          // Criar promises: timeout + invocação
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('⏱️ Timeout: Servidor não respondeu em 30s')), 30000)
+          );
+          
+          const invokePromise = supabase.functions.invoke('company-operations', {
+            body: {
+              operation: 'invite-employee',
+              company_id: companyId,
+              email
+            }
+          });
+          
+          const result = await Promise.race([invokePromise, timeoutPromise]) as any;
+          const { data, error } = result;
+          
+          console.log('[BulkInvite] Response:', { data, error });
+          
+          if (error) {
+            console.error('[BulkInvite] Supabase error:', error);
+            throw error;
           }
-        });
-        
-        console.log('[BulkInvite] Response:', { data, error });
-        
-        if (error) {
-          console.error('[BulkInvite] Supabase error:', error);
-          throw error;
+          
+          if (data?.error) {
+            console.error('[BulkInvite] Edge function error:', data.error);
+            throw new Error(data.error);
+          }
+          
+          // Sucesso
+          inviteResults.push({
+            email,
+            status: 'success'
+          });
+          
+          break; // Sair do while de retry
+          
+        } catch (error: any) {
+          lastError = error;
+          attempt++;
+          
+          console.error(`[BulkInvite] Attempt ${attempt} failed for ${email}:`, error);
+          
+          // Se não é a última tentativa e é erro de rede, tentar novamente
+          const isNetworkError = error.message?.includes('Failed to send') || 
+                                 error.message?.includes('FunctionsHttpError') ||
+                                 error.message?.includes('Timeout');
+          
+          if (attempt < MAX_RETRIES && isNetworkError) {
+            const delay = 1000 * attempt; // 1s, 2s
+            console.log(`[BulkInvite] Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            // Última tentativa ou erro não-retry (validação)
+            break;
+          }
         }
-        
-        if (data?.error) {
-          console.error('[BulkInvite] Edge function error:', data.error);
-          throw new Error(data.error);
-        }
-        
-        inviteResults.push({
-          email,
-          status: 'success'
-        });
-        
-      } catch (error: any) {
-        console.error('[BulkInvite] Failed for email:', email, error);
-        
-        let errorMessage = error.message || 'Erro desconhecido';
+      }
+      
+      // Se todas as tentativas falharam, registrar erro
+      if (attempt === MAX_RETRIES || lastError) {
+        let errorMessage = lastError?.message || 'Erro desconhecido';
         
         // Identificar tipos específicos de erro
         if (errorMessage.includes('já cadastrado')) {
           errorMessage = '❌ Email já cadastrado no sistema';
         } else if (errorMessage.includes('já enviado')) {
           errorMessage = '⚠️ Convite já enviado anteriormente';
-        } else if (errorMessage.includes('Failed to send') || errorMessage.includes('FunctionsHttpError')) {
-          errorMessage = '🔌 Erro de conexão com servidor';
+        } else if (errorMessage.includes('Failed to send') || 
+                   errorMessage.includes('FunctionsHttpError') || 
+                   errorMessage.includes('Timeout')) {
+          errorMessage = `🔌 Erro de conexão (${attempt} tentativas)`;
         }
         
         inviteResults.push({
