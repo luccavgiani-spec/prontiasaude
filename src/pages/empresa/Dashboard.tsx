@@ -2,9 +2,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
-import { Building2, User, Lock, HelpCircle, LogOut, Users, Send } from 'lucide-react';
+import { Building2, User, Lock, HelpCircle, LogOut, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCNPJ } from '@/lib/validations';
+import ConvitesManagement from '@/components/empresa/ConvitesManagement';
 export default function EmpresaDashboard() {
   const {
     company,
@@ -97,21 +98,6 @@ export default function EmpresaDashboard() {
               </CardContent>
             </Card>
 
-            {/* Convites de Funcionários */}
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/empresa/convites')}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Send className="h-5 w-5 text-primary" />
-                  Convites de Funcionários
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Acompanhe o status dos convites enviados e gerencie pendências.
-                </p>
-              </CardContent>
-            </Card>
-
             {/* Suporte */}
             <Card className="md:col-span-2">
               <CardHeader>
@@ -131,6 +117,23 @@ export default function EmpresaDashboard() {
                 </ul>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Seção de Convites Inline */}
+          <div className="mt-12 space-y-6">
+            <div className="border-b pb-4">
+              <h2 className="text-2xl font-bold text-foreground">
+                📧 Convites de Funcionários
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Acompanhe o status dos convites enviados e gerencie pendências
+              </p>
+            </div>
+            
+            <ConvitesManagement 
+              companyId={company.id} 
+              companyName={company.razao_social}
+            />
           </div>
         </div>
       </div>

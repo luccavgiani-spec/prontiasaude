@@ -96,6 +96,8 @@ export default function BulkInviteModal({
       const email = emails[i];
       
       try {
+        console.log('[BulkInvite] Sending invite for:', email);
+        
         const { data, error } = await supabase.functions.invoke('company-operations', {
           body: {
             operation: 'invite-employee',
@@ -104,8 +106,17 @@ export default function BulkInviteModal({
           }
         });
         
-        if (error) throw error;
-        if (data?.error) throw new Error(data.error);
+        console.log('[BulkInvite] Response:', { data, error });
+        
+        if (error) {
+          console.error('[BulkInvite] Supabase error:', error);
+          throw error;
+        }
+        
+        if (data?.error) {
+          console.error('[BulkInvite] Edge function error:', data.error);
+          throw new Error(data.error);
+        }
         
         inviteResults.push({
           email,
@@ -113,10 +124,23 @@ export default function BulkInviteModal({
         });
         
       } catch (error: any) {
+        console.error('[BulkInvite] Failed for email:', email, error);
+        
+        let errorMessage = error.message || 'Erro desconhecido';
+        
+        // Identificar tipos específicos de erro
+        if (errorMessage.includes('já cadastrado')) {
+          errorMessage = '❌ Email já cadastrado no sistema';
+        } else if (errorMessage.includes('já enviado')) {
+          errorMessage = '⚠️ Convite já enviado anteriormente';
+        } else if (errorMessage.includes('Failed to send') || errorMessage.includes('FunctionsHttpError')) {
+          errorMessage = '🔌 Erro de conexão com servidor';
+        }
+        
         inviteResults.push({
           email,
           status: 'error',
-          message: error.message || 'Erro desconhecido'
+          message: errorMessage
         });
       }
       
