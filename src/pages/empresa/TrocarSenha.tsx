@@ -17,6 +17,18 @@ export default function EmpresaTrocarSenha() {
     confirmPassword: '',
   });
 
+  // Verificar autenticação ao montar componente
+  useState(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Sessão expirada. Faça login novamente com a senha temporária.');
+        navigate('/empresa/login');
+      }
+    };
+    checkAuth();
+  });
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -33,26 +45,62 @@ export default function EmpresaTrocarSenha() {
     setLoading(true);
 
     try {
+      console.log('[TrocarSenha] Iniciando troca de senha...');
+
+      // Verificar sessão antes de tentar atualizar
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Sessão expirada');
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: formData.newPassword,
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[TrocarSenha] Erro ao atualizar senha:', error);
+        
+        if (error.message.includes('session')) {
+          throw new Error('Sessão expirada. Faça login novamente.');
+        }
+        
+        throw error;
+      }
+
+      console.log('[TrocarSenha] Senha atualizada no Auth, atualizando credentials...');
 
       // Atualizar flag must_change_password
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('company_credentials')
           .update({ must_change_password: false })
           .eq('user_id', user.id);
+
+        if (updateError) {
+          console.error('[TrocarSenha] Erro ao atualizar credentials:', updateError);
+          throw new Error('Senha atualizada mas erro ao finalizar. Entre em contato com o administrador.');
+        }
       }
 
-      toast.success('Senha alterada com sucesso');
-      navigate('/empresa');
-    } catch (error) {
-      console.error('Error changing password:', error);
-      toast.error('Erro ao alterar senha');
+      console.log('[TrocarSenha] ✅ Senha alterada com sucesso');
+      toast.success('Senha alterada com sucesso! Redirecionando...');
+      
+      setTimeout(() => {
+        navigate('/empresa');
+      }, 1500);
+
+    } catch (error: any) {
+      console.error('[TrocarSenha] Erro:', error);
+      
+      if (error.message?.includes('Sessão expirada')) {
+        toast.error('Sessão expirada. Faça login novamente com a senha temporária.');
+        setTimeout(() => {
+          navigate('/empresa/login');
+        }, 2000);
+      } else {
+        toast.error(error.message || 'Erro ao alterar senha. Tente novamente.');
+      }
     } finally {
       setLoading(false);
     }
