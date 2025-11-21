@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
 import { validateCPF } from '@/lib/cpf-validator';
 import { validateCEP, validateEmail } from '@/lib/validations';
-import { ArrowLeft, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, Send } from 'lucide-react';
 
 interface Employee {
   id: string;
@@ -20,6 +21,14 @@ interface Employee {
   email: string;
   telefone: string;
   created_at: string;
+}
+
+interface PendingInvite {
+  id: string;
+  email: string;
+  status: string;
+  invited_at: string;
+  expires_at: string;
 }
 
 const brazilianStates = [
@@ -33,7 +42,10 @@ export default function EmpresaFuncionarios() {
   const [loading, setLoading] = useState(false);
   const [loadingCEP, setLoadingCEP] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [cadastroMode, setCadastroMode] = useState<'convite' | 'completo'>('convite');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -56,6 +68,7 @@ export default function EmpresaFuncionarios() {
   useEffect(() => {
     if (company) {
       loadEmployees();
+      loadPendingInvites();
     }
   }, [company]);
 
@@ -73,8 +86,59 @@ export default function EmpresaFuncionarios() {
       if (error) throw error;
       setEmployees(data || []);
     } catch (error) {
-      // Don't log error details - may contain employee data
       toast.error('Erro ao carregar funcionários');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPendingInvites = async () => {
+    if (!company) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('pending_employee_invites')
+        .select('id, email, status, invited_at, expires_at')
+        .eq('company_id', company.id)
+        .eq('status', 'pending')
+        .order('invited_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingInvites(data || []);
+    } catch (error) {
+      toast.error('Erro ao carregar convites pendentes');
+    }
+  };
+
+  const handleInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateEmail(inviteEmail)) {
+      toast.error('E-mail inválido');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('company-operations', {
+        body: {
+          operation: 'invite-employee',
+          company_id: company?.id,
+          email: inviteEmail
+        }
+      });
+      
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      toast.success(`Convite enviado para ${inviteEmail}!`);
+      setInviteEmail('');
+      setShowForm(false);
+      loadPendingInvites();
+      
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao enviar convite');
     } finally {
       setLoading(false);
     }
@@ -256,7 +320,98 @@ export default function EmpresaFuncionarios() {
             </Button>
           </div>
 
-          {showForm && (
+          <div className="flex gap-2">
+            <Button
+              variant={cadastroMode === 'convite' ? 'default' : 'outline'}
+              onClick={() => setCadastroMode('convite')}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Convidar (Recomendado)
+            </Button>
+            <Button
+              variant={cadastroMode === 'completo' ? 'default' : 'outline'}
+              onClick={() => setCadastroMode('completo')}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Cadastro Completo (Legado)
+            </Button>
+          </div>
+
+          {showForm && cadastroMode === 'convite' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Convidar Funcionário</CardTitle>
+                <CardDescription>
+                  O funcionário receberá um email e completará seu próprio cadastro
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleInvite} className="space-y-4">
+                  <div>
+                    <Label htmlFor="invite-email">E-mail do Funcionário *</Label>
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="funcionario@exemplo.com"
+                      required
+                    />
+                    <p className="text-sm text-muted-foreground mt-1">
+                      O funcionário receberá um link para completar seu cadastro e o plano será ativado automaticamente.
+                    </p>
+                  </div>
+                  
+                  <div className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit" disabled={loading}>
+                      {loading ? 'Enviando convite...' : 'Enviar Convite'}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
+
+          {pendingInvites.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Convites Pendentes ({pendingInvites.length})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>E-mail</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Enviado em</TableHead>
+                      <TableHead>Expira em</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingInvites.map((invite) => (
+                      <TableRow key={invite.id}>
+                        <TableCell>{invite.email}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">Aguardando</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {new Date(invite.invited_at).toLocaleDateString('pt-BR')}
+                        </TableCell>
+                        <TableCell>
+                          {new Date(invite.expires_at).toLocaleDateString('pt-BR')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+
+          {showForm && cadastroMode === 'completo' && (
             <Card>
               <CardHeader>
                 <CardTitle>Cadastrar Funcionário</CardTitle>
