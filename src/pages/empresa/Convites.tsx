@@ -239,12 +239,11 @@ export default function EmpresaConvites() {
                   value={filters.email_search}
                   onChange={(e) => setFilters(prev => ({ ...prev, email_search: e.target.value }))}
                 />
-                <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
+                <Select value={filters.status || undefined} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}>
                   <SelectTrigger>
                     <SelectValue placeholder="Todos os status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todos</SelectItem>
                     <SelectItem value="pending">Pendente</SelectItem>
                     <SelectItem value="completed">Completo</SelectItem>
                     <SelectItem value="expired">Expirado</SelectItem>
