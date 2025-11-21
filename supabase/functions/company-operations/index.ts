@@ -143,19 +143,40 @@ Deno.serve(async (req) => {
       const password = temporaryPassword || generateTemporaryPassword(12);
 
       // Criar usuário no Supabase Auth
+      console.log('[CREATE] Creating Supabase Auth user...');
+      
       const email = `${company.cnpj.replace(/\D/g, '')}@empresa.prontia.com`;
-      const { data: authData, error: authError } = await supabaseClient.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-        user_metadata: {
-          cnpj: company.cnpj,
-          razao_social: company.razao_social,
-        }
-      });
+      
+      // Verificar se usuário com este email já existe
+      const { data: { users: existingUsers }, error: listError } = await supabaseClient.auth.admin.listUsers();
+      const existingUser = existingUsers?.find(u => u.email === email);
 
-      if (authError || !authData.user) {
-        throw new Error(`Failed to create user: ${authError?.message}`);
+      let authData;
+      if (existingUser) {
+        console.warn(`⚠️ [CREATE] User with email ${email} already exists (id: ${existingUser.id}), using existing user`);
+        authData = { user: existingUser };
+      } else {
+        const { data, error: authError } = await supabaseClient.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: {
+            cnpj: company.cnpj,
+            razao_social: company.razao_social,
+          }
+        });
+
+        if (authError) {
+          console.error('[CREATE] Failed to create auth user:', authError);
+          throw new Error(`Failed to create authentication user: ${authError.message}`);
+        }
+
+        authData = data;
+      }
+      
+      const authUserId = authData.user?.id;
+      if (!authUserId) {
+        throw new Error('Failed to get user ID');
       }
 
       // Criar registro na tabela companies
@@ -722,6 +743,110 @@ Deno.serve(async (req) => {
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // FIX EMAIL (Admin only)
+    if (req.method === 'POST' && operation === 'fix-email') {
+      if (!isAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      try {
+        const { company_id } = bodyData;
+
+        console.log(`[FIX-EMAIL] Starting email correction for company_id: ${company_id}`);
+
+        // Fetch company data
+        const { data: company, error: companyError } = await supabaseClient
+          .from('companies')
+          .select('cnpj, razao_social')
+          .eq('id', company_id)
+          .single();
+
+        if (companyError || !company) {
+          console.error('[FIX-EMAIL] Company not found:', companyError);
+          return new Response(
+            JSON.stringify({ error: 'Company not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Fetch credentials
+        const { data: credentials, error: credError } = await supabaseClient
+          .from('company_credentials')
+          .select('user_id')
+          .eq('company_id', company_id)
+          .single();
+
+        if (credError || !credentials) {
+          console.error('[FIX-EMAIL] Credentials not found:', credError);
+          return new Response(
+            JSON.stringify({ error: 'Company credentials not found' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Get current user email
+        const { data: { user: currentUser }, error: userError } = await supabaseClient.auth.admin.getUserById(
+          credentials.user_id
+        );
+
+        if (userError || !currentUser) {
+          console.error('[FIX-EMAIL] User not found:', userError);
+          return new Response(
+            JSON.stringify({ error: 'User not found in auth.users' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const oldEmail = currentUser.email;
+
+        // Generate correct email
+        const cleanCNPJ = company.cnpj.replace(/\D/g, '');
+        const correctEmail = `${cleanCNPJ}@empresa.prontia.com`;
+
+        console.log(`[FIX-EMAIL] Updating email from ${oldEmail} to ${correctEmail}`);
+
+        // Update email in auth.users
+        const { error: updateError } = await supabaseClient.auth.admin.updateUserById(
+          credentials.user_id,
+          { 
+            email: correctEmail,
+            email_confirm: true
+          }
+        );
+
+        if (updateError) {
+          console.error('[FIX-EMAIL] Failed to update email:', updateError);
+          return new Response(
+            JSON.stringify({ error: 'Failed to update email', details: updateError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`[FIX-EMAIL] Email successfully updated for ${company.razao_social}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            company: company.razao_social,
+            cnpj: company.cnpj,
+            old_email: oldEmail,
+            new_email: correctEmail,
+            message: 'Email corrigido com sucesso'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error) {
+        console.error('[FIX-EMAIL] Exception:', error);
+        return new Response(
+          JSON.stringify({ error: 'Internal server error', details: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     return new Response(
