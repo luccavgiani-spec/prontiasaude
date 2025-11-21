@@ -408,75 +408,83 @@ const handler = async (req: Request): Promise<Response> => {
         to: [formData.data.email],
         subject: "🎉 Você foi convidado para o Plano de Saúde Empresarial!",
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; text-align: center;">
-              <h1 style="color: white; margin: 0;">Bem-vindo à Prontia Saúde!</h1>
-            </div>
-            
-            <div style="padding: 30px; background: #f9f9f9;">
-              <h2 style="color: #333;">Você foi convidado!</h2>
-              <p style="color: #666; line-height: 1.6;">
-                A empresa <strong>${formData.data.empresa}</strong> está te oferecendo acesso ao plano de saúde Prontia Saúde. 🎉
-              </p>
-              
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
-                <h3 style="margin-top: 0; color: #28a745;">✅ Plano Empresarial Ativo</h3>
-                <p style="color: #666;">Complete seu cadastro para começar a usar todos os benefícios!</p>
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #00D9A3 0%, #00B887 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .button { display: inline-block; background: #00D9A3; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
+              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
+              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
+              ul { padding-left: 20px; }
+              li { margin: 10px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎉 Bem-vindo à Prontia Saúde!</h1>
               </div>
-              
-              <div style="background: #e7f3ff; border: 1px solid #0066cc; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p style="margin: 0; color: #004085;">
-                  ℹ️ <strong>O que você precisa fazer:</strong><br>
-                  1. Clique no botão abaixo<br>
-                  2. Complete seus dados pessoais<br>
-                  3. Crie sua senha de acesso<br>
-                  4. Pronto! Seu plano estará ativo imediatamente
-                </p>
-              </div>
-              
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="${formData.data.invite_link}" 
-                   style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
-                  Completar Meu Cadastro
-                </a>
-              </div>
-              
-              <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h4 style="color: #667eea; margin-top: 0;">O que você terá acesso:</h4>
-                <ul style="color: #666; line-height: 1.8;">
-                  <li>✅ Consultas médicas online ilimitadas</li>
-                  <li>✅ Médicos especialistas</li>
-                  <li>✅ Renovação de receitas</li>
-                  <li>✅ Solicitação de exames</li>
-                  <li>✅ Clube de Benefícios exclusivo</li>
+              <div class="content">
+                <p>Olá!</p>
+                
+                <p>A empresa <strong>${formData.data.companyName}</strong> convidou você para fazer parte do plano de saúde empresarial da Prontia Saúde!</p>
+                
+                <h3>🏥 Seus benefícios incluem:</h3>
+                <ul>
+                  <li>Consultas médicas ilimitadas por telemedicina</li>
+                  <li>Atendimento 24h por dia, 7 dias por semana</li>
+                  <li>Médicos especialistas disponíveis</li>
+                  <li>Receitas digitais e solicitação de exames</li>
+                  <li>Sem carência, sem burocracia</li>
                 </ul>
-              </div>
-              
-              <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                <p style="margin: 0; color: #856404;">
-                  ⏰ <strong>Importante:</strong> Este convite expira em 7 dias. Complete seu cadastro o quanto antes!
+
+                <div class="warning">
+                  <strong>⚠️ Atenção:</strong> Este convite expira em <strong>7 dias</strong>. Complete seu cadastro o quanto antes!
+                </div>
+
+                <p><strong>Para ativar seu plano, clique no botão abaixo:</strong></p>
+                
+                <div style="text-align: center;">
+                  <a href="${formData.data.inviteLink}" class="button">
+                    Completar Cadastro
+                  </a>
+                </div>
+
+                <p style="font-size: 12px; color: #666; margin-top: 20px;">
+                  Ou copie e cole este link no seu navegador:<br>
+                  <span style="word-break: break-all;">${formData.data.inviteLink}</span>
                 </p>
+
+                <p>Se você tiver dúvidas, entre em contato com o RH da sua empresa ou com nosso suporte.</p>
+                
+                <p>Bem-vindo à família Prontia! 💚</p>
               </div>
-              
-              <p style="color: #666; line-height: 1.6; margin-top: 30px;">
-                Qualquer dúvida, estamos aqui para ajudar!
-              </p>
-              
-              <p style="color: #666;">
-                Atenciosamente,<br>
-                <strong>Equipe Prontia Saúde</strong>
-              </p>
+              <div class="footer">
+                <p>Prontia Saúde - Cuidando de você, onde você estiver.</p>
+                <p>Este é um email automático, por favor não responda.</p>
+              </div>
             </div>
-            
-            <div style="background: #333; color: #999; padding: 20px; text-align: center; font-size: 12px;">
-              <p>Este é um email automático. Por favor, não responda.</p>
-              <p>© ${new Date().getFullYear()} Prontia Saúde - Todos os direitos reservados</p>
-            </div>
-          </div>
+          </body>
+          </html>
         `,
       });
 
-      console.log("Employee invite email sent:", emailResponse);
+      console.log('[employee-invite] Email sent:', {
+        to: formData.data.email,
+        from: 'noreply@prontiasaude.com.br',
+        response: emailResponse,
+        success: emailResponse.data !== null,
+        resendId: emailResponse.data?.id,
+        error: emailResponse.error
+      });
+
+      if (emailResponse.error) {
+        throw new Error(`Resend API error: ${emailResponse.error.message}`);
+      }
       return new Response(JSON.stringify({ success: true, type: "employee-invite" }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },

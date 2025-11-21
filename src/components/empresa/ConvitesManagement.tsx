@@ -39,6 +39,7 @@ interface InviteData {
 export default function ConvitesManagement({ companyId, companyName }: ConvitesManagementProps) {
   const [invites, setInvites] = useState<InviteData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingActions, setLoadingActions] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState({
     status: null as string | null,
     email_search: '',
@@ -75,7 +76,12 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
 
   useEffect(() => {
     fetchInvites();
-  }, [companyId]);
+    
+    // Auto-refresh a cada 30 segundos
+    const interval = setInterval(fetchInvites, 30000);
+    
+    return () => clearInterval(interval);
+  }, [companyId, filters]);
 
   const applyFilters = () => {
     fetchInvites();
@@ -87,6 +93,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
   };
 
   const handleResendInvite = async (inviteId: string) => {
+    setLoadingActions(prev => ({ ...prev, [inviteId]: true }));
     try {
       const { error } = await supabase.functions.invoke('company-operations', {
         body: {
@@ -96,14 +103,23 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
       });
 
       if (error) throw error;
-      toast.success('Convite reenviado com sucesso');
-      fetchInvites();
+      
+      toast.success('✅ Convite reenviado! O funcionário receberá o email em alguns minutos.', {
+        duration: 5000
+      });
+      
+      await fetchInvites();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao reenviar convite');
+      toast.error(`❌ ${error.message || 'Erro ao reenviar convite'}`, {
+        duration: 5000
+      });
+    } finally {
+      setLoadingActions(prev => ({ ...prev, [inviteId]: false }));
     }
   };
 
   const handleCancelInvite = async (inviteId: string) => {
+    setLoadingActions(prev => ({ ...prev, [inviteId]: true }));
     try {
       const { error } = await supabase
         .from('pending_employee_invites')
@@ -111,10 +127,18 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
         .eq('id', inviteId);
 
       if (error) throw error;
-      toast.success('Convite cancelado');
-      fetchInvites();
+      
+      toast.success('✅ Convite cancelado com sucesso', {
+        duration: 3000
+      });
+      
+      await fetchInvites();
     } catch (error) {
-      toast.error('Erro ao cancelar convite');
+      toast.error('❌ Erro ao cancelar convite', {
+        duration: 3000
+      });
+    } finally {
+      setLoadingActions(prev => ({ ...prev, [inviteId]: false }));
     }
   };
 
@@ -291,23 +315,30 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
                           <DropdownMenuContent align="end">
                             {invite.status === 'pending' && (
                               <>
-                                <DropdownMenuItem onClick={() => handleResendInvite(invite.id)}>
-                                  <RefreshCw className="h-4 w-4 mr-2" />
-                                  Reenviar
+                                <DropdownMenuItem 
+                                  onClick={() => handleResendInvite(invite.id)}
+                                  disabled={loadingActions[invite.id]}
+                                >
+                                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
+                                  {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleCancelInvite(invite.id)}
+                                  disabled={loadingActions[invite.id]}
                                   className="text-red-600"
                                 >
                                   <XCircle className="h-4 w-4 mr-2" />
-                                  Cancelar
+                                  {loadingActions[invite.id] ? 'Cancelando...' : 'Cancelar'}
                                 </DropdownMenuItem>
                               </>
                             )}
                             {invite.status === 'expired' && (
-                              <DropdownMenuItem onClick={() => handleResendInvite(invite.id)}>
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Reenviar
+                              <DropdownMenuItem 
+                                onClick={() => handleResendInvite(invite.id)}
+                                disabled={loadingActions[invite.id]}
+                              >
+                                <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
+                                {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
