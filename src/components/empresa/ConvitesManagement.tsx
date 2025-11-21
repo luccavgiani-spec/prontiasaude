@@ -39,14 +39,20 @@ interface InviteData {
 export default function ConvitesManagement({ companyId, companyName }: ConvitesManagementProps) {
   const [invites, setInvites] = useState<InviteData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingActions, setLoadingActions] = useState<Record<string, boolean>>({});
   const [filters, setFilters] = useState({
     status: null as string | null,
     email_search: '',
   });
 
-  const fetchInvites = async () => {
-    setLoading(true);
+  const fetchInvites = async (isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
+    
     try {
       let query = supabase
         .from('pending_employee_invites')
@@ -71,25 +77,28 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
       toast.error('Erro ao carregar convites');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchInvites();
+    fetchInvites(true); // Primeira carga
     
     // Auto-refresh a cada 30 segundos
-    const interval = setInterval(fetchInvites, 30000);
+    const interval = setInterval(() => {
+      fetchInvites(false); // Refreshes subsequentes
+    }, 30000);
     
     return () => clearInterval(interval);
   }, [companyId, filters]);
 
   const applyFilters = () => {
-    fetchInvites();
+    fetchInvites(false);
   };
 
   const clearFilters = () => {
     setFilters({ status: null, email_search: '' });
-    setTimeout(fetchInvites, 100);
+    setTimeout(() => fetchInvites(false), 100);
   };
 
   const handleResendInvite = async (inviteId: string) => {
@@ -108,7 +117,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
         duration: 5000
       });
       
-      await fetchInvites();
+      await fetchInvites(false);
     } catch (error: any) {
       toast.error(`❌ ${error.message || 'Erro ao reenviar convite'}`, {
         duration: 5000
@@ -132,7 +141,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
         duration: 3000
       });
       
-      await fetchInvites();
+      await fetchInvites(false);
     } catch (error) {
       toast.error('❌ Erro ao cancelar convite', {
         duration: 3000
@@ -264,91 +273,104 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Convites ({invites.length})</CardTitle>
-          <Button onClick={fetchInvites} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
+          <Button onClick={() => fetchInvites(false)} variant="outline" size="sm" disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Atualizando...' : 'Atualizar'}
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="relative">
           {loading ? (
             <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-          ) : invites.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhum convite encontrado
-            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Enviado em</TableHead>
-                    <TableHead>Expira em</TableHead>
-                    <TableHead>Completo em</TableHead>
-                    <TableHead className="text-right">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invites.map((invite) => (
-                    <TableRow key={invite.id}>
-                      <TableCell className="font-medium">{invite.email}</TableCell>
-                      <TableCell>{getStatusBadge(invite.status)}</TableCell>
-                      <TableCell>
-                        {format(new Date(invite.invited_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                      </TableCell>
-                      <TableCell>
-                        {format(new Date(invite.expires_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
-                      </TableCell>
-                      <TableCell>
-                        {invite.completed_at
-                          ? format(new Date(invite.completed_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {invite.status === 'pending' && (
-                              <>
-                                <DropdownMenuItem 
-                                  onClick={() => handleResendInvite(invite.id)}
-                                  disabled={loadingActions[invite.id]}
-                                >
-                                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
-                                  {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem 
-                                  onClick={() => handleCancelInvite(invite.id)}
-                                  disabled={loadingActions[invite.id]}
-                                  className="text-red-600"
-                                >
-                                  <XCircle className="h-4 w-4 mr-2" />
-                                  {loadingActions[invite.id] ? 'Cancelando...' : 'Cancelar'}
-                                </DropdownMenuItem>
-                              </>
-                            )}
-                            {invite.status === 'expired' && (
-                              <DropdownMenuItem 
-                                onClick={() => handleResendInvite(invite.id)}
-                                disabled={loadingActions[invite.id]}
-                              >
-                                <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
-                                {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              {refreshing && (
+                <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10 rounded-lg">
+                  <div className="flex items-center gap-2 bg-background px-4 py-2 rounded-lg shadow-lg border">
+                    <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium">Atualizando...</span>
+                  </div>
+                </div>
+              )}
+              
+              {invites.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhum convite encontrado
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Enviado em</TableHead>
+                        <TableHead>Expira em</TableHead>
+                        <TableHead>Completo em</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {invites.map((invite) => (
+                        <TableRow key={invite.id}>
+                          <TableCell className="font-medium">{invite.email}</TableCell>
+                          <TableCell>{getStatusBadge(invite.status)}</TableCell>
+                          <TableCell>
+                            {format(new Date(invite.invited_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {format(new Date(invite.expires_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>
+                            {invite.completed_at
+                              ? format(new Date(invite.completed_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {invite.status === 'pending' && (
+                                  <>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleResendInvite(invite.id)}
+                                      disabled={loadingActions[invite.id]}
+                                    >
+                                      <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
+                                      {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem 
+                                      onClick={() => handleCancelInvite(invite.id)}
+                                      disabled={loadingActions[invite.id]}
+                                      className="text-red-600"
+                                    >
+                                      <XCircle className="h-4 w-4 mr-2" />
+                                      {loadingActions[invite.id] ? 'Cancelando...' : 'Cancelar'}
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {invite.status === 'expired' && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleResendInvite(invite.id)}
+                                    disabled={loadingActions[invite.id]}
+                                  >
+                                    <RefreshCw className={`h-4 w-4 mr-2 ${loadingActions[invite.id] ? 'animate-spin' : ''}`} />
+                                    {loadingActions[invite.id] ? 'Reenviando...' : 'Reenviar'}
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
