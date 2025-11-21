@@ -111,7 +111,7 @@ export default function EmpresaDashboard() {
                   Precisa de ajuda? Entre em contato com nosso suporte:
                 </p>
                 <ul className="text-sm space-y-2">
-                  <li>📧 Email: suporte@prontia.com.br</li>
+                  <li>📧 Email: suporte@prontiasaude.com.br</li>
                   <li>📞 Telefone: (11) 93335-9187</li>
                   <li>💬 Horário de atendimento: Segunda a Sexta, 9h às 18h</li>
                 </ul>
@@ -130,10 +130,7 @@ export default function EmpresaDashboard() {
               </p>
             </div>
             
-            <ConvitesManagement 
-              companyId={company.id} 
-              companyName={company.razao_social}
-            />
+            <ConvitesManagement companyId={company.id} companyName={company.razao_social} />
           </div>
         </div>
       </div>
