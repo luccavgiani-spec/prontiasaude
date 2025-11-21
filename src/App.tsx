@@ -100,6 +100,7 @@ const EmpresaPerfil = lazy(() => import("./pages/empresa/Perfil"));
 const EmpresaSeguranca = lazy(() => import("./pages/empresa/Seguranca"));
 const EmpresaTrocarSenha = lazy(() => import("./pages/empresa/TrocarSenha"));
 const EmpresaFuncionarios = lazy(() => import("./pages/empresa/Funcionarios"));
+const EmpresaConvites = lazy(() => import("./pages/empresa/Convites"));
 const ClubeBen = lazy(() => import("./pages/ClubeBen"));
 const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
 const ClickLifeSSO = lazy(() => import("./pages/ClickLifeSSO"));
@@ -201,6 +202,7 @@ const App = () => (
                 <Route path="/empresa/seguranca" element={<EmpresaSeguranca />} />
                 <Route path="/empresa/trocar-senha" element={<EmpresaTrocarSenha />} />
                 <Route path="/empresa/funcionarios" element={<EmpresaFuncionarios />} />
+                <Route path="/empresa/convites" element={<EmpresaConvites />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>

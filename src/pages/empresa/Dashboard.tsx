@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
-import { Building2, User, Lock, HelpCircle, LogOut, Users } from 'lucide-react';
+import { Building2, User, Lock, HelpCircle, LogOut, Users, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatCNPJ } from '@/lib/validations';
 export default function EmpresaDashboard() {
@@ -93,6 +93,21 @@ export default function EmpresaDashboard() {
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   Cadastre funcionários com acesso ao plano de saúde.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Convites de Funcionários */}
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigate('/empresa/convites')}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Send className="h-5 w-5 text-primary" />
+                  Convites de Funcionários
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Acompanhe o status dos convites enviados e gerencie pendências.
                 </p>
               </CardContent>
             </Card>

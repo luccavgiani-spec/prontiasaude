@@ -221,6 +221,119 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Operação RESEND INVITE: permitir admin OU company (com validação de ownership)
+    if (req.method === 'POST' && operation === 'resend-invite') {
+      const { invite_id } = bodyData;
+      
+      if (!invite_id) {
+        throw new Error('Missing required field: invite_id');
+      }
+      
+      // Buscar convite
+      const { data: invite, error: fetchError } = await supabaseClient
+        .from('pending_employee_invites')
+        .select(`
+          *,
+          companies (razao_social)
+        `)
+        .eq('id', invite_id)
+        .single();
+        
+      if (fetchError || !invite) {
+        throw new Error('Convite não encontrado');
+      }
+      
+      // Verificar propriedade (empresa só pode reenviar seus próprios convites)
+      if (isCompany) {
+        const { data: companyData } = await supabaseClient
+          .from('company_credentials')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (companyData?.company_id !== invite.company_id) {
+          throw new Error('Não autorizado');
+        }
+      }
+      
+      // Reenviar email
+      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite.invite_token}`;
+      const companyName = (invite.companies as any)?.razao_social || 'Empresa';
+      
+      try {
+        await supabaseClient.functions.invoke('send-form-emails', {
+          body: {
+            type: 'employee-invite',
+            data: {
+              email: invite.email,
+              empresa: companyName,
+              invite_link: inviteLink
+            }
+          }
+        });
+        
+        console.log('[resend-invite] ✅ Invite resent successfully');
+      } catch (emailError) {
+        console.error('[resend-invite] Email error:', emailError);
+        throw new Error('Erro ao reenviar convite');
+      }
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
+    // Operação EXTEND INVITE: permitir admin OU company (com validação de ownership)
+    if (req.method === 'POST' && operation === 'extend-invite') {
+      const { invite_id, days = 7 } = bodyData;
+      
+      if (!invite_id) {
+        throw new Error('Missing required field: invite_id');
+      }
+      
+      // Verificar propriedade
+      const { data: invite } = await supabaseClient
+        .from('pending_employee_invites')
+        .select('company_id')
+        .eq('id', invite_id)
+        .single();
+      
+      if (isCompany) {
+        const { data: companyData } = await supabaseClient
+          .from('company_credentials')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (companyData?.company_id !== invite?.company_id) {
+          throw new Error('Não autorizado');
+        }
+      }
+      
+      // Calcular nova data
+      const newExpiryDate = new Date();
+      newExpiryDate.setDate(newExpiryDate.getDate() + days);
+      
+      const { error } = await supabaseClient
+        .from('pending_employee_invites')
+        .update({
+          expires_at: newExpiryDate.toISOString(),
+          status: 'pending' // Reativar se estava expirado
+        })
+        .eq('id', invite_id);
+        
+      if (error) throw error;
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        new_expiry: newExpiryDate 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
     // Operação CREATE EMPLOYEE: permitir admin OU company (com validação de ownership)
     if (req.method === 'POST' && operation === 'create-employee') {
       if (!isAdmin && !isCompany) {

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { validateCPF } from '@/lib/cpf-validator';
 import { validateCEP, validateEmail } from '@/lib/validations';
 import { ArrowLeft, Plus, Trash2, Upload, Send } from 'lucide-react';
+import BulkInviteModal from '@/components/empresa/BulkInviteModal';
 
 interface Employee {
   id: string;
@@ -47,6 +48,7 @@ export default function EmpresaFuncionarios() {
   const [cadastroMode, setCadastroMode] = useState<'convite' | 'completo'>('convite');
   const [inviteEmail, setInviteEmail] = useState('');
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [bulkInviteOpen, setBulkInviteOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     nome: '',
@@ -314,10 +316,19 @@ export default function EmpresaFuncionarios() {
                 Cadastre funcionários com acesso ao plano de saúde
               </p>
             </div>
-            <Button onClick={() => setShowForm(!showForm)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Funcionário
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setBulkInviteOpen(true)}
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Importar Lista (XLSX/CSV)
+              </Button>
+              <Button onClick={() => setShowForm(!showForm)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Funcionário
+              </Button>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -648,6 +659,16 @@ export default function EmpresaFuncionarios() {
           </Card>
         </div>
       </div>
+
+      <BulkInviteModal
+        open={bulkInviteOpen}
+        onClose={() => setBulkInviteOpen(false)}
+        companyId={company?.id || ''}
+        onComplete={() => {
+          loadPendingInvites();
+          loadEmployees();
+        }}
+      />
     </div>
   );
 }
