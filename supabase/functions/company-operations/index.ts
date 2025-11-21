@@ -176,39 +176,80 @@ Deno.serve(async (req) => {
         throw new Error('Email já cadastrado no sistema');
       }
       
-      // Verificar convite pendente
-      const { data: pendingInvite, error: inviteCheckError } = await supabaseClient
+      // Verificar se já existe convite
+      const { data: existingInvite, error: inviteCheckError } = await supabaseClient
         .from('pending_employee_invites')
-        .select('status')
+        .select('id, status, invite_token')
         .eq('company_id', company_id)
         .eq('email', email)
         .maybeSingle();
+      
+      let invite: any;
+      let invite_token: string;
+      
+      // CENÁRIO 1: Convite cancelado ou expirado → REATIVAR
+      if (existingInvite && ['cancelled', 'expired'].includes(existingInvite.status)) {
+        console.log(`[invite-employee] Reactivating ${existingInvite.status} invite for:`, email);
         
-      if (pendingInvite?.status === 'pending') {
+        invite_token = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
+        
+        const { data: updatedInvite, error: updateError } = await supabaseClient
+          .from('pending_employee_invites')
+          .update({
+            status: 'pending',
+            invite_token,
+            invited_at: new Date().toISOString(),
+            expires_at: expiresAt.toISOString(),
+            invited_by: user.id,
+            completed_at: null
+          })
+          .eq('id', existingInvite.id)
+          .select()
+          .single();
+        
+        if (updateError) {
+          console.error('[invite-employee] Error updating invite:', updateError);
+          throw new Error('Erro ao reativar convite');
+        }
+        
+        invite = updatedInvite;
+        console.log('[invite-employee] ✅ Invite reactivated successfully');
+        
+      // CENÁRIO 2: Convite pendente → ERRO
+      } else if (existingInvite && existingInvite.status === 'pending') {
         console.log('[invite-employee] Pending invite already exists:', email);
-        throw new Error('Convite já enviado para este email');
-      }
-      
-      console.log('[invite-employee] Validation passed, creating invite...');
-      
-      // Gerar token único
-      const invite_token = crypto.randomUUID();
-      
-      // Inserir convite
-      const { data: invite, error: inviteError } = await supabaseClient
-        .from('pending_employee_invites')
-        .insert({
-          company_id,
-          email,
-          invite_token,
-          invited_by: user.id
-        })
-        .select()
-        .single();
+        throw new Error('Já existe um convite pendente para este email. Use a opção "Reenviar" na tabela.');
         
-      if (inviteError) {
-        console.error('[invite-employee] Error inserting invite:', inviteError);
-        throw new Error('Erro ao criar convite');
+      // CENÁRIO 3: Convite completado → ERRO
+      } else if (existingInvite && existingInvite.status === 'completed') {
+        console.log('[invite-employee] Employee already registered:', email);
+        throw new Error('Este funcionário já completou o cadastro. Verifique a aba "Funcionários".');
+        
+      // CENÁRIO 4: Sem convite → CRIAR NOVO
+      } else {
+        console.log('[invite-employee] Creating new invite for:', email);
+        
+        invite_token = crypto.randomUUID();
+        
+        const { data: newInvite, error: inviteError } = await supabaseClient
+          .from('pending_employee_invites')
+          .insert({
+            company_id,
+            email,
+            invite_token,
+            invited_by: user.id
+          })
+          .select()
+          .single();
+          
+        if (inviteError) {
+          console.error('[invite-employee] Error inserting invite:', inviteError);
+          throw new Error('Erro ao criar convite');
+        }
+        
+        invite = newInvite;
+        console.log('[invite-employee] ✅ New invite created successfully');
       }
       
       console.log('[invite-employee] Invite created successfully, sending email...');
