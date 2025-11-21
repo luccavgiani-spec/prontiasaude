@@ -109,6 +109,11 @@ Deno.serve(async (req) => {
 
     // Operação INVITE EMPLOYEE: permitir admin OU company (com validação de ownership)
     if (req.method === 'POST' && operation === 'invite-employee') {
+      console.log('[invite-employee] Starting invitation process', { 
+        company_id: bodyData.company_id, 
+        email: bodyData.email 
+      });
+      
       if (!isAdmin && !isCompany) {
         throw new Error('Forbidden: Admin or Company access required');
       }
@@ -147,11 +152,14 @@ Deno.serve(async (req) => {
         throw new Error('Company not found');
       }
       
+      console.log('[invite-employee] Company found:', company.razao_social);
+      
       // Verificar se email já existe no sistema
       const { data: { users: existingUsers }, error: listError } = await supabaseClient.auth.admin.listUsers();
       const userExists = existingUsers?.find(u => u.email === email);
       
       if (userExists) {
+        console.log('[invite-employee] Email already registered:', email);
         throw new Error('Email já cadastrado no sistema');
       }
       
@@ -164,8 +172,11 @@ Deno.serve(async (req) => {
         .maybeSingle();
         
       if (pendingInvite?.status === 'pending') {
+        console.log('[invite-employee] Pending invite already exists:', email);
         throw new Error('Convite já enviado para este email');
       }
+      
+      console.log('[invite-employee] Validation passed, creating invite...');
       
       // Gerar token único
       const invite_token = crypto.randomUUID();
@@ -186,6 +197,8 @@ Deno.serve(async (req) => {
         console.error('[invite-employee] Error inserting invite:', inviteError);
         throw new Error('Erro ao criar convite');
       }
+      
+      console.log('[invite-employee] Invite created successfully, sending email...');
       
       // Enviar email
       const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite_token}`;
@@ -210,6 +223,8 @@ Deno.serve(async (req) => {
       } catch (emailError) {
         console.error('[invite-employee] Exception sending email:', emailError);
       }
+      
+      console.log('[invite-employee] ✅ Process completed successfully for:', email);
       
       return new Response(JSON.stringify({ 
         success: true, 
