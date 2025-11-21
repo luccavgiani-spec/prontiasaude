@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Key, Power, PowerOff } from 'lucide-react';
+import { Plus, Search, Edit, Key, Power, PowerOff, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatCNPJ } from '@/lib/validations';
@@ -78,6 +78,41 @@ export default function CompanyManagement() {
     } catch (error) {
       console.error('Error resetting password:', error);
       toast.error('Erro ao redefinir senha');
+    }
+  };
+
+  const handleFixEmail = async (companyId: string, razaoSocial: string) => {
+    if (!confirm(`Corrigir email da empresa ${razaoSocial}?\n\nIsso atualizará o email no sistema para o formato correto baseado no CNPJ.`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('company-operations', {
+        body: { 
+          operation: 'fix-email',
+          company_id: companyId 
+        }
+      });
+
+      if (error) {
+        console.error('Error fixing email:', error);
+        toast.error('Erro ao corrigir email');
+        return;
+      }
+
+      if (data?.success) {
+        toast.success(`Email corrigido: ${data.new_email}`);
+        if (data.old_email !== data.new_email) {
+          toast.info(`Email anterior: ${data.old_email}`, { duration: 5000 });
+        }
+        loadCompanies();
+      }
+    } catch (error) {
+      console.error('Exception fixing email:', error);
+      toast.error('Erro ao corrigir email');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -186,6 +221,16 @@ export default function CompanyManagement() {
                           >
                             <Edit className="h-3 w-3 mr-1" />
                             Editar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleFixEmail(company.id, company.razao_social)}
+                            disabled={loading}
+                            title="Corrigir email de autenticação"
+                          >
+                            <Mail className="h-3 w-3 mr-1" />
+                            Corrigir Email
                           </Button>
                           <Button
                             size="sm"
