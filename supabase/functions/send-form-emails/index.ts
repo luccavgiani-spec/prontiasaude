@@ -107,7 +107,8 @@ const handler = async (req: Request): Promise<Response> => {
     if (formData.type === "empresa") {
       // Handle empresa form
       const emailResponse = await resend.emails.send({
-        from: "Formulários <noreply@prontiasaude.com.br>",
+        from: "Formulários <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: recipients,
         subject: "Nova Solicitação de Proposta Empresarial - Prontia Saúde",
         html: `
@@ -145,7 +146,8 @@ const handler = async (req: Request): Promise<Response> => {
     } else if (formData.type === "ong") {
       // Handle ONG form
       const emailResponse = await resend.emails.send({
-        from: "Formulários <noreply@prontiasaude.com.br>",
+        from: "Formulários <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: recipients,
         subject: "Nova ONG Cadastrada - Programa Empresas do Bem",
         html: `
@@ -180,7 +182,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     } else if (formData.type === "trabalhe-conosco") {
       const emailResponse = await resend.emails.send({
-        from: "Formulários <noreply@prontiasaude.com.br>",
+        from: "Formulários <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: formData.recipients,
         subject: `Nova candidatura: ${formData.data.nome}`,
         html: `
@@ -204,7 +207,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     } else if (formData.type === "seja-parceiro") {
       const emailResponse = await resend.emails.send({
-        from: "Formulários <noreply@prontiasaude.com.br>",
+        from: "Formulários <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: formData.recipients,
         subject: `Nova proposta de parceria: ${formData.data.nome}`,
         html: `
@@ -232,7 +236,8 @@ const handler = async (req: Request): Promise<Response> => {
 
     } else if (formData.type === "clubeben-parceiro") {
       const emailResponse = await resend.emails.send({
-        from: "Formulários <noreply@prontiasaude.com.br>",
+        from: "Formulários <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: recipients,
         subject: `Nova loja parceira ClubeBen: ${formData.data.nomeLoja}`,
         html: `
@@ -270,7 +275,8 @@ const handler = async (req: Request): Promise<Response> => {
       
     } else if (formData.type === "company-credentials") {
       const emailResponse = await resend.emails.send({
-        from: "Prontia Saúde <noreply@prontiasaude.com.br>",
+        from: "Prontia Saúde <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: [formData.data.email],
         subject: "🔑 Credenciais de Acesso - Prontia Saúde Empresas",
         html: `
@@ -333,7 +339,8 @@ const handler = async (req: Request): Promise<Response> => {
       
     } else if (formData.type === "employee-welcome") {
       const emailResponse = await resend.emails.send({
-        from: "Prontia Saúde <noreply@prontiasaude.com.br>",
+        from: "Prontia Saúde <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: [formData.data.email],
         subject: "🎉 Bem-vindo à Prontia Saúde - Seu plano foi ativado!",
         html: `
@@ -404,7 +411,8 @@ const handler = async (req: Request): Promise<Response> => {
       
     } else if (formData.type === "employee-invite") {
       const emailResponse = await resend.emails.send({
-        from: "Prontia Saúde <noreply@prontiasaude.com.br>",
+        from: "Prontia Saúde <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
         to: [formData.data.email],
         subject: "🎉 Você foi convidado para o Plano de Saúde Empresarial!",
         html: `
@@ -475,7 +483,7 @@ const handler = async (req: Request): Promise<Response> => {
 
       console.log('[employee-invite] Email sent:', {
         to: formData.data.email,
-        from: 'noreply@prontiasaude.com.br',
+        from: 'suporte@prontiasaude.com.br',
         response: emailResponse,
         success: emailResponse.data !== null,
         resendId: emailResponse.data?.id,
