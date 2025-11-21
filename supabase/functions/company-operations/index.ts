@@ -38,7 +38,18 @@ function generateTemporaryPassword(length: number = 12): string {
 }
 
 Deno.serve(async (req) => {
+  const requestId = crypto.randomUUID().slice(0, 8);
+  console.log(`[${requestId}] ⬇️ Request received:`, {
+    method: req.method,
+    url: req.url,
+    headers: {
+      authorization: req.headers.get('Authorization') ? '✅ Present' : '❌ Missing',
+      contentType: req.headers.get('Content-Type')
+    }
+  });
+
   if (req.method === 'OPTIONS') {
+    console.log(`[${requestId}] ✅ CORS preflight handled`);
     return new Response(null, { headers: corsHeaders });
   }
 
@@ -1096,11 +1107,23 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     );
 
-  } catch (error) {
-    console.error('[company-operations] Error:', error.message);
+  } catch (error: any) {
+    console.error(`[${requestId}] ❌ Error:`, {
+      name: error.name,
+      message: error.message,
+      stack: error.stack?.split('\n')[0]
+    });
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ 
+        error: error.message,
+        requestId,
+        timestamp: new Date().toISOString()
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, 
+        status: error.message.includes('Forbidden') ? 403 : 500 
+      }
     );
   }
 });
