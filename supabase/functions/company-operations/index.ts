@@ -263,8 +263,8 @@ Deno.serve(async (req) => {
             type: 'employee-invite',
             data: {
               email,
-              empresa: company.razao_social,
-              invite_link: inviteLink
+              companyName: company.razao_social,
+              inviteLink: inviteLink
             }
           }
         });
