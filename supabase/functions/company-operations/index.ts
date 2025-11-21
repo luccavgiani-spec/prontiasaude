@@ -2,8 +2,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 import { getCorsHeaders } from '../common/cors.ts';
 import { validateCPF, cleanCPF } from '../common/cpf-validator.ts';
 
-const corsHeaders = getCorsHeaders();
-
 interface CompanyData {
   razao_social: string;
   cnpj: string;
@@ -38,10 +36,14 @@ function generateTemporaryPassword(length: number = 12): string {
 }
 
 Deno.serve(async (req) => {
+  const requestOrigin = req.headers.get('Origin');
+  const corsHeaders = getCorsHeaders(requestOrigin);
+  
   const requestId = crypto.randomUUID().slice(0, 8);
   console.log(`[${requestId}] ⬇️ Request received:`, {
     method: req.method,
     url: req.url,
+    origin: requestOrigin,
     headers: {
       authorization: req.headers.get('Authorization') ? '✅ Present' : '❌ Missing',
       contentType: req.headers.get('Content-Type')
