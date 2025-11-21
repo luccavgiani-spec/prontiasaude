@@ -235,10 +235,12 @@ export default function BulkInviteModal({
         let errorMessage = lastError?.message || 'Erro desconhecido';
         
         // Identificar tipos específicos de erro
-        if (errorMessage.includes('já cadastrado')) {
+        if (errorMessage.includes('já cadastrado no sistema')) {
           errorMessage = '❌ Email já cadastrado no sistema';
-        } else if (errorMessage.includes('já enviado')) {
-          errorMessage = '⚠️ Convite já enviado anteriormente';
+        } else if (errorMessage.includes('convite pendente')) {
+          errorMessage = '⚠️ Convite já enviado (pendente)';
+        } else if (errorMessage.includes('já completou o cadastro')) {
+          errorMessage = '✅ Funcionário já cadastrado';
         } else if (errorMessage.includes('Failed to send') || 
                    errorMessage.includes('FunctionsHttpError') || 
                    errorMessage.includes('Timeout')) {
