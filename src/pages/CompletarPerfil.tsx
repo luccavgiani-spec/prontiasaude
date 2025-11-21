@@ -31,40 +31,123 @@ const CompletarPerfil = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [inviteData, setInviteData] = useState<any>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const inviteToken = searchParams.get('token');
 
   useEffect(() => {
-    const loadPatientData = async () => {
-      const auth = await requireAuth();
-      if (!auth) return;
+    if (inviteToken) {
+      validateInviteToken();
+    } else {
+      loadPatientData();
+    }
+  }, [inviteToken]);
 
-      setCurrentUser(auth.user);
-      
-      // Load existing patient data
-      const patient = await getPatient(auth.user.id);
-      if (patient) {
-        setFormData({
-          first_name: patient.first_name || "",
-          last_name: patient.last_name || "",
-          address_line: patient.address_line || "",
-          cpf: patient.cpf || "",
-          phone_e164: patient.phone_e164 || "",
-          birth_date: patient.birth_date || "",
-          gender: patient.gender || "",
-          cep: patient.cep || "",
-          address_number: patient.address_number || "",
-          address_complement: patient.address_complement || "",
-          city: patient.city || "",
-          state: patient.state || "",
-          terms_accepted: !!patient.terms_accepted_at
+  const validateInviteToken = async () => {
+    try {
+      const { data: invite, error } = await supabase
+        .from('pending_employee_invites')
+        .select(`
+          *,
+          companies (
+            id,
+            razao_social,
+            plano_id_externo,
+            empresa_id_externo
+          )
+        `)
+        .eq('invite_token', inviteToken)
+        .eq('status', 'pending')
+        .single();
+        
+      if (error || !invite) {
+        toast({
+          title: "Convite inválido",
+          description: "Este convite não existe ou já foi utilizado.",
+          variant: "destructive",
         });
+        navigate('/entrar');
+        return;
       }
-    };
+      
+      // Verificar expiração
+      if (new Date(invite.expires_at) < new Date()) {
+        toast({
+          title: "Convite expirado",
+          description: "Este convite expirou. Solicite um novo à sua empresa.",
+          variant: "destructive",
+        });
+        navigate('/entrar');
+        return;
+      }
+      
+      setInviteData(invite);
+      
+      // Criar usuário automaticamente com senha temporária
+      const tempPassword = crypto.randomUUID();
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: invite.email,
+        password: tempPassword,
+        options: {
+          emailRedirectTo: window.location.origin
+        }
+      });
+      
+      if (authError) {
+        toast({
+          title: "Erro ao criar conta",
+          description: authError.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Fazer login automático
+      await supabase.auth.signInWithPassword({
+        email: invite.email,
+        password: tempPassword
+      });
+      
+      setCurrentUser(authData.user);
+    } catch (error: any) {
+      console.error('Error validating invite:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível validar o convite.",
+        variant: "destructive",
+      });
+      navigate('/entrar');
+    }
+  };
 
-    loadPatientData();
-  }, []);
+  const loadPatientData = async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+
+    setCurrentUser(auth.user);
+    
+    // Load existing patient data
+    const patient = await getPatient(auth.user.id);
+    if (patient) {
+      setFormData({
+        first_name: patient.first_name || "",
+        last_name: patient.last_name || "",
+        address_line: patient.address_line || "",
+        cpf: patient.cpf || "",
+        phone_e164: patient.phone_e164 || "",
+        birth_date: patient.birth_date || "",
+        gender: patient.gender || "",
+        cep: patient.cep || "",
+        address_number: patient.address_number || "",
+        address_complement: patient.address_complement || "",
+        city: patient.city || "",
+        state: patient.state || "",
+        terms_accepted: !!patient.terms_accepted_at
+      });
+    }
+  };
 
   const fetchAddressByCEP = async (cep: string) => {
     if (cep.length !== 8) return;
@@ -245,13 +328,78 @@ const CompletarPerfil = () => {
         address_complement: formData.address_complement,
         city: formData.city,
         state: formData.state,
-        termsAccepted: formData.terms_accepted
+        termsAccepted: formData.terms_accepted,
+        source: inviteData ? 'empresa_invite' : undefined
       });
       
-      toast({
-        title: "Perfil atualizado",
-        description: "Suas informações foram salvas com sucesso.",
-      });
+      // SE FOR CONVITE DE EMPRESA, ativar plano automaticamente
+      if (inviteData) {
+        const companyPlanCode = `EMPRESA_${inviteData.companies.razao_social
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '_')
+          .substring(0, 30)}`;
+        
+        const planExpiryDate = new Date();
+        planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
+        
+        // Criar plano ativo
+        const { error: planError } = await supabase.from('patient_plans').insert({
+          email: currentUser.email,
+          user_id: currentUser.id,
+          plan_code: companyPlanCode,
+          plan_expires_at: planExpiryDate.toISOString(),
+          status: 'active'
+        });
+        
+        if (planError) {
+          console.error('Error creating plan:', planError);
+        }
+        
+        // Criar vínculo em company_employees
+        const { error: employeeError } = await supabase.from('company_employees').insert({
+          user_id: currentUser.id,
+          company_id: inviteData.company_id,
+          nome: `${formData.first_name} ${formData.last_name}`,
+          cpf: formData.cpf.replace(/\D/g, ''),
+          email: currentUser.email,
+          telefone: formData.phone_e164,
+          datanascimento: formData.birth_date,
+          sexo: formData.gender === 'M' ? 'M' : 'F',
+          logradouro: formData.address_line,
+          numero: formData.address_number,
+          complemento: formData.address_complement || '',
+          bairro: '',
+          cep: formData.cep,
+          cidade: formData.city,
+          estado: formData.state,
+          empresa_id_externo: inviteData.companies.empresa_id_externo,
+          plano_id_externo: inviteData.companies.plano_id_externo,
+          has_active_plan: true
+        });
+        
+        if (employeeError) {
+          console.error('Error creating employee record:', employeeError);
+        }
+        
+        // Marcar convite como completo
+        await supabase
+          .from('pending_employee_invites')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', inviteData.id);
+        
+        toast({
+          title: "🎉 Bem-vindo!",
+          description: "Seu plano empresarial foi ativado com sucesso!",
+        });
+      } else {
+        toast({
+          title: "Perfil atualizado",
+          description: "Suas informações foram salvas com sucesso.",
+        });
+      }
       
       const redirectUrl = searchParams.get('redirect');
       if (redirectUrl) {
@@ -280,6 +428,17 @@ const CompletarPerfil = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {inviteData && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-green-800 mb-2">
+                ✅ Você foi convidado pela {inviteData.companies.razao_social}
+              </h3>
+              <p className="text-sm text-green-700">
+                Complete seus dados abaixo e seu plano de saúde será ativado automaticamente!
+              </p>
+            </div>
+          )}
+          
           <form onSubmit={handleSave} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">

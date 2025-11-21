@@ -101,10 +101,124 @@ Deno.serve(async (req) => {
     
     // Operações ADMIN-ONLY: criar empresas, listar empresas, atualizar empresas, resetar senhas
     const adminOnlyOps = ['create', 'list', 'reset-password'];
-    const isAdminOnlyOp = adminOnlyOps.includes(operation) || (req.method === 'PUT' && !operation.includes('create-employee'));
+    const isAdminOnlyOp = adminOnlyOps.includes(operation) || (req.method === 'PUT' && !operation.includes('create-employee') && !operation.includes('invite-employee'));
 
     if (isAdminOnlyOp && !isAdmin) {
       throw new Error('Forbidden: Admin access required for this operation');
+    }
+
+    // Operação INVITE EMPLOYEE: permitir admin OU company (com validação de ownership)
+    if (req.method === 'POST' && operation === 'invite-employee') {
+      if (!isAdmin && !isCompany) {
+        throw new Error('Forbidden: Admin or Company access required');
+      }
+      
+      // Se for company, validar que está criando funcionário para sua própria empresa
+      if (isCompany) {
+        const { data: companyCredential, error: credError } = await supabaseClient
+          .from('company_credentials')
+          .select('company_id')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (credError || !companyCredential) {
+          throw new Error('Forbidden: Company credentials not found');
+        }
+        
+        if (companyCredential.company_id !== bodyData.company_id) {
+          throw new Error('Forbidden: Can only invite employees for your own company');
+        }
+      }
+
+      const { company_id, email } = bodyData;
+      
+      if (!company_id || !email) {
+        throw new Error('Missing required fields: company_id, email');
+      }
+      
+      // Verificar se empresa existe
+      const { data: company, error: companyError } = await supabaseClient
+        .from('companies')
+        .select('id, razao_social, plano_id_externo, empresa_id_externo')
+        .eq('id', company_id)
+        .single();
+        
+      if (companyError || !company) {
+        throw new Error('Company not found');
+      }
+      
+      // Verificar se email já existe no sistema
+      const { data: { users: existingUsers }, error: listError } = await supabaseClient.auth.admin.listUsers();
+      const userExists = existingUsers?.find(u => u.email === email);
+      
+      if (userExists) {
+        throw new Error('Email já cadastrado no sistema');
+      }
+      
+      // Verificar convite pendente
+      const { data: pendingInvite, error: inviteCheckError } = await supabaseClient
+        .from('pending_employee_invites')
+        .select('status')
+        .eq('company_id', company_id)
+        .eq('email', email)
+        .maybeSingle();
+        
+      if (pendingInvite?.status === 'pending') {
+        throw new Error('Convite já enviado para este email');
+      }
+      
+      // Gerar token único
+      const invite_token = crypto.randomUUID();
+      
+      // Inserir convite
+      const { data: invite, error: inviteError } = await supabaseClient
+        .from('pending_employee_invites')
+        .insert({
+          company_id,
+          email,
+          invite_token,
+          invited_by: user.id
+        })
+        .select()
+        .single();
+        
+      if (inviteError) {
+        console.error('[invite-employee] Error inserting invite:', inviteError);
+        throw new Error('Erro ao criar convite');
+      }
+      
+      // Enviar email
+      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite_token}`;
+      
+      try {
+        const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
+          body: {
+            type: 'employee-invite',
+            data: {
+              email,
+              empresa: company.razao_social,
+              invite_link: inviteLink
+            }
+          }
+        });
+        
+        if (emailResult.error) {
+          console.error('[invite-employee] Email failed:', emailResult.error);
+        } else {
+          console.log('[invite-employee] ✅ Invite email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('[invite-employee] Exception sending email:', emailError);
+      }
+      
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: 'Convite enviado com sucesso',
+        invite 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 201
+      });
     }
 
     // Operação CREATE EMPLOYEE: permitir admin OU company (com validação de ownership)

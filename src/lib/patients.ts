@@ -33,6 +33,7 @@ export async function upsertPatientBasic(payload: {
   address_complement?: string; // opcional
   city: string;             // obrigatório
   state: string;            // obrigatório: UF
+  source?: string;          // opcional: origem do cadastro
 }) {
   const { data: sess } = await supabase.auth.getSession();
   const userId = sess?.session?.user?.id;
@@ -66,7 +67,7 @@ export async function upsertPatientBasic(payload: {
     address_complement: payload.address_complement || null,
     city: payload.city,
     state: payload.state,
-    source: 'site',
+    source: payload.source || 'site',
     terms_accepted_at: payload.termsAccepted ? new Date().toISOString() : null,
     profile_complete: true
   };
