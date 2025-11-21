@@ -531,47 +531,76 @@ Deno.serve(async (req) => {
     // RESET PASSWORD
     if (req.method === 'POST' && path[path.length - 1] === 'reset-password') {
       const companyId = path[path.length - 2];
+      console.log('[company-operations] 🔄 Password reset requested for company:', companyId);
       
       // Buscar credentials
       const { data: credData, error: credError } = await supabaseClient
         .from('company_credentials')
-        .select('user_id')
+        .select('user_id, company_id')
         .eq('company_id', companyId)
         .single();
 
       if (credError || !credData) {
+        console.error('[company-operations] ❌ Company credentials not found:', credError?.message);
         throw new Error('Company credentials not found');
       }
 
+      console.log('[company-operations] 📋 Company credentials found:', {
+        company_id: credData.company_id,
+        user_id: credData.user_id
+      });
+
       // Gerar nova senha
       const newPassword = generateTemporaryPassword(12);
+      console.log('[company-operations] 🔑 New temporary password generated:', newPassword.substring(0, 4) + '****');
 
       // Atualizar senha no Auth
-      const { error: authError } = await supabaseClient.auth.admin.updateUserById(
-        credData.user_id,
-        { password: newPassword }
-      );
+      try {
+        const { error: authError } = await supabaseClient.auth.admin.updateUserById(
+          credData.user_id,
+          { password: newPassword }
+        );
 
-      if (authError) {
-        throw new Error(`Failed to reset password: ${authError.message}`);
+        if (authError) {
+          console.error('[company-operations] ❌ Auth password update failed:', authError.message);
+          throw new Error(`Failed to reset password: ${authError.message}`);
+        }
+
+        console.log('[company-operations] ✅ Auth password updated successfully for user:', credData.user_id);
+      } catch (authException) {
+        console.error('[company-operations] ❌ Exception updating auth password:', authException);
+        throw authException;
       }
 
-      // Atualizar flag must_change_password
+      // Atualizar flag must_change_password e resetar failed attempts
       const { error: updateError } = await supabaseClient
         .from('company_credentials')
-        .update({ must_change_password: true })
+        .update({ 
+          must_change_password: true,
+          failed_login_attempts: 0,
+          last_failed_login_at: null
+        })
         .eq('company_id', companyId);
 
       if (updateError) {
+        console.error('[company-operations] ❌ Failed to update credentials flags:', updateError.message);
         throw new Error(`Failed to update credentials: ${updateError.message}`);
       }
+
+      console.log('[company-operations] ✅ Credentials flags updated (must_change_password=true, failed_attempts reset)');
 
       // Buscar CNPJ da empresa
       const { data: companyData } = await supabaseClient
         .from('companies')
-        .select('cnpj')
+        .select('cnpj, razao_social')
         .eq('id', companyId)
         .single();
+
+      console.log('[company-operations] ✅ Password reset completed successfully:', {
+        company: companyData?.razao_social,
+        cnpj: companyData?.cnpj,
+        password_preview: newPassword.substring(0, 4) + '****'
+      });
 
       return new Response(
         JSON.stringify({
@@ -580,6 +609,116 @@ Deno.serve(async (req) => {
             cnpj: companyData?.cnpj || '',
             password: newPassword,
           },
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // DIAGNÓSTICO DE LOGIN (Admin only)
+    if (req.method === 'POST' && operation === 'check-login-status') {
+      if (!isAdmin) {
+        throw new Error('Forbidden: Admin access required');
+      }
+
+      const { cnpj } = bodyData;
+      if (!cnpj) {
+        throw new Error('CNPJ é obrigatório');
+      }
+
+      const cleanCNPJ = cnpj.replace(/\D/g, '');
+      const email = `${cleanCNPJ}@empresa.prontia.com`;
+
+      console.log('[company-operations] 🔍 Diagnóstico de login para CNPJ:', cnpj);
+
+      // 1. Verificar se empresa existe
+      const { data: company, error: companyError } = await supabaseClient
+        .from('companies')
+        .select('id, razao_social, cnpj, status')
+        .eq('cnpj', cleanCNPJ)
+        .maybeSingle();
+
+      if (companyError) {
+        console.error('[company-operations] Erro ao buscar empresa:', companyError.message);
+      }
+
+      // 2. Verificar se usuário existe no Auth
+      const { data: authUser, error: authError } = await supabaseClient.auth.admin.listUsers();
+      const userExists = authUser?.users?.find(u => u.email === email);
+
+      // 3. Verificar role
+      let hasCompanyRole = false;
+      if (userExists) {
+        const { data: roleData } = await supabaseClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userExists.id)
+          .eq('role', 'company')
+          .maybeSingle();
+        
+        hasCompanyRole = !!roleData;
+      }
+
+      // 4. Verificar credentials
+      let credentialsData = null;
+      if (company?.id) {
+        const { data: creds } = await supabaseClient
+          .from('company_credentials')
+          .select('*')
+          .eq('company_id', company.id)
+          .maybeSingle();
+        
+        credentialsData = creds;
+      }
+
+      const diagnostics = {
+        cnpj_pesquisado: cnpj,
+        cnpj_limpo: cleanCNPJ,
+        email_gerado: email,
+        empresa_existe: !!company,
+        empresa_dados: company ? {
+          id: company.id,
+          razao_social: company.razao_social,
+          status: company.status
+        } : null,
+        usuario_auth_existe: !!userExists,
+        usuario_auth_id: userExists?.id || null,
+        tem_role_company: hasCompanyRole,
+        credentials: credentialsData ? {
+          must_change_password: credentialsData.must_change_password,
+          failed_login_attempts: credentialsData.failed_login_attempts,
+          last_login_at: credentialsData.last_login_at,
+          last_failed_login_at: credentialsData.last_failed_login_at
+        } : null,
+        problemas_identificados: []
+      };
+
+      // Identificar problemas
+      if (!company) {
+        diagnostics.problemas_identificados.push('❌ Empresa não encontrada no banco de dados');
+      }
+      if (!userExists) {
+        diagnostics.problemas_identificados.push('❌ Usuário não existe no Supabase Auth');
+      }
+      if (userExists && !hasCompanyRole) {
+        diagnostics.problemas_identificados.push('❌ Usuário existe mas não tem role "company"');
+      }
+      if (!credentialsData) {
+        diagnostics.problemas_identificados.push('❌ Registro de credentials não encontrado');
+      }
+      if (credentialsData && credentialsData.failed_login_attempts >= 5) {
+        diagnostics.problemas_identificados.push('⚠️ Conta pode estar bloqueada (5+ tentativas falhadas)');
+      }
+
+      if (diagnostics.problemas_identificados.length === 0) {
+        diagnostics.problemas_identificados.push('✅ Nenhum problema evidente detectado');
+      }
+
+      console.log('[company-operations] Diagnóstico completo:', diagnostics);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          diagnostics
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
