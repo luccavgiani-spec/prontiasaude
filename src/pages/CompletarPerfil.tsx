@@ -46,6 +46,7 @@ const CompletarPerfil = () => {
   }, [inviteToken]);
 
   const validateInviteToken = async () => {
+    setIsLoading(true);
     try {
       const { data: invite, error } = await supabase
         .from('pending_employee_invites')
@@ -96,11 +97,26 @@ const CompletarPerfil = () => {
       });
       
       if (authError) {
+        console.error('[CompletarPerfil] Auth error:', authError);
+        
+        // Tratar erro de email duplicado especificamente
+        if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
+          toast({
+            title: "⚠️ Email já cadastrado",
+            description: "Este email já possui uma conta. Por favor, faça login ou entre em contato com a empresa.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          navigate('/entrar');
+          return;
+        }
+        
         toast({
           title: "Erro ao criar conta",
           description: authError.message,
           variant: "destructive",
         });
+        setIsLoading(false);
         return;
       }
       
@@ -119,6 +135,8 @@ const CompletarPerfil = () => {
         variant: "destructive",
       });
       navigate('/entrar');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -343,42 +361,68 @@ const CompletarPerfil = () => {
         planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
         
         // Criar plano ativo
-        const { error: planError } = await supabase.from('patient_plans').insert({
-          email: currentUser.email,
-          user_id: currentUser.id,
-          plan_code: companyPlanCode,
-          plan_expires_at: planExpiryDate.toISOString(),
-          status: 'active'
-        });
-        
-        if (planError) {
-          console.error('Error creating plan:', planError);
+        try {
+          const { error: planError } = await supabase.from('patient_plans').insert({
+            email: currentUser.email,
+            user_id: currentUser.id,
+            plan_code: companyPlanCode,
+            plan_expires_at: planExpiryDate.toISOString(),
+            status: 'active'
+          });
+          
+          if (planError) {
+            console.error('❌ Error creating plan:', planError);
+            throw new Error(`Falha ao ativar plano: ${planError.message}`);
+          }
+          
+          console.log('✅ Plano criado com sucesso:', companyPlanCode);
+        } catch (planErr: any) {
+          console.error('❌ Exception creating plan:', planErr);
+          toast({
+            title: "Erro ao ativar plano",
+            description: "Não foi possível ativar seu plano empresarial. Entre em contato com o suporte.",
+            variant: "destructive",
+          });
+          throw planErr;
         }
         
         // Criar vínculo em company_employees
-        const { error: employeeError } = await supabase.from('company_employees').insert({
-          user_id: currentUser.id,
-          company_id: inviteData.company_id,
-          nome: `${formData.first_name} ${formData.last_name}`,
-          cpf: formData.cpf.replace(/\D/g, ''),
-          email: currentUser.email,
-          telefone: formData.phone_e164,
-          datanascimento: formData.birth_date,
-          sexo: formData.gender === 'M' ? 'M' : 'F',
-          logradouro: formData.address_line,
-          numero: formData.address_number,
-          complemento: formData.address_complement || '',
-          bairro: '',
-          cep: formData.cep,
-          cidade: formData.city,
-          estado: formData.state,
-          empresa_id_externo: inviteData.companies.empresa_id_externo,
-          plano_id_externo: inviteData.companies.plano_id_externo,
-          has_active_plan: true
-        });
-        
-        if (employeeError) {
-          console.error('Error creating employee record:', employeeError);
+        try {
+          const { error: employeeError } = await supabase.from('company_employees').insert({
+            user_id: currentUser.id,
+            company_id: inviteData.company_id,
+            nome: `${formData.first_name} ${formData.last_name}`,
+            cpf: formData.cpf.replace(/\D/g, ''),
+            email: currentUser.email,
+            telefone: formData.phone_e164,
+            datanascimento: formData.birth_date,
+            sexo: formData.gender === 'M' ? 'M' : 'F',
+            logradouro: formData.address_line,
+            numero: formData.address_number,
+            complemento: formData.address_complement || '',
+            bairro: '',
+            cep: formData.cep,
+            cidade: formData.city,
+            estado: formData.state,
+            empresa_id_externo: inviteData.companies.empresa_id_externo,
+            plano_id_externo: inviteData.companies.plano_id_externo,
+            has_active_plan: true
+          });
+          
+          if (employeeError) {
+            console.error('❌ Error creating employee record:', employeeError);
+            throw new Error(`Falha ao vincular à empresa: ${employeeError.message}`);
+          }
+          
+          console.log('✅ Vínculo criado em company_employees');
+        } catch (empErr: any) {
+          console.error('❌ Exception creating employee:', empErr);
+          toast({
+            title: "Erro ao vincular à empresa",
+            description: "Não foi possível completar o vínculo com a empresa. Entre em contato com o suporte.",
+            variant: "destructive",
+          });
+          throw empErr;
         }
         
         // Marcar convite como completo
