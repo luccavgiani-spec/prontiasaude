@@ -590,7 +590,7 @@ serve(async (req) => {
         const { data: updatedPlan, error: updateError } = await supabase
           .from('patient_plans')
           .update({ 
-            status: 'inactive',
+            status: 'cancelled',
             updated_at: new Date().toISOString()
           })
           .eq('email', email)
