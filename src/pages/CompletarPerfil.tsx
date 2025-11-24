@@ -94,60 +94,43 @@ const CompletarPerfil = () => {
       // Preencher email automaticamente
       setFormData(prev => ({ ...prev, first_name: invite.email }));
       
-      // Verificar se usuário já existe
+      // Verificar se usuário já está logado
       const { data: { session } } = await supabase.auth.getSession();
-      const { data: patientData } = await supabase
-        .from('patients')
-        .select('*, id')
-        .eq('email', invite.email)
-        .maybeSingle();
       
-      if (patientData && !session) {
-        // Usuário existe mas não está logado
-        console.log('[CompletarPerfil] User exists but not logged in, redirecting to login...');
-        toast({
-          title: "Você já possui uma conta",
-          description: "Faça login primeiro e depois volte a este link para ativar seu plano empresarial.",
-          variant: "default",
-        });
+      if (session) {
+        // Usuário existe e está logado - buscar dados do paciente
+        console.log('[CompletarPerfil] User is logged in, loading patient data...');
         
-        // Armazenar token no localStorage para usar após login
-        localStorage.setItem('pending_invite_token', inviteToken);
-        
-        setTimeout(() => {
-          navigate(`/entrar?email=${encodeURIComponent(invite.email)}&redirect=completar-perfil`);
-        }, 3000);
-        return;
-      }
-      
-      if (patientData && session) {
-        // Usuário existe e está logado
-        console.log('[CompletarPerfil] User exists and is logged in, loading data...');
-        
-        setCurrentUser({ id: patientData.id, email: invite.email });
-        
-        // Preencher formulário com dados existentes
-        setFormData({
-          first_name: patientData.first_name || '',
-          last_name: patientData.last_name || '',
-          address_line: patientData.address_line || '',
-          cpf: patientData.cpf || '',
-          phone_e164: patientData.phone_e164 || '',
-          birth_date: patientData.birth_date || '',
-          gender: patientData.gender || 'F',
-          cep: patientData.cep || '',
-          city: patientData.city || '',
-          state: patientData.state || '',
-          address_number: patientData.address_number || '',
-          address_complement: patientData.address_complement || '',
-          terms_accepted: true
-        });
-        
-        toast({
-          title: "✅ Bem-vindo(a) de volta!",
-          description: "Confirme seus dados para ativar seu plano empresarial.",
-          variant: "default",
-        });
+        const patient = await getPatient(session.user.id);
+        if (patient) {
+          setCurrentUser({ id: patient.id, email: invite.email });
+          
+          // Preencher formulário com dados existentes
+          setFormData({
+            first_name: patient.first_name || '',
+            last_name: patient.last_name || '',
+            address_line: patient.address_line || '',
+            cpf: patient.cpf || '',
+            phone_e164: patient.phone_e164 || '',
+            birth_date: patient.birth_date || '',
+            gender: patient.gender || 'F',
+            cep: patient.cep || '',
+            city: patient.city || '',
+            state: patient.state || '',
+            address_number: patient.address_number || '',
+            address_complement: patient.address_complement || '',
+            terms_accepted: true
+          });
+          
+          toast({
+            title: "✅ Bem-vindo(a) de volta!",
+            description: "Confirme seus dados para ativar seu plano empresarial.",
+            variant: "default",
+          });
+        } else {
+          // Tem sessão mas não tem patient - usar email do convite
+          setCurrentUser(session.user);
+        }
       }
     } catch (error: any) {
       console.error('Error validating invite:', error);
@@ -331,8 +314,11 @@ const CompletarPerfil = () => {
 
     setIsLoading(true);
     
+    // Variável local para evitar problemas de timing com estado assíncrono
+    let activeUser = currentUser;
+    
     // Se for convite e não tiver sessão, criar usuário com senha definida
-    if (inviteData && !currentUser) {
+    if (inviteData && !activeUser) {
       try {
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: inviteData.email,
@@ -346,23 +332,21 @@ const CompletarPerfil = () => {
           console.error('[CompletarPerfil] Auth error:', authError);
           
           if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-            // Se já existe, tentar login
-            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-              email: inviteData.email,
-              password: password
+            // ✅ Usuário já existe - SEMPRE salvar token antes de redirecionar
+            localStorage.setItem('pending_invite_token', inviteData.invite_token);
+            
+            toast({
+              title: "Você já possui uma conta",
+              description: "Faça login e seu plano empresarial será ativado automaticamente.",
+              variant: "default",
+              duration: 5000
             });
             
-            if (signInError) {
-              toast({
-                title: "Erro de autenticação",
-                description: "Email já cadastrado. Se você já tem uma conta, faça login normalmente.",
-                variant: "destructive",
-              });
-              setIsLoading(false);
-              return;
-            }
-            
-            setCurrentUser(signInData.user);
+            setIsLoading(false);
+            setTimeout(() => {
+              navigate(`/entrar?email=${encodeURIComponent(inviteData.email)}`);
+            }, 2000);
+            return;
           } else {
             toast({
               title: "Erro ao criar conta",
@@ -380,6 +364,7 @@ const CompletarPerfil = () => {
           });
           
           setCurrentUser(authData.user);
+          activeUser = authData.user; // ✅ Atualizar variável local sincronamente
         }
       } catch (error: any) {
         console.error('[CompletarPerfil] Exception during auth:', error);
@@ -393,7 +378,7 @@ const CompletarPerfil = () => {
       }
     }
     
-    if (!currentUser) {
+    if (!activeUser) {
       toast({
         title: "Erro",
         description: "Você precisa estar autenticado para continuar.",
@@ -409,7 +394,7 @@ const CompletarPerfil = () => {
         .from('patients')
         .select('id')
         .eq('cpf', formData.cpf.replace(/\D/g, ''))
-        .neq('id', currentUser.id)
+        .neq('id', activeUser.id)
         .maybeSingle();
 
       if (existingCPF) {
@@ -424,12 +409,12 @@ const CompletarPerfil = () => {
       }
       
       // ✅ VERIFICAR EMAIL DUPLICADO (se mudou)
-      if (currentUser.email !== formData.first_name) { // Verificar se email mudou
+      if (activeUser.email !== formData.first_name) { // Verificar se email mudou
         const { data: existingEmail } = await supabase
           .from('patients')
           .select('id')
-          .eq('email', currentUser.email)
-          .neq('id', currentUser.id)
+          .eq('email', activeUser.email)
+          .neq('id', activeUser.id)
           .maybeSingle();
 
         if (existingEmail) {
