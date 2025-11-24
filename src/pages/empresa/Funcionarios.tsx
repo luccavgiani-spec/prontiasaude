@@ -12,7 +12,7 @@ import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
 import { validateCPF } from '@/lib/cpf-validator';
 import { validateCEP, validateEmail } from '@/lib/validations';
-import { ArrowLeft, Plus, Trash2, Upload, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Upload, Send, FileSpreadsheet } from 'lucide-react';
 import BulkInviteModal from '@/components/empresa/BulkInviteModal';
 
 interface Employee {
@@ -342,8 +342,8 @@ export default function EmpresaFuncionarios() {
                 variant="outline" 
                 onClick={() => setBulkInviteOpen(true)}
               >
-                <Upload className="h-4 w-4 mr-2" />
-                Importar Lista (XLSX/CSV)
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Importar Lista
               </Button>
               <Button onClick={() => setShowForm(!showForm)}>
                 <Plus className="h-4 w-4 mr-2" />
