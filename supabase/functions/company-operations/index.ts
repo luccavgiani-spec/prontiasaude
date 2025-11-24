@@ -151,7 +151,13 @@ Deno.serve(async (req) => {
       const { company_id, email } = bodyData;
       
       if (!company_id || !email) {
-        throw new Error('Missing required fields: company_id, email');
+        return new Response(JSON.stringify({ 
+          error: 'Missing required fields: company_id, email',
+          code: 'MISSING_FIELDS'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
       }
       
       // Verificar se empresa existe
@@ -162,7 +168,13 @@ Deno.serve(async (req) => {
         .single();
         
       if (companyError || !company) {
-        throw new Error('Company not found');
+        return new Response(JSON.stringify({ 
+          error: 'Company not found',
+          code: 'COMPANY_NOT_FOUND'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404
+        });
       }
       
       console.log('[invite-employee] Company found:', company.razao_social);
@@ -173,7 +185,13 @@ Deno.serve(async (req) => {
       
       if (userExists) {
         console.log('[invite-employee] Email already registered:', email);
-        throw new Error('Email já cadastrado no sistema');
+        return new Response(JSON.stringify({ 
+          error: 'Email já cadastrado no sistema',
+          code: 'EMAIL_ALREADY_REGISTERED'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409
+        });
       }
       
       // Verificar se já existe convite
@@ -210,7 +228,14 @@ Deno.serve(async (req) => {
         
         if (updateError) {
           console.error('[invite-employee] Error updating invite:', updateError);
-          throw new Error('Erro ao reativar convite');
+          return new Response(JSON.stringify({ 
+            error: 'Erro ao reativar convite',
+            code: 'UPDATE_ERROR',
+            details: updateError.message
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          });
         }
         
         invite = updatedInvite;
@@ -257,7 +282,14 @@ Deno.serve(async (req) => {
           
         if (inviteError) {
           console.error('[invite-employee] Error inserting invite:', inviteError);
-          throw new Error('Erro ao criar convite');
+          return new Response(JSON.stringify({ 
+            error: 'Erro ao criar convite',
+            code: 'INSERT_ERROR',
+            details: inviteError.message
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 500
+          });
         }
         
         invite = newInvite;
