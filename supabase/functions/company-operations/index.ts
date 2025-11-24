@@ -219,12 +219,24 @@ Deno.serve(async (req) => {
       // CENÁRIO 2: Convite pendente → ERRO
       } else if (existingInvite && existingInvite.status === 'pending') {
         console.log('[invite-employee] Pending invite already exists:', email);
-        throw new Error('Já existe um convite pendente para este email. Use a opção "Reenviar" na tabela.');
+        return new Response(JSON.stringify({ 
+          error: 'Já existe um convite pendente para este email. Use a opção "Reenviar" na tabela.',
+          code: 'INVITE_PENDING'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409
+        });
         
       // CENÁRIO 3: Convite completado → ERRO
       } else if (existingInvite && existingInvite.status === 'completed') {
         console.log('[invite-employee] Employee already registered:', email);
-        throw new Error('Este funcionário já completou o cadastro. Verifique a aba "Funcionários".');
+        return new Response(JSON.stringify({ 
+          error: 'Este funcionário já completou o cadastro. Verifique a aba "Funcionários".',
+          code: 'EMPLOYEE_REGISTERED'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 409
+        });
         
       // CENÁRIO 4: Sem convite → CRIAR NOVO
       } else {
