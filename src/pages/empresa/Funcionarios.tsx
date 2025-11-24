@@ -112,6 +112,15 @@ export default function EmpresaFuncionarios() {
     }
   };
 
+  // Função auxiliar para tentar parsear JSON de mensagens de erro
+  const tryParseJSON = (str: string) => {
+    try {
+      return JSON.parse(str);
+    } catch {
+      return null;
+    }
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -131,24 +140,32 @@ export default function EmpresaFuncionarios() {
         }
       });
       
-      // Verificar resposta controlada da edge function (com código de erro)
+      // Extrair erro estruturado (pode estar em data OU em error.message quando é 4xx)
+      let errorInfo = null;
       if (data?.error && data?.code) {
-        // Mensagens amigáveis para erros de validação
-        let errorMessage = data.error;
+        errorInfo = data;
+      } else if (error?.message) {
+        errorInfo = tryParseJSON(error.message) || error;
+      }
+      
+      // Verificar resposta controlada da edge function (com código de erro)
+      if (errorInfo?.error && errorInfo?.code) {
+        let errorMessage = errorInfo.error;
         
-        if (data.code === 'INVITE_PENDING') {
+        if (errorInfo.code === 'INVITE_PENDING') {
           errorMessage = 'Já existe um convite pendente para este email. Use a opção "Reenviar" na tabela abaixo.';
-        } else if (data.code === 'EMAIL_ALREADY_REGISTERED') {
-          errorMessage = 'Este email já está cadastrado no sistema.';
-        } else if (data.code === 'EMPLOYEE_REGISTERED') {
+        } else if (errorInfo.code === 'EMAIL_ALREADY_REGISTERED') {
+          errorMessage = 'Este email já está cadastrado no sistema como paciente.';
+        } else if (errorInfo.code === 'EMPLOYEE_REGISTERED') {
           errorMessage = 'Este funcionário já completou o cadastro. Verifique a aba "Funcionários".';
         }
         
         toast.error(errorMessage);
+        setLoading(false);
         return;
       }
       
-      // Erro do Supabase client (network, etc.)
+      // Erro do Supabase client (network, etc.) sem estrutura JSON
       if (error) {
         console.error('[Invite] Supabase client error:', error);
         throw error;
