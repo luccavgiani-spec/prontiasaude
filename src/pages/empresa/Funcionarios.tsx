@@ -112,13 +112,36 @@ export default function EmpresaFuncionarios() {
     }
   };
 
-  // Função auxiliar para tentar parsear JSON de mensagens de erro
-  const tryParseJSON = (str: string) => {
-    try {
-      return JSON.parse(str);
-    } catch {
-      return null;
+  // Função auxiliar para extrair erro estruturado de múltiplas fontes possíveis
+  const extractErrorInfo = (data: any, error: any) => {
+    // Caso 1: Erro estruturado em data (Edge Function retornou 200 com erro)
+    if (data?.error && data?.code) {
+      return data;
     }
+    
+    // Caso 2: Erro já é um objeto com error e code (Supabase parseou automaticamente)
+    if (error?.error && error?.code) {
+      return error;
+    }
+    
+    // Caso 3: Erro em error.message como string JSON
+    if (error?.message && typeof error.message === 'string') {
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed?.error && parsed?.code) {
+          return parsed;
+        }
+      } catch {
+        // Não é JSON válido, continuar
+      }
+    }
+    
+    // Caso 4: Erro em error.context (algumas versões do SDK)
+    if (error?.context?.error && error?.context?.code) {
+      return error.context;
+    }
+    
+    return null;
   };
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -140,13 +163,10 @@ export default function EmpresaFuncionarios() {
         }
       });
       
-      // Extrair erro estruturado (pode estar em data OU em error.message quando é 4xx)
-      let errorInfo = null;
-      if (data?.error && data?.code) {
-        errorInfo = data;
-      } else if (error?.message) {
-        errorInfo = tryParseJSON(error.message) || error;
-      }
+      console.log('[Invite] Response:', { data, error });
+      
+      // Extrair erro estruturado de qualquer fonte possível
+      const errorInfo = extractErrorInfo(data, error);
       
       // Verificar resposta controlada da edge function (com código de erro)
       if (errorInfo?.error && errorInfo?.code) {
@@ -160,6 +180,7 @@ export default function EmpresaFuncionarios() {
           errorMessage = 'Este funcionário já completou o cadastro. Verifique a aba "Funcionários".';
         }
         
+        console.log('[Invite] Displaying error:', errorMessage);
         toast.error(errorMessage);
         setLoading(false);
         return;
@@ -167,10 +188,13 @@ export default function EmpresaFuncionarios() {
       
       // Erro do Supabase client (network, etc.) sem estrutura JSON
       if (error) {
-        console.error('[Invite] Supabase client error:', error);
-        throw error;
+        console.error('[Invite] Unstructured error:', error);
+        toast.error(error.message || 'Erro ao enviar convite');
+        setLoading(false);
+        return;
       }
       
+      // Sucesso
       toast.success(`Convite enviado para ${inviteEmail}!`);
       setInviteEmail('');
       setShowForm(false);

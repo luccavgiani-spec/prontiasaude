@@ -190,28 +190,43 @@ export default function BulkInviteModal({
           
           console.log('[BulkInvite] Response:', { data, error, status: result?.status });
           
-          // Extrair erro estruturado (pode estar em data OU em error.message quando é 4xx)
+          // Extrair erro estruturado de múltiplas fontes possíveis
           let errorInfo = null;
+          
+          // Caso 1: Erro em data (200 com erro estruturado)
           if (data?.error && data?.code) {
             errorInfo = data;
-          } else if (error?.message) {
+          } 
+          // Caso 2: Erro já é objeto estruturado
+          else if (error?.error && error?.code) {
+            errorInfo = error;
+          }
+          // Caso 3: Erro em error.message como string JSON
+          else if (error?.message && typeof error.message === 'string') {
             try {
-              errorInfo = JSON.parse(error.message);
+              const parsed = JSON.parse(error.message);
+              if (parsed?.error && parsed?.code) {
+                errorInfo = parsed;
+              }
             } catch {
-              errorInfo = null;
+              // Não é JSON, continuar
             }
           }
+          // Caso 4: Erro em error.context
+          else if (error?.context?.error && error?.context?.code) {
+            errorInfo = error.context;
+          }
           
-          // Se retornou errorInfo com error e code, é uma resposta controlada da edge function
+          // Se encontrou erro estruturado da edge function
           if (errorInfo?.error && errorInfo?.code) {
-            console.log('[BulkInvite] Validation error from edge function:', errorInfo);
+            console.log('[BulkInvite] Structured error:', errorInfo);
             throw new Error(errorInfo.error);
           }
           
-          // Se error do Supabase client (network, timeout, etc.) sem estrutura JSON
+          // Erro genérico do Supabase client (network, timeout, etc.)
           if (error) {
             console.error('[BulkInvite] Supabase client error:', error);
-            throw error;
+            throw new Error(error.message || 'Erro ao enviar convite');
           }
           
           // Sucesso
