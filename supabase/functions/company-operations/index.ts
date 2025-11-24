@@ -79,21 +79,6 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Verificar se usuário é admin OU company
-    const { data: roleData } = await supabaseClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .in('role', ['admin', 'company'])
-      .maybeSingle();
-
-    if (!roleData) {
-      throw new Error('Forbidden: Access denied');
-    }
-
-    const isAdmin = roleData.role === 'admin';
-    const isCompany = roleData.role === 'company';
-
     const url = new URL(req.url);
     const path = url.pathname.split('/').filter(Boolean);
     
@@ -109,6 +94,30 @@ Deno.serve(async (req) => {
     }
     
     const operation = bodyData.operation || path[path.length - 1];
+
+    // Operação ACTIVATE-EMPLOYEE-PLAN não exige role específica, apenas autenticação
+    const publicAuthOps = ['activate-employee-plan'];
+    const isPublicAuthOp = publicAuthOps.includes(operation);
+
+    // Verificar se usuário é admin OU company (apenas se não for operação pública)
+    let isAdmin = false;
+    let isCompany = false;
+    
+    if (!isPublicAuthOp) {
+      const { data: roleData } = await supabaseClient
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .in('role', ['admin', 'company'])
+        .maybeSingle();
+
+      if (!roleData) {
+        throw new Error('Forbidden: Access denied');
+      }
+
+      isAdmin = roleData.role === 'admin';
+      isCompany = roleData.role === 'company';
+    }
 
     // ============= CONTROLES DE ACESSO POR OPERAÇÃO =============
     
@@ -433,6 +442,158 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200
       });
+    }
+
+    // Operação ACTIVATE EMPLOYEE PLAN: público com autenticação, valida token do convite
+    if (req.method === 'POST' && operation === 'activate-employee-plan') {
+      const { invite_token } = bodyData;
+      
+      if (!invite_token) {
+        return new Response(JSON.stringify({ 
+          error: 'Token do convite é obrigatório',
+          code: 'MISSING_TOKEN'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+      
+      console.log('[activate-employee-plan] Validating invite token for user:', user.email);
+      
+      // Buscar convite
+      const { data: invite, error: inviteError } = await supabaseClient
+        .from('pending_employee_invites')
+        .select(`
+          *,
+          companies (
+            id,
+            razao_social,
+            plano_id_externo,
+            empresa_id_externo
+          )
+        `)
+        .eq('invite_token', invite_token)
+        .eq('status', 'pending')
+        .maybeSingle();
+      
+      if (inviteError || !invite) {
+        console.error('[activate-employee-plan] Invite not found or error:', inviteError);
+        return new Response(JSON.stringify({ 
+          error: 'Convite inválido ou já utilizado',
+          code: 'INVALID_INVITE'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404
+        });
+      }
+      
+      // Validar expiração
+      if (new Date(invite.expires_at) < new Date()) {
+        console.error('[activate-employee-plan] Invite expired');
+        return new Response(JSON.stringify({ 
+          error: 'Convite expirado. Solicite um novo à sua empresa.',
+          code: 'INVITE_EXPIRED'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 410
+        });
+      }
+      
+      // Validar que o email do convite corresponde ao usuário autenticado
+      if (invite.email !== user.email) {
+        console.error('[activate-employee-plan] Email mismatch:', { invite_email: invite.email, user_email: user.email });
+        return new Response(JSON.stringify({ 
+          error: 'Este convite não é para o seu email',
+          code: 'EMAIL_MISMATCH'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 403
+        });
+      }
+      
+      console.log('[activate-employee-plan] Invite validated, creating plan...');
+      
+      // Gerar código do plano empresarial
+      const companyPlanCode = `EMPRESA_${invite.companies.razao_social
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '_')
+        .substring(0, 30)}`;
+      
+      const planExpiryDate = new Date();
+      planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
+      
+      try {
+        // Verificar se já existe plano empresarial ativo
+        const { data: existingPlan } = await supabaseClient
+          .from('patient_plans')
+          .select('id, plan_code')
+          .eq('user_id', user.id)
+          .eq('plan_code', companyPlanCode)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (existingPlan) {
+          console.log('[activate-employee-plan] Plan already exists, skipping creation');
+        } else {
+          // Desativar outros planos ativos
+          await supabaseClient
+            .from('patient_plans')
+            .update({ status: 'cancelled' })
+            .eq('user_id', user.id)
+            .eq('status', 'active');
+          
+          // Criar novo plano empresarial (usando service_role_key, bypass RLS)
+          const { error: planError } = await supabaseClient.from('patient_plans').insert({
+            email: user.email,
+            user_id: user.id,
+            plan_code: companyPlanCode,
+            plan_expires_at: planExpiryDate.toISOString(),
+            status: 'active'
+          });
+          
+          if (planError) {
+            console.error('[activate-employee-plan] Error creating plan:', planError);
+            return new Response(JSON.stringify({ 
+              error: `Falha ao ativar plano: ${planError.message}`,
+              code: 'PLAN_CREATION_ERROR'
+            }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 500
+            });
+          }
+          
+          console.log('[activate-employee-plan] Plan created successfully:', companyPlanCode);
+        }
+        
+        // Marcar convite como completo
+        await supabaseClient
+          .from('pending_employee_invites')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', invite.id);
+        
+        console.log('[activate-employee-plan] Invite marked as completed');
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          message: 'Plano ativado com sucesso',
+          plan_code: companyPlanCode
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200
+        });
+      } catch (error: any) {
+        console.error('[activate-employee-plan] Exception:', error);
+        return new Response(JSON.stringify({ 
+          error: error.message || 'Erro ao ativar plano',
+          code: 'INTERNAL_ERROR'
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        });
+      }
     }
 
     // Operação CREATE EMPLOYEE: permitir admin OU company (com validação de ownership)
