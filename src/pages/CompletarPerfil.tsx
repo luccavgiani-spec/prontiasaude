@@ -98,38 +98,58 @@ const CompletarPerfil = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session) {
-        // Usuário existe e está logado - buscar dados do paciente
-        console.log('[CompletarPerfil] User is logged in, loading patient data...');
-        
-        const patient = await getPatient(session.user.id);
-        if (patient) {
-          setCurrentUser({ id: patient.id, email: invite.email });
-          
-          // Preencher formulário com dados existentes
-          setFormData({
-            first_name: patient.first_name || '',
-            last_name: patient.last_name || '',
-            address_line: patient.address_line || '',
-            cpf: patient.cpf || '',
-            phone_e164: patient.phone_e164 || '',
-            birth_date: patient.birth_date || '',
-            gender: patient.gender || 'F',
-            cep: patient.cep || '',
-            city: patient.city || '',
-            state: patient.state || '',
-            address_number: patient.address_number || '',
-            address_complement: patient.address_complement || '',
-            terms_accepted: true
+        // VERIFICAÇÃO: Se o email logado é DIFERENTE do convite, fazer logout
+        if (session.user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+          console.log('[CompletarPerfil] Email mismatch detected - signing out:', {
+            logged_email: session.user.email,
+            invite_email: invite.email
           });
+          
+          // Fazer logout silencioso
+          await supabase.auth.signOut();
           
           toast({
-            title: "✅ Bem-vindo(a) de volta!",
-            description: "Confirme seus dados para ativar seu plano empresarial.",
+            title: "Sessão anterior encerrada",
+            description: `Complete o cadastro com o email ${invite.email}`,
             variant: "default",
           });
+          
+          // NÃO definir currentUser - continuar como novo usuário
+          // O fluxo vai para criação de nova conta em handleSave
         } else {
-          // Tem sessão mas não tem patient - usar email do convite
-          setCurrentUser(session.user);
+          // Email corresponde - usar sessão existente
+          console.log('[CompletarPerfil] Email match - using existing session');
+          
+          const patient = await getPatient(session.user.id);
+          if (patient) {
+            setCurrentUser({ id: patient.id, email: invite.email });
+            
+            // Preencher formulário com dados existentes
+            setFormData({
+              first_name: patient.first_name || '',
+              last_name: patient.last_name || '',
+              address_line: patient.address_line || '',
+              cpf: patient.cpf || '',
+              phone_e164: patient.phone_e164 || '',
+              birth_date: patient.birth_date || '',
+              gender: patient.gender || 'F',
+              cep: patient.cep || '',
+              city: patient.city || '',
+              state: patient.state || '',
+              address_number: patient.address_number || '',
+              address_complement: patient.address_complement || '',
+              terms_accepted: true
+            });
+            
+            toast({
+              title: "✅ Bem-vindo(a) de volta!",
+              description: "Confirme seus dados para ativar seu plano empresarial.",
+              variant: "default",
+            });
+          } else {
+            // Tem sessão mas não tem patient - usar email do convite
+            setCurrentUser(session.user);
+          }
         }
       }
     } catch (error: any) {
