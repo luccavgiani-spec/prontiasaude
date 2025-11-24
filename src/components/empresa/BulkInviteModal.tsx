@@ -190,13 +190,25 @@ export default function BulkInviteModal({
           
           console.log('[BulkInvite] Response:', { data, error, status: result?.status });
           
-          // Se retornou data com error e code, é uma resposta controlada da edge function
+          // Extrair erro estruturado (pode estar em data OU em error.message quando é 4xx)
+          let errorInfo = null;
           if (data?.error && data?.code) {
-            console.log('[BulkInvite] Validation error from edge function:', data);
-            throw new Error(data.error);
+            errorInfo = data;
+          } else if (error?.message) {
+            try {
+              errorInfo = JSON.parse(error.message);
+            } catch {
+              errorInfo = null;
+            }
           }
           
-          // Se error do Supabase client (network, timeout, etc.)
+          // Se retornou errorInfo com error e code, é uma resposta controlada da edge function
+          if (errorInfo?.error && errorInfo?.code) {
+            console.log('[BulkInvite] Validation error from edge function:', errorInfo);
+            throw new Error(errorInfo.error);
+          }
+          
+          // Se error do Supabase client (network, timeout, etc.) sem estrutura JSON
           if (error) {
             console.error('[BulkInvite] Supabase client error:', error);
             throw error;
