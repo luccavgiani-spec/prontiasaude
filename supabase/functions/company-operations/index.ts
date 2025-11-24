@@ -554,6 +554,42 @@ Deno.serve(async (req) => {
           console.log('[activate-employee-plan] Plan created successfully:', companyPlanCode);
         }
         
+        // Criar vínculo em company_employees (usando service_role, bypass RLS)
+        const employeeData = bodyData.employee_data;
+        if (employeeData) {
+          console.log('[activate-employee-plan] Creating employee record...');
+          
+          const { error: employeeError } = await supabaseAdmin
+            .from('company_employees')
+            .insert({
+              user_id: user.id,
+              company_id: invite.company_id,
+              nome: employeeData.nome,
+              cpf: employeeData.cpf,
+              email: user.email,
+              telefone: employeeData.telefone,
+              datanascimento: employeeData.birth_date,
+              sexo: employeeData.gender,
+              logradouro: employeeData.address_line,
+              numero: employeeData.address_number,
+              complemento: employeeData.address_complement || '',
+              bairro: '',
+              cep: employeeData.cep,
+              cidade: employeeData.city,
+              estado: employeeData.state,
+              empresa_id_externo: invite.companies.empresa_id_externo,
+              plano_id_externo: invite.companies.plano_id_externo,
+              has_active_plan: true
+            });
+
+          if (employeeError) {
+            console.error('[activate-employee-plan] Error creating employee record:', employeeError);
+            // Não falhar - plano já foi criado, apenas log
+          } else {
+            console.log('[activate-employee-plan] Employee record created successfully');
+          }
+        }
+        
         // Marcar convite como completo
         await supabaseClient
           .from('pending_employee_invites')

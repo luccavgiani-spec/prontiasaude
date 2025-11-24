@@ -469,7 +469,20 @@ const CompletarPerfil = () => {
           const { data: planResult, error: planError } = await supabase.functions.invoke('company-operations', {
             body: {
               operation: 'activate-employee-plan',
-              invite_token: inviteData.invite_token
+              invite_token: inviteData.invite_token,
+              employee_data: {
+                nome: `${formData.first_name} ${formData.last_name}`,
+                cpf: formData.cpf.replace(/\D/g, ''),
+                telefone: formData.phone_e164,
+                birth_date: formData.birth_date,
+                gender: formData.gender === 'M' ? 'M' : 'F',
+                address_line: formData.address_line,
+                address_number: formData.address_number,
+                address_complement: formData.address_complement || '',
+                cep: formData.cep,
+                city: formData.city,
+                state: formData.state
+              }
             }
           });
           
@@ -478,36 +491,7 @@ const CompletarPerfil = () => {
             throw new Error(planResult?.error || 'Falha ao ativar plano empresarial');
           }
           
-          console.log('✅ Plan activated via Edge Function:', planResult.plan_code);
-          
-          // Criar vínculo em company_employees
-          const { error: employeeError } = await supabase.from('company_employees').insert({
-            user_id: currentUser.id,
-            company_id: inviteData.company_id,
-            nome: `${formData.first_name} ${formData.last_name}`,
-            cpf: formData.cpf.replace(/\D/g, ''),
-            email: currentUser.email,
-            telefone: formData.phone_e164,
-            datanascimento: formData.birth_date,
-            sexo: formData.gender === 'M' ? 'M' : 'F',
-            logradouro: formData.address_line,
-            numero: formData.address_number,
-            complemento: formData.address_complement || '',
-            bairro: '',
-            cep: formData.cep,
-            cidade: formData.city,
-            estado: formData.state,
-            empresa_id_externo: inviteData.companies.empresa_id_externo,
-            plano_id_externo: inviteData.companies.plano_id_externo,
-            has_active_plan: true
-          });
-          
-          if (employeeError) {
-            console.error('❌ Error creating employee record:', employeeError);
-            throw new Error(`Falha ao vincular à empresa: ${employeeError.message}`);
-          }
-          
-          console.log('✅ Vínculo criado em company_employees');
+          console.log('✅ Plan and employee record created via Edge Function:', planResult.plan_code);
           
           toast({
             title: "🎉 Bem-vindo!",
