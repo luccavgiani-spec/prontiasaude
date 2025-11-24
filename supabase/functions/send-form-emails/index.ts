@@ -416,68 +416,130 @@ const handler = async (req: Request): Promise<Response> => {
         to: [formData.data.email],
         subject: "🎉 Você foi convidado para o Plano de Saúde Empresarial!",
         html: `
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <style>
-              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background: linear-gradient(135deg, #00D9A3 0%, #00B887 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-              .button { display: inline-block; background: #00D9A3; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; font-weight: bold; }
-              .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #666; }
-              .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; }
-              ul { padding-left: 20px; }
-              li { margin: 10px 0; }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="header">
-                <h1>🎉 Bem-vindo à Prontia Saúde!</h1>
-              </div>
-              <div class="content">
-                <p>Olá!</p>
-                
-                <p>A empresa <strong>${formData.data.companyName}</strong> convidou você para fazer parte do plano de saúde empresarial da Prontia Saúde!</p>
-                
-                <h3>🏥 Seus benefícios incluem:</h3>
-                <ul>
-                  <li>Consultas médicas ilimitadas por telemedicina</li>
-                  <li>Atendimento 24h por dia, 7 dias por semana</li>
-                  <li>Médicos especialistas disponíveis</li>
-                  <li>Receitas digitais e solicitação de exames</li>
-                  <li>Sem carência, sem burocracia</li>
-                </ul>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Bem-vindo à Prontìa Saúde</title>
+</head>
+<body style="margin:0; padding:0; background-color:#efe3d5;">
+  <div style="font-family:'Poppins', Arial, sans-serif; background-color:#efe3d5; padding:40px 0;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+            style="background:#ffffff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.06); overflow:hidden;">
 
-                <div class="warning">
-                  <strong>⚠️ Atenção:</strong> Este convite expira em <strong>7 dias</strong>. Complete seu cadastro o quanto antes!
-                </div>
+            <!-- HEADER -->
+            <tr>
+              <td style="background-color:#00766a; padding:24px 40px; text-align:center;">
+                <h1 style="color:#ffffff; margin:0; font-size:24px;">
+                  🎉 Bem-vindo à Prontìa Saúde!
+                </h1>
+              </td>
+            </tr>
 
-                <p><strong>Para ativar seu plano, clique no botão abaixo:</strong></p>
-                
-                <div style="text-align: center;">
-                  <a href="${formData.data.inviteLink}" class="button">
-                    Completar Cadastro
-                  </a>
-                </div>
+            <!-- YELLOW LINE -->
+            <tr>
+              <td style="background-color:#fbaa03; height:4px;"></td>
+            </tr>
 
-                <p style="font-size: 12px; color: #666; margin-top: 20px;">
-                  Ou copie e cole este link no seu navegador:<br>
-                  <span style="word-break: break-all;">${formData.data.inviteLink}</span>
+            <!-- LOGO LEFT -->
+            <tr>
+              <td style="padding:20px 40px 0 40px;">
+                <img src="https://ploqujuhpwutpcibedbr.supabase.co/storage/v1/object/public/email-assets/prontia-favicon.png"
+                     alt="Prontìa Saúde"
+                     style="width:120px; height:auto;">
+              </td>
+            </tr>
+
+            <!-- CONTENT -->
+            <tr>
+              <td style="padding:20px 40px 40px 40px; color:#333333;">
+                <p style="font-size:16px; line-height:1.7; margin:0 0 12px 0;">
+                  Olá!
                 </p>
 
-                <p>Se você tiver dúvidas, entre em contato com o RH da sua empresa ou com nosso suporte.</p>
-                
-                <p>Bem-vindo à família Prontia! 💚</p>
-              </div>
-              <div class="footer">
-                <p>Prontia Saúde - Cuidando de você, onde você estiver.</p>
-                <p>Este é um email automático, por favor não responda.</p>
-              </div>
-            </div>
-          </body>
-          </html>
+                <p style="font-size:16px; line-height:1.7; margin:0 0 16px 0;">
+                  A empresa <strong>${formData.data.companyName}</strong> convidou você para fazer parte do plano de saúde empresarial da Prontia Saúde!
+                </p>
+
+                <h3 style="font-size:18px; line-height:1.6; margin:20px 0 12px 0;">
+                  🏥 Seus benefícios incluem:
+                </h3>
+
+                <ul style="font-size:15px; line-height:1.7; padding-left:20px; margin:0 0 20px 0;">
+                  <li style="margin-bottom:8px;">Consultas médicas ilimitadas por telemedicina</li>
+                  <li style="margin-bottom:8px;">Atendimento 24h por dia, 7 dias por semana</li>
+                  <li style="margin-bottom:8px;">Médicos especialistas disponíveis</li>
+                  <li style="margin-bottom:8px;">Receitas digitais e solicitação de exames</li>
+                  <li style="margin-bottom:8px;">Sem carência, sem burocracia</li>
+                </ul>
+
+                <!-- WARNING BOX -->
+                <div style="
+                  background-color:#fff8e5;
+                  border-left:4px solid #fbaa03;
+                  padding:12px 14px;
+                  margin:20px 0;
+                  font-size:14px;
+                  line-height:1.6;
+                ">
+                  <strong>⚠️ Atenção:</strong>
+                  Este convite expira em <strong>7 dias</strong>. Complete seu cadastro o quanto antes!
+                </div>
+
+                <p style="font-size:16px; line-height:1.7; margin:16px 0 20px 0;">
+                  <strong>Para ativar seu plano, clique no botão abaixo:</strong>
+                </p>
+
+                <!-- CTA BUTTON -->
+                <p style="text-align:center; margin:0 0 24px 0;">
+                  <a href="${formData.data.inviteLink}"
+                    style="
+                      display:inline-block;
+                      background-color:#00766a;
+                      color:#ffffff;
+                      text-decoration:none;
+                      font-weight:600;
+                      padding:14px 32px;
+                      border-radius:100px;
+                      font-size:15px;
+                    ">
+                    Completar Cadastro
+                  </a>
+                </p>
+
+                <p style="font-size:12px; line-height:1.7; color:#666666; margin:0 0 20px 0;">
+                  Ou copie e cole este link no seu navegador:<br>
+                  <span style="word-break:break-all;">${formData.data.inviteLink}</span>
+                </p>
+
+                <p style="font-size:15px; line-height:1.7; margin:0 0 12px 0;">
+                  Se você tiver dúvidas, entre em contato com o RH da sua empresa ou com nosso suporte.
+                </p>
+
+                <p style="font-size:15px; line-height:1.7; margin:0;">
+                  Bem-vindo à família Prontìa! 💚
+                </p>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td style="background-color:#efe3d5; padding:16px 24px; text-align:center; color:#555555; font-size:12px; line-height:1.6;">
+                Prontìa Saúde - Cuidando de você, onde você estiver.<br>
+                Este é um email automático, por favor não responda.
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>
         `,
       });
 
