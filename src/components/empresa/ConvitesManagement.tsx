@@ -58,6 +58,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
         .from('pending_employee_invites')
         .select('*')
         .eq('company_id', companyId)
+        .neq('status', 'cancelled')
         .order('invited_at', { ascending: false });
 
       if (filters.status) {
@@ -132,7 +133,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
     try {
       const { error } = await supabase
         .from('pending_employee_invites')
-        .update({ status: 'cancelled' })
+        .delete()
         .eq('id', inviteId);
 
       if (error) throw error;
@@ -253,7 +254,6 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
                 <SelectItem value="pending">Pendente</SelectItem>
                 <SelectItem value="completed">Completo</SelectItem>
                 <SelectItem value="expired">Expirado</SelectItem>
-                <SelectItem value="cancelled">Cancelado</SelectItem>
               </SelectContent>
             </Select>
 

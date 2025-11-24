@@ -205,41 +205,29 @@ Deno.serve(async (req) => {
       let invite: any;
       let invite_token: string;
       
-      // CENÁRIO 1: Convite cancelado ou expirado → REATIVAR
+      // CENÁRIO 1: Convite cancelado ou expirado → DELETAR e criar novo
       if (existingInvite && ['cancelled', 'expired'].includes(existingInvite.status)) {
-        console.log(`[invite-employee] Reactivating ${existingInvite.status} invite for:`, email);
+        console.log(`[invite-employee] Deleting old ${existingInvite.status} invite and creating new one for:`, email);
         
-        invite_token = crypto.randomUUID();
-        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 dias
-        
-        const { data: updatedInvite, error: updateError } = await supabaseClient
+        const { error: deleteError } = await supabaseClient
           .from('pending_employee_invites')
-          .update({
-            status: 'pending',
-            invite_token,
-            invited_at: new Date().toISOString(),
-            expires_at: expiresAt.toISOString(),
-            invited_by: user.id,
-            completed_at: null
-          })
-          .eq('id', existingInvite.id)
-          .select()
-          .single();
+          .delete()
+          .eq('id', existingInvite.id);
         
-        if (updateError) {
-          console.error('[invite-employee] Error updating invite:', updateError);
+        if (deleteError) {
+          console.error('[invite-employee] Error deleting old invite:', deleteError);
           return new Response(JSON.stringify({ 
-            error: 'Erro ao reativar convite',
-            code: 'UPDATE_ERROR',
-            details: updateError.message
+            error: 'Erro ao remover convite anterior',
+            code: 'DELETE_ERROR',
+            details: deleteError.message
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 500
           });
         }
         
-        invite = updatedInvite;
-        console.log('[invite-employee] ✅ Invite reactivated successfully');
+        console.log('[invite-employee] ✅ Old invite deleted, will create new one');
+        existingInvite = null; // Resetar para criar novo convite
         
       // CENÁRIO 2: Convite pendente → ERRO
       } else if (existingInvite && existingInvite.status === 'pending') {
