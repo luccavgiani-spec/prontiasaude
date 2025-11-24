@@ -548,7 +548,7 @@ const CompletarPerfil = () => {
           {inviteData && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <h3 className="font-semibold text-green-800 mb-2">
-                ✅ Você foi convidado pela {inviteData.companies.razao_social}
+                ✅ Você foi convidado pela {inviteData.companies?.razao_social || 'sua empresa'}
               </h3>
               <p className="text-sm text-green-700">
                 Complete seus dados abaixo e seu plano de saúde será ativado automaticamente!
