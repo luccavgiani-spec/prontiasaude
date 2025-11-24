@@ -442,64 +442,26 @@ const CompletarPerfil = () => {
         source: inviteData ? 'empresa_invite' : undefined
       });
       
-      // SE FOR CONVITE DE EMPRESA, ativar plano automaticamente
+      // SE FOR CONVITE DE EMPRESA, ativar plano via Edge Function segura
       if (inviteData) {
-        const companyPlanCode = `EMPRESA_${inviteData.companies.razao_social
-          .toUpperCase()
-          .replace(/[^A-Z0-9]/g, '_')
-          .substring(0, 30)}`;
-        
-        const planExpiryDate = new Date();
-        planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
-        
-        // Verificar se já existe plano empresarial
         try {
-          const { data: existingPlan } = await supabase
-            .from('patient_plans')
-            .select('id, plan_code')
-            .eq('user_id', currentUser.id)
-            .eq('plan_code', companyPlanCode)
-            .eq('status', 'active')
-            .maybeSingle();
+          console.log('[CompletarPerfil] Calling activate-employee-plan Edge Function...');
           
-          if (existingPlan) {
-            console.log('✅ Plano empresarial já existe, pulando criação');
-          } else {
-            // Desativar planos antigos para evitar conflitos
-            await supabase
-              .from('patient_plans')
-              .update({ status: 'inactive' })
-              .eq('user_id', currentUser.id)
-              .eq('status', 'active');
-            
-            // Criar novo plano empresarial
-            const { error: planError } = await supabase.from('patient_plans').insert({
-              email: currentUser.email,
-              user_id: currentUser.id,
-              plan_code: companyPlanCode,
-              plan_expires_at: planExpiryDate.toISOString(),
-              status: 'active'
-            });
-            
-            if (planError) {
-              console.error('❌ Error creating plan:', planError);
-              throw new Error(`Falha ao ativar plano: ${planError.message}`);
+          const { data: planResult, error: planError } = await supabase.functions.invoke('company-operations', {
+            body: {
+              operation: 'activate-employee-plan',
+              invite_token: inviteData.invite_token
             }
-            
-            console.log('✅ Plano empresarial criado:', companyPlanCode);
-          }
-        } catch (planErr: any) {
-          console.error('❌ Exception creating plan:', planErr);
-          toast({
-            title: "Erro ao ativar plano",
-            description: "Não foi possível ativar seu plano empresarial. Entre em contato com o suporte.",
-            variant: "destructive",
           });
-          throw planErr;
-        }
-        
-        // Criar vínculo em company_employees
-        try {
+          
+          if (planError || !planResult.success) {
+            console.error('❌ Error activating plan via Edge Function:', planError || planResult);
+            throw new Error(planResult?.error || 'Falha ao ativar plano empresarial');
+          }
+          
+          console.log('✅ Plan activated via Edge Function:', planResult.plan_code);
+          
+          // Criar vínculo em company_employees
           const { error: employeeError } = await supabase.from('company_employees').insert({
             user_id: currentUser.id,
             company_id: inviteData.company_id,
@@ -527,29 +489,20 @@ const CompletarPerfil = () => {
           }
           
           console.log('✅ Vínculo criado em company_employees');
-        } catch (empErr: any) {
-          console.error('❌ Exception creating employee:', empErr);
+          
           toast({
-            title: "Erro ao vincular à empresa",
-            description: "Não foi possível completar o vínculo com a empresa. Entre em contato com o suporte.",
+            title: "🎉 Bem-vindo!",
+            description: "Seu plano empresarial foi ativado com sucesso!",
+          });
+        } catch (activationErr: any) {
+          console.error('❌ Exception during plan activation:', activationErr);
+          toast({
+            title: "Erro ao ativar plano",
+            description: activationErr.message || "Não foi possível ativar seu plano empresarial. Entre em contato com o suporte.",
             variant: "destructive",
           });
-          throw empErr;
+          throw activationErr;
         }
-        
-        // Marcar convite como completo
-        await supabase
-          .from('pending_employee_invites')
-          .update({
-            status: 'completed',
-            completed_at: new Date().toISOString()
-          })
-          .eq('id', inviteData.id);
-        
-        toast({
-          title: "🎉 Bem-vindo!",
-          description: "Seu plano empresarial foi ativado com sucesso!",
-        });
       } else {
         toast({
           title: "Perfil atualizado",
