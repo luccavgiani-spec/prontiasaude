@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, User, MapPin, Phone, Calendar, Home, LogOut } from "lucide-react";
+import { Loader2, User, MapPin, Phone, Calendar, Home, LogOut, Eye, EyeOff, Lock } from "lucide-react";
 import { requireAuth, getPatient } from "@/lib/auth";
 import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
 import { upsertPatientBasic } from "@/lib/patients";
+import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 
 const CompletarPerfil = () => {
   const [formData, setFormData] = useState({
@@ -29,6 +30,10 @@ const CompletarPerfil = () => {
     state: "",
     terms_accepted: false
   });
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteData, setInviteData] = useState<any>(null);
@@ -86,86 +91,45 @@ const CompletarPerfil = () => {
       
       setInviteData(invite);
       
-      // Criar usuário automaticamente com senha temporária
-      const tempPassword = crypto.randomUUID();
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: invite.email,
-        password: tempPassword,
-        options: {
-          emailRedirectTo: window.location.origin
-        }
-      });
+      // Preencher email automaticamente
+      setFormData(prev => ({ ...prev, first_name: invite.email }));
       
-      if (authError) {
-        console.error('[CompletarPerfil] Auth error:', authError);
+      // Verificar se usuário já existe
+      const { data: patientData } = await supabase
+        .from('patients')
+        .select('*, id')
+        .eq('email', invite.email)
+        .maybeSingle();
+      
+      if (patientData) {
+        console.log('[CompletarPerfil] Email já cadastrado, carregando dados existentes...');
         
-        // Tratar erro de email duplicado - buscar usuário existente e continuar
-        if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-          console.log('[CompletarPerfil] Email já cadastrado, buscando usuário existente...');
-          
-          // Buscar dados do paciente pelo email
-          const { data: patientData } = await supabase
-            .from('patients')
-            .select('*, id')
-            .eq('email', invite.email)
-            .maybeSingle();
-          
-          if (!patientData) {
-            toast({
-              title: "Erro",
-              description: "Não foi possível localizar sua conta. Entre em contato com o suporte.",
-              variant: "destructive",
-            });
-            setIsLoading(false);
-            return;
-          }
-          
-          // Simular sessão do usuário existente
-          setCurrentUser({ id: patientData.id, email: invite.email });
-          
-          // Preencher formulário com dados existentes
-          setFormData({
-            first_name: patientData.first_name || '',
-            last_name: patientData.last_name || '',
-            address_line: patientData.address_line || '',
-            cpf: patientData.cpf || '',
-            phone_e164: patientData.phone_e164 || '',
-            birth_date: patientData.birth_date || '',
-            gender: patientData.gender || 'F',
-            cep: patientData.cep || '',
-            city: patientData.city || '',
-            state: patientData.state || '',
-            address_number: patientData.address_number || '',
-            address_complement: patientData.address_complement || '',
-            terms_accepted: true
-          });
-          
-          toast({
-            title: "✅ Bem-vindo(a) de volta!",
-            description: "Você já possui uma conta. Vamos vincular seu plano empresarial.",
-            variant: "default",
-          });
-          
-          setIsLoading(false);
-          return;
-        }
+        // Simular sessão do usuário existente
+        setCurrentUser({ id: patientData.id, email: invite.email });
+        
+        // Preencher formulário com dados existentes
+        setFormData({
+          first_name: patientData.first_name || '',
+          last_name: patientData.last_name || '',
+          address_line: patientData.address_line || '',
+          cpf: patientData.cpf || '',
+          phone_e164: patientData.phone_e164 || '',
+          birth_date: patientData.birth_date || '',
+          gender: patientData.gender || 'F',
+          cep: patientData.cep || '',
+          city: patientData.city || '',
+          state: patientData.state || '',
+          address_number: patientData.address_number || '',
+          address_complement: patientData.address_complement || '',
+          terms_accepted: true
+        });
         
         toast({
-          title: "Erro ao criar conta",
-          description: authError.message,
-          variant: "destructive",
+          title: "✅ Bem-vindo(a) de volta!",
+          description: "Você já possui uma conta. Complete seus dados para ativar seu plano empresarial.",
+          variant: "default",
         });
-        setIsLoading(false);
-        return;
       }
-      
-      // Fazer login automático
-      await supabase.auth.signInWithPassword({
-        email: invite.email,
-        password: tempPassword
-      });
-      
-      setCurrentUser(authData.user);
     } catch (error: any) {
       console.error('Error validating invite:', error);
       toast({
@@ -307,6 +271,23 @@ const CompletarPerfil = () => {
       toast({ title: "Erro", description: "Você deve aceitar os termos de uso.", variant: "destructive" });
       return false;
     }
+    
+    // Validação de senha apenas para convites de empresa
+    if (inviteData && !currentUser) {
+      if (!password.trim()) {
+        toast({ title: "Erro", description: "Senha é obrigatória.", variant: "destructive" });
+        return false;
+      }
+      if (!isPasswordValid(password)) {
+        toast({ title: "Erro", description: "A senha não atende aos requisitos mínimos.", variant: "destructive" });
+        return false;
+      }
+      if (password !== confirmPassword) {
+        toast({ title: "Erro", description: "As senhas não coincidem.", variant: "destructive" });
+        return false;
+      }
+    }
+    
     return true;
   };
 
@@ -327,9 +308,81 @@ const CompletarPerfil = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm() || !currentUser) return;
+    if (!validateForm()) return;
 
     setIsLoading(true);
+    
+    // Se for convite e não tiver sessão, criar usuário com senha definida
+    if (inviteData && !currentUser) {
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: inviteData.email,
+          password: password,
+          options: {
+            emailRedirectTo: window.location.origin
+          }
+        });
+        
+        if (authError) {
+          console.error('[CompletarPerfil] Auth error:', authError);
+          
+          if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
+            // Se já existe, tentar login
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: inviteData.email,
+              password: password
+            });
+            
+            if (signInError) {
+              toast({
+                title: "Erro de autenticação",
+                description: "Email já cadastrado. Se você já tem uma conta, faça login normalmente.",
+                variant: "destructive",
+              });
+              setIsLoading(false);
+              return;
+            }
+            
+            setCurrentUser(signInData.user);
+          } else {
+            toast({
+              title: "Erro ao criar conta",
+              description: authError.message,
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // Fazer login automático após signup
+          await supabase.auth.signInWithPassword({
+            email: inviteData.email,
+            password: password
+          });
+          
+          setCurrentUser(authData.user);
+        }
+      } catch (error: any) {
+        console.error('[CompletarPerfil] Exception during auth:', error);
+        toast({
+          title: "Erro",
+          description: "Não foi possível criar sua conta. Tente novamente.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+    
+    if (!currentUser) {
+      toast({
+        title: "Erro",
+        description: "Você precisa estar autenticado para continuar.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
     
     try {
       // ✅ VERIFICAR CPF DUPLICADO
@@ -543,6 +596,70 @@ const CompletarPerfil = () => {
           )}
           
           <form onSubmit={handleSave} className="space-y-6">
+            {inviteData && !currentUser && (
+              <div className="border-t border-b py-6 space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Lock className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Crie sua Senha de Acesso</h3>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Nova Senha *</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Digite sua senha"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirmar Senha *</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        placeholder="Digite novamente"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                
+                <PasswordChecklist password={password} />
+                
+                {password && confirmPassword && password !== confirmPassword && (
+                  <p className="text-sm text-destructive flex items-center gap-2">
+                    <span>⚠️</span>
+                    <span>As senhas não coincidem</span>
+                  </p>
+                )}
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="first_name">Nome *</Label>
