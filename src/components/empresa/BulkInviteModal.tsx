@@ -188,16 +188,18 @@ export default function BulkInviteModal({
           const result = await Promise.race([invokePromise, timeoutPromise]) as any;
           const { data, error } = result;
           
-          console.log('[BulkInvite] Response:', { data, error });
+          console.log('[BulkInvite] Response:', { data, error, status: result?.status });
           
-          if (error) {
-            console.error('[BulkInvite] Supabase error:', error);
-            throw error;
+          // Se retornou data com error e code, é uma resposta controlada da edge function
+          if (data?.error && data?.code) {
+            console.log('[BulkInvite] Validation error from edge function:', data);
+            throw new Error(data.error);
           }
           
-          if (data?.error) {
-            console.error('[BulkInvite] Edge function error:', data.error);
-            throw new Error(data.error);
+          // Se error do Supabase client (network, timeout, etc.)
+          if (error) {
+            console.error('[BulkInvite] Supabase client error:', error);
+            throw error;
           }
           
           // Sucesso
@@ -214,17 +216,27 @@ export default function BulkInviteModal({
           
           console.error(`[BulkInvite] Attempt ${attempt} failed for ${email}:`, error);
           
-          // Se não é a última tentativa e é erro de rede, tentar novamente
+          // Erros de validação (409) não devem fazer retry
+          const isValidationError = error.message?.includes('convite pendente') ||
+                                   error.message?.includes('já cadastrado') ||
+                                   error.message?.includes('completou o cadastro');
+          
+          // Erros de rede podem fazer retry
           const isNetworkError = error.message?.includes('Failed to send') || 
                                  error.message?.includes('FunctionsHttpError') ||
                                  error.message?.includes('Timeout');
           
-          if (attempt < MAX_RETRIES && isNetworkError) {
+          if (isValidationError) {
+            // Erro de validação: não fazer retry, sair imediatamente
+            console.log('[BulkInvite] Validation error, not retrying');
+            break;
+          } else if (attempt < MAX_RETRIES && isNetworkError) {
+            // Erro de rede: tentar novamente
             const delay = 1000 * attempt; // 1s, 2s
             console.log(`[BulkInvite] Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
-            // Última tentativa ou erro não-retry (validação)
+            // Última tentativa ou erro desconhecido
             break;
           }
         }
@@ -234,17 +246,21 @@ export default function BulkInviteModal({
       if (attempt === MAX_RETRIES || lastError) {
         let errorMessage = lastError?.message || 'Erro desconhecido';
         
-        // Identificar tipos específicos de erro
-        if (errorMessage.includes('já cadastrado no sistema')) {
+        // Identificar tipos específicos de erro (com prioridade para mensagens mais específicas)
+        if (errorMessage.includes('Email já cadastrado no sistema')) {
           errorMessage = '❌ Email já cadastrado no sistema';
-        } else if (errorMessage.includes('convite pendente')) {
-          errorMessage = '⚠️ Convite já enviado (pendente)';
-        } else if (errorMessage.includes('já completou o cadastro')) {
+        } else if (errorMessage.includes('convite pendente') || errorMessage.includes('Use a opção "Reenviar"')) {
+          errorMessage = '⚠️ Convite já enviado anteriormente (pendente)';
+        } else if (errorMessage.includes('completou o cadastro') || errorMessage.includes('Verifique a aba "Funcionários"')) {
           errorMessage = '✅ Funcionário já cadastrado';
         } else if (errorMessage.includes('Failed to send') || 
                    errorMessage.includes('FunctionsHttpError') || 
                    errorMessage.includes('Timeout')) {
           errorMessage = `🔌 Erro de conexão (${attempt} tentativas)`;
+        } else if (errorMessage.includes('Company not found')) {
+          errorMessage = '❌ Empresa não encontrada';
+        } else if (errorMessage.includes('Missing required fields')) {
+          errorMessage = '❌ Dados inválidos';
         }
         
         inviteResults.push({

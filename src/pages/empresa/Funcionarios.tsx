@@ -131,8 +131,28 @@ export default function EmpresaFuncionarios() {
         }
       });
       
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      // Verificar resposta controlada da edge function (com código de erro)
+      if (data?.error && data?.code) {
+        // Mensagens amigáveis para erros de validação
+        let errorMessage = data.error;
+        
+        if (data.code === 'INVITE_PENDING') {
+          errorMessage = 'Já existe um convite pendente para este email. Use a opção "Reenviar" na tabela abaixo.';
+        } else if (data.code === 'EMAIL_ALREADY_REGISTERED') {
+          errorMessage = 'Este email já está cadastrado no sistema.';
+        } else if (data.code === 'EMPLOYEE_REGISTERED') {
+          errorMessage = 'Este funcionário já completou o cadastro. Verifique a aba "Funcionários".';
+        }
+        
+        toast.error(errorMessage);
+        return;
+      }
+      
+      // Erro do Supabase client (network, etc.)
+      if (error) {
+        console.error('[Invite] Supabase client error:', error);
+        throw error;
+      }
       
       toast.success(`Convite enviado para ${inviteEmail}!`);
       setInviteEmail('');
@@ -140,6 +160,7 @@ export default function EmpresaFuncionarios() {
       loadPendingInvites();
       
     } catch (error: any) {
+      console.error('[Invite] Exception:', error);
       toast.error(error.message || 'Erro ao enviar convite');
     } finally {
       setLoading(false);
