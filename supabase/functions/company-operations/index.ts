@@ -559,7 +559,7 @@ Deno.serve(async (req) => {
         if (employeeData) {
           console.log('[activate-employee-plan] Creating employee record...');
           
-          const { error: employeeError } = await supabaseAdmin
+          const { error: employeeError } = await supabaseClient
             .from('company_employees')
             .insert({
               user_id: user.id,
