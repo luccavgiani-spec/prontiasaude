@@ -95,16 +95,35 @@ const CompletarPerfil = () => {
       setFormData(prev => ({ ...prev, first_name: invite.email }));
       
       // Verificar se usuário já existe
+      const { data: { session } } = await supabase.auth.getSession();
       const { data: patientData } = await supabase
         .from('patients')
         .select('*, id')
         .eq('email', invite.email)
         .maybeSingle();
       
-      if (patientData) {
-        console.log('[CompletarPerfil] Email já cadastrado, carregando dados existentes...');
+      if (patientData && !session) {
+        // Usuário existe mas não está logado
+        console.log('[CompletarPerfil] User exists but not logged in, redirecting to login...');
+        toast({
+          title: "Você já possui uma conta",
+          description: "Faça login primeiro e depois volte a este link para ativar seu plano empresarial.",
+          variant: "default",
+        });
         
-        // Simular sessão do usuário existente
+        // Armazenar token no localStorage para usar após login
+        localStorage.setItem('pending_invite_token', inviteToken);
+        
+        setTimeout(() => {
+          navigate(`/entrar?email=${encodeURIComponent(invite.email)}&redirect=completar-perfil`);
+        }, 3000);
+        return;
+      }
+      
+      if (patientData && session) {
+        // Usuário existe e está logado
+        console.log('[CompletarPerfil] User exists and is logged in, loading data...');
+        
         setCurrentUser({ id: patientData.id, email: invite.email });
         
         // Preencher formulário com dados existentes
@@ -126,7 +145,7 @@ const CompletarPerfil = () => {
         
         toast({
           title: "✅ Bem-vindo(a) de volta!",
-          description: "Você já possui uma conta. Complete seus dados para ativar seu plano empresarial.",
+          description: "Confirme seus dados para ativar seu plano empresarial.",
           variant: "default",
         });
       }

@@ -5,12 +5,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { validateEmail } from "@/lib/validations";
 
 const Entrar = () => {
-  const [email, setEmail] = useState("");
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get('email') || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,7 +23,7 @@ const Entrar = () => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        navigate('/auth/callback');
+        handleSuccessfulLogin();
       }
     };
     checkSession();
@@ -36,6 +37,17 @@ const Entrar = () => {
       document.head.appendChild(script);
     }
   }, [navigate]);
+
+  const handleSuccessfulLogin = () => {
+    // Verificar se há convite pendente
+    const pendingToken = localStorage.getItem('pending_invite_token');
+    if (pendingToken) {
+      localStorage.removeItem('pending_invite_token');
+      navigate(`/completar-perfil?token=${pendingToken}`);
+    } else {
+      navigate('/auth/callback');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +93,7 @@ const Entrar = () => {
         });
       }
     } else {
-      navigate('/auth/callback');
+      handleSuccessfulLogin();
     }
     
     setIsLoading(false);
@@ -134,7 +146,7 @@ const Entrar = () => {
               
               if (session?.user) {
                 // ✅ Sessão confirmada, redirecionar
-                navigate('/auth/callback');
+                handleSuccessfulLogin();
                 return true;
               }
               

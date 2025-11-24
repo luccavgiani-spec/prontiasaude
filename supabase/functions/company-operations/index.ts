@@ -188,20 +188,9 @@ Deno.serve(async (req) => {
       
       console.log('[invite-employee] Company found:', company.razao_social);
       
-      // Verificar se email já existe no sistema
-      const { data: { users: existingUsers }, error: listError } = await supabaseClient.auth.admin.listUsers();
-      const userExists = existingUsers?.find(u => u.email === email);
-      
-      if (userExists) {
-        console.log('[invite-employee] Email already registered:', email);
-        return new Response(JSON.stringify({ 
-          error: 'Email já cadastrado no sistema',
-          code: 'EMAIL_ALREADY_REGISTERED'
-        }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 409
-        });
-      }
+      // ✅ PERMITIR CONVITES PARA USUÁRIOS EXISTENTES (Opção B)
+      // O fluxo de /completar-perfil vai vincular usuários existentes à empresa
+      console.log('[invite-employee] Processing invite for:', email);
       
       // Verificar se já existe convite
       const { data: existingInvite, error: inviteCheckError } = await supabaseClient
