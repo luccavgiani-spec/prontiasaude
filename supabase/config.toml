@@ -1,5 +1,8 @@
 project_id = "ploqujuhpwutpcibedbr"
 
+[functions.activate-clicklife-manual]
+verify_jwt = false
+
 [functions.mc-clicklife-sso-proxy]
 verify_jwt = false
 
