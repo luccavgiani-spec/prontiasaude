@@ -139,9 +139,11 @@ export default function UserRegistrationsTab() {
     link.click();
   };
 
-  const maskCPF = (cpf?: string) => {
+  const formatCPF = (cpf?: string) => {
     if (!cpf) return 'N/A';
-    return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.***.**$4');
+    const cleaned = cpf.replace(/\D/g, '');
+    if (cleaned.length !== 11) return cpf;
+    return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
   if (loading) {
@@ -272,7 +274,7 @@ export default function UserRegistrationsTab() {
                           ? `${user.patient.first_name} ${user.patient.last_name}`
                           : '-'}
                       </TableCell>
-                      <TableCell className="font-mono text-sm">{maskCPF(user.patient?.cpf)}</TableCell>
+                      <TableCell className="font-mono text-sm">{formatCPF(user.patient?.cpf)}</TableCell>
                       <TableCell>{user.patient?.phone_e164 || user.phone || '-'}</TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell>
