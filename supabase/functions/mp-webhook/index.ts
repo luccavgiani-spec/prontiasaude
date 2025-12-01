@@ -36,6 +36,125 @@ function mapSkuToName(sku: string): string {
   return SERVICE_NAMES[sku] || sku;
 }
 
+// Helper function to register patient in ClickLife (simplified version)
+async function registerClickLifePatientSimple(
+  cpf: string,
+  nome: string,
+  email: string,
+  telefone: string,
+  planoId: number,
+  sexo: string,
+  birthDate?: string
+): Promise<{ success: boolean; error?: string }> {
+  const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE');
+  const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+
+  if (!CLICKLIFE_API || !INTEGRATOR_TOKEN) {
+    return { success: false, error: 'ClickLife credentials not configured' };
+  }
+
+  try {
+    console.log('[registerClickLife] 📝 Iniciando cadastro do paciente na ClickLife');
+    console.log('[registerClickLife] CPF:', cpf.substring(0, 3) + '***');
+
+    // Normalizar telefone
+    let telefoneLimpo = telefone.replace(/\D/g, '');
+    if (telefoneLimpo.startsWith('55')) {
+      telefoneLimpo = telefoneLimpo.substring(2);
+    }
+    const ddd = telefoneLimpo.substring(0, 2);
+    const numero = telefoneLimpo.substring(2);
+
+    // Normalizar e converter data de nascimento para DD-MM-YYYY
+    let birthDateFormatted = '01-01-1990'; // fallback
+    if (birthDate) {
+      if (birthDate.includes('-')) {
+        const parts = birthDate.split('-');
+        if (parts.length === 3) {
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD -> DD-MM-YYYY
+            birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          } else {
+            // Já está em DD-MM-YYYY
+            birthDateFormatted = birthDate;
+          }
+        }
+      }
+    }
+
+    const registerPayload = {
+      cpf: cpf.replace(/\D/g, ''),
+      nome,
+      email,
+      ddd,
+      telefone: numero,
+      sexo: sexo || 'F',
+      plano_id: planoId,
+      data_nascimento: birthDateFormatted,
+      password: Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD') || 'Pr0ntia!2025'
+    };
+
+    console.log('[registerClickLife] Payload de cadastro:', {
+      ...registerPayload,
+      password: '***',
+      cpf: registerPayload.cpf.substring(0, 3) + '***'
+    });
+
+    // 1. CADASTRAR PACIENTE
+    const registerRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'integrator-token': INTEGRATOR_TOKEN
+      },
+      body: JSON.stringify(registerPayload)
+    });
+
+    const registerData = await registerRes.json();
+    console.log('[registerClickLife] Resposta do cadastro:', registerData);
+
+    // Tolerar erros de "já cadastrado"
+    if (!registerRes.ok && registerData.mensagem?.toLowerCase().includes('já cadastrado')) {
+      console.log('[registerClickLife] ⚠️ Paciente já cadastrado (continuando)');
+    } else if (!registerRes.ok) {
+      console.error('[registerClickLife] ❌ Erro no cadastro:', registerData);
+      return { success: false, error: registerData.mensagem || 'Erro ao cadastrar paciente' };
+    }
+
+    // 2. ATIVAR PACIENTE
+    console.log('[registerClickLife] 🔐 Ativando paciente...');
+    
+    const activatePayload = {
+      cpf: cpf.replace(/\D/g, ''),
+      plano_id: planoId
+    };
+
+    const activateRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'integrator-token': INTEGRATOR_TOKEN
+      },
+      body: JSON.stringify(activatePayload)
+    });
+
+    const activateData = await activateRes.json();
+    console.log('[registerClickLife] Resposta da ativação:', activateData);
+
+    if (!activateRes.ok) {
+      console.error('[registerClickLife] ❌ Erro na ativação:', activateData);
+      return { success: false, error: activateData.mensagem || 'Erro ao ativar paciente' };
+    }
+
+    console.log('[registerClickLife] ✅ Paciente cadastrado e ativado com sucesso');
+    return { success: true };
+
+  } catch (error) {
+    console.error('[registerClickLife] ❌ Exception:', error);
+    return { success: false, error: error.message || 'Exception during registration' };
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -480,18 +599,81 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ✅ EXCEÇÃO 2: ESPECIALISTAS SEM plano → WhatsApp manual
+    // ✅ EXCEÇÃO 2: ESPECIALISTAS SEM plano → Cadastrar ClickLife + WhatsApp manual
     if (isEspecialista && semPlanoAtivo && !fromClicklife) {
       const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
-      const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
       
-      console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → WhatsApp Suporte`);
-      console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
+      console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → Cadastrar ClickLife + WhatsApp`);
 
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
+
+      // ✅ BUSCAR/CRIAR dados completos do paciente
+      let patientData = (await supabaseAdmin
+        .from('patients')
+        .select('first_name, last_name, cpf, phone_e164, gender, birth_date, email')
+        .eq('email', schedulePayload.email)
+        .maybeSingle()).data;
+
+      if (!patientData) {
+        console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
+        
+        const newPatientData = {
+          email: schedulePayload.email,
+          cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
+          first_name: schedulePayload.nome?.split(' ')[0] || payment.payer?.first_name || 'Nome',
+          last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || payment.payer?.last_name || 'Sobrenome',
+          phone_e164: schedulePayload.telefone || payment.payer?.phone?.area_code + payment.payer?.phone?.number,
+          gender: schedulePayload.sexo || 'F',
+          birth_date: schedulePayload.birth_date || '1990-01-01',
+          profile_complete: false,
+          source: 'pix_payment'
+        };
+        
+        const { data: createdPatient, error: createError } = await supabaseAdmin
+          .from('patients')
+          .upsert(newPatientData)
+          .select('first_name, last_name, cpf, phone_e164, gender, birth_date, email')
+          .single();
+        
+        if (createError) {
+          console.error('[mp-webhook] ❌ Erro ao criar paciente:', createError);
+        } else {
+          console.log('[mp-webhook] ✅ Paciente criado com sucesso');
+          patientData = createdPatient;
+        }
+      }
+
+      // ✅ CADASTRAR na ClickLife ANTES do WhatsApp
+      let clicklifeResult = { success: false, error: 'Patient data not available' };
+      
+      if (patientData) {
+        console.log('[mp-webhook] 📝 Cadastrando especialista sem plano na ClickLife...');
+        
+        const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
+        
+        clicklifeResult = await registerClickLifePatientSimple(
+          patientData.cpf || '',
+          nomeCompleto,
+          patientData.email || schedulePayload.email,
+          patientData.phone_e164 || '',
+          864, // planoId para consultas avulsas
+          patientData.gender || 'F',
+          patientData.birth_date
+        );
+        
+        if (clicklifeResult.success) {
+          console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso');
+        } else {
+          console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (continuando para WhatsApp):', clicklifeResult.error);
+        }
+      }
+
+      // ✅ Continuar com WhatsApp como hoje
+      const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
+      console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
 
       const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
@@ -520,7 +702,9 @@ Deno.serve(async (req) => {
           payment_id: payment.id, 
           mp_status: payment.status,
           order_id: payment.metadata?.order_id,
-          redirect_type: 'whatsapp_specialist_no_plan'
+          redirect_type: 'whatsapp_specialist_no_plan',
+          clicklife_registered: clicklifeResult.success,
+          clicklife_error: clicklifeResult.error || null
         }
       });
 
@@ -536,13 +720,14 @@ Deno.serve(async (req) => {
           .eq('order_id', payment.metadata.order_id);
       }
 
-      console.log('[mp-webhook] ✅ Redirecionamento WhatsApp configurado');
+      console.log('[mp-webhook] ✅ Cadastro ClickLife + Redirecionamento WhatsApp configurado');
       
       return new Response(JSON.stringify({ 
         success: true, 
         payment_id: payment.id,
         redirect_url: whatsappUrl,
-        provider: 'whatsapp_manual'
+        provider: 'whatsapp_manual',
+        clicklife_registered: clicklifeResult.success
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
