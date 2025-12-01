@@ -26,7 +26,6 @@ export const ALL_SPECIALTIES = [
   'Neurologista',
   'Infectologista',
   'Laudos Psicológicos',
-  'Renovação de Receitas',
   'Solicitação de Exames',
 ];
 

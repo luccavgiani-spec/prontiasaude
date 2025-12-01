@@ -34,7 +34,6 @@ const SKU_TO_SERVICE: Record<string, string> = {
   
   // Outros Serviços
   'OVM9892': 'Laudos Psicológicos',
-  'RZP5755': 'Renovação de Receitas',
   'ULT3571': 'Solicitação de Exames',
 };
 

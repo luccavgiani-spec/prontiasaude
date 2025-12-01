@@ -79,20 +79,6 @@ export const CATALOGO_SERVICOS = [
     naoInclui: ["placeholder"]
   },
   { 
-    slug: "renovacao_receitas", 
-    nome: "Renovação de receitas", 
-    precoBase: 9.99, 
-    sku: "RZP5755",
-    descricao: "Renove suas receitas médicas de forma prática e rápida. Após a confirmação do pagamento, você poderá anexar sua receita atual válida (até 3 meses) e encaminhar para análise. Um médico avaliará e emitirá a renovação em documento digital",
-    tempo: "Atendimento imediato",
-    inclui: [
-      "Análise de receita anterior (válida até 3 meses)",
-      "Avaliação médica especializada",
-      "Nova receita digital",
-      "Atendimento rápido via WhatsApp"
-    ]
-  },
-  { 
     slug: "solicitacao_exames", 
     nome: "Solicitação de Exames", 
     precoBase: 34.90, 

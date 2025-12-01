@@ -312,11 +312,11 @@ const ServicoDetalhe = () => {
               </h1>
               {servico.slug === "laudos_psicologicos" && <p className="text-xl text-muted-foreground mb-8">Necessário consulta prévia com psicólogo.</p>}
               {servico.slug !== "laudos_psicologicos" && <p className="text-xl text-muted-foreground mb-8">
-                  {servico.slug === "renovacao_receitas" ? "Para renovar sua receita, é necessário enviar uma receita médica anterior com no máximo 3 meses de emissão. Assim, nosso médico poderá avaliar e liberar a nova prescrição com segurança." : servico.slug === "solicitacao_exames" ? "Peça seus exames de forma prática: solicitação médica online, assinada digitalmente e aceita em qualquer laboratório, sem sair de casa." : servico.descricao}
+                  {servico.slug === "solicitacao_exames" ? "Peça seus exames de forma prática: solicitação médica online, assinada digitalmente e aceita em qualquer laboratório, sem sair de casa." : servico.descricao}
                 </p>}
 
               {/* Informações básicas */}
-              {servico.slug !== "renovacao_receitas" && servico.slug !== "solicitacao_exames" && servico.slug !== "laudos_psicologicos" && <div className="mb-8">
+              {servico.slug !== "solicitacao_exames" && servico.slug !== "laudos_psicologicos" && <div className="mb-8">
                 <div className="flex items-center gap-6 text-muted-foreground">
                   {servico.slug === "psicologa" && <div className="flex items-center gap-2">
                       <Clock className="h-5 w-5" />
@@ -335,12 +335,7 @@ const ServicoDetalhe = () => {
                   O que está incluso:
                 </h2>
                 <ul className="space-y-3">
-                  {servico.slug === "renovacao_receitas" ? <>
-                      <li className="flex items-center gap-3">
-                        <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
-                        <span className="text-muted-foreground">Nova receita digital válida em todo país</span>
-                      </li>
-                    </> : servico.slug === "solicitacao_exames" ? <>
+                  {servico.slug === "solicitacao_exames" ? <>
                       <li className="flex items-center gap-3">
                         <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />
                         <span className="text-muted-foreground">Atendimento ágil via WhatsApp</span>
@@ -395,7 +390,7 @@ const ServicoDetalhe = () => {
                           <p className="text-muted-foreground">Com a aprovação, o laudo psicológico é elaborado e enviado ao paciente, pronto para ser utilizado em procedimentos como cirurgia bariátrica, laqueadura, ou vasectomia.</p>
                         </div>
                       </div>
-                    </> : servico.slug === "renovacao_receitas" || servico.slug === "solicitacao_exames" ? <>
+                    </> : servico.slug === "solicitacao_exames" ? <>
                       <div className="flex gap-4">
                         <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0">
                           1
@@ -563,7 +558,7 @@ const ServicoDetalhe = () => {
                 <div className="text-center mb-6">
                   {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && !selectedVariant && <p className="text-muted-foreground mb-2">À partir de</p>}
                   <div className="text-3xl font-bold text-foreground mb-2">
-                    {servico.slug === "renovacao_receitas" ? formataPreco(9.99) : formataPreco(getTotalPrice())}
+                    {formataPreco(getTotalPrice())}
                   </div>
                   {servico.slug === "psicologa" && selectedVariant && (() => {
                   const variant = servico.variantes?.find(v => v.nome === selectedVariant) as Variante | undefined;
@@ -578,7 +573,7 @@ const ServicoDetalhe = () => {
                 <Button onClick={() => {
                 handleAgendar();
               }} variant="outline" size="lg" className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4" disabled={isLoading} data-sku={getCurrentSku()}>
-                  {isLoading ? "Processando..." : servico.slug === "solicitacao_exames" ? "Solicitar exames" : servico.slug === "renovacao_receitas" ? "Renovar agora" : "Agendar agora"}
+                  {isLoading ? "Processando..." : servico.slug === "solicitacao_exames" ? "Solicitar exames" : "Agendar agora"}
                 </Button>
 
                 <div className="text-center">

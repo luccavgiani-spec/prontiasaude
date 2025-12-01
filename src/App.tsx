@@ -65,7 +65,6 @@ const Consulta = lazy(() => import("./pages/servicos/Consulta"));
 const Psicologa = lazy(() => import("./pages/servicos/Psicologa"));
 const MedicosEspecialistas = lazy(() => import("./pages/servicos/MedicosEspecialistas"));
 const LaudosPsicologicos = lazy(() => import("./pages/servicos/LaudosPsicologicos"));
-const RenovacaoReceitas = lazy(() => import("./pages/servicos/RenovacaoReceitas"));
 const SolicitacaoExames = lazy(() => import("./pages/servicos/SolicitacaoExames"));
 const Planos = lazy(() => import("./pages/Planos"));
 const Empresas = lazy(() => import("./pages/Empresas"));
@@ -152,7 +151,6 @@ const App = () => (
                 <Route path="/servicos/psicologa" element={<Psicologa />} />
                 <Route path="/servicos/medicos_especialistas" element={<MedicosEspecialistas />} />
                 <Route path="/servicos/laudos_psicologicos" element={<LaudosPsicologicos />} />
-                <Route path="/servicos/renovacao_receitas" element={<RenovacaoReceitas />} />
                 <Route path="/servicos/solicitacao_exames" element={<SolicitacaoExames />} />
                 <Route path="/servicos/:slug" element={<ServicoDetalhe />} />
                 <Route path="/planos" element={<Planos />} />
