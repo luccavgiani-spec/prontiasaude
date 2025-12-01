@@ -50,8 +50,6 @@ export function ServicoCard({
     switch (slug) {
       case "consulta":
         return <Stethoscope className="h-12 w-12 text-accent mb-4" />;
-      case "renovacao_receitas":
-        return <Pill className="h-12 w-12 text-accent mb-4" />;
       case "solicitacao_exames":
         return <FileText className="h-12 w-12 text-accent mb-4" />;
       case "psicologa":
@@ -70,8 +68,6 @@ export function ServicoCard({
     switch (slug) {
       case "consulta":
         return "Consulte agora";
-      case "renovacao_receitas":
-        return "Renovar agora";
       case "solicitacao_exames":
         return "Solicitar agora";
       default:
@@ -340,8 +336,6 @@ export function ServicoCard({
             <p className="text-sm text-muted-foreground">
               {servico.slug === "solicitacao_exames" 
                 ? "Obtenha solicitações de exames laboratoriais sem sair de casa." 
-                : servico.slug === "renovacao_receitas" 
-                ? "Renove agora sua receita válida em todo país." 
                 : servico.descricao}
             </p>
           )}
@@ -393,7 +387,7 @@ export function ServicoCard({
               </div> : <div>
                 {(servico.slug === "psicologa" || servico.slug === "medicos_especialistas" || servico.slug === "laudos_psicologicos" || servico.slug === "solicitacao_exames") && <p className="text-sm text-muted-foreground mb-1">a partir de</p>}
                 <span className="text-2xl font-bold text-foreground">
-                  {servico.slug === "psicologa" ? formataPreco(38.49) : servico.slug === "renovacao_receitas" ? formataPreco(9.99) : formataPreco(servico.precoBase)}
+                  {servico.slug === "psicologa" ? formataPreco(38.49) : formataPreco(servico.precoBase)}
                 </span>
               </div>}
           </div>
