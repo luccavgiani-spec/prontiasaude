@@ -2,7 +2,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PaymentModal } from "@/components/payment/PaymentModal";
-import { PackageSelectionModal } from "@/components/payment/PackageSelectionModal";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 export default function Psicologa() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<{ sku: string; nome: string; valor: number } | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -41,26 +38,20 @@ export default function Psicologa() {
     );
   }
 
-  const handleAgendar = () => {
-    setIsPackageModalOpen(true);
-  };
-
-  const handlePackageSelect = async (pkg: { sku: string; nome: string; valor: number }) => {
-    setSelectedPackage(pkg);
-
+  const handleAgendar = async () => {
     trackLead({
-      value: pkg.valor,
-      content_name: `${servico.nome} - ${pkg.nome}`
+      value: servico.precoBase,
+      content_name: servico.nome
     });
 
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
       const pendingService = {
-        sku: pkg.sku,
-        serviceName: `${servico.nome} - ${pkg.nome}`,
-        amount: pkg.valor * 100,
-        especialidade: pkg.nome,
+        sku: servico.sku,
+        serviceName: servico.nome,
+        amount: servico.precoBase * 100,
+        especialidade: servico.nome,
         timestamp: Date.now()
       };
       localStorage.setItem('pendingService', JSON.stringify(pendingService));
@@ -76,10 +67,10 @@ export default function Psicologa() {
 
     if (!patient?.profile_complete) {
       const pendingService = {
-        sku: pkg.sku,
-        serviceName: `${servico.nome} - ${pkg.nome}`,
-        amount: pkg.valor * 100,
-        especialidade: pkg.nome,
+        sku: servico.sku,
+        serviceName: servico.nome,
+        amount: servico.precoBase * 100,
+        especialidade: servico.nome,
         timestamp: Date.now()
       };
       localStorage.setItem('pendingService', JSON.stringify(pendingService));
@@ -91,7 +82,6 @@ export default function Psicologa() {
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      // ✅ COM PLANO ATIVO: Redireciona direto para WhatsApp 0800
       toast({ description: 'Redirecionando para agendamento via WhatsApp...', duration: 2000 });
       window.location.href = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20sessão%20de%20psicologia';
       return;
@@ -223,22 +213,13 @@ export default function Psicologa() {
         </div>
       </div>
 
-      {servico.variantes && (
-        <PackageSelectionModal
-          open={isPackageModalOpen}
-          onOpenChange={setIsPackageModalOpen}
-          packages={servico.variantes}
-          onPackageSelect={handlePackageSelect}
-        />
-      )}
-
       <PaymentModal
         open={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
-        sku={selectedPackage?.sku || servico.sku}
-        serviceName={selectedPackage ? `${servico.nome} - ${selectedPackage.nome}` : servico.nome}
-        amount={selectedPackage ? Math.round(selectedPackage.valor * 100) : Math.round(servico.precoBase * 100)}
-        especialidade={selectedPackage?.nome || servico.nome}
+        sku={servico.sku}
+        serviceName={servico.nome}
+        amount={Math.round(servico.precoBase * 100)}
+        especialidade={servico.nome}
         onSuccess={() => {
           setIsPaymentModalOpen(false);
           toast({ title: "Sucesso!", description: "Pagamento processado com sucesso" });

@@ -21,12 +21,7 @@ export const CATALOGO_SERVICOS = [
     sku: "ZXW2165",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",
-    inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"],
-    variantes: [
-      { valor: 44.90, nome: "Individual (R$ 44,90/consulta)", sku: "ZXW2165", consultas: 1 },
-      { valor: 171.96, nome: "Plano 4 consultas (R$ 42,99/consulta)", sku: "HXR8516", consultas: 4 },
-      { valor: 307.92, nome: "Plano 8 consultas (R$ 38,49/consulta)", sku: "YME9025", consultas: 8 }
-    ]
+    inclui: ["Sessão terapêutica", "Acompanhamento psicológico", "Orientações personalizadas"]
   },
   { 
     slug: "medicos_especialistas", 
