@@ -4,9 +4,7 @@
  */
 export const ALL_SPECIALTIES = [
   'Clínico Geral',
-  'Psicólogo - 1 sessão',
-  'Psicólogo - 4 sessões',
-  'Psicólogo - 8 sessões',
+  'Psicólogo',
   'Personal Trainer',
   'Nutricionista',
   'Cardiologista',

@@ -8,9 +8,7 @@ const SKU_TO_SERVICE: Record<string, string> = {
   'ITC6534': 'Clínico Geral',
   
   // Psicologia → Formato Communicare
-  'ZXW2165': 'Psicólogo - 1 sessão',
-  'HXR8516': 'Psicólogo - 4 sessões',
-  'YME9025': 'Psicólogo - 8 sessões',
+  'ZXW2165': 'Psicólogo',
   
   // Médicos Especialistas
   'BIR7668': 'Personal Trainer',
