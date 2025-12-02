@@ -57,7 +57,20 @@ const AuthCallback = () => {
         });
       }
 
-      // Busca flags pra decidir o redirecionamento
+      // ✅ Verificar se é admin de empresa ANTES de verificar profile_complete
+      const { data: companyCredentials } = await supabase
+        .from('company_credentials')
+        .select('company_id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (companyCredentials?.company_id) {
+        console.log('User is company admin, redirecting to /empresa');
+        window.location.replace('/empresa');
+        return;
+      }
+
+      // Busca flags pra decidir o redirecionamento (fluxo paciente)
       const { data, error } = await supabase
         .from('patients')
         .select('profile_complete')
