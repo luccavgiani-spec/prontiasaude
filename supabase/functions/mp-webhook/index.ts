@@ -651,6 +651,14 @@ Deno.serve(async (req) => {
       
       if (patientData) {
         console.log('[mp-webhook] 📝 Cadastrando especialista sem plano na ClickLife...');
+        console.log('[mp-webhook] Dados do paciente:', {
+          cpf: patientData.cpf?.substring(0, 3) + '***',
+          nome: `${patientData.first_name} ${patientData.last_name}`,
+          email: patientData.email,
+          phone: patientData.phone_e164,
+          gender: patientData.gender,
+          birth_date: patientData.birth_date
+        });
         
         const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
         
@@ -664,10 +672,53 @@ Deno.serve(async (req) => {
           patientData.birth_date
         );
         
+        // ✅ REGISTRAR NA TABELA DE AUDITORIA
+        const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
+        try {
+          await supabaseAdmin.from('clicklife_registrations').insert({
+            patient_email: patientData.email || schedulePayload.email,
+            patient_cpf: patientData.cpf,
+            patient_name: nomeCompleto,
+            appointment_id: null, // será preenchido depois
+            order_id: payment.metadata?.order_id,
+            payment_id: String(payment.id),
+            sku: schedulePayload.sku,
+            service_name: serviceName,
+            clicklife_empresa_id: 9083,
+            clicklife_plano_id: 864,
+            success: clicklifeResult.success,
+            error_message: clicklifeResult.error || null,
+            response_data: clicklifeResult
+          });
+          console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo');
+        } catch (auditError) {
+          console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
+        }
+        
         if (clicklifeResult.success) {
           console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso');
         } else {
           console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (continuando para WhatsApp):', clicklifeResult.error);
+        }
+      } else {
+        // Registrar falha quando não há dados do paciente
+        try {
+          await supabaseAdmin.from('clicklife_registrations').insert({
+            patient_email: schedulePayload.email,
+            patient_cpf: null,
+            patient_name: schedulePayload.nome || 'Desconhecido',
+            order_id: payment.metadata?.order_id,
+            payment_id: String(payment.id),
+            sku: schedulePayload.sku,
+            service_name: SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku,
+            clicklife_empresa_id: 9083,
+            clicklife_plano_id: 864,
+            success: false,
+            error_message: 'Patient data not available - patientData is null',
+            response_data: { schedulePayload, payerInfo: payment.payer }
+          });
+        } catch (auditError) {
+          console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
         }
       }
 

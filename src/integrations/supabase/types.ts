@@ -140,6 +140,60 @@ export type Database = {
         }
         Relationships: []
       }
+      clicklife_registrations: {
+        Row: {
+          appointment_id: string | null
+          clicklife_empresa_id: number | null
+          clicklife_plano_id: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          order_id: string | null
+          patient_cpf: string | null
+          patient_email: string
+          patient_name: string | null
+          payment_id: string | null
+          response_data: Json | null
+          service_name: string | null
+          sku: string | null
+          success: boolean
+        }
+        Insert: {
+          appointment_id?: string | null
+          clicklife_empresa_id?: number | null
+          clicklife_plano_id?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          order_id?: string | null
+          patient_cpf?: string | null
+          patient_email: string
+          patient_name?: string | null
+          payment_id?: string | null
+          response_data?: Json | null
+          service_name?: string | null
+          sku?: string | null
+          success?: boolean
+        }
+        Update: {
+          appointment_id?: string | null
+          clicklife_empresa_id?: number | null
+          clicklife_plano_id?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          order_id?: string | null
+          patient_cpf?: string | null
+          patient_email?: string
+          patient_name?: string | null
+          payment_id?: string | null
+          response_data?: Json | null
+          service_name?: string | null
+          sku?: string | null
+          success?: boolean
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           bairro: string | null
