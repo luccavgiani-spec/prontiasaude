@@ -99,27 +99,60 @@ const Entrar = () => {
     setIsLoading(false);
   };
 
+  // Fallback: usar OAuth tradicional se GSI falhar
+  const handleGoogleLoginFallback = async () => {
+    console.log('[Google Login] Usando fallback OAuth...');
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      }
+    });
+    
+    if (error) {
+      console.error('[Google Login] Fallback OAuth error:', error);
+      toast({
+        title: "Erro no login",
+        description: "Não foi possível fazer login com Google. Tente novamente.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsLoading(true);
+    console.log('[Google Login] Iniciando login com Google...');
     
     try {
       // ✅ Aguardar GSI ser carregado (máximo 5 segundos)
       let gsiAttempts = 0;
+      console.log('[Google Login] Aguardando GSI carregar...');
+      
       // @ts-ignore - Google Identity Services global
       while (typeof google === 'undefined' || !google?.accounts) {
         if (gsiAttempts >= 50) { // 5 segundos (100ms * 50)
-          throw new Error('Google Identity Services não carregado após 5 segundos');
+          console.warn('[Google Login] GSI não carregou após 5s, usando fallback OAuth');
+          await handleGoogleLoginFallback();
+          return;
         }
         await new Promise(resolve => setTimeout(resolve, 100));
         gsiAttempts++;
       }
       
+      console.log('[Google Login] GSI carregado após', gsiAttempts * 100, 'ms');
+      
       const nonce = Math.random().toString(36).substring(2);
+      const clientId = '640368297459-abnkvkvjhshvv5kg89a31kgmnlp9oqe3.apps.googleusercontent.com';
+      
+      console.log('[Google Login] Inicializando com client_id:', clientId.substring(0, 20) + '...');
 
       // @ts-ignore
       google.accounts.id.initialize({
-        client_id: '640368297459-abnkvkvjhshvv5kg89a31kgmnlp9oqe3.apps.googleusercontent.com',
+        client_id: clientId,
         callback: async (response: any) => {
+          console.log('[Google Login] Callback recebido, processando token...');
           try {
             const { data, error } = await supabase.auth.signInWithIdToken({
               provider: 'google',
@@ -128,6 +161,7 @@ const Entrar = () => {
             });
 
             if (error) {
+              console.error('[Google Login] Erro signInWithIdToken:', error.message);
               toast({
                 title: "Erro no login",
                 description: "Não foi possível fazer login com Google. Tente novamente.",
@@ -137,6 +171,8 @@ const Entrar = () => {
               return;
             }
 
+            console.log('[Google Login] Token aceito, aguardando sessão...');
+            
             // ✅ Aguardar sessão ser estabelecida (até 3 segundos)
             let attempts = 0;
             const maxAttempts = 30; // 3 segundos (100ms * 30)
@@ -145,14 +181,23 @@ const Entrar = () => {
               const { data: { session } } = await supabase.auth.getSession();
               
               if (session?.user) {
-                // ✅ Sessão confirmada, redirecionar
-                handleSuccessfulLogin();
+                console.log('[Google Login] ✅ Sessão estabelecida para:', session.user.email);
+                // ✅ Usar window.location.href para garantir persistência da sessão
+                const pendingToken = localStorage.getItem('pending_invite_token');
+                if (pendingToken) {
+                  localStorage.removeItem('pending_invite_token');
+                  console.log('[Google Login] Redirecionando para completar-perfil com token');
+                  window.location.href = `/completar-perfil?token=${pendingToken}`;
+                } else {
+                  console.log('[Google Login] Redirecionando para /auth/callback');
+                  window.location.href = '/auth/callback';
+                }
                 return true;
               }
               
               attempts++;
               if (attempts >= maxAttempts) {
-                // Timeout após 3 segundos
+                console.error('[Google Login] Timeout aguardando sessão após 3s');
                 toast({
                   title: "Erro de autenticação",
                   description: "Tempo esgotado. Tente novamente.",
@@ -162,13 +207,13 @@ const Entrar = () => {
                 return false;
               }
               
-              // Tentar novamente após 100ms
               await new Promise(resolve => setTimeout(resolve, 100));
               return checkSession();
             };
             
             await checkSession();
           } catch (err) {
+            console.error('[Google Login] Erro no callback:', err);
             toast({
               title: "Erro no login",
               description: "Não foi possível fazer login com Google.",
@@ -180,15 +225,62 @@ const Entrar = () => {
         nonce,
       });
 
-      // @ts-ignore
-      google.accounts.id.prompt();
+      console.log('[Google Login] Chamando prompt()...');
+      
+      // @ts-ignore - Callback de diagnóstico para entender falhas
+      google.accounts.id.prompt((notification: any) => {
+        console.log('[Google Login] Notification recebida:', notification);
+        
+        if (notification.isNotDisplayed()) {
+          const reason = notification.getNotDisplayedReason();
+          console.warn('[Google Login] ❌ Prompt NÃO exibido. Motivo:', reason);
+          
+          // Mapear motivos para mensagens amigáveis
+          const reasonMessages: Record<string, string> = {
+            'browser_not_supported': 'Navegador não suportado',
+            'invalid_client': 'Configuração inválida do cliente',
+            'missing_client_id': 'Client ID não encontrado',
+            'opt_out_or_no_session': 'Usuário optou por não usar ou sem sessão Google',
+            'suppressed_by_user': 'Bloqueado temporariamente (cooldown)',
+            'unregistered_origin': 'Origem não registrada no Google Console',
+            'unknown_reason': 'Motivo desconhecido',
+          };
+          
+          const friendlyMessage = reasonMessages[reason] || reason;
+          
+          toast({
+            title: "Login com Google indisponível",
+            description: `${friendlyMessage}. Usando método alternativo...`,
+            variant: "warning",
+          });
+          
+          // Usar fallback OAuth automaticamente
+          console.log('[Google Login] Ativando fallback OAuth devido a:', reason);
+          handleGoogleLoginFallback();
+        }
+        
+        if (notification.isSkippedMoment()) {
+          const reason = notification.getSkippedReason();
+          console.log('[Google Login] Momento pulado. Motivo:', reason);
+          setIsLoading(false);
+        }
+        
+        if (notification.isDismissedMoment()) {
+          const reason = notification.getDismissedReason();
+          console.log('[Google Login] Usuário fechou o prompt. Motivo:', reason);
+          setIsLoading(false);
+        }
+      });
+      
     } catch (error) {
+      console.error('[Google Login] Erro geral:', error);
       toast({
         title: "Erro no login",
-        description: "Não foi possível carregar o Google Login. Recarregue a página e tente novamente.",
-        variant: "destructive",
+        description: "Não foi possível carregar o Google Login. Tentando método alternativo...",
+        variant: "warning",
       });
-      setIsLoading(false);
+      // Tentar fallback em caso de erro
+      await handleGoogleLoginFallback();
     }
   };
 
