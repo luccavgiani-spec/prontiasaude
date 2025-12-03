@@ -975,30 +975,18 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     );
   }
 
-  // 3. CRIAR AGENDAMENTO COM SENHA DO PACIENTE
-  const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
-  if (!PATIENT_PASSWORD) {
-    console.error('[ClickLife] CLICKLIFE_PATIENT_DEFAULT_PASSWORD não configurado');
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: 'Configuração de senha do paciente ausente'
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
-  }
-
+  // 3. CRIAR AGENDAMENTO USANDO AUTHTOKEN DO INTEGRADOR (não depende da senha do paciente)
   const requestBody: any = {
     cpf: payload.cpf.replace(/\D/g, ''),
-    senha: PATIENT_PASSWORD, // ✅ Senha padrão do paciente para autenticação
+    authtoken: INTEGRATOR_TOKEN, // ✅ Token do integrador no body (conforme documentação ClickLife)
     especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
   };
 
-  console.log('[ClickLife] Request body:', requestBody);
-  console.log('[ClickLife] Auth via header (token mascarado):', `${INTEGRATOR_TOKEN.substring(0, 10)}...`);
+  console.log('[ClickLife] Request body (usando authtoken):', {
+    cpf: requestBody.cpf,
+    authtoken: `${INTEGRATOR_TOKEN.substring(0, 10)}...`, // Mascarar token no log
+    especialidadeid: requestBody.especialidadeid
+  });
 
   const response = await fetch(
     `${API_BASE}/atendimentos/atendimentos`,
@@ -1006,7 +994,6 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'authtoken': INTEGRATOR_TOKEN, // ✅ Token do integrador enviado no header
       },
       body: JSON.stringify(requestBody)
     }
