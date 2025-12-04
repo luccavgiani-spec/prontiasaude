@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { PixPaymentForm } from "./PixPaymentForm";
 import { PaymentSummary } from "./PaymentSummary";
 import { MP_PUBLIC_KEY } from "@/lib/constants";
-import { trackInitiateCheckout } from "@/lib/meta-tracking";
+import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-tracking";
 
 declare global {
   interface Window {
@@ -980,6 +980,19 @@ export function PaymentModal({
               appointment_id: appointment.appointment_id,
             });
 
+            // 🎯 Track Purchase event para Meta Ads (PIX)
+            trackPurchase({
+              value: amount / 100,
+              order_id: orderId,
+              content_name: serviceName,
+              contents: [{
+                id: sku,
+                quantity: 1,
+                item_price: amount / 100
+              }]
+            });
+            console.log("[Meta Tracking] 💰 Purchase event disparado (PIX):", { value: amount / 100, order_id: orderId });
+
             toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
 
             setTimeout(() => {
@@ -1278,6 +1291,20 @@ export function PaymentModal({
       if (data.status === "approved") {
         setPaymentId(data.payment_id);
         setPaymentStatus("approved");
+
+        // 🎯 Track Purchase event para Meta Ads (Cartão)
+        const dbUnitPrice = amount / 100;
+        trackPurchase({
+          value: dbUnitPrice,
+          order_id: orderId,
+          content_name: serviceName,
+          contents: [{
+            id: sku,
+            quantity: 1,
+            item_price: dbUnitPrice
+          }]
+        });
+        console.log("[Meta Tracking] 💰 Purchase event disparado (Cartão):", { value: dbUnitPrice, order_id: orderId });
 
         toast.dismiss();
 
