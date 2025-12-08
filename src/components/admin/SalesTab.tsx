@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -7,9 +7,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ExternalLink, Copy, Search, Download, DollarSign, Calendar, TrendingUp } from "lucide-react";
-import { format, startOfDay, startOfWeek, isAfter, isBefore, parseISO } from "date-fns";
+import { ExternalLink, Copy, Search, Download, DollarSign, Calendar, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { format, startOfDay, startOfWeek, isAfter, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDaysInMonth, isSameMonth, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+
+// 🔒 Data mínima para filtrar vendas de teste (apenas vendas reais a partir de 21/11/2025)
+const SALES_START_DATE = '2025-11-21T00:00:00.000Z';
+
+// 💰 Mapeamento de SKUs para preços em centavos
+const SKU_PRICES: Record<string, number> = {
+  'ITC6534': 4390,      // Clínico Geral
+  'ZXW2165': 3999,      // Psicólogo
+  'OVM9892': 11990,     // Laudo Psicológico
+  'ULT3571': 4390,      // Solicitação de Exames
+  // Planos mensais
+  'IND_SEM_ESP_1M': 1999,
+  'IND_COM_ESP_1M': 2399,
+  'FAM_SEM_ESP_1M': 3499,
+  'FAM_COM_ESP_1M': 4390,
+  // Planos anuais
+  'IND_SEM_ESP_12M': 19990,
+  'IND_COM_ESP_12M': 23990,
+  'FAM_SEM_ESP_12M': 34990,
+  'FAM_COM_ESP_12M': 43900,
+};
 
 interface Appointment {
   id: string;
@@ -30,6 +52,13 @@ interface Appointment {
   updated_at: string;
 }
 
+interface DailyChartData {
+  day: number;
+  dayLabel: string;
+  sales: number;
+  revenue: number;
+}
+
 const SalesTab = () => {
   const { toast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -44,6 +73,7 @@ const SalesTab = () => {
       const { data, error } = await supabase
         .from("appointments")
         .select("*")
+        .gte("created_at", SALES_START_DATE) // 🔒 Filtro de data mínima
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -87,6 +117,84 @@ const SalesTab = () => {
     };
   }, []);
 
+  // 📊 Análise mensal comparativa
+  const monthlyAnalysis = useMemo(() => {
+    const now = new Date();
+    const currentMonth = startOfMonth(now);
+    const currentMonthEnd = endOfMonth(now);
+    const daysInCurrentMonth = getDaysInMonth(now);
+    const currentDayOfMonth = now.getDate();
+
+    // Vendas do mês atual
+    const currentMonthSales = appointments.filter(apt => {
+      const aptDate = parseISO(apt.created_at);
+      return isSameMonth(aptDate, now);
+    });
+
+    // Receita do mês
+    const currentMonthRevenue = currentMonthSales.reduce((sum, apt) => {
+      const price = SKU_PRICES[apt.service_code] || 0;
+      return sum + price;
+    }, 0);
+
+    // Todas as vendas para calcular média histórica
+    const allSalesCount = appointments.length;
+    const firstSaleDate = appointments.length > 0 
+      ? parseISO(appointments[appointments.length - 1].created_at)
+      : now;
+    
+    // Dias desde a primeira venda
+    const daysSinceFirstSale = Math.max(1, Math.ceil((now.getTime() - firstSaleDate.getTime()) / (1000 * 60 * 60 * 24)));
+    
+    // Média histórica diária
+    const historicalAvgDaily = allSalesCount / daysSinceFirstSale;
+    
+    // Média diária do mês atual
+    const avgDailySalesCurrentMonth = currentMonthSales.length / currentDayOfMonth;
+    
+    // Projeção mensal
+    const projectedMonthlySales = Math.round(avgDailySalesCurrentMonth * daysInCurrentMonth);
+    const projectedMonthlyRevenue = (currentMonthRevenue / currentDayOfMonth) * daysInCurrentMonth;
+    
+    // Variação percentual vs histórico
+    const variationPercent = historicalAvgDaily > 0 
+      ? ((avgDailySalesCurrentMonth - historicalAvgDaily) / historicalAvgDaily) * 100 
+      : 0;
+
+    // Dados para o gráfico por dia
+    const daysOfMonth = eachDayOfInterval({ start: currentMonth, end: currentMonthEnd });
+    const dailyData: DailyChartData[] = daysOfMonth.map((day, index) => {
+      const daySales = currentMonthSales.filter(apt => isSameDay(parseISO(apt.created_at), day));
+      const dayRevenue = daySales.reduce((sum, apt) => sum + (SKU_PRICES[apt.service_code] || 0), 0);
+      return {
+        day: index + 1,
+        dayLabel: format(day, 'dd', { locale: ptBR }),
+        sales: daySales.length,
+        revenue: dayRevenue / 100,
+      };
+    });
+
+    // Melhor e pior dia
+    const sortedDays = [...dailyData].filter(d => d.sales > 0).sort((a, b) => b.sales - a.sales);
+    const bestDay = sortedDays[0] || null;
+    const worstDay = sortedDays[sortedDays.length - 1] || null;
+
+    return {
+      currentMonthSales: currentMonthSales.length,
+      currentMonthRevenue: currentMonthRevenue / 100,
+      avgDailySales: avgDailySalesCurrentMonth,
+      projectedMonthlySales,
+      projectedMonthlyRevenue: projectedMonthlyRevenue / 100,
+      historicalAvgDaily,
+      variationPercent,
+      dailyData: dailyData.filter(d => d.day <= currentDayOfMonth), // Apenas dias até hoje
+      bestDay,
+      worstDay,
+      monthName: format(now, 'MMMM', { locale: ptBR }),
+      year: format(now, 'yyyy'),
+    };
+  }, [appointments]);
+
   const filteredAppointments = appointments.filter((apt) => {
     if (searchEmail && !apt.email.toLowerCase().includes(searchEmail.toLowerCase())) return false;
     if (filterService !== "all" && apt.service_code !== filterService) return false;
@@ -121,12 +229,10 @@ const SalesTab = () => {
   const simplifyUrl = (url: string): string => {
     try {
       const urlObj = new URL(url);
-      // Retorna o domínio + últimos 8 caracteres do path
       const path = urlObj.pathname + urlObj.hash;
       const shortPath = path.length > 20 ? '...' + path.slice(-15) : path;
       return urlObj.hostname + shortPath;
     } catch {
-      // Se não for URL válida, retorna os primeiros e últimos caracteres
       return url.length > 30 ? url.slice(0, 15) + '...' + url.slice(-15) : url;
     }
   };
@@ -244,6 +350,159 @@ const SalesTab = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* 📊 Card de Análise Comparativa Mensal */}
+      <Card className="border-primary/20">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">
+                Desempenho de {monthlyAnalysis.monthName.charAt(0).toUpperCase() + monthlyAnalysis.monthName.slice(1)}/{monthlyAnalysis.year}
+              </CardTitle>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Atualizado em tempo real
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Métricas principais */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-1">Receita do Mês</p>
+              <p className="text-xl font-bold text-primary">
+                R$ {monthlyAnalysis.currentMonthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-1">Vendas do Mês</p>
+              <p className="text-xl font-bold">{monthlyAnalysis.currentMonthSales}</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-1">Média Diária</p>
+              <p className="text-xl font-bold">{monthlyAnalysis.avgDailySales.toFixed(1)}</p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-1">Projeção Mensal</p>
+              <p className="text-xl font-bold">{monthlyAnalysis.projectedMonthlySales} vendas</p>
+              <p className="text-xs text-muted-foreground">
+                ~R$ {monthlyAnalysis.projectedMonthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-4">
+              <p className="text-xs text-muted-foreground mb-1">Variação vs Histórico</p>
+              <div className="flex items-center gap-1">
+                {monthlyAnalysis.variationPercent >= 0 ? (
+                  <ArrowUpRight className="h-4 w-4 text-green-500" />
+                ) : (
+                  <ArrowDownRight className="h-4 w-4 text-red-500" />
+                )}
+                <p className={`text-xl font-bold ${monthlyAnalysis.variationPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {monthlyAnalysis.variationPercent >= 0 ? '+' : ''}{monthlyAnalysis.variationPercent.toFixed(1)}%
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Média histórica: {monthlyAnalysis.historicalAvgDaily.toFixed(1)}/dia
+              </p>
+            </div>
+          </div>
+
+          {/* Gráfico de Histograma */}
+          <div className="bg-muted/30 rounded-lg p-4">
+            <p className="text-sm font-medium mb-4">Vendas por Dia do Mês</p>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyAnalysis.dailyData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis 
+                    dataKey="dayLabel" 
+                    tick={{ fontSize: 10 }} 
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis 
+                    tick={{ fontSize: 10 }} 
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip 
+                    content={({ active, payload, label }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-background border rounded-lg shadow-lg p-2">
+                            <p className="text-xs font-medium">Dia {label}</p>
+                            <p className="text-xs text-primary">{payload[0].value} vendas</p>
+                            <p className="text-xs text-muted-foreground">
+                              R$ {(payload[0].payload.revenue || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <ReferenceLine 
+                    y={monthlyAnalysis.historicalAvgDaily} 
+                    stroke="hsl(var(--primary))" 
+                    strokeDasharray="5 5"
+                    strokeWidth={2}
+                  />
+                  <Bar 
+                    dataKey="sales" 
+                    fill="hsl(var(--primary))" 
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={30}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex items-center justify-center gap-6 mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-primary"></div>
+                <span>Vendas do dia</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-0.5 bg-primary" style={{ borderStyle: 'dashed' }}></div>
+                <span>Média histórica ({monthlyAnalysis.historicalAvgDaily.toFixed(1)}/dia)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Destaques do mês */}
+          {(monthlyAnalysis.bestDay || monthlyAnalysis.worstDay) && (
+            <div className="grid gap-4 grid-cols-2">
+              {monthlyAnalysis.bestDay && (
+                <div className="flex items-center gap-3 p-3 bg-green-500/10 rounded-lg border border-green-500/20">
+                  <div className="p-2 bg-green-500/20 rounded-full">
+                    <ArrowUpRight className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Melhor dia</p>
+                    <p className="text-sm font-medium">
+                      Dia {monthlyAnalysis.bestDay.day} - {monthlyAnalysis.bestDay.sales} vendas
+                    </p>
+                  </div>
+                </div>
+              )}
+              {monthlyAnalysis.worstDay && monthlyAnalysis.bestDay?.day !== monthlyAnalysis.worstDay?.day && (
+                <div className="flex items-center gap-3 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <div className="p-2 bg-orange-500/20 rounded-full">
+                    <ArrowDownRight className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Menor movimento</p>
+                    <p className="text-sm font-medium">
+                      Dia {monthlyAnalysis.worstDay.day} - {monthlyAnalysis.worstDay.sales} vendas
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Filtros */}
       <Card>
