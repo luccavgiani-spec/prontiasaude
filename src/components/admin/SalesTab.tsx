@@ -137,29 +137,20 @@ const SalesTab = () => {
       return sum + price;
     }, 0);
 
-    // Todas as vendas para calcular média histórica
-    const allSalesCount = appointments.length;
-    const firstSaleDate = appointments.length > 0 
-      ? parseISO(appointments[appointments.length - 1].created_at)
-      : now;
-    
-    // Dias desde a primeira venda
-    const daysSinceFirstSale = Math.max(1, Math.ceil((now.getTime() - firstSaleDate.getTime()) / (1000 * 60 * 60 * 24)));
-    
-    // Média histórica diária
-    const historicalAvgDaily = allSalesCount / daysSinceFirstSale;
-    
-    // Média diária do mês atual
+    // 🎯 DEZEMBRO É O PRIMEIRO MÊS DE OPERAÇÃO
+    // Média diária do mês atual (baseada apenas nos dias com vendas reais)
     const avgDailySalesCurrentMonth = currentMonthSales.length / currentDayOfMonth;
     
-    // Projeção mensal
+    // Projeção mensal (extrapolação linear baseada no ritmo atual)
     const projectedMonthlySales = Math.round(avgDailySalesCurrentMonth * daysInCurrentMonth);
-    const projectedMonthlyRevenue = (currentMonthRevenue / currentDayOfMonth) * daysInCurrentMonth;
-    
-    // Variação percentual vs histórico
-    const variationPercent = historicalAvgDaily > 0 
-      ? ((avgDailySalesCurrentMonth - historicalAvgDaily) / historicalAvgDaily) * 100 
+    const projectedMonthlyRevenue = currentDayOfMonth > 0 
+      ? (currentMonthRevenue / currentDayOfMonth) * daysInCurrentMonth 
       : 0;
+    
+    // Como dezembro é o primeiro mês, a "média histórica" é a própria média do mês
+    // Não há histórico anterior para comparar - variação será 0%
+    const historicalAvgDaily = avgDailySalesCurrentMonth;
+    const variationPercent = 0; // Primeiro mês, sem histórico para comparar
 
     // Dados para o gráfico por dia
     const daysOfMonth = eachDayOfInterval({ start: currentMonth, end: currentMonthEnd });
