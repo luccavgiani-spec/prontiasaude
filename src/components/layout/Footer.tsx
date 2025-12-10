@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { Mail, Phone, MapPin, Instagram } from "lucide-react";
 import { CATALOGO_SERVICOS } from "@/lib/constants";
 import prontiaLogo from "@/assets/prontia-logo-branca.webp";
-
 export function Footer() {
   return <footer className="bg-primary border-t border-primary-glow/20 mt-16">
       <div className="container mx-auto px-4 py-12">
@@ -10,11 +9,7 @@ export function Footer() {
           {/* Logo e Descrição */}
           <div className="md:col-span-2">
             <Link to="/" className="inline-block mb-4 transition-all duration-300 hover:scale-105">
-              <img 
-                src={prontiaLogo} 
-                alt="Prontìa Saúde" 
-                className="h-16 w-auto"
-              />
+              <img src={prontiaLogo} alt="Prontìa Saúde" className="h-16 w-auto" />
             </Link>
             <p className="text-white/80 mb-4 max-w-md">
               Conectamos você aos melhores profissionais de saúde através de consultas online seguras e acessíveis.
@@ -43,16 +38,11 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Links Rápidos</h3>
             <ul className="space-y-2 text-sm">
-              {CATALOGO_SERVICOS.map((servico) => (
-                <li key={servico.slug}>
-                  <Link 
-                    to={`/servicos/${servico.slug}`} 
-                    className="text-white/70 hover:text-white transition-colors"
-                  >
+              {CATALOGO_SERVICOS.map(servico => <li key={servico.slug}>
+                  <Link to={`/servicos/${servico.slug}`} className="text-white/70 hover:text-white transition-colors">
               {servico.nome}
             </Link>
-          </li>
-        ))}
+          </li>)}
       </ul>
           </div>
 
@@ -102,7 +92,9 @@ export function Footer() {
         {/* Bottom Bar */}
         <div className="border-t border-white/20 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4 text-sm text-white/70">
-            <span>© 2024 Prontìa Saúde. Todos os direitos reservados.</span>
+            <span className="text-center">© 2024 Prontìa Saúde — Marca registrada em processo no INPI (Processo nº 941907740).
+Prontìa Saúde é uma marca de propriedade de PRIMECARE SERVIÇOS MÉDICOS LTDA — CNPJ 56.210.013/0001-40.
+Todos os serviços de saúde são prestados pela PRIMECARE SERVIÇOS MÉDICOS LTDA  enquanto responsável técnica e legal.</span>
           </div>
           <div className="flex items-center gap-6 text-sm">
             <Link to="/termos" className="text-white/70 hover:text-white transition-colors">
