@@ -29,7 +29,14 @@ export function Footer() {
               </div>
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-white" />
-                <span>São Paulo, SP - Brasil</span>
+                <span>
+
+
+
+
+
+
+Rua Fábio Montanari Ramos, 204 — Bragança Paulista, SP — 12916-450.</span>
               </div>
             </div>
           </div>
