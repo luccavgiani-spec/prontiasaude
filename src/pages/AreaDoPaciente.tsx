@@ -15,6 +15,7 @@ import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 import { PlanCardWithActions } from "@/components/patient/PlanCardWithActions";
+import { FamiliaresSection } from "@/components/patient/FamiliaresSection";
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -491,6 +492,17 @@ const AreaDoPaciente = () => {
               planCode={patientPlan.plan_code || ''}
               planCreatedAt={patientPlan.created_at || new Date().toISOString()}
               cpf={patient.cpf || ''}
+            />
+          </div>
+        )}
+
+        {/* Seção de Familiares - APENAS para planos familiares */}
+        {patientPlan && patientPlan.plan_code?.startsWith('FAM_') && currentUser?.id && (
+          <div className="mt-8">
+            <FamiliaresSection
+              currentUserId={currentUser.id}
+              planId={(patientPlan as any).id}
+              planCode={patientPlan.plan_code}
             />
           </div>
         )}

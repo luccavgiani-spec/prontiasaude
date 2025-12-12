@@ -161,6 +161,17 @@ interface ActivatePlanManualRequest {
   send_email?: boolean;
 }
 
+interface InviteFamiliarRequest {
+  operation: 'invite-familiar';
+  plan_id: string;
+  email: string;
+}
+
+interface ResendFamilyInviteRequest {
+  operation: 'resend-family-invite';
+  invite_id: string;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -747,6 +758,311 @@ serve(async (req) => {
             expires_at: expiresAt.toISOString()
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'invite-familiar': {
+        const token = authHeader!.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+          return new Response(
+            JSON.stringify({ error: 'Não autorizado' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { plan_id, email } = body as InviteFamiliarRequest;
+
+        if (!plan_id || !email) {
+          return new Response(
+            JSON.stringify({ error: 'plan_id e email são obrigatórios' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!validateEmail(email)) {
+          return new Response(
+            JSON.stringify({ error: 'Email inválido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Verificar se o plano pertence ao usuário e é familiar
+        const { data: plan, error: planError } = await supabase
+          .from('patient_plans')
+          .select('id, plan_code, user_id, email')
+          .eq('id', plan_id)
+          .eq('status', 'active')
+          .single();
+
+        if (planError || !plan) {
+          return new Response(
+            JSON.stringify({ error: 'Plano não encontrado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (plan.user_id !== user.id) {
+          return new Response(
+            JSON.stringify({ error: 'Você não tem permissão para gerenciar este plano' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!plan.plan_code?.startsWith('FAM_')) {
+          return new Response(
+            JSON.stringify({ error: 'Este recurso é apenas para planos familiares' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Verificar se já existe convite pendente ou completo para este email
+        const { data: existingInvite } = await supabase
+          .from('pending_family_invites')
+          .select('id, status')
+          .eq('titular_plan_id', plan_id)
+          .eq('email', email.toLowerCase())
+          .maybeSingle();
+
+        if (existingInvite) {
+          if (existingInvite.status === 'pending') {
+            return new Response(
+              JSON.stringify({ error: 'Já existe um convite pendente para este email' }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          if (existingInvite.status === 'completed') {
+            return new Response(
+              JSON.stringify({ error: 'Este familiar já está cadastrado no plano' }),
+              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+
+        // Contar familiares existentes (máximo 3)
+        const { count } = await supabase
+          .from('pending_family_invites')
+          .select('*', { count: 'exact', head: true })
+          .eq('titular_plan_id', plan_id)
+          .in('status', ['pending', 'completed']);
+
+        if ((count || 0) >= 3) {
+          return new Response(
+            JSON.stringify({ error: 'Limite de 3 familiares atingido' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Gerar token único
+        const inviteToken = crypto.randomUUID();
+
+        // Inserir convite
+        const { error: insertError } = await supabase
+          .from('pending_family_invites')
+          .insert({
+            titular_id: user.id,
+            titular_plan_id: plan_id,
+            email: email.toLowerCase(),
+            invite_token: inviteToken,
+            status: 'pending'
+          });
+
+        if (insertError) {
+          console.error('[invite-familiar] Insert error:', insertError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao criar convite' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Enviar email
+        try {
+          const inviteLink = `https://prontiasaude.com.br/completar-perfil?token_familiar=${inviteToken}`;
+          
+          // Buscar nome do titular
+          const { data: titular } = await supabase
+            .from('patients')
+            .select('first_name, last_name')
+            .eq('id', user.id)
+            .single();
+
+          const titularName = titular 
+            ? `${titular.first_name || ''} ${titular.last_name || ''}`.trim()
+            : 'Um membro';
+
+          await supabase.functions.invoke('send-form-emails', {
+            body: {
+              type: 'family-invite',
+              data: {
+                email: email.toLowerCase(),
+                titularName,
+                inviteLink
+              }
+            }
+          });
+        } catch (emailError) {
+          console.error('[invite-familiar] Email error:', emailError);
+          // Não falhar se email não enviar
+        }
+
+        console.log('[invite-familiar] Invite created:', { plan_id, email });
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Convite enviado com sucesso' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'resend-family-invite': {
+        const token = authHeader!.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+          return new Response(
+            JSON.stringify({ error: 'Não autorizado' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const { invite_id } = body as ResendFamilyInviteRequest;
+
+        // Buscar convite
+        const { data: invite, error: inviteError } = await supabase
+          .from('pending_family_invites')
+          .select('*, patient_plans(plan_code)')
+          .eq('id', invite_id)
+          .eq('titular_id', user.id)
+          .eq('status', 'pending')
+          .single();
+
+        if (inviteError || !invite) {
+          return new Response(
+            JSON.stringify({ error: 'Convite não encontrado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Gerar novo token e atualizar expiração
+        const newToken = crypto.randomUUID();
+        const newExpires = new Date();
+        newExpires.setDate(newExpires.getDate() + 7);
+
+        await supabase
+          .from('pending_family_invites')
+          .update({
+            invite_token: newToken,
+            expires_at: newExpires.toISOString()
+          })
+          .eq('id', invite_id);
+
+        // Reenviar email
+        try {
+          const inviteLink = `https://prontiasaude.com.br/completar-perfil?token_familiar=${newToken}`;
+          
+          const { data: titular } = await supabase
+            .from('patients')
+            .select('first_name, last_name')
+            .eq('id', user.id)
+            .single();
+
+          const titularName = titular 
+            ? `${titular.first_name || ''} ${titular.last_name || ''}`.trim()
+            : 'Um membro';
+
+          await supabase.functions.invoke('send-form-emails', {
+            body: {
+              type: 'family-invite',
+              data: {
+                email: invite.email,
+                titularName,
+                inviteLink
+              }
+            }
+          });
+        } catch (emailError) {
+          console.error('[resend-family-invite] Email error:', emailError);
+        }
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Convite reenviado' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'activate-family-member': {
+        // Este endpoint será chamado pelo CompletarPerfil quando um familiar completar cadastro
+        const { invite_token, member_data } = body;
+
+        if (!invite_token) {
+          return new Response(
+            JSON.stringify({ error: 'Token de convite é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Buscar convite válido
+        const { data: invite, error: inviteError } = await supabase
+          .from('pending_family_invites')
+          .select('*, patient_plans(plan_code, plan_expires_at)')
+          .eq('invite_token', invite_token)
+          .eq('status', 'pending')
+          .single();
+
+        if (inviteError || !invite) {
+          return new Response(
+            JSON.stringify({ error: 'Convite inválido ou já utilizado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (new Date(invite.expires_at) < new Date()) {
+          return new Response(
+            JSON.stringify({ error: 'Convite expirado' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Buscar user_id do membro (recém criado)
+        const { data: authUser } = await supabase.auth.admin.getUserByEmail(invite.email);
+        const memberId = authUser?.user?.id;
+
+        // Criar plano para o familiar
+        const { error: planError } = await supabase
+          .from('patient_plans')
+          .insert({
+            user_id: memberId,
+            email: invite.email,
+            plan_code: invite.patient_plans?.plan_code || 'FAM_BASIC',
+            plan_expires_at: invite.patient_plans?.plan_expires_at,
+            status: 'active'
+          });
+
+        if (planError) {
+          console.error('[activate-family-member] Plan error:', planError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao ativar plano do familiar' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Marcar convite como completo
+        await supabase
+          .from('pending_family_invites')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString()
+          })
+          .eq('id', invite.id);
+
+        console.log('[activate-family-member] Family member activated:', invite.email);
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            plan_code: invite.patient_plans?.plan_code 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 

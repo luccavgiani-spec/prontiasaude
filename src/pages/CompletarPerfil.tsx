@@ -41,14 +41,93 @@ const CompletarPerfil = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get('token');
+  const familyToken = searchParams.get('token_familiar');
 
   useEffect(() => {
-    if (inviteToken) {
+    if (familyToken) {
+      validateFamilyInviteToken();
+    } else if (inviteToken) {
       validateInviteToken();
     } else {
       loadPatientData();
     }
-  }, [inviteToken]);
+  }, [inviteToken, familyToken]);
+
+  const validateFamilyInviteToken = async () => {
+    setIsLoading(true);
+    try {
+      const { data: invite, error } = await supabase
+        .from('pending_family_invites')
+        .select('*, patient_plans(plan_code, plan_expires_at)')
+        .eq('invite_token', familyToken)
+        .eq('status', 'pending')
+        .single();
+        
+      if (error || !invite) {
+        toast({
+          title: "Convite inválido",
+          description: "Este convite não existe ou já foi utilizado.",
+          variant: "destructive",
+        });
+        navigate('/entrar');
+        return;
+      }
+      
+      if (new Date(invite.expires_at) < new Date()) {
+        toast({
+          title: "Convite expirado",
+          description: "Este convite expirou. Solicite um novo ao titular do plano.",
+          variant: "destructive",
+        });
+        navigate('/entrar');
+        return;
+      }
+      
+      // Marcar como convite familiar
+      setInviteData({ ...invite, isFamilyInvite: true });
+      
+      // Verificar sessão atual
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session && session.user.email?.toLowerCase() !== invite.email.toLowerCase()) {
+        await supabase.auth.signOut();
+        toast({
+          title: "Sessão anterior encerrada",
+          description: `Complete o cadastro com o email ${invite.email}`,
+        });
+      } else if (session) {
+        setCurrentUser(session.user);
+        const patient = await getPatient(session.user.id);
+        if (patient) {
+          setFormData({
+            first_name: patient.first_name || '',
+            last_name: patient.last_name || '',
+            address_line: patient.address_line || '',
+            cpf: patient.cpf || '',
+            phone_e164: patient.phone_e164 || '',
+            birth_date: patient.birth_date || '',
+            gender: patient.gender || 'F',
+            cep: patient.cep || '',
+            city: patient.city || '',
+            state: patient.state || '',
+            address_number: patient.address_number || '',
+            address_complement: patient.address_complement || '',
+            terms_accepted: true
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error validating family invite:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível validar o convite.",
+        variant: "destructive",
+      });
+      navigate('/entrar');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const validateInviteToken = async () => {
     setIsLoading(true);
@@ -467,7 +546,7 @@ const CompletarPerfil = () => {
       });
       
       // SE FOR CONVITE DE EMPRESA, ativar plano via Edge Function segura
-      if (inviteData) {
+      if (inviteData && !inviteData.isFamilyInvite) {
         try {
           console.log('[CompletarPerfil] Calling activate-employee-plan Edge Function...');
           
@@ -511,6 +590,35 @@ const CompletarPerfil = () => {
           });
           throw activationErr;
         }
+      } else if (inviteData && inviteData.isFamilyInvite) {
+        // SE FOR CONVITE FAMILIAR, ativar plano do familiar
+        try {
+          console.log('[CompletarPerfil] Activating family member plan...');
+          
+          const { data: familyResult, error: familyError } = await supabase.functions.invoke('patient-operations', {
+            body: {
+              operation: 'activate-family-member',
+              invite_token: inviteData.invite_token
+            }
+          });
+          
+          if (familyError || !familyResult.success) {
+            throw new Error(familyResult?.error || 'Falha ao ativar plano familiar');
+          }
+          
+          toast({
+            title: "🏠 Bem-vindo à família!",
+            description: "Seu plano familiar foi ativado com sucesso!",
+          });
+        } catch (familyErr: any) {
+          console.error('❌ Exception during family plan activation:', familyErr);
+          toast({
+            title: "Erro ao ativar plano",
+            description: familyErr.message || "Não foi possível ativar seu plano familiar.",
+            variant: "destructive",
+          });
+          throw familyErr;
+        }
       } else {
         toast({
           title: "Perfil atualizado",
@@ -548,7 +656,10 @@ const CompletarPerfil = () => {
           {inviteData && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <h3 className="font-semibold text-green-800 mb-2">
-                ✅ Você foi convidado pela {inviteData.companies?.razao_social || 'sua empresa'}
+                {inviteData.isFamilyInvite 
+                  ? "🏠 Você foi convidado para um Plano Familiar!"
+                  : `✅ Você foi convidado pela ${inviteData.companies?.razao_social || 'sua empresa'}`
+                }
               </h3>
               <p className="text-sm text-green-700">
                 Complete seus dados abaixo e seu plano de saúde será ativado automaticamente!

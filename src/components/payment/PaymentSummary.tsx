@@ -18,6 +18,7 @@ interface PaymentSummaryProps {
   recurring?: boolean;
   frequency?: number;
   frequencyType?: 'months' | 'days';
+  sku?: string; // Para detectar se é um plano
   onSelectPaymentMethod: (method: 'card' | 'pix') => void;
   
   // Props de cupom
@@ -40,6 +41,12 @@ interface PaymentSummaryProps {
   onRemoveCoupon: () => void;
 }
 
+// Helper para detectar se é um plano (individual ou familiar)
+const isPlanSku = (sku?: string): boolean => {
+  if (!sku) return false;
+  return sku.startsWith('IND_') || sku.startsWith('FAM_');
+};
+
 export function PaymentSummary({
   serviceName,
   amount,
@@ -47,6 +54,7 @@ export function PaymentSummary({
   recurring,
   frequency,
   frequencyType,
+  sku,
   onSelectPaymentMethod,
   couponCode,
   setCouponCode,
@@ -56,6 +64,8 @@ export function PaymentSummary({
   onApplyCoupon,
   onRemoveCoupon
 }: PaymentSummaryProps) {
+  // PIX é bloqueado para planos (IND_* ou FAM_*) e para recorrências
+  const isPixBlocked = recurring || isPlanSku(sku);
   const formatRecurringText = () => {
     if (!recurring || !frequency) return null;
     
@@ -217,8 +227,8 @@ export function PaymentSummary({
             </span>
           </Button>
 
-          {/* PIX disponível apenas para pagamentos únicos (não recorrentes) */}
-          {!recurring && (
+          {/* PIX disponível apenas para serviços avulsos (não planos e não recorrentes) */}
+          {!isPixBlocked && (
             <Button
               onClick={() => onSelectPaymentMethod('pix')}
               size="lg"
@@ -235,9 +245,9 @@ export function PaymentSummary({
         </div>
         
         {/* Aviso quando PIX não está disponível */}
-        {recurring && (
+        {isPixBlocked && (
           <p className="text-xs text-center text-muted-foreground mt-2">
-            ℹ️ Para planos recorrentes, apenas cartão de crédito está disponível
+            ℹ️ Para planos, apenas cartão de crédito está disponível
           </p>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PatientPlan {
+  id?: string;
   plan_code?: string;
   plan_expires_at?: string;
   status?: string;
@@ -17,7 +18,7 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
     if (userId) {
       const { data: planByUserId, error: userIdError } = await supabase
         .from('patient_plans')
-        .select('plan_code, plan_expires_at, status, created_at')
+        .select('id, plan_code, plan_expires_at, status, created_at')
         .eq('user_id', userId)
         .eq('status', 'active')
         .gte('plan_expires_at', new Date().toISOString())
@@ -35,7 +36,7 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
     const normalizedEmail = (email || '').trim().toLowerCase();
     const { data, error } = await supabase
       .from('patient_plans')
-      .select('plan_code, plan_expires_at, status, created_at')
+      .select('id, plan_code, plan_expires_at, status, created_at')
       .eq('email', normalizedEmail)
       .eq('status', 'active')
       .gte('plan_expires_at', new Date().toISOString())
