@@ -44,7 +44,7 @@ interface PaymentSummaryProps {
 // Helper para detectar se é um plano (individual ou familiar)
 const isPlanSku = (sku?: string): boolean => {
   if (!sku) return false;
-  return sku.startsWith('IND_') || sku.startsWith('FAM_');
+  return sku.startsWith('IND_') || sku.startsWith('FAM_') || sku === 'FAMILY';
 };
 
 export function PaymentSummary({

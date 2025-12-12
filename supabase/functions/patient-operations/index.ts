@@ -810,7 +810,7 @@ serve(async (req) => {
           );
         }
 
-        if (!plan.plan_code?.startsWith('FAM_')) {
+        if (!plan.plan_code?.startsWith('FAM_') && plan.plan_code !== 'FAMILY') {
           return new Response(
             JSON.stringify({ error: 'Este recurso é apenas para planos familiares' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
