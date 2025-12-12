@@ -497,7 +497,7 @@ const AreaDoPaciente = () => {
         )}
 
         {/* Seção de Familiares - APENAS para planos familiares */}
-        {patientPlan && patientPlan.plan_code?.startsWith('FAM_') && currentUser?.id && (
+        {patientPlan && (patientPlan.plan_code?.startsWith('FAM_') || patientPlan.plan_code === 'FAMILY') && currentUser?.id && (
           <div className="mt-8">
             <FamiliaresSection
               currentUserId={currentUser.id}

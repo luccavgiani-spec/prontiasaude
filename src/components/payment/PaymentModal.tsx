@@ -1309,7 +1309,7 @@ export function PaymentModal({
         toast.dismiss();
 
         // ✅ Detectar se é PLANO e redirecionar diretamente
-        const isPlan = sku.match(/^(IND_|FAM_)/);
+        const isPlan = sku.match(/^(IND_|FAM_)/) || sku === 'FAMILY';
 
         if (isPlan) {
           console.log("[Card Payment] 🎯 PLANO detectado - Redirecionando para área do paciente");

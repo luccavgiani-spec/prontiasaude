@@ -31,7 +31,7 @@ function mapSkuToName(sku: string): string {
   };
   
   if (sku.startsWith('IND_')) return 'Plano Individual';
-  if (sku.startsWith('FAM_')) return 'Plano Familiar';
+  if (sku.startsWith('FAM_') || sku === 'FAMILY') return 'Plano Familiar';
   
   return SERVICE_NAMES[sku] || sku;
 }
