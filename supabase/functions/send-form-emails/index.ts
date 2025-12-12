@@ -85,12 +85,23 @@ interface EmployeeInviteRequest {
   type: "employee-invite";
   data: {
     email: string;
-    empresa: string;
-    invite_link: string;
+    empresa?: string;
+    companyName?: string;
+    invite_link?: string;
+    inviteLink?: string;
   };
 }
 
-type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest | ClubeBenParceiroRequest | CompanyCredentialsRequest | EmployeeWelcomeRequest | EmployeeInviteRequest;
+interface FamilyInviteRequest {
+  type: "family-invite";
+  data: {
+    email: string;
+    titularName: string;
+    inviteLink: string;
+  };
+}
+
+type FormRequest = EmpresaFormRequest | ONGFormRequest | TrabalheConoscoRequest | SejaParceiroRequest | ClubeBenParceiroRequest | CompanyCredentialsRequest | EmployeeWelcomeRequest | EmployeeInviteRequest | FamilyInviteRequest;
 
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
@@ -556,6 +567,150 @@ const handler = async (req: Request): Promise<Response> => {
         throw new Error(`Resend API error: ${emailResponse.error.message}`);
       }
       return new Response(JSON.stringify({ success: true, type: "employee-invite" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    } else if (formData.type === "family-invite") {
+      const emailResponse = await resend.emails.send({
+        from: "Prontia Saúde <suporte@prontiasaude.com.br>",
+        reply_to: "suporte@prontiasaude.com.br",
+        to: [formData.data.email],
+        subject: "🏠 Você foi convidado para o Plano Familiar Prontia Saúde!",
+        html: `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Convite Plano Familiar</title>
+</head>
+<body style="margin:0; padding:0; background-color:#efe3d5;">
+  <div style="font-family:'Poppins', Arial, sans-serif; background-color:#efe3d5; padding:40px 0;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+            style="background:#ffffff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.06); overflow:hidden;">
+
+            <!-- HEADER -->
+            <tr>
+              <td style="background-color:#00766a; padding:24px 40px; text-align:center;">
+                <h1 style="color:#ffffff; margin:0; font-size:24px;">
+                  🏠 Convite Plano Familiar
+                </h1>
+              </td>
+            </tr>
+
+            <!-- YELLOW LINE -->
+            <tr>
+              <td style="background-color:#fbaa03; height:4px;"></td>
+            </tr>
+
+            <!-- LOGO -->
+            <tr>
+              <td style="padding:20px 40px 0 40px;">
+                <img src="https://ploqujuhpwutpcibedbr.supabase.co/storage/v1/object/public/email-assets/prontia-favicon.png"
+                     alt="Prontìa Saúde"
+                     style="width:120px; height:auto;">
+              </td>
+            </tr>
+
+            <!-- CONTENT -->
+            <tr>
+              <td style="padding:20px 40px 40px 40px; color:#333333;">
+                <p style="font-size:16px; line-height:1.7; margin:0 0 12px 0;">
+                  Olá!
+                </p>
+
+                <p style="font-size:16px; line-height:1.7; margin:0 0 16px 0;">
+                  <strong>${formData.data.titularName}</strong> convidou você para fazer parte do plano familiar de saúde da Prontia Saúde!
+                </p>
+
+                <h3 style="font-size:18px; line-height:1.6; margin:20px 0 12px 0;">
+                  💚 Seus benefícios incluem:
+                </h3>
+
+                <ul style="font-size:15px; line-height:1.7; padding-left:20px; margin:0 0 20px 0;">
+                  <li style="margin-bottom:8px;">Consultas médicas ilimitadas por telemedicina</li>
+                  <li style="margin-bottom:8px;">Atendimento 24h por dia, 7 dias por semana</li>
+                  <li style="margin-bottom:8px;">Médicos especialistas disponíveis</li>
+                  <li style="margin-bottom:8px;">Receitas digitais e solicitação de exames</li>
+                  <li style="margin-bottom:8px;">Acesso ao Clube de Benefícios com +450 descontos</li>
+                </ul>
+
+                <!-- WARNING BOX -->
+                <div style="
+                  background-color:#fff8e5;
+                  border-left:4px solid #fbaa03;
+                  padding:12px 14px;
+                  margin:20px 0;
+                  font-size:14px;
+                  line-height:1.6;
+                ">
+                  <strong>⚠️ Atenção:</strong>
+                  Este convite expira em <strong>7 dias</strong>. Complete seu cadastro o quanto antes!
+                </div>
+
+                <p style="font-size:16px; line-height:1.7; margin:16px 0 20px 0;">
+                  <strong>Para ativar seu plano, clique no botão abaixo:</strong>
+                </p>
+
+                <!-- CTA BUTTON -->
+                <p style="text-align:center; margin:0 0 24px 0;">
+                  <a href="${formData.data.inviteLink}"
+                    style="
+                      display:inline-block;
+                      background-color:#00766a;
+                      color:#ffffff;
+                      text-decoration:none;
+                      font-weight:600;
+                      padding:14px 32px;
+                      border-radius:100px;
+                      font-size:15px;
+                    ">
+                    Completar Cadastro
+                  </a>
+                </p>
+
+                <p style="font-size:12px; line-height:1.7; color:#666666; margin:0 0 20px 0;">
+                  Ou copie e cole este link no seu navegador:<br>
+                  <span style="word-break:break-all;">${formData.data.inviteLink}</span>
+                </p>
+
+                <p style="font-size:15px; line-height:1.7; margin:0;">
+                  Bem-vindo à família Prontìa! 💚
+                </p>
+              </td>
+            </tr>
+
+            <!-- FOOTER -->
+            <tr>
+              <td style="background-color:#efe3d5; padding:16px 24px; text-align:center; color:#555555; font-size:12px; line-height:1.6;">
+                Prontìa Saúde - Cuidando de você, onde você estiver.<br>
+                Este é um email automático, por favor não responda.
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>
+        `,
+      });
+
+      console.log('[family-invite] Email sent:', {
+        to: formData.data.email,
+        response: emailResponse,
+        success: emailResponse.data !== null
+      });
+
+      if (emailResponse.error) {
+        throw new Error(`Resend API error: ${emailResponse.error.message}`);
+      }
+      
+      return new Response(JSON.stringify({ success: true, type: "family-invite" }), {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });

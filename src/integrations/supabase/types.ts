@@ -717,6 +717,50 @@ export type Database = {
           },
         ]
       }
+      pending_family_invites: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invite_token: string
+          status: string
+          titular_id: string
+          titular_plan_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          invite_token: string
+          status?: string
+          titular_id: string
+          titular_plan_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invite_token?: string
+          status?: string
+          titular_id?: string
+          titular_plan_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_family_invites_titular_plan_id_fkey"
+            columns: ["titular_plan_id"]
+            isOneToOne: false
+            referencedRelation: "patient_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_payments: {
         Row: {
           amount_cents: number | null
