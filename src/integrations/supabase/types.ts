@@ -963,6 +963,17 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      validate_family_invite_token: {
+        Args: { p_token: string }
+        Returns: {
+          email: string
+          expires_at: string
+          plan_code: string
+          plan_expires_at: string
+          titular_plan_id: string
+          valid: boolean
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "user" | "company"
