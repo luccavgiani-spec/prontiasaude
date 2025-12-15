@@ -4,6 +4,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { UtensilsCrossed, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ContentItem {
   id: string;
@@ -21,11 +22,29 @@ const ReceitasSaudaveis = () => {
   const [content, setContent] = useState<ContentItem[]>([]);
 
   useEffect(() => {
-    // Load content from localStorage or API
-    const savedContent = localStorage.getItem('receitas-saudaveis-content');
-    if (savedContent) {
-      setContent(JSON.parse(savedContent));
-    }
+    const loadContent = async () => {
+      const { data, error } = await supabase
+        .from('admin_content')
+        .select('*')
+        .eq('destination', 'receitas-saudaveis')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const formattedContent = data.map(item => ({
+          id: item.id,
+          title: item.title,
+          description: item.description || '',
+          type: item.content_type as 'video' | 'pdf' | 'link' | 'post' | 'image',
+          url: item.url || item.external_link || '',
+          content: item.content || '',
+          fileUrl: item.file_url || '',
+          externalLink: item.external_link || '',
+          createdAt: new Date(item.created_at)
+        }));
+        setContent(formattedContent);
+      }
+    };
+    loadContent();
   }, []);
 
   return (
