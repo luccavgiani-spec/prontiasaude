@@ -39,10 +39,10 @@ const Entrar = () => {
   }, [navigate]);
 
   const handleSuccessfulLogin = () => {
-    // Verificar se há convite pendente
-    const pendingToken = localStorage.getItem('pending_invite_token');
+    // Verificar se há convite pendente (usando sessionStorage para segurança)
+    const pendingToken = sessionStorage.getItem('pending_invite_token');
     if (pendingToken) {
-      localStorage.removeItem('pending_invite_token');
+      sessionStorage.removeItem('pending_invite_token');
       navigate(`/completar-perfil?token=${pendingToken}`);
     } else {
       navigate('/auth/callback');
@@ -183,9 +183,9 @@ const Entrar = () => {
               if (session?.user) {
                 console.log('[Google Login] ✅ Sessão estabelecida para:', session.user.email);
                 // ✅ Usar window.location.href para garantir persistência da sessão
-                const pendingToken = localStorage.getItem('pending_invite_token');
+                const pendingToken = sessionStorage.getItem('pending_invite_token');
                 if (pendingToken) {
-                  localStorage.removeItem('pending_invite_token');
+                  sessionStorage.removeItem('pending_invite_token');
                   console.log('[Google Login] Redirecionando para completar-perfil com token');
                   window.location.href = `/completar-perfil?token=${pendingToken}`;
                 } else {

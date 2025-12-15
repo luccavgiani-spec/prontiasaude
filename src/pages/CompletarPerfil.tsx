@@ -433,7 +433,7 @@ const CompletarPerfil = () => {
           
           if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
             // ✅ Usuário já existe - SEMPRE salvar token antes de redirecionar
-            localStorage.setItem('pending_invite_token', inviteData.invite_token);
+            sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
             
             toast({
               title: "Você já possui uma conta",
