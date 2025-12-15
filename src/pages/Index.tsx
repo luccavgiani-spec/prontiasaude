@@ -7,6 +7,7 @@ const BenefitsBar = lazy(() => import("@/components/home/BenefitsBar").then(m =>
 const ServicosSection = lazy(() => import("@/components/home/ServicosSection").then(m => ({ default: m.ServicosSection })));
 const PlanosSection = lazy(() => import("@/components/home/PlanosSection").then(m => ({ default: m.PlanosSection })));
 const ClubeBenBannerSection = lazy(() => import("@/components/home/ClubeBenBannerSection").then(m => ({ default: m.ClubeBenBannerSection })));
+const ProvasSection = lazy(() => import("@/components/home/ProvasSection").then(m => ({ default: m.ProvasSection })));
 const FAQSection = lazy(() => import("@/components/home/FAQSection").then(m => ({ default: m.FAQSection })));
 
 const Index = () => {
@@ -24,6 +25,9 @@ const Index = () => {
       </Suspense>
       <Suspense fallback={<div style={{ minHeight: '300px' }} />}>
         <ClubeBenBannerSection />
+      </Suspense>
+      <Suspense fallback={<div style={{ minHeight: '600px' }} />}>
+        <ProvasSection />
       </Suspense>
       <Suspense fallback={<div style={{ minHeight: '600px' }} />}>
         <FAQSection />

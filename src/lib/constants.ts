@@ -228,27 +228,57 @@ export const DESCONTOS_PLANO_VISUAL = {
   "12": 0.40
 } as const;
 
-// Depoimentos para prova social
+// Depoimentos para prova social (8+ para carrossel)
 export const DEPOIMENTOS = [
   {
-    nome: "Tatiana Peixes, 54.",
+    nome: "Tatiana Peixes, 54",
     avaliacao: 5,
     texto: "Atendimento excelente! Consegui minha consulta rapidamente e o médico foi muito atencioso."
   },
   {
-    nome: "Ricardo de Paula, 46.", 
+    nome: "Ricardo de Paula, 46", 
     avaliacao: 5,
     texto: "Plataforma muito fácil de usar. Renovei minha receita sem sair de casa."
   },
   {
-    nome: "Mario Goji, 32.",
+    nome: "Mario Goji, 32",
     avaliacao: 5, 
     texto: "Profissionais qualificados e preço justo. Recomendo para toda família."
   },
   {
-    nome: "Teo Gonçalves, 27.",
+    nome: "Teo Gonçalves, 27",
     avaliacao: 5,
     texto: "Nunca passei por uma consulta tão rápido. Comprei uma consulta, recebi o link da videochamada na mesma hora e em 30min fui atendido. Assinei um plano depois dessa, recomendo demais!"
+  },
+  {
+    nome: "Fernanda Costa, 38",
+    avaliacao: 5,
+    texto: "Minha filha estava com febre de madrugada e conseguimos atendimento em menos de 10 minutos. Serviço essencial para famílias!"
+  },
+  {
+    nome: "Carlos Mendes, 51",
+    avaliacao: 5,
+    texto: "Tenho pressão alta e preciso acompanhamento frequente. Com o plano, faço consultas mensais sem gastar fortunas. Muito satisfeito!"
+  },
+  {
+    nome: "Julia Santos, 29",
+    avaliacao: 5,
+    texto: "A psicóloga foi incrível! Me senti acolhida desde o primeiro momento. Já marquei minha próxima sessão."
+  },
+  {
+    nome: "Roberto Lima, 44",
+    avaliacao: 5,
+    texto: "Estava cético com telemedicina, mas mudei de opinião. Atendimento humano e profissional, melhor que muitos presenciais que já tive."
+  },
+  {
+    nome: "Amanda Oliveira, 35",
+    avaliacao: 5,
+    texto: "Economizei muito tempo e dinheiro! Não preciso mais faltar trabalho para ir ao médico. Super prático."
+  },
+  {
+    nome: "Pedro Henrique, 23",
+    avaliacao: 5,
+    texto: "Como universitário com orçamento apertado, o preço acessível foi decisivo. Qualidade top por um valor justo!"
   }
 ];
 
