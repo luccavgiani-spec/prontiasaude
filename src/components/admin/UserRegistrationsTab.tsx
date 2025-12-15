@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2 } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 
@@ -38,6 +38,7 @@ export default function UserRegistrationsTab() {
   const [page, setPage] = useState(1);
   const [activationModalOpen, setActivationModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [clicklifeLoading, setClicklifeLoading] = useState<string | null>(null);
   const limit = 50;
 
   useEffect(() => {
@@ -115,6 +116,41 @@ export default function UserRegistrationsTab() {
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Erro ao deletar usuário');
+    }
+  };
+
+  // ✅ NOVO: Ativar manualmente na ClickLife
+  const handleClickLifeActivation = async (user: User) => {
+    if (!user.patient?.cpf) {
+      toast.error('Usuário não possui CPF cadastrado');
+      return;
+    }
+
+    setClicklifeLoading(user.id);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('activate-clicklife-manual', {
+        body: {
+          email: user.email
+        }
+      });
+
+      if (error) {
+        console.error('Error activating ClickLife:', error);
+        toast.error('Erro ao ativar na ClickLife: ' + (error.message || 'Erro desconhecido'));
+        return;
+      }
+
+      if (data?.success) {
+        toast.success('Paciente ativado na ClickLife com sucesso!');
+      } else {
+        toast.error('Falha na ativação: ' + (data?.error || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      console.error('Error activating ClickLife:', error);
+      toast.error('Erro ao ativar na ClickLife');
+    } finally {
+      setClicklifeLoading(null);
     }
   };
 
@@ -320,7 +356,25 @@ export default function UserRegistrationsTab() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {/* ✅ NOVO: Botão para ativar/renovar plano */}
+                          {/* ✅ NOVO: Botão para ativar na ClickLife */}
+                          {user.patient?.cpf && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleClickLifeActivation(user)}
+                              disabled={clicklifeLoading === user.id}
+                              title="Ativar na ClickLife"
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              {clicklifeLoading === user.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Stethoscope className="h-4 w-4" />
+                              )}
+                            </Button>
+                          )}
+                          
+                          {/* Botão para ativar/renovar plano */}
                           {user.patient && (
                             <Button
                               variant="ghost"

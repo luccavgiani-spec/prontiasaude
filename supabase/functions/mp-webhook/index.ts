@@ -872,6 +872,53 @@ Deno.serve(async (req) => {
       console.error('[mp-webhook] ❌ Falha ao obter dados do paciente');
     }
 
+    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
+    // Executar antes do schedule-redirect para garantir que o paciente esteja cadastrado
+    if (patientData && patientData.cpf) {
+      console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
+      
+      const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
+      
+      const clicklifeResult = await registerClickLifePatientSimple(
+        patientData.cpf,
+        nomeCompleto,
+        patientData.email || schedulePayload.email,
+        patientData.phone_e164 || '',
+        864, // planoId padrão para consultas
+        patientData.gender || 'F',
+        patientData.birth_date
+      );
+      
+      // Registrar na tabela de auditoria
+      try {
+        await supabaseAdmin.from('clicklife_registrations').insert({
+          patient_email: patientData.email || schedulePayload.email,
+          patient_cpf: patientData.cpf,
+          patient_name: nomeCompleto,
+          order_id: payment.metadata?.order_id,
+          payment_id: String(payment.id),
+          sku: schedulePayload.sku,
+          service_name: mapSkuToName(schedulePayload.sku),
+          clicklife_empresa_id: 9083,
+          clicklife_plano_id: 864,
+          success: clicklifeResult.success,
+          error_message: clicklifeResult.error || null,
+          response_data: clicklifeResult
+        });
+        console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo (universal)');
+      } catch (auditError) {
+        console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
+      }
+      
+      if (clicklifeResult.success) {
+        console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso (universal)');
+      } else {
+        console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (universal):', clicklifeResult.error);
+      }
+    } else {
+      console.log('[mp-webhook] ⚠️ Pulando cadastro ClickLife - dados incompletos do paciente');
+    }
+
     console.log('[mp-webhook] 📞 Chamando schedule-redirect para payment:', payment.id);
 
     // ✅ RETRY AUTOMÁTICO: Tentar 3 vezes com delay exponencial
