@@ -252,18 +252,12 @@ const AdminDashboard = () => {
         return;
       }
 
-      // Map content type
-      let contentType = 'blog';
-      if (contentForm.destination === 'livros') contentType = 'livro';
-      else if (contentForm.destination === 'playlists') contentType = 'playlist';
-      else if (contentForm.destination === 'receitas-saudaveis') contentType = 'receita';
-
       const { error } = await supabase
         .from('admin_content')
         .insert({
           title: contentForm.title,
           description: contentForm.description,
-          content_type: contentType,
+          content_type: contentForm.type,
           url: contentForm.url || null,
           content: contentForm.content || null,
           file_url: contentForm.fileUrl || null,
