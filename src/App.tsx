@@ -9,7 +9,9 @@ import { initMetaTracking } from "@/lib/meta-tracking";
 import { initWebVitals } from "@/lib/web-vitals";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { PromoTopBar } from "@/components/layout/PromoTopBar";
 import WhatsAppFloatButton from "@/components/layout/WhatsAppFloatButton";
+import ConsultNowFloatButton from "@/components/layout/ConsultNowFloatButton";
 
 // Critical Pages (loaded immediately - apenas homepage)
 import Index from "./pages/Index";
@@ -134,6 +136,7 @@ const App = () => (
       <BrowserRouter>
         <ScrollToTop />
         <div className="min-h-screen flex flex-col bg-muted/30">
+          <PromoTopBar />
           <Navbar />
           <main className="flex-1">
             <Suspense
@@ -208,6 +211,7 @@ const App = () => (
           </main>
           <Footer />
         </div>
+        <ConsultNowFloatButton />
         <WhatsAppFloatButton />
       </BrowserRouter>
     </TooltipProvider>
