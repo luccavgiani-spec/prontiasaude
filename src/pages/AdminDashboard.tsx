@@ -136,16 +136,43 @@ const AdminDashboard = () => {
     setContentForm(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Convert file to base64 for permanent storage
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        setContentForm(prev => ({ ...prev, file, fileUrl: base64 }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        // Upload file to Supabase Storage
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `content/${fileName}`;
+
+        const { data, error } = await supabase.storage
+          .from('assets')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (error) throw error;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('assets')
+          .getPublicUrl(filePath);
+
+        setContentForm(prev => ({ ...prev, file, fileUrl: publicUrl }));
+        
+        toast({
+          title: "Arquivo enviado!",
+          description: "O arquivo foi enviado com sucesso."
+        });
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        toast({
+          title: "Erro no upload",
+          description: "Não foi possível enviar o arquivo. Tente novamente.",
+          variant: "destructive"
+        });
+      }
     }
   };
 

@@ -1071,10 +1071,117 @@ export function PaymentModal({
     return true;
   };
 
+  // ✅ NOVO: Handler para pedidos gratuitos (cupom 100%)
+  const handleFreeOrder = async () => {
+    console.log("[handleFreeOrder] Processando pedido gratuito (cupom 100%)");
+    
+    setPaymentStatus("processing");
+    toast.loading("Processando seu pedido gratuito...");
+
+    try {
+      const orderId = `order_free_${Date.now()}`;
+      const schedulePayload = buildSchedulePayload();
+
+      // Chamar schedule-redirect diretamente (sem Mercado Pago)
+      const { data: scheduleResult, error: scheduleError } = await supabase.functions.invoke(
+        "schedule-redirect",
+        {
+          body: {
+            ...schedulePayload,
+            orderId,
+            paymentId: `free_${Date.now()}`,
+            isFreeOrder: true
+          },
+        }
+      );
+
+      if (scheduleError) {
+        console.error("[handleFreeOrder] Schedule error:", scheduleError);
+        throw new Error("Erro ao agendar consulta");
+      }
+
+      // Registrar métrica de venda gratuita
+      await supabase.from("metrics").insert({
+        metric_type: "sale",
+        patient_email: formData.email,
+        plan_code: sku,
+        amount_cents: 0,
+        status: "approved",
+        metadata: {
+          order_id: orderId,
+          coupon_code: appliedCoupon?.coupon_code,
+          discount_percentage: 100,
+          original_amount: appliedCoupon?.amount_original,
+          is_free_order: true
+        }
+      });
+
+      // Registrar uso do cupom
+      if (appliedCoupon) {
+        await supabase.from("coupon_uses").insert({
+          coupon_id: appliedCoupon.coupon_id,
+          coupon_code: appliedCoupon.coupon_code,
+          used_by_email: formData.email,
+          used_by_name: formData.name,
+          owner_user_id: appliedCoupon.owner_user_id,
+          owner_email: appliedCoupon.owner_email,
+          owner_pix_key: appliedCoupon.owner_pix_key,
+          amount_original: appliedCoupon.amount_original,
+          amount_discounted: 0,
+          discount_percentage: 100,
+          service_or_plan_name: serviceName,
+          service_or_plan_id: sku,
+          payment_id: `free_${Date.now()}`,
+          order_id: orderId
+        });
+      }
+
+      // Track purchase event (mesmo gratuito)
+      trackPurchase({
+        value: 0,
+        order_id: orderId,
+        content_name: serviceName,
+        contents: [{
+          id: sku,
+          quantity: 1,
+          item_price: 0
+        }]
+      });
+
+      toast.dismiss();
+      setPaymentStatus("approved");
+      toast.success("✅ Pedido gratuito processado! Redirecionando...");
+
+      // Redirecionar para consulta
+      if (scheduleResult?.redirect_url) {
+        setTimeout(() => {
+          window.location.href = scheduleResult.redirect_url;
+        }, 1500);
+      } else {
+        setTimeout(() => {
+          window.location.href = "/area-do-paciente";
+        }, 1500);
+      }
+
+    } catch (error) {
+      console.error("[handleFreeOrder] Error:", error);
+      toast.dismiss();
+      toast.error("Erro ao processar pedido gratuito. Tente novamente.");
+      setPaymentStatus("idle");
+    }
+  };
+
   const handleCardSubmit = async (cardFormData: any) => {
     console.log("[handleCardSubmit] START - Card form data:", cardFormData);
     console.log("[handleCardSubmit] formData:", formData);
     console.log("[handleCardSubmit] SKU:", sku, "Amount:", amount);
+
+    // ✅ NOVO: Verificar se é pedido gratuito (cupom 100%)
+    if (appliedCoupon && appliedCoupon.amount_discounted === 0) {
+      console.log("[handleCardSubmit] Cupom 100% detectado - processando como pedido gratuito");
+      await handleFreeOrder();
+      return;
+    }
 
     // ✅ ETAPA 6: Validar readiness ANTES de processar
     if (!validatePaymentReadiness()) {
@@ -1517,6 +1624,13 @@ export function PaymentModal({
     // Prevenir múltiplos submits
     if (isSubmittingRef.current || paymentStatus === "processing") {
       console.warn("[handlePixSubmit] Submit already in progress, ignoring");
+      return;
+    }
+
+    // ✅ NOVO: Verificar se é pedido gratuito (cupom 100%)
+    if (appliedCoupon && appliedCoupon.amount_discounted === 0) {
+      console.log("[handlePixSubmit] Cupom 100% detectado - processando como pedido gratuito");
+      await handleFreeOrder();
       return;
     }
 
