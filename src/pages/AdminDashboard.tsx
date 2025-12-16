@@ -29,7 +29,7 @@ interface ContentItem {
   id: string;
   title: string;
   description: string;
-  type: 'video' | 'pdf' | 'link' | 'post' | 'image';
+  type: 'video' | 'video_upload' | 'pdf' | 'link' | 'post' | 'image';
   url?: string;
   content?: string;
   file?: File;
@@ -46,7 +46,7 @@ const AdminDashboard = () => {
   const [contentForm, setContentForm] = useState({
     title: '',
     description: '',
-    type: 'post' as 'video' | 'pdf' | 'link' | 'post' | 'image',
+    type: 'post' as 'video' | 'video_upload' | 'pdf' | 'link' | 'post' | 'image',
     url: '',
     content: '',
     file: null as File | null,
@@ -110,6 +110,7 @@ const AdminDashboard = () => {
         description: item.description || '',
         type: item.content_type === 'livro' ? 'pdf' : 
               item.content_type === 'playlist' ? 'video' : 
+              item.content_type === 'video_upload' ? 'video_upload' :
               item.external_link ? 'link' : 'post',
         url: item.url || '',
         content: item.content || '',
@@ -212,6 +213,15 @@ const AdminDashboard = () => {
       toast({
         title: "Arquivo obrigatório",
         description: "Para PDFs e imagens, é necessário fazer upload do arquivo.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (contentForm.type === 'video_upload' && !contentForm.file) {
+      toast({
+        title: "Arquivo obrigatório",
+        description: "Para upload de vídeo, é necessário selecionar um arquivo de vídeo.",
         variant: "destructive"
       });
       return;
@@ -441,7 +451,13 @@ const AdminDashboard = () => {
                     <SelectItem value="video">
                       <div className="flex items-center gap-2">
                         <Video className="h-4 w-4" />
-                        Vídeo
+                        Vídeo (URL)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="video_upload">
+                      <div className="flex items-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Vídeo (Upload)
                       </div>
                     </SelectItem>
                     <SelectItem value="image">
@@ -479,13 +495,21 @@ const AdminDashboard = () => {
                 </div>
               )}
 
-              {(contentForm.type === 'pdf' || contentForm.type === 'image') && (
+              {(contentForm.type === 'pdf' || contentForm.type === 'image' || contentForm.type === 'video_upload') && (
                 <div>
-                  <Label htmlFor="file">{contentForm.type === 'pdf' ? 'Arquivo PDF *' : 'Arquivo de Imagem *'}</Label>
+                  <Label htmlFor="file">
+                    {contentForm.type === 'pdf' ? 'Arquivo PDF *' : 
+                     contentForm.type === 'video_upload' ? 'Arquivo de Vídeo *' : 
+                     'Arquivo de Imagem *'}
+                  </Label>
                   <Input
                     id="file"
                     type="file"
-                    accept={contentForm.type === 'pdf' ? '.pdf' : 'image/*'}
+                    accept={
+                      contentForm.type === 'pdf' ? '.pdf' : 
+                      contentForm.type === 'video_upload' ? 'video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.mov' : 
+                      'image/*'
+                    }
                     onChange={handleFileChange}
                     className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/80"
                   />
