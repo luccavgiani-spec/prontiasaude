@@ -6,6 +6,20 @@ const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
 const corsHeaders = getCorsHeaders();
 
+/**
+ * HTML escape function to prevent XSS/HTML injection in email templates
+ * Escapes special HTML characters to their entity equivalents
+ */
+function escapeHtml(text: string | undefined | null): string {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 interface EmpresaFormRequest {
   type: "empresa";
   nome: string;
@@ -116,7 +130,7 @@ const handler = async (req: Request): Promise<Response> => {
     const recipients = ["sandra_toledo@prontiasaude.com.br", "victoria_toledo@prontiasaude.com.br", "suporte@prontiasaude.com.br"];
 
     if (formData.type === "empresa") {
-      // Handle empresa form
+      // Handle empresa form - escape all user input
       const emailResponse = await resend.emails.send({
         from: "Formulários <suporte@prontiasaude.com.br>",
         reply_to: "suporte@prontiasaude.com.br",
@@ -128,12 +142,12 @@ const handler = async (req: Request): Promise<Response> => {
           
           <h2>Dados da Empresa:</h2>
           <ul>
-            <li><strong>Nome do contato:</strong> ${formData.nome}</li>
-            <li><strong>Empresa:</strong> ${formData.empresa}</li>
-            <li><strong>Número de colaboradores:</strong> ${formData.colaboradores}</li>
-            <li><strong>CNPJ:</strong> ${formData.cnpj}</li>
-            <li><strong>Telefone:</strong> ${formData.telefone}</li>
-            <li><strong>Email:</strong> ${formData.email}</li>
+            <li><strong>Nome do contato:</strong> ${escapeHtml(formData.nome)}</li>
+            <li><strong>Empresa:</strong> ${escapeHtml(formData.empresa)}</li>
+            <li><strong>Número de colaboradores:</strong> ${escapeHtml(formData.colaboradores)}</li>
+            <li><strong>CNPJ:</strong> ${escapeHtml(formData.cnpj)}</li>
+            <li><strong>Telefone:</strong> ${escapeHtml(formData.telefone)}</li>
+            <li><strong>Email:</strong> ${escapeHtml(formData.email)}</li>
           </ul>
           
           <p>Entre em contato com o cliente o mais breve possível para apresentar nossa proposta personalizada.</p>
@@ -155,7 +169,7 @@ const handler = async (req: Request): Promise<Response> => {
       });
 
     } else if (formData.type === "ong") {
-      // Handle ONG form
+      // Handle ONG form - escape all user input
       const emailResponse = await resend.emails.send({
         from: "Formulários <suporte@prontiasaude.com.br>",
         reply_to: "suporte@prontiasaude.com.br",
@@ -167,10 +181,10 @@ const handler = async (req: Request): Promise<Response> => {
           
           <h2>Dados da ONG:</h2>
           <ul>
-            <li><strong>Nome da ONG:</strong> ${formData.nomeOng}</li>
-            <li><strong>Site/Redes Sociais:</strong> ${formData.siteRedes}</li>
-            <li><strong>Contato:</strong> ${formData.contato}</li>
-            <li><strong>Descrição:</strong> ${formData.descricao || "Não informado"}</li>
+            <li><strong>Nome da ONG:</strong> ${escapeHtml(formData.nomeOng)}</li>
+            <li><strong>Site/Redes Sociais:</strong> ${escapeHtml(formData.siteRedes)}</li>
+            <li><strong>Contato:</strong> ${escapeHtml(formData.contato)}</li>
+            <li><strong>Descrição:</strong> ${escapeHtml(formData.descricao) || "Não informado"}</li>
           </ul>
           
           <p>Avaliem a organização e considerem incluí-la no programa de apoio social da Prontia Saúde.</p>
@@ -196,15 +210,15 @@ const handler = async (req: Request): Promise<Response> => {
         from: "Formulários <suporte@prontiasaude.com.br>",
         reply_to: "suporte@prontiasaude.com.br",
         to: formData.recipients,
-        subject: `Nova candidatura: ${formData.data.nome}`,
+        subject: `Nova candidatura: ${escapeHtml(formData.data.nome)}`,
         html: `
           <h1>Nova Candidatura Recebida</h1>
           <h2>Trabalhe Conosco</h2>
           
-          <p><strong>Nome:</strong> ${formData.data.nome}</p>
-          <p><strong>CRM:</strong> ${formData.data.crm}</p>
-          <p><strong>Contato:</strong> ${formData.data.contato}</p>
-          <p><strong>CPF/CNPJ:</strong> ${formData.data.cpfCnpj}</p>
+          <p><strong>Nome:</strong> ${escapeHtml(formData.data.nome)}</p>
+          <p><strong>CRM:</strong> ${escapeHtml(formData.data.crm)}</p>
+          <p><strong>Contato:</strong> ${escapeHtml(formData.data.contato)}</p>
+          <p><strong>CPF/CNPJ:</strong> ${escapeHtml(formData.data.cpfCnpj)}</p>
           
           <hr>
           <p><em>Candidatura recebida em ${new Date().toLocaleString('pt-BR')}</em></p>
@@ -221,18 +235,18 @@ const handler = async (req: Request): Promise<Response> => {
         from: "Formulários <suporte@prontiasaude.com.br>",
         reply_to: "suporte@prontiasaude.com.br",
         to: formData.recipients,
-        subject: `Nova proposta de parceria: ${formData.data.nome}`,
+        subject: `Nova proposta de parceria: ${escapeHtml(formData.data.nome)}`,
         html: `
           <h1>Nova Proposta de Parceria</h1>
           
-          <p><strong>Responsável:</strong> ${formData.data.nome}</p>
-          <p><strong>Empresa:</strong> ${formData.data.empresa || 'Não informado'}</p>
-          <p><strong>Contato:</strong> ${formData.data.contato}</p>
-          <p><strong>CPF/CNPJ:</strong> ${formData.data.cpfCnpj}</p>
+          <p><strong>Responsável:</strong> ${escapeHtml(formData.data.nome)}</p>
+          <p><strong>Empresa:</strong> ${escapeHtml(formData.data.empresa) || 'Não informado'}</p>
+          <p><strong>Contato:</strong> ${escapeHtml(formData.data.contato)}</p>
+          <p><strong>CPF/CNPJ:</strong> ${escapeHtml(formData.data.cpfCnpj)}</p>
           
           ${formData.data.descricao ? `
           <h3>Descrição da Proposta:</h3>
-          <p>${formData.data.descricao}</p>
+          <p>${escapeHtml(formData.data.descricao)}</p>
           ` : ''}
           
           <hr>
@@ -250,22 +264,22 @@ const handler = async (req: Request): Promise<Response> => {
         from: "Formulários <suporte@prontiasaude.com.br>",
         reply_to: "suporte@prontiasaude.com.br",
         to: recipients,
-        subject: `Nova loja parceira ClubeBen: ${formData.data.nomeLoja}`,
+        subject: `Nova loja parceira ClubeBen: ${escapeHtml(formData.data.nomeLoja)}`,
         html: `
           <h1>Nova Loja Parceira - Clube de Benefícios</h1>
           <p>Uma nova loja/empresa deseja se tornar parceira e oferecer benefícios aos nossos assinantes.</p>
           
           <h2>Dados da Loja:</h2>
           <ul>
-            <li><strong>Nome da Loja/Empresa:</strong> ${formData.data.nomeLoja}</li>
-            <li><strong>Responsável:</strong> ${formData.data.responsavel}</li>
-            <li><strong>Contato:</strong> ${formData.data.contato}</li>
-            <li><strong>CNPJ:</strong> ${formData.data.cnpj}</li>
-            <li><strong>Categoria:</strong> ${formData.data.categoria}</li>
+            <li><strong>Nome da Loja/Empresa:</strong> ${escapeHtml(formData.data.nomeLoja)}</li>
+            <li><strong>Responsável:</strong> ${escapeHtml(formData.data.responsavel)}</li>
+            <li><strong>Contato:</strong> ${escapeHtml(formData.data.contato)}</li>
+            <li><strong>CNPJ:</strong> ${escapeHtml(formData.data.cnpj)}</li>
+            <li><strong>Categoria:</strong> ${escapeHtml(formData.data.categoria)}</li>
           </ul>
           
           <h3>Descrição dos Benefícios Oferecidos:</h3>
-          <p>${formData.data.descricao}</p>
+          <p>${escapeHtml(formData.data.descricao)}</p>
           
           <hr>
           <p><em>Cadastro recebido em ${new Date().toLocaleString('pt-BR')}</em></p>
@@ -297,7 +311,7 @@ const handler = async (req: Request): Promise<Response> => {
             </div>
             
             <div style="padding: 30px; background: #f9f9f9;">
-              <h2 style="color: #333;">Olá, ${formData.data.razao_social}!</h2>
+              <h2 style="color: #333;">Olá, ${escapeHtml(formData.data.razao_social)}!</h2>
               <p style="color: #666; line-height: 1.6;">
                 Sua empresa foi cadastrada com sucesso na plataforma Prontia Saúde Empresas. 
                 Abaixo estão suas credenciais de acesso:
@@ -305,14 +319,14 @@ const handler = async (req: Request): Promise<Response> => {
               
               <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
                 <h3 style="margin-top: 0; color: #667eea;">Dados de Acesso</h3>
-                <p style="margin: 10px 0;"><strong>CNPJ:</strong> ${formData.data.cnpj}</p>
+                <p style="margin: 10px 0;"><strong>CNPJ:</strong> ${escapeHtml(formData.data.cnpj)}</p>
                 <p style="margin: 10px 0;"><strong>Senha temporária:</strong> 
-                  <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 4px; font-size: 16px;">${formData.data.password}</code>
+                  <code style="background: #f0f0f0; padding: 5px 10px; border-radius: 4px; font-size: 16px;">${escapeHtml(formData.data.password)}</code>
                 </p>
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${formData.data.login_url}" 
+                <a href="${escapeHtml(formData.data.login_url)}" 
                    style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                   Acessar Painel da Empresa
                 </a>
@@ -361,9 +375,9 @@ const handler = async (req: Request): Promise<Response> => {
             </div>
             
             <div style="padding: 30px; background: #f9f9f9;">
-              <h2 style="color: #333;">Olá, ${formData.data.nome}!</h2>
+              <h2 style="color: #333;">Olá, ${escapeHtml(formData.data.nome)}!</h2>
               <p style="color: #666; line-height: 1.6;">
-                Você foi cadastrado(a) pela empresa <strong>${formData.data.empresa}</strong> e seu plano já está ativo!
+                Você foi cadastrado(a) pela empresa <strong>${escapeHtml(formData.data.empresa)}</strong> e seu plano já está ativo!
               </p>
               
               <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #28a745;">
@@ -379,7 +393,7 @@ const handler = async (req: Request): Promise<Response> => {
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${formData.data.reset_link}" 
+                <a href="${escapeHtml(formData.data.reset_link)}" 
                    style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">
                   Criar Minha Senha
                 </a>
@@ -472,7 +486,7 @@ const handler = async (req: Request): Promise<Response> => {
                 </p>
 
                 <p style="font-size:16px; line-height:1.7; margin:0 0 16px 0;">
-                  A empresa <strong>${formData.data.companyName}</strong> convidou você para fazer parte do plano de saúde empresarial da Prontia Saúde!
+                  A empresa <strong>${escapeHtml(formData.data.companyName)}</strong> convidou você para fazer parte do plano de saúde empresarial da Prontia Saúde!
                 </p>
 
                 <h3 style="font-size:18px; line-height:1.6; margin:20px 0 12px 0;">
@@ -506,7 +520,7 @@ const handler = async (req: Request): Promise<Response> => {
 
                 <!-- CTA BUTTON -->
                 <p style="text-align:center; margin:0 0 24px 0;">
-                  <a href="${formData.data.inviteLink}"
+                  <a href="${escapeHtml(formData.data.inviteLink)}"
                     style="
                       display:inline-block;
                       background-color:#00766a;
@@ -523,7 +537,7 @@ const handler = async (req: Request): Promise<Response> => {
 
                 <p style="font-size:12px; line-height:1.7; color:#666666; margin:0 0 20px 0;">
                   Ou copie e cole este link no seu navegador:<br>
-                  <span style="word-break:break-all;">${formData.data.inviteLink}</span>
+                  <span style="word-break:break-all;">${escapeHtml(formData.data.inviteLink)}</span>
                 </p>
 
                 <p style="font-size:15px; line-height:1.7; margin:0 0 12px 0;">
@@ -622,7 +636,7 @@ const handler = async (req: Request): Promise<Response> => {
                 </p>
 
                 <p style="font-size:16px; line-height:1.7; margin:0 0 16px 0;">
-                  <strong>${formData.data.titularName}</strong> convidou você para fazer parte do plano familiar de saúde da Prontia Saúde!
+                  <strong>${escapeHtml(formData.data.titularName)}</strong> convidou você para fazer parte do plano familiar de saúde da Prontia Saúde!
                 </p>
 
                 <h3 style="font-size:18px; line-height:1.6; margin:20px 0 12px 0;">
@@ -656,7 +670,7 @@ const handler = async (req: Request): Promise<Response> => {
 
                 <!-- CTA BUTTON -->
                 <p style="text-align:center; margin:0 0 24px 0;">
-                  <a href="${formData.data.inviteLink}"
+                  <a href="${escapeHtml(formData.data.inviteLink)}"
                     style="
                       display:inline-block;
                       background-color:#00766a;
@@ -673,7 +687,7 @@ const handler = async (req: Request): Promise<Response> => {
 
                 <p style="font-size:12px; line-height:1.7; color:#666666; margin:0 0 20px 0;">
                   Ou copie e cole este link no seu navegador:<br>
-                  <span style="word-break:break-all;">${formData.data.inviteLink}</span>
+                  <span style="word-break:break-all;">${escapeHtml(formData.data.inviteLink)}</span>
                 </p>
 
                 <p style="font-size:15px; line-height:1.7; margin:0;">
