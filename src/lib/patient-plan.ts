@@ -8,14 +8,14 @@ export interface PatientPlan {
   created_at?: string;
 }
 
-export const getPatientPlan = async (email: string): Promise<PatientPlan | null> => {
+export const getPatientPlan = async (email: string, byEmailOnly: boolean = false): Promise<PatientPlan | null> => {
   try {
     // Tentar buscar usuário logado primeiro
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
     
-    // PRIORIDADE 1: Buscar por user_id (se logado)
-    if (userId) {
+    // PRIORIDADE 1: Buscar por user_id (se logado E não for busca apenas por email)
+    if (userId && !byEmailOnly) {
       const { data: planByUserId, error: userIdError } = await supabase
         .from('patient_plans')
         .select('id, plan_code, plan_expires_at, status, created_at')
