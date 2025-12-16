@@ -29,17 +29,22 @@ const AuthCallback = () => {
       }
       
       // ✅ CRÍTICO: Verificar tokens de convite ANTES de qualquer redirecionamento
-      const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
+      // Verificar sessionStorage E localStorage (redundância)
+      const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token')
+        || localStorage.getItem('pending_family_invite_token');
       if (pendingFamilyToken) {
         sessionStorage.removeItem('pending_family_invite_token');
+        localStorage.removeItem('pending_family_invite_token');
         console.log('[AuthCallback] Redirecting to complete family invite');
         window.location.replace(`/completar-perfil?token_familiar=${pendingFamilyToken}`);
         return;
       }
       
-      const pendingToken = sessionStorage.getItem('pending_invite_token');
+      const pendingToken = sessionStorage.getItem('pending_invite_token')
+        || localStorage.getItem('pending_invite_token');
       if (pendingToken) {
         sessionStorage.removeItem('pending_invite_token');
+        localStorage.removeItem('pending_invite_token');
         console.log('[AuthCallback] Redirecting to complete employee invite');
         window.location.replace(`/completar-perfil?token=${pendingToken}`);
         return;

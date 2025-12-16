@@ -433,11 +433,13 @@ const CompletarPerfil = () => {
           console.error('[CompletarPerfil] Auth error:', authError);
           
           if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-            // ✅ Usuário já existe - salvar token com chave apropriada
+            // ✅ Usuário já existe - salvar token em sessionStorage E localStorage (redundância)
             if (inviteData.isFamilyInvite) {
               sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
+              localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
             } else {
               sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+              localStorage.setItem('pending_invite_token', inviteData.invite_token);
             }
             
             toast({
@@ -450,8 +452,9 @@ const CompletarPerfil = () => {
             });
             
             setIsLoading(false);
+            // Usar window.location para forçar reload e preservar tokens
             setTimeout(() => {
-              navigate(`/entrar?email=${encodeURIComponent(inviteData.email)}`);
+              window.location.href = `/entrar?email=${encodeURIComponent(inviteData.email)}`;
             }, 2000);
             return;
           } else {
@@ -606,13 +609,18 @@ const CompletarPerfil = () => {
           const { data: familyResult, error: familyError } = await supabase.functions.invoke('patient-operations', {
             body: {
               operation: 'activate-family-member',
-              invite_token: inviteData.invite_token
+              invite_token: inviteData.invite_token,
+              user_id: activeUser.id // ✅ Passar user_id para usuários existentes
             }
           });
           
           if (familyError || !familyResult.success) {
             throw new Error(familyResult?.error || 'Falha ao ativar plano familiar');
           }
+          
+          // ✅ Limpar tokens salvos após sucesso
+          sessionStorage.removeItem('pending_family_invite_token');
+          localStorage.removeItem('pending_family_invite_token');
           
           toast({
             title: "🏠 Bem-vindo à família!",

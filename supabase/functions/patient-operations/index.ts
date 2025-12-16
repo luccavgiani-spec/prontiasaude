@@ -992,7 +992,7 @@ serve(async (req) => {
 
       case 'activate-family-member': {
         // Este endpoint será chamado pelo CompletarPerfil quando um familiar completar cadastro
-        const { invite_token, member_data } = body;
+        const { invite_token, user_id: passedUserId } = body;
 
         if (!invite_token) {
           return new Response(
@@ -1023,9 +1023,70 @@ serve(async (req) => {
           );
         }
 
-        // Buscar user_id do membro (recém criado)
-        const { data: authUser } = await supabase.auth.admin.getUserByEmail(invite.email);
-        const memberId = authUser?.user?.id;
+        // ✅ PRIORIZAR user_id passado pelo frontend (usuários existentes)
+        let memberId = passedUserId;
+        
+        // Se não foi passado user_id, buscar por email
+        if (!memberId) {
+          const { data: authUser } = await supabase.auth.admin.getUserByEmail(invite.email);
+          memberId = authUser?.user?.id;
+        }
+
+        console.log('[activate-family-member] Processing:', { 
+          invite_email: invite.email, 
+          passed_user_id: passedUserId,
+          resolved_member_id: memberId 
+        });
+
+        // ✅ Garantir que existe registro em patients (upsert)
+        if (memberId) {
+          const { error: patientError } = await supabase
+            .from('patients')
+            .upsert({
+              id: memberId,
+              email: invite.email,
+              profile_complete: false,
+              updated_at: new Date().toISOString()
+            }, { 
+              onConflict: 'id',
+              ignoreDuplicates: false 
+            });
+          
+          if (patientError) {
+            console.error('[activate-family-member] Patient upsert error:', patientError);
+            // Não bloquear - apenas logar
+          }
+        }
+
+        // ✅ Verificar se já existe plano ativo para evitar duplicação
+        const { data: existingPlan } = await supabase
+          .from('patient_plans')
+          .select('id, plan_code')
+          .eq('email', invite.email)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (existingPlan) {
+          console.log('[activate-family-member] User already has active plan:', existingPlan.plan_code);
+          
+          // Marcar convite como completo mesmo assim
+          await supabase
+            .from('pending_family_invites')
+            .update({
+              status: 'completed',
+              completed_at: new Date().toISOString()
+            })
+            .eq('id', invite.id);
+
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              plan_code: existingPlan.plan_code,
+              message: 'Usuário já possui plano ativo'
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         // Criar plano para o familiar
         const { error: planError } = await supabase
@@ -1055,7 +1116,7 @@ serve(async (req) => {
           })
           .eq('id', invite.id);
 
-        console.log('[activate-family-member] Family member activated:', invite.email);
+        console.log('[activate-family-member] ✅ Family member activated:', invite.email);
 
         return new Response(
           JSON.stringify({ 
