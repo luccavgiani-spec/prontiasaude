@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 const ConsultNowFloatButton = () => {
-  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
