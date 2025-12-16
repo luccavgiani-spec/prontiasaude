@@ -1,16 +1,26 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface ValidateCouponRequest {
-  coupon_code: string;
-  item_type: 'SERVICE' | 'PLAN';
-  amount_original: number; // em centavos
-  user_id?: string;
-}
+// Zod schema for input validation
+const ValidateCouponSchema = z.object({
+  coupon_code: z.string()
+    .min(3, 'Código de cupom deve ter pelo menos 3 caracteres')
+    .max(30, 'Código de cupom deve ter no máximo 30 caracteres')
+    .regex(/^[A-Za-z0-9_-]+$/, 'Código de cupom contém caracteres inválidos'),
+  item_type: z.enum(['SERVICE', 'PLAN'], {
+    errorMap: () => ({ message: 'Tipo de item deve ser SERVICE ou PLAN' })
+  }),
+  amount_original: z.number()
+    .int('Valor deve ser um número inteiro')
+    .positive('Valor deve ser positivo')
+    .max(10000000, 'Valor máximo excedido'), // 100k reais in centavos
+  user_id: z.string().uuid('ID de usuário inválido').optional(),
+});
 
 interface ValidateCouponResponse {
   is_valid: boolean;
@@ -36,21 +46,38 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body: ValidateCouponRequest = await req.json();
-    const { coupon_code, item_type, amount_original, user_id } = body;
-
-    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id });
-
-    // Validação básica
-    if (!coupon_code || !item_type || !amount_original) {
+    // Parse request body
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
         JSON.stringify({
           is_valid: false,
-          error_message: 'Parâmetros inválidos',
+          error_message: 'Corpo da requisição inválido',
         } as ValidateCouponResponse),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+
+    // Validate input with zod schema
+    const validationResult = ValidateCouponSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.errors[0]?.message || 'Parâmetros inválidos';
+      console.log('[validate-coupon] Validation error:', validationResult.error.errors);
+      return new Response(
+        JSON.stringify({
+          is_valid: false,
+          error_message: errorMessage,
+        } as ValidateCouponResponse),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    const { coupon_code, item_type, amount_original, user_id } = validationResult.data;
+
+    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id });
 
     // Buscar cupom no banco
     const { data: coupon, error: couponError } = await supabase
