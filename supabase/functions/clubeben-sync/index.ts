@@ -70,62 +70,125 @@ Deno.serve(async (req) => {
 
   try {
     const { user_email, user_id, trigger_source } = await req.json();
-    console.log('[ClubeBen Sync] Starting sync:', { user_email, user_id, trigger_source });
+    console.log('[ClubeBen Sync] 🚀 Starting sync:', { user_email, user_id, trigger_source });
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Buscar dados do paciente
-    let query = supabase.from('patients').select('*');
+    // =====================================================
+    // BUSCA MULTI-ESTRATÉGIA DO PACIENTE
+    // =====================================================
+    let patient = null;
     
-    if (user_email) {
-      query = query.eq('email', user_email);
-    } else if (user_id) {
-      query = query.eq('id', user_id);
+    // Estratégia 1: Buscar por user_id se fornecido
+    if (user_id) {
+      console.log('[ClubeBen Sync] 🔍 Estratégia 1: Buscando por user_id:', user_id);
+      const { data } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', user_id)
+        .maybeSingle();
+      patient = data;
     }
     
-    const { data: patient, error: fetchError } = await query.single();
+    // Estratégia 2: Buscar por email na tabela patients
+    if (!patient && user_email) {
+      console.log('[ClubeBen Sync] 🔍 Estratégia 2: Buscando por email em patients:', user_email);
+      const { data } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('email', user_email)
+        .maybeSingle();
+      patient = data;
+    }
+    
+    // Estratégia 3: Buscar pelo email do patient_plans e depois pelo id
+    if (!patient && user_email) {
+      console.log('[ClubeBen Sync] 🔍 Estratégia 3: Buscando user_id via patient_plans');
+      const { data: plan } = await supabase
+        .from('patient_plans')
+        .select('user_id, email')
+        .eq('email', user_email)
+        .eq('status', 'active')
+        .gte('plan_expires_at', new Date().toISOString())
+        .maybeSingle();
+      
+      if (plan?.user_id) {
+        console.log('[ClubeBen Sync] 📌 Encontrado user_id via plano:', plan.user_id);
+        const { data } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', plan.user_id)
+          .maybeSingle();
+        patient = data;
+      }
+    }
 
-    if (fetchError || !patient) {
-      console.error('[ClubeBen Sync] Patient not found:', fetchError);
+    if (!patient) {
+      console.error('[ClubeBen Sync] ❌ Patient not found após 3 estratégias');
+      console.error('[ClubeBen Sync] Parâmetros recebidos:', { user_email, user_id });
       return new Response(
-        JSON.stringify({ success: false, error: 'Patient not found' }),
+        JSON.stringify({ success: false, error: 'Patient not found', params: { user_email, user_id } }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // ✅ VALIDAÇÃO OBRIGATÓRIA: Verificar plano ativo
-    const { data: activePlan, error: planError } = await supabase
+    console.log('[ClubeBen Sync] ✅ Patient encontrado:', { id: patient.id, email: patient.email });
+
+    // =====================================================
+    // VALIDAÇÃO DO PLANO ATIVO (multi-condição)
+    // =====================================================
+    const patientId = patient.id;
+    const patientEmail = patient.email;
+    
+    // Construir query com OR entre user_id e email
+    let planQuery = supabase
       .from('patient_plans')
-      .select('plan_code, plan_expires_at, status')
+      .select('plan_code, plan_expires_at, status, user_id, email')
       .eq('status', 'active')
       .gte('plan_expires_at', new Date().toISOString())
-      .or(`user_id.eq.${patient.id},email.eq.${patient.email}`)
       .order('plan_expires_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+    
+    // Filtro combinado: user_id OU email
+    if (patientId && patientEmail) {
+      planQuery = planQuery.or(`user_id.eq.${patientId},email.eq.${patientEmail}`);
+    } else if (patientId) {
+      planQuery = planQuery.eq('user_id', patientId);
+    } else if (patientEmail) {
+      planQuery = planQuery.eq('email', patientEmail);
+    }
+    
+    const { data: activePlan, error: planError } = await planQuery.maybeSingle();
 
     if (!activePlan || planError) {
-      console.warn('[ClubeBen Sync] No active plan found for patient:', patient.id);
+      console.warn('[ClubeBen Sync] ❌ No active plan found');
+      console.warn('[ClubeBen Sync] Verificou: user_id=', patientId, 'email=', patientEmail);
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'plan_required',
-          message: 'Plano ativo é necessário para sincronizar com o Clube de Benefícios.' 
+          message: 'Plano ativo é necessário para sincronizar com o Clube de Benefícios.',
+          debug: { patientId, patientEmail }
         }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('[ClubeBen Sync] Active plan verified:', activePlan.plan_code);
+    console.log('[ClubeBen Sync] ✅ Active plan verified:', activePlan.plan_code);
 
     // Validar campos obrigatórios
     if (!patient.cpf || !patient.birth_date || !patient.email || !patient.first_name) {
-      console.warn('[ClubeBen Sync] Missing required fields:', patient.id);
+      console.warn('[ClubeBen Sync] ⚠️ Missing required fields:', {
+        cpf: !!patient.cpf,
+        birth_date: !!patient.birth_date,
+        email: !!patient.email,
+        first_name: !!patient.first_name
+      });
       return new Response(
-        JSON.stringify({ success: false, error: 'Missing required fields' }),
+        JSON.stringify({ success: false, error: 'Missing required fields', fields: { cpf: !!patient.cpf, birth_date: !!patient.birth_date, email: !!patient.email, first_name: !!patient.first_name } }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

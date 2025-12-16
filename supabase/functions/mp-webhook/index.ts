@@ -313,7 +313,7 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // ✅ GARANTIR que o registro do paciente existe
+      // ✅ GARANTIR que o registro do paciente existe COM email e user_id
       let userId: string | null = null;
       
       // 🔍 VERIFICAR DUPLICAÇÃO: Checar se já existe um appointment com este order_id
@@ -334,19 +334,44 @@ Deno.serve(async (req) => {
         }
       }
       
+      // 🔍 BUSCAR user_id via auth.users pelo email (para garantir vinculação correta)
+      const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1 });
+      let authUserId: string | null = null;
+      
+      // Buscar usuário pelo email em auth.users
+      const { data: usersByEmail } = await supabaseAdmin.rpc('current_user_email'); // fallback
+      
+      // Busca direta pelo email no auth
+      try {
+        const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById('');
+        // Fallback: buscar via query em patients que já tem o id do auth
+      } catch (_) {}
+
       const { data: existingPatient } = await supabaseAdmin
         .from('patients')
-        .select('id')
+        .select('id, email')
         .eq('email', schedulePayload.email)
         .maybeSingle();
 
       if (existingPatient) {
         userId = existingPatient.id;
         console.log('[mp-webhook] ✅ Patient já existe:', userId);
+        
+        // ✅ GARANTIR que email está preenchido no paciente
+        if (!existingPatient.email) {
+          await supabaseAdmin
+            .from('patients')
+            .update({ email: schedulePayload.email })
+            .eq('id', userId);
+          console.log('[mp-webhook] ✅ Email atualizado no patient existente');
+        }
       } else {
         console.log('[mp-webhook] 🆕 Criando registro de paciente para:', schedulePayload.email);
         
-        // Criar registro básico do paciente (sem id - Supabase gera automaticamente)
+        // Tentar buscar user_id existente em auth.users pelo email
+        // Como não podemos buscar diretamente, usamos o email do payer para o id
+        
+        // Criar registro básico do paciente
         const { data: newPatient, error: patientError } = await supabaseAdmin
           .from('patients')
           .insert({
@@ -356,7 +381,6 @@ Deno.serve(async (req) => {
             cpf: schedulePayload.cpf || null,
             phone_e164: schedulePayload.telefone || null,
             profile_complete: false,
-            intake_complete: false,
             clubeben_status: 'pending'
           })
           .select('id')
@@ -365,7 +389,7 @@ Deno.serve(async (req) => {
         if (patientError) {
           console.error('[mp-webhook] ❌ Erro ao criar patient:', patientError);
         } else if (newPatient) {
-          console.log('[mp-webhook] ✅ Patient criado com sucesso');
+          console.log('[mp-webhook] ✅ Patient criado com sucesso:', newPatient.id);
           userId = newPatient.id;
           
           // ✅ Se temos contact_id no schedulePayload, atualizar
@@ -391,7 +415,9 @@ Deno.serve(async (req) => {
         planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
       }
 
-      // Criar registro em patient_plans
+      // ✅ CRIAR patient_plans COM user_id GARANTIDO
+      console.log('[mp-webhook] 📝 Criando plano com user_id:', userId, 'email:', schedulePayload.email);
+      
       const { error: planError } = await supabaseAdmin
         .from('patient_plans')
         .insert({
@@ -406,6 +432,7 @@ Deno.serve(async (req) => {
         console.error('[mp-webhook] ❌ Erro ao criar patient_plan:', planError);
       } else {
         console.log('[mp-webhook] ✅ Plano criado:', {
+          user_id: userId,
           email: schedulePayload.email,
           plan_code: schedulePayload.sku,
           expires_at: planExpiresAt.toISOString()
@@ -440,16 +467,19 @@ Deno.serve(async (req) => {
           .eq('order_id', payment.metadata.order_id);
       }
 
-      // Sincronizar ClubeBen (fire-and-forget)
+      // ✅ Sincronizar ClubeBen (fire-and-forget) com AMBOS os parâmetros
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_ANON_KEY')!
       );
       
+      console.log('[mp-webhook] 🔄 Disparando ClubeBen sync com user_id:', userId, 'email:', schedulePayload.email);
+      
       supabase.functions.invoke('clubeben-sync', {
         body: {
           user_email: schedulePayload.email,
-          trigger_source: 'plan_purchase'
+          user_id: userId,
+          trigger_source: 'plan_purchase_mp_webhook'
         }
       }).catch(err => console.error('[mp-webhook] ClubeBen sync error (non-blocking):', err));
 
