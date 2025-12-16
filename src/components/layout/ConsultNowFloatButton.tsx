@@ -7,7 +7,6 @@ import { CATALOGO_SERVICOS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-
 const ConsultNowFloatButton = () => {
   const [isChatOpen, setIsChatOpen] = useState(true);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -16,16 +15,16 @@ const ConsultNowFloatButton = () => {
 
   // Get Pronto Atendimento service
   const prontoAtendimento = CATALOGO_SERVICOS.find(s => s.slug === 'consulta');
-
   const handleConsultNow = async () => {
     if (!prontoAtendimento) return;
-    
     setIsLoading(true);
-    
     try {
       // 1. Verificar se usuário está logado
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: {
+          user
+        }
+      } = await supabase.auth.getUser();
       if (!user) {
         // Salvar returnUrl e serviço pendente
         localStorage.setItem('returnUrl', window.location.pathname);
@@ -34,19 +33,15 @@ const ConsultNowFloatButton = () => {
           name: prontoAtendimento.nome,
           amount: Math.round(prontoAtendimento.precoBase * 100)
         }));
-        
         setIsChatOpen(false);
         navigate('/area-do-paciente');
         return;
       }
 
       // 2. Verificar se perfil está completo
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
-        .eq('id', user.id)
-        .maybeSingle();
-
+      const {
+        data: patient
+      } = await supabase.from('patients').select('profile_complete, cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
       if (!patient?.profile_complete) {
         localStorage.setItem('returnUrl', window.location.pathname);
         localStorage.setItem('pendingService', JSON.stringify({
@@ -54,16 +49,16 @@ const ConsultNowFloatButton = () => {
           name: prontoAtendimento.nome,
           amount: Math.round(prontoAtendimento.precoBase * 100)
         }));
-        
         setIsChatOpen(false);
         navigate('/completar-perfil');
         return;
       }
 
       // 3. Verificar se tem plano ativo
-      const { checkPatientPlanActive } = await import('@/lib/patient-plan');
+      const {
+        checkPatientPlanActive
+      } = await import('@/lib/patient-plan');
       const planStatus = await checkPatientPlanActive(user.email!);
-
       if (planStatus.canBypassPayment) {
         // ✅ COM PLANO ATIVO: Redirecionar direto para agendamento
         if (!patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
@@ -72,12 +67,13 @@ const ConsultNowFloatButton = () => {
           navigate('/completar-perfil');
           return;
         }
-
-        const mapSexo = (g?: string) => (g?.toUpperCase().startsWith('F') ? 'F' : 'M');
-
-        toast('Redirecionando para agendamento...', { duration: 2000 });
-        
-        const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
+        const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
+        toast('Redirecionando para agendamento...', {
+          duration: 2000
+        });
+        const {
+          scheduleWithActivePlan
+        } = await import('@/lib/schedule-service');
         const result = await scheduleWithActivePlan({
           cpf: patient.cpf,
           email: user.email!,
@@ -87,7 +83,6 @@ const ConsultNowFloatButton = () => {
           plano_ativo: true,
           sexo: mapSexo(patient.gender)
         });
-
         if (result.ok && result.url) {
           setIsChatOpen(false);
           window.location.href = result.url;
@@ -96,11 +91,10 @@ const ConsultNowFloatButton = () => {
         }
         return;
       }
-      
+
       // ❌ SEM PLANO: Abrir modal de pagamento
       setIsChatOpen(false);
       setShowPaymentModal(true);
-      
     } catch (error) {
       console.error('Erro ao processar consulta:', error);
       toast.error('Erro ao processar. Tente novamente.');
@@ -108,21 +102,14 @@ const ConsultNowFloatButton = () => {
       setIsLoading(false);
     }
   };
-
-  const floatButton = (
-    <>
+  const floatButton = <>
       {/* Float Button - above WhatsApp (bottom-6 + h-16 + gap = ~28) */}
-      <button
-        onClick={() => setIsChatOpen(true)}
-        className="fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(0,118,106,0.4)] animate-pulse hover:animate-none"
-        aria-label="Consulte agora"
-      >
+      <button onClick={() => setIsChatOpen(true)} className="fixed bottom-28 right-6 z-[9999] flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-2xl transition-all duration-300 hover:scale-110 hover:shadow-[0_20px_40px_rgba(0,118,106,0.4)] animate-pulse hover:animate-none" aria-label="Consulte agora">
         <Stethoscope className="h-7 w-7 text-primary-foreground" />
       </button>
 
       {/* Chat Modal */}
-      {isChatOpen && (
-        <div className="fixed bottom-28 right-6 z-[10000] w-80 max-w-[calc(100vw-3rem)] animate-in slide-in-from-bottom-4 fade-in duration-300">
+      {isChatOpen && <div className="fixed bottom-28 right-6 z-[10000] w-80 max-w-[calc(100vw-3rem)] animate-in slide-in-from-bottom-4 fade-in duration-300">
           <div className="bg-card rounded-2xl shadow-2xl border border-border overflow-hidden">
             {/* Header */}
             <div className="bg-primary px-4 py-3 flex items-center justify-between">
@@ -138,11 +125,7 @@ const ConsultNowFloatButton = () => {
                   </span>
                 </div>
               </div>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="text-primary-foreground/80 hover:text-primary-foreground transition-colors"
-                aria-label="Fechar chat"
-              >
+              <button onClick={() => setIsChatOpen(false)} className="text-primary-foreground/80 hover:text-primary-foreground transition-colors" aria-label="Fechar chat">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -156,16 +139,13 @@ const ConsultNowFloatButton = () => {
                     <Stethoscope className="h-5 w-5 text-primary" />
                   </div>
                   <div className="flex-1">
-                    <p className="text-foreground font-medium text-sm mb-1">
-                      Médico disponível agora! 🩺
-                    </p>
+                    
                     <div className="space-y-2 text-sm text-muted-foreground">
                       <p className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-accent" />
                         Fila de espera estimada: <span className="font-semibold text-foreground">3 minutos</span>
                       </p>
-                      <p className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-primary" />
+                      <p className="flex items-center gap-2">Atendimento médico 24h por dia<Users className="h-4 w-4 text-primary" />
                         Atendimento 24h por dia
                       </p>
                     </div>
@@ -183,48 +163,25 @@ const ConsultNowFloatButton = () => {
                 </div>
 
                 {/* CTA Button */}
-                <Button 
-                  onClick={handleConsultNow}
-                  disabled={isLoading}
-                  className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all"
-                  size="lg"
-                >
-                  {isLoading ? (
-                    <>
+                <Button onClick={handleConsultNow} disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all" size="lg">
+                  {isLoading ? <>
                       <Loader2 className="h-5 w-5 mr-2 animate-spin" />
                       Carregando...
-                    </>
-                  ) : (
-                    <>
+                    </> : <>
                       <MessageCircle className="h-5 w-5 mr-2" />
                       Consulte agora
-                    </>
-                  )}
+                    </>}
                 </Button>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <>
+        </div>}
+    </>;
+  return <>
       {createPortal(floatButton, document.body)}
       
       {/* Payment Modal */}
-      {showPaymentModal && prontoAtendimento && (
-        <PaymentModal
-          open={showPaymentModal}
-          onOpenChange={setShowPaymentModal}
-          serviceName={prontoAtendimento.nome}
-          amount={Math.round(prontoAtendimento.precoBase * 100)}
-          sku={prontoAtendimento.sku}
-        />
-      )}
-    </>
-  );
+      {showPaymentModal && prontoAtendimento && <PaymentModal open={showPaymentModal} onOpenChange={setShowPaymentModal} serviceName={prontoAtendimento.nome} amount={Math.round(prontoAtendimento.precoBase * 100)} sku={prontoAtendimento.sku} />}
+    </>;
 };
-
 export default ConsultNowFloatButton;
