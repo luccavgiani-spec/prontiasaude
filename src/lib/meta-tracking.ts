@@ -335,10 +335,24 @@ export function trackSubscribedButtonClick(data?: {
   sendToGTMServer(event);
 }
 
+// ✅ DEDUPLICAÇÃO: Verificar se purchase já foi disparado para este transaction_id
+function hasAlreadyTrackedPurchase(transactionId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  const key = `gtag_purchase_tracked_${transactionId}`;
+  return localStorage.getItem(key) === 'true';
+}
+
+function markPurchaseAsTracked(transactionId: string): void {
+  if (typeof window === 'undefined') return;
+  const key = `gtag_purchase_tracked_${transactionId}`;
+  localStorage.setItem(key, 'true');
+}
+
 // Track Purchase event
 export function trackPurchase(data: {
   value: number;
   order_id: string;
+  email?: string; // ✅ NOVO - Para Enhanced Conversions
   contents?: Array<{
     id: string;
     quantity: number;
@@ -347,7 +361,13 @@ export function trackPurchase(data: {
   content_name?: string;
   content_category?: string;
 }): void {
-  // Use native fbq if available
+  // ✅ DEDUPLICAÇÃO: Verificar se já foi disparado
+  if (hasAlreadyTrackedPurchase(data.order_id)) {
+    console.log('[trackPurchase] ⚠️ Evento já disparado para transaction_id:', data.order_id);
+    return;
+  }
+
+  // Use native fbq if available (Meta Pixel)
   if (typeof window !== 'undefined' && (window as any).fbq) {
     (window as any).fbq('track', 'Purchase', {
       value: data.value,
@@ -357,21 +377,38 @@ export function trackPurchase(data: {
     });
   }
 
-  // Google Ads Conversion Tracking
-  gtagEvent('conversion', {
-    send_to: 'AW-17744564489/L0OCPGgnMMbElmioo1C',
-    value: data.value,
-    currency: 'BRL',
-    transaction_id: data.order_id,
-  });
+  // ✅ ENHANCED CONVERSIONS: Configurar dados do usuário ANTES do evento
+  if (typeof window !== 'undefined' && (window as any).gtag && data.email) {
+    (window as any).gtag("set", "user_data", {
+      email: data.email.toLowerCase().trim() // Normalizado conforme padrão Google
+    });
+    console.log('[Google Ads] 👤 user_data configurado para Enhanced Conversions');
+  }
 
-  console.log('[Google Ads] Conversão "Consulta realizada" enviada:', {
-    value: data.value,
-    order_id: data.order_id,
-    content_name: data.content_name
-  });
+  // ✅ EVENTO PURCHASE CORRETO (formato oficial GA4/Google Ads)
+  if (typeof window !== 'undefined' && (window as any).gtag) {
+    (window as any).gtag("event", "purchase", {
+      transaction_id: data.order_id,
+      value: data.value,
+      currency: "BRL",
+      items: data.contents?.map(item => ({
+        item_id: item.id,
+        item_name: data.content_name || item.id,
+        price: item.item_price || data.value,
+        quantity: item.quantity
+      })) || []
+    });
+    console.log('[Google Ads] ✅ Evento purchase enviado:', {
+      transaction_id: data.order_id,
+      value: data.value,
+      currency: 'BRL'
+    });
+  }
 
-  // Also send to GTM Server for redundancy
+  // ✅ MARCAR COMO DISPARADO (evitar duplicatas)
+  markPurchaseAsTracked(data.order_id);
+
+  // Also send to GTM Server for redundancy (Meta CAPI)
   const event: MetaEvent = {
     event_name: 'Purchase',
     event_time: Math.floor(Date.now() / 1000),
