@@ -77,6 +77,7 @@ const CompletarPerfil = () => {
         email: invite.email,
         titular_plan_id: invite.titular_plan_id,
         expires_at: invite.expires_at,
+        invite_token: familyToken, // ✅ CRÍTICO: incluir token para ativação posterior
         patient_plans: {
           plan_code: invite.plan_code,
           plan_expires_at: invite.plan_expires_at
@@ -432,12 +433,18 @@ const CompletarPerfil = () => {
           console.error('[CompletarPerfil] Auth error:', authError);
           
           if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-            // ✅ Usuário já existe - SEMPRE salvar token antes de redirecionar
-            sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+            // ✅ Usuário já existe - salvar token com chave apropriada
+            if (inviteData.isFamilyInvite) {
+              sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
+            } else {
+              sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+            }
             
             toast({
               title: "Você já possui uma conta",
-              description: "Faça login e seu plano empresarial será ativado automaticamente.",
+              description: inviteData.isFamilyInvite 
+                ? "Faça login e seu plano familiar será ativado automaticamente."
+                : "Faça login e seu plano empresarial será ativado automaticamente.",
               variant: "default",
               duration: 5000
             });
