@@ -393,23 +393,6 @@ export default function EmpresaFuncionarios() {
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant={cadastroMode === 'convite' ? 'default' : 'outline'}
-              onClick={() => setCadastroMode('convite')}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Convidar (Recomendado)
-            </Button>
-            <Button
-              variant={cadastroMode === 'completo' ? 'default' : 'outline'}
-              onClick={() => setCadastroMode('completo')}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Cadastro Completo (Legado)
-            </Button>
-          </div>
-
           {showForm && cadastroMode === 'convite' && (
             <Card>
               <CardHeader>
