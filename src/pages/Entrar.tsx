@@ -39,19 +39,25 @@ const Entrar = () => {
   }, [navigate]);
 
   const handleSuccessfulLogin = () => {
-    // ✅ Verificar convite familiar PRIMEIRO (prioridade sobre empresarial)
-    const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
+    // ✅ Verificar convite familiar PRIMEIRO (sessionStorage + localStorage fallback)
+    const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token') 
+      || localStorage.getItem('pending_family_invite_token');
     if (pendingFamilyToken) {
       sessionStorage.removeItem('pending_family_invite_token');
-      navigate(`/completar-perfil?token_familiar=${pendingFamilyToken}`);
+      localStorage.removeItem('pending_family_invite_token');
+      console.log('[Entrar] Redirecting with family invite token');
+      window.location.href = `/completar-perfil?token_familiar=${pendingFamilyToken}`;
       return;
     }
     
-    // Verificar se há convite empresarial pendente
-    const pendingToken = sessionStorage.getItem('pending_invite_token');
+    // Verificar se há convite empresarial pendente (sessionStorage + localStorage fallback)
+    const pendingToken = sessionStorage.getItem('pending_invite_token')
+      || localStorage.getItem('pending_invite_token');
     if (pendingToken) {
       sessionStorage.removeItem('pending_invite_token');
-      navigate(`/completar-perfil?token=${pendingToken}`);
+      localStorage.removeItem('pending_invite_token');
+      console.log('[Entrar] Redirecting with employee invite token');
+      window.location.href = `/completar-perfil?token=${pendingToken}`;
       return;
     }
     
