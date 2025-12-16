@@ -980,10 +980,11 @@ export function PaymentModal({
               appointment_id: appointment.appointment_id,
             });
 
-            // 🎯 Track Purchase event para Meta Ads (PIX)
+            // 🎯 Track Purchase event para Meta Ads + Google Ads (PIX)
             trackPurchase({
               value: amount / 100,
               order_id: orderId,
+              email: formData.email, // ✅ Enhanced Conversions
               content_name: serviceName,
               contents: [{
                 id: sku,
@@ -1136,10 +1137,11 @@ export function PaymentModal({
         });
       }
 
-      // Track purchase event (mesmo gratuito)
+      // Track purchase event para Meta Ads + Google Ads (gratuito)
       trackPurchase({
         value: 0,
         order_id: orderId,
+        email: formData.email, // ✅ Enhanced Conversions
         content_name: serviceName,
         contents: [{
           id: sku,
@@ -1400,11 +1402,12 @@ export function PaymentModal({
         setPaymentId(data.payment_id);
         setPaymentStatus("approved");
 
-        // 🎯 Track Purchase event para Meta Ads (Cartão)
+        // 🎯 Track Purchase event para Meta Ads + Google Ads (Cartão)
         const dbUnitPrice = amount / 100;
         trackPurchase({
           value: dbUnitPrice,
           order_id: orderId,
+          email: formData.email, // ✅ Enhanced Conversions
           content_name: serviceName,
           contents: [{
             id: sku,
