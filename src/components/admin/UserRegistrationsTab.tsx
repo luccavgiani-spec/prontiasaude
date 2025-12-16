@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2 } from 'lucide-react';
@@ -39,6 +40,7 @@ export default function UserRegistrationsTab() {
   const [activationModalOpen, setActivationModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [clicklifeLoading, setClicklifeLoading] = useState<string | null>(null);
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
   const limit = 50;
 
   useEffect(() => {
@@ -352,7 +354,12 @@ export default function UserRegistrationsTab() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm" title="Ver Detalhes">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Ver Detalhes"
+                            onClick={() => setViewingUser(user)}
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
                           
@@ -451,6 +458,95 @@ export default function UserRegistrationsTab() {
           }}
         />
       )}
+
+      {/* Modal de Detalhes do Usuário */}
+      <Dialog open={!!viewingUser} onOpenChange={(open) => !open && setViewingUser(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Paciente</DialogTitle>
+          </DialogHeader>
+          
+          {viewingUser && (
+            <div className="space-y-6">
+              {/* Informações Básicas */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Email</label>
+                  <p className="font-mono text-sm">{viewingUser.email}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Nome Completo</label>
+                  <p>{viewingUser.patient?.first_name} {viewingUser.patient?.last_name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">CPF</label>
+                  <p className="font-mono">{formatCPF(viewingUser.patient?.cpf)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Telefone</label>
+                  <p>{viewingUser.patient?.phone_e164 || '-'}</p>
+                </div>
+              </div>
+
+              {/* Datas */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Cadastrado em</label>
+                  <p>{new Date(viewingUser.created_at).toLocaleString('pt-BR')}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Último Login</label>
+                  <p>{viewingUser.last_sign_in_at ? new Date(viewingUser.last_sign_in_at).toLocaleString('pt-BR') : 'Nunca'}</p>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Status Email</label>
+                  <div className="mt-1">
+                    <Badge variant={viewingUser.email_confirmed_at ? 'default' : 'secondary'}>
+                      {viewingUser.email_confirmed_at ? 'Confirmado' : 'Pendente'}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Perfil</label>
+                  <div className="mt-1">
+                    <Badge variant={viewingUser.patient?.profile_complete ? 'default' : 'secondary'}>
+                      {viewingUser.patient?.profile_complete ? 'Completo' : 'Incompleto'}
+                    </Badge>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Plano</label>
+                  <div className="mt-1">
+                    <Badge variant={viewingUser.activePlan ? 'default' : 'secondary'} className={viewingUser.activePlan ? 'bg-green-600' : ''}>
+                      {viewingUser.activePlan ? viewingUser.planCode : 'Sem plano'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              {/* Roles */}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">Roles</label>
+                <div className="flex gap-2 mt-1">
+                  {viewingUser.roles.length > 0 ? viewingUser.roles.map(role => (
+                    <Badge key={role} variant="outline">{role}</Badge>
+                  )) : <span className="text-muted-foreground text-sm">Nenhuma role</span>}
+                </div>
+              </div>
+
+              {/* ID Técnico */}
+              <div>
+                <label className="text-sm font-medium text-muted-foreground">User ID</label>
+                <p className="font-mono text-xs text-muted-foreground">{viewingUser.id}</p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
