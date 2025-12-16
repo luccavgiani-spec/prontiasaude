@@ -558,10 +558,11 @@ const AdminDashboard = () => {
                     <SelectValue placeholder="Escolha onde publicar" />
                   </SelectTrigger>
                   <SelectContent>
-                  <SelectItem value="receitas-saudaveis">Receitas Saudáveis</SelectItem>
-                  <SelectItem value="playlists">Playlists</SelectItem>
-                  <SelectItem value="livros">Livros</SelectItem>
-                  <SelectItem value="blog">Blog</SelectItem>
+                    <SelectItem value="receitas-saudaveis">Receitas Saudáveis</SelectItem>
+                    <SelectItem value="playlists">Playlists</SelectItem>
+                    <SelectItem value="livros">Livros</SelectItem>
+                    <SelectItem value="saude-mental">Saúde Mental</SelectItem>
+                    <SelectItem value="blog">Blog</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
