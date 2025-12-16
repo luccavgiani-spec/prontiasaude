@@ -79,7 +79,7 @@ export default function ReportsTab() {
       const appointments = metricsData.filter((m: any) => m.metric_type === 'appointment');
 
       // ✅ Combinar dados reais com métricas
-      const totalSales = plans?.length || 0;
+      const totalSales = sales.length;  // Usa tabela metrics (vendas reais)
       const totalPatients = patients?.length || 0;
       const totalRevenue = sales.reduce((acc: number, m: any) => acc + (m.amount_cents || 0), 0) / 100 || (totalSales * 14.90);
       const totalAppointments = appointments.length;
