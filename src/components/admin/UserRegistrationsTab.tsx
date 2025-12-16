@@ -66,7 +66,7 @@ export default function UserRegistrationsTab() {
       const usersWithPlans = await Promise.all(
         (data.users || []).map(async (user: User) => {
           try {
-            const plan = await getPatientPlan(user.email);
+            const plan = await getPatientPlan(user.email, true); // Força busca por email (contexto admin)
             const now = new Date();
             const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at) : null;
             const isActive = expiresAt && expiresAt > now && plan?.status === 'active';
