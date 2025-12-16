@@ -1153,9 +1153,10 @@ export function PaymentModal({
       toast.success("✅ Pedido gratuito processado! Redirecionando...");
 
       // Redirecionar para consulta
-      if (scheduleResult?.redirect_url) {
+      // FIX: schedule-redirect retorna "url", não "redirect_url"
+      if (scheduleResult?.url) {
         setTimeout(() => {
-          window.location.href = scheduleResult.redirect_url;
+          window.location.href = scheduleResult.url;
         }, 1500);
       } else {
         setTimeout(() => {
