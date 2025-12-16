@@ -28,6 +28,23 @@ const AuthCallback = () => {
         return;
       }
       
+      // ✅ CRÍTICO: Verificar tokens de convite ANTES de qualquer redirecionamento
+      const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
+      if (pendingFamilyToken) {
+        sessionStorage.removeItem('pending_family_invite_token');
+        console.log('[AuthCallback] Redirecting to complete family invite');
+        window.location.replace(`/completar-perfil?token_familiar=${pendingFamilyToken}`);
+        return;
+      }
+      
+      const pendingToken = sessionStorage.getItem('pending_invite_token');
+      if (pendingToken) {
+        sessionStorage.removeItem('pending_invite_token');
+        console.log('[AuthCallback] Redirecting to complete employee invite');
+        window.location.replace(`/completar-perfil?token=${pendingToken}`);
+        return;
+      }
+      
       try {
         await ensurePatientRow(session.user.id);
       } catch (e) {
@@ -57,7 +74,7 @@ const AuthCallback = () => {
         });
       }
 
-      // ✅ Verificar se é admin de empresa ANTES de verificar profile_complete
+      // ✅ Verificar se é admin de empresa
       const { data: companyCredentials } = await supabase
         .from('company_credentials')
         .select('company_id')

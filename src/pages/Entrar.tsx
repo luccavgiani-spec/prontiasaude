@@ -39,14 +39,23 @@ const Entrar = () => {
   }, [navigate]);
 
   const handleSuccessfulLogin = () => {
-    // Verificar se há convite pendente (usando sessionStorage para segurança)
+    // ✅ Verificar convite familiar PRIMEIRO (prioridade sobre empresarial)
+    const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
+    if (pendingFamilyToken) {
+      sessionStorage.removeItem('pending_family_invite_token');
+      navigate(`/completar-perfil?token_familiar=${pendingFamilyToken}`);
+      return;
+    }
+    
+    // Verificar se há convite empresarial pendente
     const pendingToken = sessionStorage.getItem('pending_invite_token');
     if (pendingToken) {
       sessionStorage.removeItem('pending_invite_token');
       navigate(`/completar-perfil?token=${pendingToken}`);
-    } else {
-      navigate('/auth/callback');
+      return;
     }
+    
+    navigate('/auth/callback');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -180,18 +189,29 @@ const Entrar = () => {
             const checkSession = async (): Promise<boolean> => {
               const { data: { session } } = await supabase.auth.getSession();
               
-              if (session?.user) {
+                if (session?.user) {
                 console.log('[Google Login] ✅ Sessão estabelecida para:', session.user.email);
-                // ✅ Usar window.location.href para garantir persistência da sessão
+                
+                // ✅ Verificar convite familiar PRIMEIRO
+                const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
+                if (pendingFamilyToken) {
+                  sessionStorage.removeItem('pending_family_invite_token');
+                  console.log('[Google Login] Redirecionando para completar-perfil com token familiar');
+                  window.location.href = `/completar-perfil?token_familiar=${pendingFamilyToken}`;
+                  return true;
+                }
+                
+                // Verificar convite empresarial
                 const pendingToken = sessionStorage.getItem('pending_invite_token');
                 if (pendingToken) {
                   sessionStorage.removeItem('pending_invite_token');
-                  console.log('[Google Login] Redirecionando para completar-perfil com token');
+                  console.log('[Google Login] Redirecionando para completar-perfil com token empresarial');
                   window.location.href = `/completar-perfil?token=${pendingToken}`;
-                } else {
-                  console.log('[Google Login] Redirecionando para /auth/callback');
-                  window.location.href = '/auth/callback';
+                  return true;
                 }
+                
+                console.log('[Google Login] Redirecionando para /auth/callback');
+                window.location.href = '/auth/callback';
                 return true;
               }
               
