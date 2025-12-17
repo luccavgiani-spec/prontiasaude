@@ -105,6 +105,7 @@ const EmpresaConvites = lazy(() => import("./pages/empresa/Convites"));
 const ClubeBen = lazy(() => import("./pages/ClubeBen"));
 const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
 const ClickLifeSSO = lazy(() => import("./pages/ClickLifeSSO"));
+const ProntoAtendimento = lazy(() => import("./pages/ProntoAtendimento"));
 
 const queryClient = new QueryClient();
 
@@ -186,6 +187,9 @@ const App = () => (
                 
                 {/* SSO route */}
                 <Route path="/sso" element={<ClickLifeSSO />} />
+                
+                {/* Landing Page Pronto Atendimento */}
+                <Route path="/pronto-atendimento" element={<ProntoAtendimento />} />
 
                 {/* Footer pages */}
                 <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
