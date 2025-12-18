@@ -145,8 +145,9 @@ const ConsultNowFloatButton = () => {
                         <Clock className="h-4 w-4 text-accent" />
                         Fila de espera estimada: <span className="font-semibold text-foreground">3 minutos</span>
                       </p>
-                      <p className="flex items-center gap-2">Atendimento médico 24h por dia<Users className="h-4 w-4 text-primary" />
-                        Atendimento 24h por dia
+                      <p className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-primary" />
+                        Atendimento médico 24h por dia
                       </p>
                     </div>
                   </div>
