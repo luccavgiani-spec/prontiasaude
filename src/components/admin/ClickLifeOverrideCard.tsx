@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 
 export default function ClickLifeOverrideCard() {
   const [isActive, setIsActive] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     loadStatus();
@@ -31,17 +32,27 @@ export default function ClickLifeOverrideCard() {
   };
 
   const toggleOverride = async (newValue: boolean) => {
+    setSaving(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('admin_settings')
         .upsert({ 
           key: 'force_clicklife_pronto_atendimento', 
-          value: newValue ? 'true' : 'false' 
-        });
+          value: newValue ? 'true' : 'false',
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
-      setIsActive(newValue);
+      if (!data) {
+        throw new Error('Alteração não foi aplicada. Verifique suas permissões.');
+      }
+
+      // Recarregar status para confirmar
+      await loadStatus();
+
       toast.success(
         newValue 
           ? '🚨 Override ativado! Pronto Atendimento agora vai SEMPRE para ClickLife'
@@ -49,7 +60,11 @@ export default function ClickLifeOverrideCard() {
       );
     } catch (err) {
       console.error('Error toggling override:', err);
-      toast.error('Erro ao alterar configuração');
+      toast.error(`Erro ao alterar configuração: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+      // Recarregar status em caso de erro também
+      await loadStatus();
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -95,18 +110,20 @@ export default function ClickLifeOverrideCard() {
           <Button
             variant={isActive ? 'outline' : 'destructive'}
             onClick={() => toggleOverride(true)}
-            disabled={isActive === true}
+            disabled={isActive === true || saving}
             className="flex-1"
           >
+            {saving && !isActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {isActive ? '✓ Override Ativo' : 'Ativar Override'}
           </Button>
 
           <Button
             variant="outline"
             onClick={() => toggleOverride(false)}
-            disabled={isActive === false}
+            disabled={isActive === false || saving}
             className="flex-1"
           >
+            {saving && isActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             {isActive === false ? '✓ Override Inativo' : 'Desativar Override'}
           </Button>
         </div>
