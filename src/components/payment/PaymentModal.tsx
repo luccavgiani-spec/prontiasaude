@@ -270,6 +270,41 @@ export function PaymentModal({
     }
   }, [open, amount, serviceName, especialidade]);
 
+  // ✅ Verificar PIX pendente no localStorage ao montar modal
+  useEffect(() => {
+    const checkPendingPix = async () => {
+      const pendingOrderId = localStorage.getItem('pendingPixOrderId');
+      const pendingEmail = localStorage.getItem('pendingPixEmail');
+      
+      if (pendingOrderId && pendingEmail) {
+        console.log('[PaymentModal] 🔍 Verificando PIX pendente:', pendingOrderId);
+        
+        try {
+          const result = await getAppointments(pendingEmail);
+          const apt = result.appointments?.find(a => a.order_id === pendingOrderId && a.redirect_url);
+          
+          if (apt?.redirect_url) {
+            console.log('[PaymentModal] ✅ PIX pendente encontrado! Redirecionando...');
+            localStorage.removeItem('pendingPixOrderId');
+            localStorage.removeItem('pendingPixEmail');
+            toast.success("Pagamento confirmado! Redirecionando para sua consulta...");
+            setTimeout(() => {
+              window.location.href = apt.redirect_url!;
+            }, 1500);
+          } else {
+            console.log('[PaymentModal] ⏳ PIX pendente ainda não processado');
+          }
+        } catch (err) {
+          console.error('[PaymentModal] Erro ao verificar PIX pendente:', err);
+        }
+      }
+    };
+    
+    if (open) {
+      checkPendingPix();
+    }
+  }, [open]);
+
   const loadUserData = async () => {
     console.log("[loadUserData] Starting...");
     setIsLoadingUserData(true);
@@ -944,7 +979,7 @@ export function PaymentModal({
     setCurrentOrderId(orderId);
     console.log("[pollPaymentStatus] 🔍 Iniciando polling para order_id:", orderId);
 
-    const maxAttempts = 120; // 10 minutos (5s x 120)
+    const maxAttempts = 240; // 32 minutos (8s x 240) - aumentado para cobrir processamento lento do PIX
     let attempts = 0;
 
     const interval = setInterval(async () => {
@@ -971,6 +1006,10 @@ export function PaymentModal({
           if (appointment?.redirect_url) {
             clearInterval(interval);
             setIsPollingPayment(false);
+            
+            // ✅ Limpar localStorage se existir
+            localStorage.removeItem('pendingPixOrderId');
+            localStorage.removeItem('pendingPixEmail');
 
             console.log("[pollPaymentStatus] ✅ Appointment encontrado e confirmado:", {
               order_id: appointment.order_id,
@@ -1008,19 +1047,35 @@ export function PaymentModal({
           clearInterval(interval);
           setIsPollingPayment(false);
 
-          console.warn("[pollPaymentStatus] ⏱️ Timeout após 10 minutos");
-          toast.info('Aguardando confirmação do pagamento. Acesse "Minhas Consultas" para verificar o status.', {
-            duration: 8000,
+          console.warn("[pollPaymentStatus] ⏱️ Timeout após 32 minutos");
+          
+          // ✅ Salvar orderId no localStorage para retry posterior
+          localStorage.setItem('pendingPixOrderId', orderId);
+          localStorage.setItem('pendingPixEmail', formData.email);
+          
+          toast.info('Pagamento pode estar sendo processado. Clique para verificar.', {
+            duration: 15000,
             action: {
-              label: "Ir para Área do Paciente",
-              onClick: () => window.open("/area-do-paciente", "_blank"),
+              label: "Verificar Agora",
+              onClick: async () => {
+                // Tentar buscar appointment uma última vez
+                const retryResult = await getAppointments(formData.email);
+                const apt = retryResult.appointments?.find(a => a.order_id === orderId && a.redirect_url);
+                if (apt?.redirect_url) {
+                  localStorage.removeItem('pendingPixOrderId');
+                  localStorage.removeItem('pendingPixEmail');
+                  window.location.href = apt.redirect_url;
+                } else {
+                  window.open("/area-do-paciente", "_blank");
+                }
+              },
             },
           });
         }
       } catch (error) {
         console.error("[pollPaymentStatus] ❌ Erro ao verificar status:", error);
       }
-    }, 5000); // 5 segundos
+    }, 8000); // 8 segundos (aumentado para reduzir carga)
   };
 
   // ✅ FASE 1.2 + 3.2: Validação pré-pagamento (checklist completo com street_number)
