@@ -385,9 +385,35 @@ export function trackPurchase(data: {
     console.log('[Google Ads] 👤 user_data configurado para Enhanced Conversions');
   }
 
-  // ✅ EVENTO PURCHASE CORRETO (formato oficial GA4/Google Ads)
+  // ✅ PASSO 1: Popular dataLayer no formato Enhanced Ecommerce GA4
+  // Isso preenche as variáveis ecommerce.* que a tag "Purchase Prontia" do GTM precisa
+  if (typeof window !== 'undefined') {
+    (window as any).dataLayer = (window as any).dataLayer || [];
+    (window as any).dataLayer.push({ ecommerce: null }); // Limpar ecommerce anterior
+    (window as any).dataLayer.push({
+      event: 'purchase',
+      ecommerce: {
+        transaction_id: data.order_id,
+        value: data.value,
+        currency: 'BRL',
+        items: data.contents?.map(item => ({
+          item_id: item.id,
+          item_name: data.content_name || item.id,
+          price: item.item_price || data.value,
+          quantity: item.quantity
+        })) || []
+      }
+    });
+    console.log('[GTM dataLayer] ✅ Enhanced Ecommerce purchase enviado:', {
+      transaction_id: data.order_id,
+      value: data.value,
+      currency: 'BRL'
+    });
+  }
+
+  // ✅ PASSO 2: Eventos gtag() para envio direto (redundância)
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    // 1. Evento purchase para GA4
+    // 2a. Evento purchase para GA4
     (window as any).gtag("event", "purchase", {
       transaction_id: data.order_id,
       value: data.value,
@@ -405,7 +431,7 @@ export function trackPurchase(data: {
       currency: 'BRL'
     });
 
-    // 2. ✅ Conversão Google Ads "Consulta Realizada"
+    // 2b. ✅ Conversão Google Ads "Consulta Realizada"
     (window as any).gtag("event", "conversion", {
       send_to: 'AW-17744564489/-L0OCPGgnMMbEImioo1C',
       value: data.value,
