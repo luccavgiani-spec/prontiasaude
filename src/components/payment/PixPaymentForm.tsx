@@ -199,6 +199,22 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
             }
           </p>
         </div>
+
+        {/* Mensagem de fallback - apenas quando ainda aguardando */}
+        {!redirectUrl && !autoRedirectUrl && (
+          <p className="text-sm text-center text-muted-foreground mt-3">
+            Caso não seja redirecionado automaticamente, entre na sua{' '}
+            <a 
+              href="/area-do-paciente" 
+              className="text-primary hover:underline font-medium"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Área do Paciente
+            </a>{' '}
+            para acessar sua consulta.
+          </p>
+        )}
       </div>
 
       {/* Botão Verificar Status Manualmente */}
