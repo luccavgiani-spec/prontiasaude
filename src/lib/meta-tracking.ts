@@ -387,6 +387,7 @@ export function trackPurchase(data: {
 
   // ✅ EVENTO PURCHASE CORRETO (formato oficial GA4/Google Ads)
   if (typeof window !== 'undefined' && (window as any).gtag) {
+    // 1. Evento purchase para GA4
     (window as any).gtag("event", "purchase", {
       transaction_id: data.order_id,
       value: data.value,
@@ -402,6 +403,19 @@ export function trackPurchase(data: {
       transaction_id: data.order_id,
       value: data.value,
       currency: 'BRL'
+    });
+
+    // 2. ✅ Conversão Google Ads "Consulta Realizada"
+    (window as any).gtag("event", "conversion", {
+      send_to: 'AW-17744564489/-L0OCPGgnMMbEImioo1C',
+      value: data.value,
+      currency: 'BRL',
+      transaction_id: data.order_id
+    });
+    console.log('[Google Ads] ✅ Conversão "Consulta Realizada" enviada:', {
+      send_to: 'AW-17744564489/-L0OCPGgnMMbEImioo1C',
+      transaction_id: data.order_id,
+      value: data.value
     });
   }
 
