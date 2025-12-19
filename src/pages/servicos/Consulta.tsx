@@ -273,7 +273,7 @@ export default function Consulta() {
                   className="bg-green-600 text-white border-green-600 hover:bg-green-700 w-full mb-4"
                   data-sku={servico.sku}
                 >
-                  Agendar agora
+                  Consulte Agora
                 </Button>
 
                 <div className="text-center">
