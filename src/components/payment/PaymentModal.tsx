@@ -2159,6 +2159,9 @@ export function PaymentModal({
           qrCodeBase64={pixData.qrCodeBase64}
           redirectUrl={redirectUrl}
           onCancel={handleTryAgain}
+          paymentId={pixPaymentId || pixData.paymentId}
+          orderId={currentOrderId || undefined}
+          email={formData.email}
         />
       );
     }
