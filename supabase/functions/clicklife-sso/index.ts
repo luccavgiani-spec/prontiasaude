@@ -144,12 +144,16 @@ Deno.serve(async (req) => {
 
     const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE') || 'https://erpapp.sistemaclicklife.com.br/api';
     const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
-    const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD') || 'Pr0ntia!2025';
+    const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
     const JWT_SECRET = Deno.env.get('AUTH_JWT_SECRET');
     const BASE_URL = Deno.env.get('BASE_CONSULTAS_URL') || 'https://prontiasaude.com.br';
 
-    if (!INTEGRATOR_TOKEN || !JWT_SECRET) {
-      console.error('[clicklife-sso] Variáveis de ambiente ausentes');
+    if (!INTEGRATOR_TOKEN || !JWT_SECRET || !PATIENT_PASSWORD) {
+      console.error('[clicklife-sso] Variáveis de ambiente ausentes:', {
+        hasIntegratorToken: !!INTEGRATOR_TOKEN,
+        hasJwtSecret: !!JWT_SECRET,
+        hasPatientPassword: !!PATIENT_PASSWORD
+      });
       return new Response(
         JSON.stringify({ 
           ok: false, 
