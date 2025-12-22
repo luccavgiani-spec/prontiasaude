@@ -82,6 +82,12 @@ async function registerClickLifePatientSimple(
       }
     }
 
+    const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+    if (!PATIENT_PASSWORD) {
+      console.error('[registerClickLife] ❌ CLICKLIFE_PATIENT_DEFAULT_PASSWORD não configurado');
+      return { success: false, error: 'Variável de ambiente CLICKLIFE_PATIENT_DEFAULT_PASSWORD não configurada' };
+    }
+    
     const registerPayload = {
       cpf: cpf.replace(/\D/g, ''),
       nome,
@@ -91,7 +97,7 @@ async function registerClickLifePatientSimple(
       sexo: sexo || 'F',
       plano_id: planoId,
       data_nascimento: birthDateFormatted,
-      password: Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD') || 'Pr0ntia!2025'
+      password: PATIENT_PASSWORD
     };
 
     console.log('[registerClickLife] Payload de cadastro:', {
