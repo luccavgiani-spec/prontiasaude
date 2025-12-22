@@ -118,7 +118,7 @@ const ConsultNowFloatButton = () => {
                   <Stethoscope className="h-4 w-4 text-primary-foreground" />
                 </div>
                 <div>
-                  <h3 className="text-primary-foreground font-semibold text-sm">Prontia Saúde</h3>
+                  <h3 className="text-primary-foreground font-semibold text-sm">Prontìa Saúde</h3>
                   <span className="text-primary-foreground/80 text-xs flex items-center gap-1">
                     <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                     Online agora
