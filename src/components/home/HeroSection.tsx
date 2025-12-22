@@ -104,15 +104,23 @@ export function HeroSection() {
   }}>
       {/* Modern geometric background - Using transform for GPU acceleration to prevent CLS */}
       <div className="absolute inset-0 geometric-pattern" />
-      <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl" style={{ transform: 'translate3d(0, 0, 0)', willChange: 'transform' }} />
-      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl" style={{ transform: 'translate3d(0, 0, 0)', willChange: 'transform' }} />
+      <div className="absolute top-20 right-20 w-72 h-72 bg-gradient-to-r from-primary/10 to-secondary/10 rounded-full blur-3xl" style={{
+      transform: 'translate3d(0, 0, 0)',
+      willChange: 'transform'
+    }} />
+      <div className="absolute bottom-32 left-16 w-56 h-56 bg-gradient-to-r from-accent/15 to-primary/15 rounded-full blur-2xl" style={{
+      transform: 'translate3d(0, 0, 0)',
+      willChange: 'transform'
+    }} />
       
       <div className="container mx-auto px-4 py-6 md:py-10 relative z-10">
         <div className="grid lg:grid-cols-2 gap-8 md:gap-16 items-center min-h-[500px] md:min-h-[600px]">
           {/* Content Column */}
           <div className="space-y-6 md:space-y-10">
             {/* Modern badge with fixed height to prevent CLS */}
-            <div className="inline-flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg text-sm md:text-base" style={{ height: '44px' }}>
+            <div className="inline-flex items-center gap-2 px-4 md:px-6 py-2 md:py-3 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 backdrop-blur-sm border border-primary/20 text-primary font-medium shadow-lg text-sm md:text-base" style={{
+            height: '44px'
+          }}>
               <CheckCircle className="w-4 h-4 md:w-5 md:h-5" />
               Plataforma Médica Certificada
             </div>
@@ -122,7 +130,7 @@ export function HeroSection() {
               <h1 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight">
                 <span className="text-foreground">Médico 24 horas por dia,</span>
                 <br />
-                <span className="text-foreground">consulta imediata por apenas</span>
+                <span className="text-foreground">consulta online imediata por apenas</span>
                 <br />
                 <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$43,90!</span>
               </h1>
@@ -164,26 +172,12 @@ export function HeroSection() {
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl h-full">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10 pointer-events-none" />
             <picture className="hero-picture">
-              <source 
-                type="image/webp" 
-                srcSet="/assets/hero-mobile-420.webp 672w, /assets/hero-tablet-768.webp 768w, /assets/hero-desktop-1600.webp 1600w" 
-                sizes="(max-width: 600px) 672px, (max-width: 1024px) 768px, 1600px" 
-              />
-              <img 
-                src="/assets/hero-mobile-420.webp" 
-                alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
-                className="w-full h-full object-contain object-center" 
-                width={672} 
-                height={416} 
-                loading="eager" 
-                fetchPriority="high" 
-                decoding="async" 
-                style={{
+              <source type="image/webp" srcSet="/assets/hero-mobile-420.webp 672w, /assets/hero-tablet-768.webp 768w, /assets/hero-desktop-1600.webp 1600w" sizes="(max-width: 600px) 672px, (max-width: 1024px) 768px, 1600px" />
+              <img src="/assets/hero-mobile-420.webp" alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" className="w-full h-full object-contain object-center" width={672} height={416} loading="eager" fetchPriority="high" decoding="async" style={{
                   aspectRatio: '672/416',
                   objectFit: 'contain',
                   maxHeight: '400px'
-                }} 
-              />
+                }} />
             </picture>
           </div>
             </div>
