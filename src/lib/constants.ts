@@ -28,7 +28,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Médicos Especialistas", 
     precoBase: 54.99, 
     sku: "BIR7668",
-    descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria, Cardiologista, Dermatologista, Endocrinologista, Gastroenterologista, Ginecologista, Oftalmologista, Ortopedista, Pediatra, Otorrinolaringologista, Médico da Família, Psiquiatra",
+    descricao: "Personal Trainer, Nutricionista, Reumatologista, Neurologista, Infectologista, Nutrólogo, Geriatria, Urologista, Cardiologista, Dermatologista, Endocrinologista, Gastroenterologista, Ginecologista, Oftalmologista, Ortopedista, Pediatra, Otorrinolaringologista, Médico da Família, Psiquiatra",
     tempo: "30-60 minutos",
     inclui: [
       "Personal Trainer", "Nutricionista", "Reumatologista", 
@@ -36,7 +36,7 @@ export const CATALOGO_SERVICOS = [
       "Cardiologista", "Dermatologista", "Endocrinologista",
       "Gastroenterologista", "Ginecologista", "Oftalmologista",
       "Ortopedista", "Pediatra", "Otorrinolaringologista",
-      "Médico da Família", "Psiquiatra"
+      "Médico da Família", "Psiquiatra", "Urologista"
     ],
     variantes: [
       { valor: 54.99, nome: "Personal Trainer", sku: "BIR7668" },
@@ -46,6 +46,7 @@ export const CATALOGO_SERVICOS = [
       { valor: 129.90, nome: "Infectologista", sku: "MYX5186" },
       { valor: 119.90, nome: "Nutrólogo", sku: "LZF3879" },
       { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
+      { valor: 109.90, nome: "Urologista", sku: "URO1099" },
       { valor: 89.90, nome: "Cardiologista", sku: "TQP5720" },
       { valor: 89.90, nome: "Dermatologista", sku: "HGG3503" },
       { valor: 89.90, nome: "Endocrinologista", sku: "VHH8883" },

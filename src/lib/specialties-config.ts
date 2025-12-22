@@ -23,6 +23,7 @@ export const ALL_SPECIALTIES = [
   'Reumatologista',
   'Neurologista',
   'Infectologista',
+  'Urologista',
   'Laudos Psicológicos',
   'Solicitação de Exames',
 ];
