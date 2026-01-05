@@ -580,6 +580,29 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
+      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
+      const orderId = payment.metadata?.order_id;
+      if (orderId) {
+        const { data: existingAppointment } = await supabaseAdmin
+          .from('appointments')
+          .select('id, appointment_id, redirect_url')
+          .eq('order_id', orderId)
+          .maybeSingle();
+        
+        if (existingAppointment) {
+          console.log('[mp-webhook] ⚠️ Appointment duplicado detectado (psicólogo)! Order já processado:', orderId);
+          return new Response(
+            JSON.stringify({ 
+              ok: true, 
+              message: 'Order already processed', 
+              appointment_id: existingAppointment.appointment_id,
+              redirect_url: existingAppointment.redirect_url 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+          );
+        }
+      }
+
       const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
       await supabaseAdmin.from('appointments').insert({
@@ -593,7 +616,7 @@ Deno.serve(async (req) => {
         provider: 'agendar_cc',
         redirect_url: agendarUrl,
         teams_join_url: agendarUrl,
-        order_id: payment.metadata?.order_id
+        order_id: orderId
       });
 
       await supabaseAdmin.from('metrics').insert({
@@ -758,6 +781,29 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
+      const orderId = payment.metadata?.order_id;
+      if (orderId) {
+        const { data: existingAppointment } = await supabaseAdmin
+          .from('appointments')
+          .select('id, appointment_id, redirect_url')
+          .eq('order_id', orderId)
+          .maybeSingle();
+        
+        if (existingAppointment) {
+          console.log('[mp-webhook] ⚠️ Appointment duplicado detectado (especialista)! Order já processado:', orderId);
+          return new Response(
+            JSON.stringify({ 
+              ok: true, 
+              message: 'Order already processed', 
+              appointment_id: existingAppointment.appointment_id,
+              redirect_url: existingAppointment.redirect_url 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+          );
+        }
+      }
+
       // ✅ Continuar com WhatsApp como hoje
       const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
       console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
@@ -775,7 +821,7 @@ Deno.serve(async (req) => {
         provider: 'whatsapp_manual',
         redirect_url: whatsappUrl,
         teams_join_url: whatsappUrl,
-        order_id: payment.metadata?.order_id
+        order_id: orderId
       });
 
       await supabaseAdmin.from('metrics').insert({

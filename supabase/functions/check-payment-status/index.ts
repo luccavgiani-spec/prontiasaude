@@ -57,12 +57,43 @@ Deno.serve(async (req) => {
         });
       }
 
-      console.log('[check-payment-status] 🎉 PIX aprovado! Criando appointment...');
-
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_ANON_KEY')!
       );
+
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      );
+
+      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
+      const orderIdToCheck = payment.metadata?.order_id || order_id;
+      if (orderIdToCheck) {
+        const { data: existingAppointment } = await supabaseAdmin
+          .from('appointments')
+          .select('appointment_id, redirect_url, provider')
+          .eq('order_id', orderIdToCheck)
+          .maybeSingle();
+        
+        if (existingAppointment) {
+          console.log('[check-payment-status] ⚠️ Appointment já existe para order_id:', orderIdToCheck);
+          console.log('[check-payment-status] Retornando dados existentes em vez de criar duplicado');
+          return new Response(JSON.stringify({ 
+            success: true,
+            status: payment.status,
+            approved: true,
+            redirect_url: existingAppointment.redirect_url,
+            appointment_id: existingAppointment.appointment_id,
+            existing: true
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      console.log('[check-payment-status] 🎉 PIX aprovado! Criando appointment...');
 
       // Chamar schedule-redirect para criar appointment
       const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
@@ -75,7 +106,7 @@ Deno.serve(async (req) => {
           sku: schedulePayload.sku,
           horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
           plano_ativo: schedulePayload.plano_ativo || false,
-          order_id: payment.metadata?.order_id || order_id,
+          order_id: orderIdToCheck,
           payment_id: payment.id
         }
       });
