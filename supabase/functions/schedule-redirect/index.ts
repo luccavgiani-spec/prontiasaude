@@ -361,8 +361,27 @@ async function saveAppointment(
   provider: string,
   redirectUrl: string,
   supabase: any
-): Promise<void> {
+): Promise<{ appointment_id: string; redirect_url: string; existing?: boolean }> {
   try {
+    // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Se já existe appointment com este order_id, retornar existente
+    if (payload.order_id) {
+      const { data: existingAppointment } = await supabase
+        .from('appointments')
+        .select('appointment_id, redirect_url')
+        .eq('order_id', payload.order_id)
+        .maybeSingle();
+      
+      if (existingAppointment) {
+        console.log('[saveAppointment] ⚠️ Appointment já existe para order_id:', payload.order_id);
+        console.log('[saveAppointment] Retornando appointment existente:', existingAppointment.appointment_id);
+        return { 
+          appointment_id: existingAppointment.appointment_id, 
+          redirect_url: existingAppointment.redirect_url || redirectUrl,
+          existing: true 
+        };
+      }
+    }
+    
     // ✅ ETAPA 3: Sincronizar email no Supabase antes de salvar
     if (payload.email && payload.cpf) {
       console.log('[saveAppointment] 🔄 Sincronizando email no Supabase:', payload.email);
@@ -445,6 +464,8 @@ async function saveAppointment(
       console.log('[saveAppointment] Email:', payload.email);
       console.log('[saveAppointment] Redirect URL:', redirectUrl);
     }
+    
+    return { appointment_id: appointmentId, redirect_url: redirectUrl, existing: false };
   } catch (error) {
     console.error('[saveAppointment] ❌ EXCEÇÃO ao salvar appointment:', error);
     throw error;
