@@ -164,11 +164,7 @@ const ConsultNowFloatButton = () => {
                 </div>
 
                 {/* Aviso de Festas de Final de Ano */}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-center">
-                  <p className="text-xs text-amber-800">
-                    ⚠️ <strong>Atenção:</strong> De 24/12 a 05/01, o tempo de espera pode ser maior devido às festas de final de ano. Agradecemos a compreensão! 🎄
-                  </p>
-                </div>
+                
 
                 {/* CTA Button */}
                 <Button onClick={handleConsultNow} disabled={isLoading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl shadow-lg hover:shadow-xl transition-all" size="lg">
