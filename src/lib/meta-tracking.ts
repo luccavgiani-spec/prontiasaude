@@ -80,6 +80,41 @@ function generateEventId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2)}`;
 }
 
+// ✅ NEW: Send event to Meta CAPI via Edge Function (server-side, always available)
+async function sendToMetaCAPI(eventName: string, data: {
+  value?: number;
+  order_id?: string;
+}): Promise<void> {
+  try {
+    const payload = {
+      event_name: eventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_source_url: window.location.href,
+      value: data.value,
+      currency: 'BRL',
+      order_id: data.order_id,
+      fbp: getFbp(),
+      fbc: getFbc(),
+      client_user_agent: navigator.userAgent,
+    };
+
+    const response = await fetch('https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/meta-capi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (response.ok) {
+      console.log('[Meta CAPI] ✅ Evento enviado:', eventName);
+    } else {
+      const result = await response.json();
+      console.warn('[Meta CAPI] ⚠️ Resposta não-ok:', result);
+    }
+  } catch (error) {
+    console.error('[Meta CAPI] ❌ Erro ao enviar evento:', error);
+  }
+}
+
 // Send event to GTM Server with fallback
 async function sendToGTMServer(event: MetaEvent): Promise<void> {
   try {
@@ -301,6 +336,11 @@ export function trackInitiateCheckout(data?: {
   };
 
   sendToGTMServer(event);
+  
+  // ✅ NEW: Send to Meta CAPI server-side (guaranteed delivery)
+  sendToMetaCAPI('InitiateCheckout', {
+    value: data?.value,
+  });
 }
 
 // Track SubscribedButtonClick event (custom event for subscription plans)
@@ -467,6 +507,12 @@ export function trackPurchase(data: {
   };
 
   sendToGTMServer(event);
+  
+  // ✅ NEW: Send to Meta CAPI server-side (guaranteed delivery)
+  sendToMetaCAPI('Purchase', {
+    value: data.value,
+    order_id: data.order_id,
+  });
 }
 
 // Initialize tracking on page load (lazy loaded)
