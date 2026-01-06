@@ -90,16 +90,22 @@ Deno.serve(async (req) => {
 
     console.log('[Meta CAPI] Sending to Meta:', JSON.stringify(eventData));
 
+    // Build the complete request body
+    const requestBody = {
+      data: [eventData],
+      test_event_code: 'TEST45323', // ⚠️ REMOVER APÓS VALIDAÇÃO
+    };
+
+    // Log the complete payload being sent (without token)
+    console.log('[Meta CAPI] 📦 Complete request body (with test_event_code):', JSON.stringify(requestBody));
+
     // Send to Meta Conversions API
     const response = await fetch(`${META_API_URL}?access_token=${accessToken}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        data: [eventData],
-        test_event_code: 'TEST45323', // ⚠️ REMOVER APÓS VALIDAÇÃO
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const result = await response.json();
