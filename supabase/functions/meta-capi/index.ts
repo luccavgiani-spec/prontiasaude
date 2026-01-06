@@ -73,7 +73,7 @@ Deno.serve(async (req) => {
     // Build custom_data object (no sensitive medical data)
     const customData: Record<string, unknown> = {};
     if (payload.value !== undefined) customData.value = payload.value;
-    if (payload.currency) customData.currency = payload.currency;
+    customData.currency = payload.currency || 'BRL'; // ✅ Fallback garantido
     if (payload.order_id) customData.order_id = payload.order_id;
     // Note: content_name excluded to avoid any medical data
 
@@ -88,7 +88,21 @@ Deno.serve(async (req) => {
       custom_data: customData,
     };
 
-    console.log('[Meta CAPI] Sending to Meta:', JSON.stringify(eventData));
+    // ✅ Log especial para CAPI_Test
+    if (payload.event_name === 'CAPI_Test') {
+      console.log('[Meta CAPI] 🧪 EVENTO DE TESTE QA DISPARADO');
+    }
+
+    // ✅ DIAGNÓSTICO EXPLÍCITO - campos críticos
+    console.log('[Meta CAPI] 🔍 DIAGNÓSTICO:');
+    console.log('[Meta CAPI] → Pixel ID:', PIXEL_ID);
+    console.log('[Meta CAPI] → event_name:', eventData.event_name);
+    console.log('[Meta CAPI] → action_source:', eventData.action_source);
+    console.log('[Meta CAPI] → event_source_url:', eventData.event_source_url);
+    console.log('[Meta CAPI] → user_data.client_ip_address:', userData.client_ip_address || 'NÃO CAPTURADO');
+    console.log('[Meta CAPI] → user_data.client_user_agent:', userData.client_user_agent || 'NÃO ENVIADO');
+    console.log('[Meta CAPI] → custom_data.value:', customData.value);
+    console.log('[Meta CAPI] → custom_data.currency:', customData.currency);
 
     // Build the complete request body
     const requestBody = {

@@ -115,6 +115,16 @@ async function sendToMetaCAPI(eventName: string, data: {
   }
 }
 
+// ✅ Função de teste QA para validação no Events Manager
+export async function sendCAPITest(): Promise<void> {
+  console.log('[Meta CAPI] 🧪 Enviando evento de teste...');
+  await sendToMetaCAPI('CAPI_Test', {
+    value: 1,
+    order_id: `test_${Date.now()}`,
+  });
+  console.log('[Meta CAPI] 🧪 Evento CAPI_Test enviado! Verifique Events Manager → Eventos de Teste');
+}
+
 // Send event to GTM Server with fallback
 async function sendToGTMServer(event: MetaEvent): Promise<void> {
   try {
@@ -335,9 +345,10 @@ export function trackInitiateCheckout(data?: {
     }
   };
 
-  sendToGTMServer(event);
-  
-  // ✅ NEW: Send to Meta CAPI server-side (guaranteed delivery)
+  // ⚠️ sGTM desativado para Meta (ruído de 404)
+  // sendToGTMServer(event);
+
+  // ✅ Meta CAPI server-side (única rota Meta)
   sendToMetaCAPI('InitiateCheckout', {
     value: data?.value,
   });
@@ -506,9 +517,10 @@ export function trackPurchase(data: {
     }
   };
 
-  sendToGTMServer(event);
-  
-  // ✅ NEW: Send to Meta CAPI server-side (guaranteed delivery)
+  // ⚠️ sGTM desativado para Meta (ruído de 404)
+  // sendToGTMServer(event);
+
+  // ✅ Meta CAPI server-side (única rota Meta)
   sendToMetaCAPI('Purchase', {
     value: data.value,
     order_id: data.order_id,
@@ -577,10 +589,12 @@ if (typeof window !== 'undefined') {
   (window as any).trackSubscribedButtonClick = trackSubscribedButtonClick;
   (window as any).trackPurchase = trackPurchase;
   (window as any).__setGtmFallbackUrl = setGtmFallbackUrl;
+  (window as any).sendCAPITest = sendCAPITest; // ✅ QA: Teste Meta CAPI
   
   // Log debug instructions on load
   console.log('[Meta Tracking] 🛠️ Debug mode available:');
   console.log('  • Set fallback: window.__setGtmFallbackUrl("https://your-url.appspot.com")');
   console.log('  • Clear fallback: window.__setGtmFallbackUrl("")');
   console.log('  • Current fallback:', currentFallbackUrl);
+  console.log('  • 🧪 Teste Meta CAPI: window.sendCAPITest()');
 }
