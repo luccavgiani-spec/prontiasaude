@@ -253,9 +253,13 @@ export function trackViewContent(data?: {
   content_ids?: string[];
   value?: number;
 }): void {
-  // Use native fbq if available
+  // Use native fbq if available - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('track', 'ViewContent', data);
+    (window as any).fbq('track', 'ViewContent', {
+      value: data?.value,
+      currency: 'BRL'
+      // REMOVIDO: content_name, content_category, content_ids (dados sensíveis de saúde)
+    });
   }
 
   // Also send to GTM Server for redundancy
@@ -272,7 +276,8 @@ export function trackViewContent(data?: {
     },
     custom_data: {
       currency: 'BRL',
-      ...data
+      value: data?.value
+      // REMOVIDO: content_name, content_category, content_ids (dados sensíveis de saúde)
     }
   };
 
@@ -284,9 +289,13 @@ export function trackLead(data?: {
   value?: number;
   content_name?: string;
 }): void {
-  // Use native fbq if available
+  // Use native fbq if available - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('track', 'Lead', data);
+    (window as any).fbq('track', 'Lead', {
+      value: data?.value,
+      currency: 'BRL'
+      // REMOVIDO: content_name (dados sensíveis de saúde)
+    });
   }
 
   // Also send to GTM Server for redundancy
@@ -303,7 +312,8 @@ export function trackLead(data?: {
     },
     custom_data: {
       currency: 'BRL',
-      ...data
+      value: data?.value
+      // REMOVIDO: content_name (dados sensíveis de saúde)
     }
   };
 
@@ -317,9 +327,13 @@ export function trackInitiateCheckout(data?: {
   content_category?: string;
   content_ids?: string[];
 }): void {
-  // Use native fbq if available
+  // Use native fbq if available - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('track', 'InitiateCheckout', data);
+    (window as any).fbq('track', 'InitiateCheckout', {
+      value: data?.value,
+      currency: 'BRL'
+      // REMOVIDO: content_name, content_category, content_ids (dados sensíveis de saúde)
+    });
   }
 
   // Google Ads Conversion Tracking - Begin Checkout
@@ -350,7 +364,8 @@ export function trackInitiateCheckout(data?: {
     },
     custom_data: {
       currency: 'BRL',
-      ...data
+      value: data?.value
+      // REMOVIDO: content_name, content_category, content_ids (dados sensíveis de saúde)
     }
   };
 
@@ -369,9 +384,13 @@ export function trackSubscribedButtonClick(data?: {
   content_name?: string;
   content_category?: string;
 }): void {
-  // Use native fbq if available
+  // Use native fbq if available - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
-    (window as any).fbq('trackCustom', 'SubscribedButtonClick', data);
+    (window as any).fbq('trackCustom', 'SubscribedButtonClick', {
+      value: data?.value,
+      currency: 'BRL'
+      // REMOVIDO: content_name, content_category (dados sensíveis de saúde)
+    });
   }
 
   // Also send to GTM Server for redundancy
@@ -388,7 +407,8 @@ export function trackSubscribedButtonClick(data?: {
     },
     custom_data: {
       currency: 'BRL',
-      ...data
+      value: data?.value
+      // REMOVIDO: content_name, content_category (dados sensíveis de saúde)
     }
   };
 
@@ -427,13 +447,12 @@ export function trackPurchase(data: {
     return;
   }
 
-  // Use native fbq if available (Meta Pixel)
+  // Use native fbq if available (Meta Pixel) - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
     (window as any).fbq('track', 'Purchase', {
       value: data.value,
-      currency: 'BRL',
-      contents: data.contents,
-      content_name: data.content_name
+      currency: 'BRL'
+      // REMOVIDO: contents, content_name (dados sensíveis de saúde)
     });
   }
 
@@ -522,7 +541,9 @@ export function trackPurchase(data: {
     },
     custom_data: {
       currency: 'BRL',
-      ...data
+      value: data.value,
+      order_id: data.order_id
+      // REMOVIDO: contents, content_name, content_category (dados sensíveis de saúde)
     }
   };
 
