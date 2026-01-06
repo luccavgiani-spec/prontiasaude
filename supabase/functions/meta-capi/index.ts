@@ -98,6 +98,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         data: [eventData],
+        test_event_code: 'TEST45323', // ⚠️ REMOVER APÓS VALIDAÇÃO
       }),
     });
 
