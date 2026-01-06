@@ -18,6 +18,7 @@ interface CAPIPayload {
   fbc?: string;
   client_user_agent?: string;
   content_name?: string;
+  test_event_code?: string; // ✅ Opcional: só enviar quando for teste
 }
 
 Deno.serve(async (req) => {
@@ -104,14 +105,19 @@ Deno.serve(async (req) => {
     console.log('[Meta CAPI] → custom_data.value:', customData.value);
     console.log('[Meta CAPI] → custom_data.currency:', customData.currency);
 
-    // Build the complete request body
-    const requestBody = {
+    // Build the complete request body - test_event_code SOMENTE se vier no payload
+    const requestBody: Record<string, unknown> = {
       data: [eventData],
-      test_event_code: 'TEST45323', // ⚠️ REMOVER APÓS VALIDAÇÃO
     };
+    
+    // ✅ Incluir test_event_code APENAS para CAPI_Test (eventos reais vão sem)
+    if (payload.test_event_code) {
+      requestBody.test_event_code = payload.test_event_code;
+      console.log('[Meta CAPI] 🧪 test_event_code incluído:', payload.test_event_code);
+    }
 
     // Log the complete payload being sent (without token)
-    console.log('[Meta CAPI] 📦 Complete request body (with test_event_code):', JSON.stringify(requestBody));
+    console.log('[Meta CAPI] 📦 Complete request body:', JSON.stringify(requestBody));
 
     // Send to Meta Conversions API
     const response = await fetch(`${META_API_URL}?access_token=${accessToken}`, {
