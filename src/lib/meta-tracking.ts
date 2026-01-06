@@ -80,13 +80,14 @@ function generateEventId(): string {
   return `${Date.now()}_${Math.random().toString(36).substring(2)}`;
 }
 
-// ✅ NEW: Send event to Meta CAPI via Edge Function (server-side, always available)
+// ✅ Send event to Meta CAPI via Edge Function (server-side)
 async function sendToMetaCAPI(eventName: string, data: {
   value?: number;
   order_id?: string;
+  test_event_code?: string; // ✅ Opcional: para modo teste
 }): Promise<void> {
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       event_name: eventName,
       event_time: Math.floor(Date.now() / 1000),
       event_source_url: window.location.href,
@@ -98,16 +99,23 @@ async function sendToMetaCAPI(eventName: string, data: {
       client_user_agent: navigator.userAgent,
     };
 
+    // ✅ Incluir test_event_code apenas se fornecido
+    if (data.test_event_code) {
+      payload.test_event_code = data.test_event_code;
+    }
+
     const response = await fetch('https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/meta-capi', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
+    const result = await response.json();
+    
     if (response.ok) {
       console.log('[Meta CAPI] ✅ Evento enviado:', eventName);
+      console.log('[Meta CAPI] 📊 Resposta:', result); // ✅ Mostra fbtrace_id e events_received
     } else {
-      const result = await response.json();
       console.warn('[Meta CAPI] ⚠️ Resposta não-ok:', result);
     }
   } catch (error) {
@@ -117,10 +125,11 @@ async function sendToMetaCAPI(eventName: string, data: {
 
 // ✅ Função de teste QA para validação no Events Manager
 export async function sendCAPITest(): Promise<void> {
-  console.log('[Meta CAPI] 🧪 Enviando evento de teste...');
+  console.log('[Meta CAPI] 🧪 Enviando evento de teste com test_event_code: TEST45323');
   await sendToMetaCAPI('CAPI_Test', {
     value: 1,
     order_id: `test_${Date.now()}`,
+    test_event_code: 'TEST45323', // ✅ Código fixo da Meta para aparecer em "Eventos de Teste"
   });
   console.log('[Meta CAPI] 🧪 Evento CAPI_Test enviado! Verifique Events Manager → Eventos de Teste');
 }
