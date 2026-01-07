@@ -2672,15 +2672,24 @@ export function PaymentModal({
                     <CreditCard className="mr-2 h-4 w-4" />
                     Cartão
                   </Button>
-                  <Button
-                    type="button"
-                    variant={paymentMethod === "pix" ? "default" : "outline"}
-                    onClick={() => setPaymentMethod("pix")}
-                    className="flex-1"
-                  >
-                    PIX
-                  </Button>
+                  {/* PIX só para serviços avulsos, não planos */}
+                  {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                    <Button
+                      type="button"
+                      variant={paymentMethod === "pix" ? "default" : "outline"}
+                      onClick={() => setPaymentMethod("pix")}
+                      className="flex-1"
+                    >
+                      PIX
+                    </Button>
+                  )}
                 </div>
+                {/* Aviso quando PIX não está disponível */}
+                {(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                  <p className="text-xs text-center text-muted-foreground -mt-2 mb-2">
+                    ℹ️ Para planos, apenas cartão de crédito está disponível
+                  </p>
+                )}
 
                 {/* Card Payment Brick */}
                 {paymentMethod === "card" && (
