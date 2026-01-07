@@ -8,7 +8,7 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "consulta", 
     nome: "Pronto Atendimento", 
-    precoBase: 43.90, 
+    precoBase: 39.90, 
     sku: "ITC6534",
     descricao: "Consulta médica online 24h por dia com clínico geral.",
     tempo: "30-45 minutos",
