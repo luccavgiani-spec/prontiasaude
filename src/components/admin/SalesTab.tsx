@@ -67,6 +67,32 @@ const SalesTab = () => {
   const [filterService, setFilterService] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterProvider, setFilterProvider] = useState("all");
+  
+  // 📅 Estado para seleção de mês no card de desempenho
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // 📆 Gerar lista de meses disponíveis (desde Nov/2025)
+  const availableMonths = useMemo(() => {
+    const months: { value: string; label: string }[] = [];
+    const now = new Date();
+    const startDate = new Date(2025, 10, 1); // Nov 2025
+
+    for (let i = 0; i < 24; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      if (date < startDate) break;
+      
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      months.push({ 
+        value, 
+        label: label.charAt(0).toUpperCase() + label.slice(1) 
+      });
+    }
+    return months;
+  }, []);
 
   const loadAppointments = async () => {
     try {
@@ -120,42 +146,60 @@ const SalesTab = () => {
   // 📊 Análise mensal comparativa
   const monthlyAnalysis = useMemo(() => {
     const now = new Date();
-    const currentMonth = startOfMonth(now);
-    const currentMonthEnd = endOfMonth(now);
-    const daysInCurrentMonth = getDaysInMonth(now);
-    const currentDayOfMonth = now.getDate();
+    
+    // Usar o mês selecionado
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const selectedDate = new Date(year, month - 1, 15);
+    const isCurrentMonth = isSameMonth(selectedDate, now);
+    
+    const monthStart = startOfMonth(selectedDate);
+    const monthEnd = endOfMonth(selectedDate);
+    const daysInMonth = getDaysInMonth(selectedDate);
+    
+    // Se é o mês atual, usa o dia atual; senão, usa todos os dias do mês
+    const dayOfMonth = isCurrentMonth ? now.getDate() : daysInMonth;
 
-    // Vendas do mês atual
-    const currentMonthSales = appointments.filter(apt => {
+    // Vendas do mês selecionado
+    const monthSales = appointments.filter(apt => {
       const aptDate = parseISO(apt.created_at);
-      return isSameMonth(aptDate, now);
+      return isSameMonth(aptDate, selectedDate);
     });
 
     // Receita do mês
-    const currentMonthRevenue = currentMonthSales.reduce((sum, apt) => {
+    const monthRevenue = monthSales.reduce((sum, apt) => {
       const price = SKU_PRICES[apt.service_code] || 0;
       return sum + price;
     }, 0);
 
-    // 🎯 DEZEMBRO É O PRIMEIRO MÊS DE OPERAÇÃO
-    // Média diária do mês atual (baseada apenas nos dias com vendas reais)
-    const avgDailySalesCurrentMonth = currentMonthSales.length / currentDayOfMonth;
+    // Média diária
+    const avgDailySales = dayOfMonth > 0 ? monthSales.length / dayOfMonth : 0;
     
-    // Projeção mensal (extrapolação linear baseada no ritmo atual)
-    const projectedMonthlySales = Math.round(avgDailySalesCurrentMonth * daysInCurrentMonth);
-    const projectedMonthlyRevenue = currentDayOfMonth > 0 
-      ? (currentMonthRevenue / currentDayOfMonth) * daysInCurrentMonth 
+    // Projeção mensal (só faz sentido para o mês atual)
+    const projectedMonthlySales = isCurrentMonth 
+      ? Math.round(avgDailySales * daysInMonth)
+      : monthSales.length;
+    const projectedMonthlyRevenue = isCurrentMonth && dayOfMonth > 0
+      ? (monthRevenue / dayOfMonth) * daysInMonth 
+      : monthRevenue;
+    
+    // Comparação com mês anterior
+    const prevMonthDate = new Date(year, month - 2, 15);
+    const prevMonthSales = appointments.filter(apt => {
+      const aptDate = parseISO(apt.created_at);
+      return isSameMonth(aptDate, prevMonthDate);
+    });
+    const prevMonthDays = getDaysInMonth(prevMonthDate);
+    const prevAvgDaily = prevMonthDays > 0 ? prevMonthSales.length / prevMonthDays : 0;
+    
+    const historicalAvgDaily = prevAvgDaily > 0 ? prevAvgDaily : avgDailySales;
+    const variationPercent = prevAvgDaily > 0 
+      ? ((avgDailySales - prevAvgDaily) / prevAvgDaily) * 100 
       : 0;
-    
-    // Como dezembro é o primeiro mês, a "média histórica" é a própria média do mês
-    // Não há histórico anterior para comparar - variação será 0%
-    const historicalAvgDaily = avgDailySalesCurrentMonth;
-    const variationPercent = 0; // Primeiro mês, sem histórico para comparar
 
     // Dados para o gráfico por dia
-    const daysOfMonth = eachDayOfInterval({ start: currentMonth, end: currentMonthEnd });
+    const daysOfMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const dailyData: DailyChartData[] = daysOfMonth.map((day, index) => {
-      const daySales = currentMonthSales.filter(apt => isSameDay(parseISO(apt.created_at), day));
+      const daySales = monthSales.filter(apt => isSameDay(parseISO(apt.created_at), day));
       const dayRevenue = daySales.reduce((sum, apt) => sum + (SKU_PRICES[apt.service_code] || 0), 0);
       return {
         day: index + 1,
@@ -171,20 +215,21 @@ const SalesTab = () => {
     const worstDay = sortedDays[sortedDays.length - 1] || null;
 
     return {
-      currentMonthSales: currentMonthSales.length,
-      currentMonthRevenue: currentMonthRevenue / 100,
-      avgDailySales: avgDailySalesCurrentMonth,
+      currentMonthSales: monthSales.length,
+      currentMonthRevenue: monthRevenue / 100,
+      avgDailySales,
       projectedMonthlySales,
       projectedMonthlyRevenue: projectedMonthlyRevenue / 100,
       historicalAvgDaily,
       variationPercent,
-      dailyData: dailyData.filter(d => d.day <= currentDayOfMonth), // Apenas dias até hoje
+      dailyData: isCurrentMonth ? dailyData.filter(d => d.day <= dayOfMonth) : dailyData,
       bestDay,
       worstDay,
-      monthName: format(now, 'MMMM', { locale: ptBR }),
-      year: format(now, 'yyyy'),
+      monthName: format(selectedDate, 'MMMM', { locale: ptBR }),
+      year: format(selectedDate, 'yyyy'),
+      isCurrentMonth,
     };
-  }, [appointments]);
+  }, [appointments, selectedMonth]);
 
   const filteredAppointments = appointments.filter((apt) => {
     if (searchEmail && !apt.email.toLowerCase().includes(searchEmail.toLowerCase())) return false;
@@ -345,16 +390,28 @@ const SalesTab = () => {
       {/* 📊 Card de Análise Comparativa Mensal */}
       <Card className="border-primary/20">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">
-                Desempenho de {monthlyAnalysis.monthName.charAt(0).toUpperCase() + monthlyAnalysis.monthName.slice(1)}/{monthlyAnalysis.year}
-              </CardTitle>
+              <CardTitle className="text-lg">Desempenho Mensal</CardTitle>
             </div>
-            <Badge variant="outline" className="text-xs">
-              Atualizado em tempo real
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-[180px] h-8">
+                  <SelectValue placeholder="Selecionar mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableMonths.map(month => (
+                    <SelectItem key={month.value} value={month.value}>
+                      {month.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                {monthlyAnalysis.isCurrentMonth ? 'Tempo real' : 'Histórico'}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
