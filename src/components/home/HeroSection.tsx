@@ -132,7 +132,7 @@ export function HeroSection() {
                 <br />
                 <span className="text-foreground">consulta online imediata por apenas</span>
                 <br />
-                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$43,90!</span>
+                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$39,90!</span>
               </h1>
               
               <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
