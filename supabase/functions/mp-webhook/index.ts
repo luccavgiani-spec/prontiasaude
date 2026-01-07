@@ -88,21 +88,28 @@ async function registerClickLifePatientSimple(
       return { success: false, error: 'Variável de ambiente CLICKLIFE_PATIENT_DEFAULT_PASSWORD não configurada' };
     }
     
+    // Payload de cadastro com campos corretos (igual ao activate-clicklife-manual)
     const registerPayload = {
-      cpf: cpf.replace(/\D/g, ''),
       nome,
+      cpf: cpf.replace(/\D/g, ''),
       email,
-      ddd,
-      telefone: numero,
+      senha: PATIENT_PASSWORD,
+      datanascimento: birthDateFormatted,
       sexo: sexo || 'F',
-      plano_id: planoId,
-      data_nascimento: birthDateFormatted,
-      password: PATIENT_PASSWORD
+      telefone: numero,
+      logradouro: 'Rua Exemplo',
+      numero: '123',
+      bairro: 'Centro',
+      cep: '01000000',
+      cidade: 'São Paulo',
+      estado: 'SP',
+      empresaid: 9083,
+      planoid: planoId
     };
 
     console.log('[registerClickLife] Payload de cadastro:', {
       ...registerPayload,
-      password: '***',
+      senha: '***',
       cpf: registerPayload.cpf.substring(0, 3) + '***'
     });
 
@@ -111,7 +118,7 @@ async function registerClickLifePatientSimple(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'integrator-token': INTEGRATOR_TOKEN
+        'authtoken': INTEGRATOR_TOKEN
       },
       body: JSON.stringify(registerPayload)
     });
@@ -131,15 +138,18 @@ async function registerClickLifePatientSimple(
     console.log('[registerClickLife] 🔐 Ativando paciente...');
     
     const activatePayload = {
+      authtoken: INTEGRATOR_TOKEN,
       cpf: cpf.replace(/\D/g, ''),
-      plano_id: planoId
+      empresaid: 9083,
+      planoid: planoId,
+      proposito: 'Ativar'
     };
 
     const activateRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'integrator-token': INTEGRATOR_TOKEN
+        'authtoken': INTEGRATOR_TOKEN
       },
       body: JSON.stringify(activatePayload)
     });
