@@ -1495,7 +1495,10 @@ export function PaymentModal({
 
         // Chamar schedule-redirect imediatamente após pagamento aprovado
         const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke("schedule-redirect", {
-          body: schedulePayload,
+          body: {
+            ...schedulePayload,
+            order_id: orderId,  // ✅ CRÍTICO: Permite verificação de duplicação no backend
+          },
         });
 
         if (scheduleError || !scheduleData?.ok) {
