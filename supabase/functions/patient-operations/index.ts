@@ -5,6 +5,329 @@ import { validateCPF as validateCPFChecksum, cleanCPF } from '../common/cpf-vali
 
 const corsHeaders = getCorsHeaders();
 
+// ============================================================
+// ✅ CONSTANTES E HELPERS PARA SYNC CLICKLIFE DE DEPENDENTES
+// ============================================================
+
+// Planos FAMILIARES que incluem especialistas → planoid 1238 na ClickLife
+const PLANOS_FAMILIARES_COM_ESPECIALISTAS = [
+  'FAM_COM_ESP_1M',
+  'FAM_COM_ESP_3M',
+  'FAM_COM_ESP_6M',
+  'FAM_COM_ESP_12M',
+];
+
+// Planos FAMILIARES sem especialistas → planoid 1237 na ClickLife
+const PLANOS_FAMILIARES_SEM_ESPECIALISTAS = [
+  'FAM_SEM_ESP_1M',
+  'FAM_SEM_ESP_3M',
+  'FAM_SEM_ESP_6M',
+  'FAM_SEM_ESP_12M',
+  'FAMILY',
+  'FAM_BASIC',
+];
+
+// Função para determinar planoid de dependente familiar
+function getClickLifePlanIdForDependente(planCode: string | undefined | null): number {
+  if (!planCode) return 1237;
+  if (PLANOS_FAMILIARES_COM_ESPECIALISTAS.includes(planCode)) return 1238;
+  // Planos empresariais familiares também têm especialistas
+  if (planCode.startsWith('EMPRESA_')) return 1238;
+  return 1237;
+}
+
+// Normalizar gênero para 'M' | 'F'
+function normalizeGender(gender: string | undefined | null): 'M' | 'F' {
+  if (!gender) return 'F';
+  const g = gender.trim().toUpperCase();
+  if (g === 'M' || g === 'MALE' || g === 'MASCULINO') return 'M';
+  if (g === 'F' || g === 'FEMALE' || g === 'FEMININO') return 'F';
+  return 'F';
+}
+
+// Normalizar telefone (robusto)
+function normalizePhone(phone: string | undefined | null): string {
+  if (!phone) return '11999999999';
+  let clean = phone.replace(/\D/g, '');
+  // Se começa com 55 e tem pelo menos 12 dígitos (55 + DDD + 8/9 dígitos), remover 55
+  if (clean.startsWith('55') && clean.length >= 12) {
+    clean = clean.substring(2);
+  }
+  // Garantir que tem pelo menos 10 dígitos (DDD + número)
+  if (clean.length < 10) {
+    console.warn('[normalizePhone] Telefone muito curto:', clean);
+    return '11999999999';
+  }
+  return clean;
+}
+
+// Interface para resultado do sync ClickLife
+interface ClickLifeSyncResult {
+  success: boolean;
+  status: 'ok' | 'failed' | 'partial';
+  error_message?: string;
+  details?: Record<string, any>;
+}
+
+// Função para sincronizar dependente na ClickLife
+async function syncDependenteClickLife(
+  dependente: {
+    cpf: string;
+    nome: string;
+    email: string;
+    telefone: string | undefined | null;
+    sexo: string | undefined | null;
+    birthDate?: string | null;
+    cep?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+  },
+  titularCpf: string,
+  planoid: number
+): Promise<ClickLifeSyncResult> {
+  const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE');
+  const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+  const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+
+  if (!CLICKLIFE_API || !INTEGRATOR_TOKEN) {
+    console.error('[syncDependenteClickLife] ❌ Credenciais ClickLife não configuradas');
+    return { success: false, status: 'failed', error_message: 'ClickLife credentials not configured' };
+  }
+
+  const cpfLimpo = dependente.cpf.replace(/\D/g, '');
+  const titularCpfLimpo = titularCpf.replace(/\D/g, '');
+  const details: Record<string, any> = {};
+
+  try {
+    console.log('[syncDependenteClickLife] 🔄 Iniciando sync ClickLife para dependente');
+    console.log('[syncDependenteClickLife] CPF dependente:', cpfLimpo.substring(0, 3) + '***');
+    console.log('[syncDependenteClickLife] CPF titular:', titularCpfLimpo.substring(0, 3) + '***');
+    console.log('[syncDependenteClickLife] Planoid:', planoid);
+
+    // ================================
+    // PASSO 1: Verificar se dependente já existe na ClickLife
+    // ================================
+    console.log('[ClickLife Dependente] 1️⃣ Verificando se dependente existe...');
+    
+    const checkUserRes = await fetch(`${CLICKLIFE_API}/usuarios/obter`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'authtoken': INTEGRATOR_TOKEN
+      },
+      body: JSON.stringify({
+        authtoken: INTEGRATOR_TOKEN,
+        cpfpaciente: cpfLimpo
+      })
+    });
+    
+    const checkUserData = await checkUserRes.json();
+    details.user_check = checkUserData;
+    
+    // Checagem robusta: verificar múltiplos campos possíveis
+    const userExists = checkUserRes.ok && (
+      checkUserData?.cpf || 
+      checkUserData?.data?.cpf || 
+      checkUserData?.usuario?.cpf ||
+      (checkUserData?.sucesso === true && (checkUserData?.mensagem || '').toLowerCase().includes('encontrado'))
+    );
+    console.log('[ClickLife Dependente] Usuário existe?', userExists);
+
+    // ================================
+    // PASSO 2: Cadastrar usuário se não existir
+    // ================================
+    if (!userExists) {
+      console.log('[ClickLife Dependente] 2️⃣ Cadastrando dependente...');
+      
+      // Normalizar telefone de forma robusta
+      const telefoneLimpo = normalizePhone(dependente.telefone);
+      const numero = telefoneLimpo.substring(2); // Remove DDD
+
+      // Normalizar data de nascimento para DD-MM-YYYY
+      let birthDateFormatted = '01-01-1990';
+      if (dependente.birthDate) {
+        const bd = dependente.birthDate;
+        if (bd.includes('-')) {
+          const parts = bd.split('-');
+          if (parts.length === 3 && parts[0].length === 4) {
+            // YYYY-MM-DD -> DD-MM-YYYY
+            birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+          } else if (parts.length === 3) {
+            birthDateFormatted = bd;
+          }
+        }
+      }
+
+      // Normalizar gênero
+      const sexoNormalizado = normalizeGender(dependente.sexo);
+
+      const registerPayload = {
+        nome: dependente.nome,
+        cpf: cpfLimpo,
+        email: dependente.email,
+        senha: PATIENT_PASSWORD || 'Pronto@2024',
+        datanascimento: birthDateFormatted,
+        sexo: sexoNormalizado,
+        telefone: numero,
+        logradouro: dependente.logradouro || 'Rua Exemplo',
+        numero: dependente.numero || '123',
+        bairro: 'Centro', // Fallback fixo (não existe em patients)
+        cep: (dependente.cep || '01000000').replace(/\D/g, ''),
+        cidade: dependente.cidade || 'São Paulo',
+        estado: dependente.estado || 'SP',
+        empresaid: 9083,
+        planoid: planoid
+      };
+
+      console.log('[ClickLife Dependente] Payload cadastro:', {
+        ...registerPayload,
+        senha: '***',
+        cpf: cpfLimpo.substring(0, 3) + '***'
+      });
+
+      const registerRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'authtoken': INTEGRATOR_TOKEN
+        },
+        body: JSON.stringify(registerPayload)
+      });
+
+      const registerData = await registerRes.json();
+      details.user_register = registerData;
+      console.log('[ClickLife Dependente] Resposta cadastro:', registerData);
+
+      // Tolerar "já cadastrado" como sucesso
+      const msgLower = (registerData.mensagem || '').toLowerCase();
+      if (!registerRes.ok && !msgLower.includes('já cadastrado') && !msgLower.includes('ja cadastrado')) {
+        console.error('[ClickLife Dependente] ❌ Falha ao cadastrar:', registerData);
+        return { 
+          success: false, 
+          status: 'failed', 
+          error_message: registerData.mensagem || 'Erro ao cadastrar dependente',
+          details 
+        };
+      }
+    }
+
+    // ================================
+    // PASSO 3: Verificar se já está vinculado como dependente
+    // ================================
+    console.log('[ClickLife Dependente] 3️⃣ Verificando vínculo com titular...');
+    
+    const checkDepsRes = await fetch(`${CLICKLIFE_API}/usuarios/obter-dependentes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'authtoken': INTEGRATOR_TOKEN
+      },
+      body: JSON.stringify({
+        authtoken: INTEGRATOR_TOKEN,
+        cpftitular: titularCpfLimpo
+      })
+    });
+
+    const checkDepsData = await checkDepsRes.json();
+    details.dependente_check = checkDepsData;
+    
+    // Verificar se CPF do dependente está na lista
+    const dependentes = checkDepsData?.dependentes || checkDepsData?.data || [];
+    const jaVinculado = Array.isArray(dependentes) && 
+      dependentes.some((d: any) => (d.cpf || '').replace(/\D/g, '') === cpfLimpo);
+    
+    console.log('[ClickLife Dependente] Já vinculado?', jaVinculado);
+
+    // ================================
+    // PASSO 4: Vincular dependente ao titular se necessário
+    // ================================
+    if (!jaVinculado) {
+      console.log('[ClickLife Dependente] 4️⃣ Vinculando dependente ao titular...');
+      
+      const linkPayload = {
+        authtoken: INTEGRATOR_TOKEN,
+        cpftitular: titularCpfLimpo,
+        cpfdependente: cpfLimpo,
+        nomedependente: dependente.nome
+      };
+
+      const linkRes = await fetch(`${CLICKLIFE_API}/usuarios/cadastrar-dependente`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'authtoken': INTEGRATOR_TOKEN
+        },
+        body: JSON.stringify(linkPayload)
+      });
+
+      const linkData = await linkRes.json();
+      details.dependente_link = linkData;
+      console.log('[ClickLife Dependente] Resposta vínculo:', linkData);
+
+      // Tolerar "já vinculado" como sucesso
+      const msgLower = (linkData.mensagem || '').toLowerCase();
+      if (!linkRes.ok && !msgLower.includes('já') && !msgLower.includes('ja')) {
+        console.warn('[ClickLife Dependente] ⚠️ Falha ao vincular (continuando para ativação):', linkData);
+      }
+    }
+
+    // ================================
+    // PASSO 5: Ativar dependente no plano familiar
+    // ================================
+    console.log('[ClickLife Dependente] 5️⃣ Ativando no plano familiar...');
+    
+    const activatePayload = {
+      authtoken: INTEGRATOR_TOKEN,
+      cpf: cpfLimpo,
+      empresaid: 9083,
+      planoid: planoid,
+      proposito: 'Ativar'
+    };
+
+    const activateRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'authtoken': INTEGRATOR_TOKEN
+      },
+      body: JSON.stringify(activatePayload)
+    });
+
+    const activateData = await activateRes.json();
+    details.activation = activateData;
+    console.log('[ClickLife Dependente] Resposta ativação:', activateData);
+
+    // Tolerar "já ativo" como sucesso
+    const msgLower = (activateData.mensagem || '').toLowerCase();
+    if (!activateRes.ok && !msgLower.includes('já ativo') && !msgLower.includes('ja ativo')) {
+      return { 
+        success: false, 
+        status: 'partial',
+        error_message: activateData.mensagem || 'Erro ao ativar dependente',
+        details 
+      };
+    }
+
+    console.log('[ClickLife Dependente] ✅ Sync completo com sucesso!');
+    return { success: true, status: 'ok', details };
+
+  } catch (error) {
+    console.error('[ClickLife Dependente] ❌ Exception:', error);
+    return { 
+      success: false, 
+      status: 'failed', 
+      error_message: error instanceof Error ? error.message : 'Exception during sync',
+      details: { ...details, exception: String(error) }
+    };
+  }
+}
+
+// ============================================================
+// FIM HELPERS CLICKLIFE
+// ============================================================
+
 // Validation helpers
 const TEMP_EMAIL_DOMAINS = [
   '10minutemail.com', 'guerrillamail.com', 'mailinator.com', 'tempmail.com',
@@ -1116,12 +1439,109 @@ serve(async (req) => {
           })
           .eq('id', invite.id);
 
+        // ============================================================
+        // ✅ NOVO: Sincronizar dependente na ClickLife
+        // ============================================================
+        let clicklife_sync: 'ok' | 'failed' | 'partial' | 'skipped' = 'skipped';
+        let clicklife_error_message: string | undefined;
+        let resolvedPlanCode: string | undefined;
+
+        try {
+          // Buscar dados completos do dependente
+          const { data: dependenteData } = await supabase
+            .from('patients')
+            .select('cpf, first_name, last_name, phone_e164, gender, birth_date, cep, address_line, address_number, city, state')
+            .eq('email', invite.email)
+            .maybeSingle();
+
+          // Buscar CPF do titular
+          const { data: titularData } = await supabase
+            .from('patients')
+            .select('cpf')
+            .eq('id', invite.titular_id)
+            .single();
+
+          // Buscar plan_code REAL do plano do titular (não confiar no join)
+          const { data: titularPlanData } = await supabase
+            .from('patient_plans')
+            .select('plan_code')
+            .eq('id', invite.titular_plan_id)
+            .maybeSingle();
+
+          const planCode = titularPlanData?.plan_code || invite.patient_plans?.plan_code || 'FAMILY';
+          resolvedPlanCode = planCode;
+
+          if (dependenteData?.cpf && titularData?.cpf) {
+            const planoid = getClickLifePlanIdForDependente(planCode);
+            
+            console.log('[activate-family-member] 🔄 Iniciando sync ClickLife');
+            console.log('[activate-family-member] Plan code do titular:', planCode, '→ planoid:', planoid);
+
+            const syncResult = await syncDependenteClickLife(
+              {
+                cpf: dependenteData.cpf,
+                nome: `${dependenteData.first_name || ''} ${dependenteData.last_name || ''}`.trim() || 'Dependente',
+                email: invite.email,
+                telefone: dependenteData.phone_e164,
+                sexo: dependenteData.gender,
+                birthDate: dependenteData.birth_date,
+                cep: dependenteData.cep,
+                logradouro: dependenteData.address_line,
+                numero: dependenteData.address_number,
+                cidade: dependenteData.city,
+                estado: dependenteData.state
+              },
+              titularData.cpf,
+              planoid
+            );
+
+            clicklife_sync = syncResult.status;
+            clicklife_error_message = syncResult.error_message;
+
+            // Registrar métrica
+            await supabase.from('metrics').insert({
+              metric_type: 'clicklife_family_activation',
+              status: syncResult.success ? 'success' : 'failed',
+              patient_email: invite.email,
+              plan_code: planCode,
+              metadata: {
+                planoid,
+                titular_cpf_masked: titularData.cpf.substring(0, 3) + '***',
+                dependente_cpf_masked: dependenteData.cpf.substring(0, 3) + '***',
+                sync_status: syncResult.status,
+                error: syncResult.error_message
+              }
+            });
+
+            if (syncResult.success) {
+              console.log('[activate-family-member] ✅ ClickLife sync OK');
+            } else {
+              console.warn('[activate-family-member] ⚠️ ClickLife sync:', syncResult.status, syncResult.error_message);
+            }
+
+          } else {
+            console.warn('[activate-family-member] ⚠️ Dados insuficientes para sync ClickLife:', {
+              tem_cpf_dependente: !!dependenteData?.cpf,
+              tem_cpf_titular: !!titularData?.cpf
+            });
+            clicklife_sync = 'skipped';
+            clicklife_error_message = 'Dados insuficientes (CPF dependente ou titular ausente)';
+          }
+
+        } catch (clicklifeError) {
+          console.error('[activate-family-member] ❌ ClickLife sync error:', clicklifeError);
+          clicklife_sync = 'failed';
+          clicklife_error_message = clicklifeError instanceof Error ? clicklifeError.message : 'Exception during sync';
+        }
+
         console.log('[activate-family-member] ✅ Family member activated:', invite.email);
 
         return new Response(
           JSON.stringify({ 
             success: true, 
-            plan_code: invite.patient_plans?.plan_code 
+            plan_code: resolvedPlanCode || invite.patient_plans?.plan_code,
+            clicklife_sync,
+            clicklife_error_message: clicklife_sync !== 'ok' ? clicklife_error_message : undefined
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
