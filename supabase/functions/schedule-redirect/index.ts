@@ -663,7 +663,7 @@ Deno.serve(async (req) => {
         // Buscar patient pelo email usando query direta
         const { data: patientData, error: patientError } = await supabase
           .from('patients')
-          .select('id, cpf, first_name, last_name, phone_e164, gender')
+          .select('id, cpf, first_name, last_name, phone_e164, gender, birth_date')
           .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
           .maybeSingle();
         
@@ -683,6 +683,12 @@ Deno.serve(async (req) => {
                 fonte: 'patients_table'
               });
             }
+          }
+          
+          // ✅ Enriquecer birth_date se ausente
+          if (!payload.birth_date && patientData.birth_date) {
+            payload.birth_date = patientData.birth_date;
+            console.log('[schedule-redirect] ✓ birth_date obtido de patients:', patientData.birth_date);
           }
           
           console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
@@ -1123,16 +1129,35 @@ async function createCommunicarePatient(
   const ddi = phoneClean.startsWith('55') ? '55' : '55';
   const mobileNumber = phoneClean.replace(/^55/, '');
   
+  // Converter birth_date de YYYY-MM-DD para DDMMYYYY (formato Communicare)
+  let birthDateFormatted = "01011990"; // Fallback
+  if (payload.birth_date) {
+    try {
+      const parts = payload.birth_date.split('-');
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        birthDateFormatted = `${day}${month}${year}`;
+        console.log('[Communicare Patients] Data de nascimento:', payload.birth_date, '→', birthDateFormatted);
+      }
+    } catch (e) {
+      console.warn('[Communicare Patients] Erro ao converter birth_date, usando fallback:', e);
+    }
+  }
+
+  // Mapear gênero (já vem normalizado como 'M' ou 'F')
+  const genderFormatted = (payload.sexo === 'M' || payload.sexo === 'F') ? payload.sexo : 'M';
+  console.log('[Communicare Patients] Gênero:', payload.sexo, '→', genderFormatted);
+
   const patientPayload = {
     name: payload.nome,
     cpf: cpfClean,
     mobileNumber: mobileNumber,
     email: payload.email,
     ddi: ddi,
-    birthDate: "01011990", // Fallback: 1º/jan/1990 (DDMMYYYY)
-    gender: "M", // M = Masculino (M | F | I)
-    workingArea: "Outro", // Enum obrigatório
-    jogPosition: "Outro", // Enum obrigatório
+    birthDate: birthDateFormatted,
+    gender: genderFormatted,
+    workingArea: "Outro",
+    jogPosition: "Outro",
   };
   
   console.log('[Communicare Patients] Criando paciente CPF:', cpfClean);
