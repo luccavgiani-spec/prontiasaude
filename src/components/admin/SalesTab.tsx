@@ -171,8 +171,17 @@ const SalesTab = () => {
       return sum + price;
     }, 0);
 
-    // Média diária
+    // Média diária do mês selecionado
     const avgDailySales = dayOfMonth > 0 ? monthSales.length / dayOfMonth : 0;
+    
+    // Vendas de hoje (só relevante se for o mês atual)
+    const todaySales = isCurrentMonth 
+      ? appointments.filter(apt => isAfter(parseISO(apt.created_at), startOfDay(now))).length
+      : 0;
+    const todayRevenue = isCurrentMonth 
+      ? appointments.filter(apt => isAfter(parseISO(apt.created_at), startOfDay(now)))
+          .reduce((sum, apt) => sum + (SKU_PRICES[apt.service_code] || 0), 0)
+      : 0;
     
     // Projeção mensal (só faz sentido para o mês atual)
     const projectedMonthlySales = isCurrentMonth 
@@ -188,14 +197,8 @@ const SalesTab = () => {
       const aptDate = parseISO(apt.created_at);
       return isSameMonth(aptDate, prevMonthDate);
     });
-    const prevMonthDays = getDaysInMonth(prevMonthDate);
-    const prevAvgDaily = prevMonthDays > 0 ? prevMonthSales.length / prevMonthDays : 0;
+    const prevMonthRevenue = prevMonthSales.reduce((sum, apt) => sum + (SKU_PRICES[apt.service_code] || 0), 0);
     
-    const historicalAvgDaily = prevAvgDaily > 0 ? prevAvgDaily : avgDailySales;
-    const variationPercent = prevAvgDaily > 0 
-      ? ((avgDailySales - prevAvgDaily) / prevAvgDaily) * 100 
-      : 0;
-
     // Dados para o gráfico por dia
     const daysOfMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const dailyData: DailyChartData[] = daysOfMonth.map((day, index) => {
@@ -218,10 +221,12 @@ const SalesTab = () => {
       currentMonthSales: monthSales.length,
       currentMonthRevenue: monthRevenue / 100,
       avgDailySales,
+      todaySales,
+      todayRevenue: todayRevenue / 100,
       projectedMonthlySales,
       projectedMonthlyRevenue: projectedMonthlyRevenue / 100,
-      historicalAvgDaily,
-      variationPercent,
+      prevMonthTotal: prevMonthSales.length,
+      prevMonthRevenue: prevMonthRevenue / 100,
       dailyData: isCurrentMonth ? dailyData.filter(d => d.day <= dayOfMonth) : dailyData,
       bestDay,
       worstDay,
@@ -417,41 +422,66 @@ const SalesTab = () => {
         <CardContent className="space-y-6">
           {/* Métricas principais */}
           <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
+            {/* 1. Receita do Mês */}
             <div className="bg-muted/50 rounded-lg p-4">
               <p className="text-xs text-muted-foreground mb-1">Receita do Mês</p>
               <p className="text-xl font-bold text-primary">
                 R$ {monthlyAnalysis.currentMonthRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
             </div>
+            
+            {/* 2. Vendas do Mês */}
             <div className="bg-muted/50 rounded-lg p-4">
               <p className="text-xs text-muted-foreground mb-1">Vendas do Mês</p>
               <p className="text-xl font-bold">{monthlyAnalysis.currentMonthSales}</p>
             </div>
+            
+            {/* 3. Vendas de Hoje */}
             <div className="bg-muted/50 rounded-lg p-4">
-              <p className="text-xs text-muted-foreground mb-1">Média Diária</p>
-              <p className="text-xl font-bold">{monthlyAnalysis.avgDailySales.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground mb-1">Vendas de Hoje</p>
+              <p className="text-xl font-bold">{monthlyAnalysis.todaySales}</p>
+              <p className="text-xs text-muted-foreground">
+                R$ {monthlyAnalysis.todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </p>
             </div>
+            
+            {/* 4. Projeção Mensal + Comparativo */}
             <div className="bg-muted/50 rounded-lg p-4">
               <p className="text-xs text-muted-foreground mb-1">Projeção Mensal</p>
               <p className="text-xl font-bold">{monthlyAnalysis.projectedMonthlySales} vendas</p>
               <p className="text-xs text-muted-foreground">
                 ~R$ {monthlyAnalysis.projectedMonthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
+              <div className="flex items-center gap-1 mt-1 border-t border-muted pt-1">
+                {monthlyAnalysis.projectedMonthlySales >= monthlyAnalysis.prevMonthTotal ? (
+                  <ArrowUpRight className="h-3 w-3 text-green-500" />
+                ) : (
+                  <ArrowDownRight className="h-3 w-3 text-red-500" />
+                )}
+                <p className="text-xs text-muted-foreground">
+                  vs {monthlyAnalysis.prevMonthTotal} mês anterior
+                </p>
+              </div>
             </div>
+            
+            {/* 5. Hoje vs Média Diária */}
             <div className="bg-muted/50 rounded-lg p-4">
-              <p className="text-xs text-muted-foreground mb-1">Variação vs Histórico</p>
+              <p className="text-xs text-muted-foreground mb-1">Hoje vs Média</p>
               <div className="flex items-center gap-1">
-                {monthlyAnalysis.variationPercent >= 0 ? (
+                {monthlyAnalysis.todaySales >= monthlyAnalysis.avgDailySales ? (
                   <ArrowUpRight className="h-4 w-4 text-green-500" />
                 ) : (
                   <ArrowDownRight className="h-4 w-4 text-red-500" />
                 )}
-                <p className={`text-xl font-bold ${monthlyAnalysis.variationPercent >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {monthlyAnalysis.variationPercent >= 0 ? '+' : ''}{monthlyAnalysis.variationPercent.toFixed(1)}%
+                <p className={`text-xl font-bold ${monthlyAnalysis.todaySales >= monthlyAnalysis.avgDailySales ? 'text-green-500' : 'text-red-500'}`}>
+                  {monthlyAnalysis.todaySales} / {monthlyAnalysis.avgDailySales.toFixed(1)}
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Média histórica: {monthlyAnalysis.historicalAvgDaily.toFixed(1)}/dia
+                {monthlyAnalysis.todaySales >= monthlyAnalysis.avgDailySales 
+                  ? `+${(monthlyAnalysis.todaySales - monthlyAnalysis.avgDailySales).toFixed(1)} acima`
+                  : `${(monthlyAnalysis.todaySales - monthlyAnalysis.avgDailySales).toFixed(1)} abaixo`
+                }
               </p>
             </div>
           </div>
@@ -492,7 +522,7 @@ const SalesTab = () => {
                     }}
                   />
                   <ReferenceLine 
-                    y={monthlyAnalysis.historicalAvgDaily} 
+                    y={monthlyAnalysis.avgDailySales} 
                     stroke="hsl(var(--primary))" 
                     strokeDasharray="5 5"
                     strokeWidth={2}
@@ -513,7 +543,7 @@ const SalesTab = () => {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-primary" style={{ borderStyle: 'dashed' }}></div>
-                <span>Média histórica ({monthlyAnalysis.historicalAvgDaily.toFixed(1)}/dia)</span>
+                <span>Média diária ({monthlyAnalysis.avgDailySales.toFixed(1)}/dia)</span>
               </div>
             </div>
           </div>
