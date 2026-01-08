@@ -72,6 +72,21 @@ const PSICOLOGO_SKUS = [
   'YME9025'  // Psicólogo 8 sessões
 ];
 
+// ✅ Planos que incluem consultas com especialistas → plano_id 864 na ClickLife
+const PLANOS_COM_ESPECIALISTAS = [
+  'IND_COM_ESP_1M',   // Individual Completo com Especialistas - 1 Mês
+  'IND_COM_ESP_3M',   // Individual Completo com Especialistas - 3 Meses
+  'IND_COM_ESP_6M',   // Individual Completo com Especialistas - 6 Meses
+  'IND_COM_ESP_12M',  // Individual Completo com Especialistas - 12 Meses
+  'FAM_COM_ESP_1M',   // Família Completo com Especialistas - 1 Mês
+  'FAM_COM_ESP_3M',   // Família Completo com Especialistas - 3 Meses
+  'FAM_COM_ESP_6M',   // Família Completo com Especialistas - 6 Meses
+  'FAM_COM_ESP_12M',  // Família Completo com Especialistas - 12 Meses
+];
+
+// Planos empresariais também têm acesso a especialistas
+const isPlanoEmpresarial = (planCode: string | undefined) => planCode?.startsWith('EMPRESA_') ?? false;
+
 /**
  * Normaliza strings removendo acentos, convertendo para lowercase e trim
  */
@@ -692,6 +707,28 @@ Deno.serve(async (req) => {
           }
           
           console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
+          
+          // ✅ Buscar plan_code do plano ativo se ainda não temos
+          if (payload.plano_ativo && !payload.plan_code) {
+            try {
+              const { data: activePlan } = await supabase
+                .from('patient_plans')
+                .select('plan_code')
+                .eq('email', payload.email)
+                .eq('status', 'active')
+                .gte('plan_expires_at', new Date().toISOString())
+                .order('plan_expires_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              
+              if (activePlan?.plan_code) {
+                payload.plan_code = activePlan.plan_code;
+                console.log('[schedule-redirect] ✓ plan_code obtido:', activePlan.plan_code);
+              }
+            } catch (planError) {
+              console.warn('[schedule-redirect] Erro ao buscar plan_code:', planError);
+            }
+          }
         } else {
           console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
         }
@@ -870,10 +907,22 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const API_BASE = Deno.env.get('CLICKLIFE_API_BASE')!;
   const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!
 
-  // Determinar plano_id: 864 se plano ativo + especialista, senão 863
-  const planoId = (payload.plano_ativo && ESPECIALISTA_SKUS.includes(payload.sku)) ? 864 : 863;
-  
-  console.log(`[ClickLife] plano_id selecionado: ${planoId} (SKU: ${payload.sku}, plano_ativo: ${payload.plano_ativo})`);
+  // ✅ Determinar plano_id baseado no PLANO do paciente (não no SKU da consulta)
+  // 864 = Plano com especialistas | 863 = Plano sem especialistas
+  let planoId = 863; // Default: sem especialistas
+
+  if (payload.plano_ativo && payload.plan_code) {
+    const planoIncluiEspecialistas = 
+      PLANOS_COM_ESPECIALISTAS.includes(payload.plan_code) || 
+      isPlanoEmpresarial(payload.plan_code);
+    
+    planoId = planoIncluiEspecialistas ? 864 : 863;
+    
+    console.log(`[ClickLife] Plano do paciente: ${payload.plan_code}`);
+    console.log(`[ClickLife] Inclui especialistas: ${planoIncluiEspecialistas}`);
+  }
+
+  console.log(`[ClickLife] plano_id selecionado: ${planoId} (plan_code: ${payload.plan_code}, plano_ativo: ${payload.plano_ativo})`);
 
   // ✅ Garantir que sexo seja 'M' ou 'F'
   const sexoFinal = payload.sexo && (payload.sexo === 'M' || payload.sexo === 'F') 
