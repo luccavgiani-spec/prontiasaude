@@ -98,16 +98,13 @@ const TestesRoteamento: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [showJson, setShowJson] = useState(false);
   const [forceClicklife, setForceClicklife] = useState(false);
-  const [forceCommClinico, setForceCommClinico] = useState(false);
   const [loadingOverride, setLoadingOverride] = useState(false);
-  const [loadingCommOverride, setLoadingCommOverride] = useState(false);
   const [isRunningCommunicare, setIsRunningCommunicare] = useState(false);
   const [isRunningClicklife, setIsRunningClicklife] = useState(false);
 
-  // Carregar status dos overrides ao montar
+  // Carregar status do override global ao montar
   useEffect(() => {
     loadForceClicklifeStatus();
-    loadForceCommClinicoStatus();
   }, []);
 
   const loadForceClicklifeStatus = async () => {
@@ -121,20 +118,6 @@ const TestesRoteamento: React.FC = () => {
       setForceClicklife(data?.value === 'true');
     } catch (error) {
       console.error('Erro ao carregar force_clicklife:', error);
-    }
-  };
-
-  const loadForceCommClinicoStatus = async () => {
-    try {
-      const { data } = await supabase
-        .from('admin_settings')
-        .select('value')
-        .eq('key', 'force_communicare_clinico')
-        .maybeSingle();
-      
-      setForceCommClinico(data?.value === 'true');
-    } catch (error) {
-      console.error('Erro ao carregar force_communicare_clinico:', error);
     }
   };
 
@@ -159,33 +142,6 @@ const TestesRoteamento: React.FC = () => {
       toast.error('Erro ao atualizar override');
     } finally {
       setLoadingOverride(false);
-    }
-  };
-
-  const toggleForceCommClinico = async () => {
-    setLoadingCommOverride(true);
-    try {
-      const newValue = !forceCommClinico;
-      const { error } = await supabase
-        .from('admin_settings')
-        .upsert({ 
-          key: 'force_communicare_clinico', 
-          value: newValue.toString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) throw error;
-
-      setForceCommClinico(newValue);
-      toast.success(
-        `Override Clínico→Communicare ${newValue ? 'ativado' : 'desativado'}: ` +
-        `${newValue ? 'Pronto Atendimento irá para Communicare independente de horário/dia' : 'roteamento normal'}`
-      );
-    } catch (error) {
-      console.error('Erro ao atualizar force_communicare_clinico:', error);
-      toast.error('Erro ao atualizar override');
-    } finally {
-      setLoadingCommOverride(false);
     }
   };
 
@@ -813,46 +769,6 @@ const TestesRoteamento: React.FC = () => {
           >
             {loadingOverride ? 'Atualizando...' : forceClicklife ? 'Desativar Override' : 'Ativar Override'}
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* NOVO: Admin Override - Clínico → Communicare */}
-      <Card className="border-2 border-blue-500/20 bg-blue-50/50 dark:bg-blue-950/10">
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span className="flex items-center gap-2">
-              {forceCommClinico ? <ToggleRight className="h-5 w-5 text-blue-600" /> : <ToggleLeft className="h-5 w-5" />}
-              🆕 Admin Override - Clínico → Communicare
-            </span>
-            <Badge variant={forceCommClinico ? 'default' : 'secondary'} className={forceCommClinico ? 'bg-blue-600' : ''}>
-              {forceCommClinico ? 'ATIVO' : 'INATIVO'}
-            </Badge>
-          </CardTitle>
-          <CardDescription>
-            Força Pronto Atendimento (ITC6534) para Communicare independente de horário/dia
-            <br />
-            <span className="text-xs text-blue-600 font-medium">🎯 Útil para atender finais de semana/noites via Communicare</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={toggleForceCommClinico}
-            disabled={loadingCommOverride}
-            variant={forceCommClinico ? "default" : "outline"}
-            className={forceCommClinico ? "w-full bg-blue-600 hover:bg-blue-700" : "w-full border-blue-300 text-blue-600 hover:bg-blue-50"}
-          >
-            {loadingCommOverride ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Atualizando...
-              </>
-            ) : (
-              forceCommClinico ? 'Desativar Override Clínico' : 'Ativar Override Clínico'
-            )}
-          </Button>
-          <p className="mt-3 text-xs text-muted-foreground">
-            ⚠️ Nota: Afeta APENAS o SKU ITC6534 (Clínico Geral/Pronto Atendimento)
-          </p>
         </CardContent>
       </Card>
 

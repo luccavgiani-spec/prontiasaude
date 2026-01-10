@@ -24,6 +24,7 @@ import UserRegistrationsTab from "@/components/admin/UserRegistrationsTab";
 import SalesTab from "@/components/admin/SalesTab";
 import PlansManagement from "@/components/admin/PlansManagement";
 import ClickLifeOverrideCard from "@/components/admin/ClickLifeOverrideCard";
+import CommunicareOverrideCard from "@/components/admin/CommunicareOverrideCard";
 
 interface ContentItem {
   id: string;
@@ -675,8 +676,11 @@ const AdminDashboard = () => {
 
           <TabsContent value="configuracoes">
             <div className="space-y-6">
-              {/* BOTÃO OVERRIDE CLICKLIFE */}
-              <ClickLifeOverrideCard />
+              {/* Dois cards de override lado a lado */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ClickLifeOverrideCard />
+                <CommunicareOverrideCard />
+              </div>
               
               <SpecialtiesSelector isAdmin={true} />
               <RedirectFlowMap />
