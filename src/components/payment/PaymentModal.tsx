@@ -111,6 +111,9 @@ export function PaymentModal({
   const [showErrorOverlay, setShowErrorOverlay] = useState(false);
   const [errorOverlayMessage, setErrorOverlayMessage] = useState<string>("");
 
+  // Estado para botão de retry quando Brick do MP apresenta erro de validação
+  const [showBrickRetryButton, setShowBrickRetryButton] = useState(false);
+
   // Estados para cupom de desconto
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -567,6 +570,7 @@ export function PaymentModal({
       setPixData(null);
       setPaymentMethod(undefined);
       setShowSummary(true);
+      setShowBrickRetryButton(false); // Reset botão de retry do Brick
     }
   }, [open]);
 
@@ -882,10 +886,24 @@ export function PaymentModal({
               return;
             }
 
+            // ✅ Detectar erros de validação do Brick que podem "travar" o formulário
+            const isValidationError = 
+              message.toLowerCase().includes('dado obrigatório') ||
+              message.toLowerCase().includes('mandatory') ||
+              message.toLowerCase().includes('required field') ||
+              message.toLowerCase().includes('campo obrigatório') ||
+              error?.fieldErrors?.length > 0;
+
+            if (isValidationError) {
+              console.warn("[Card Payment Brick] Erro de validação detectado - mostrando botão retry");
+              setShowBrickRetryButton(true);
+            }
+
             // ✅ Exibir erros críticos ao usuário
             if (error?.cause?.[0]?.code === "E301" || message.includes("token")) {
               setError("Erro ao processar dados do cartão. Verifique as informações e tente novamente.");
               setPaymentStatus("idle");
+              setShowBrickRetryButton(true);
             } else if (message.includes("security_code")) {
               setError("Código de segurança (CVV) inválido.");
               setPaymentStatus("idle");
@@ -2484,6 +2502,37 @@ export function PaymentModal({
                       id="cardPaymentBrick"
                       className="mp-brick-container min-h-[400px]"
                     ></div>
+
+                    {/* Botão de retry quando Brick apresentar erro de validação */}
+                    {showBrickRetryButton && (
+                      <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800 mb-3">
+                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou usar PIX como alternativa.
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => window.location.reload()}
+                          >
+                            🔄 Recarregar página
+                          </Button>
+                          {/* Mostrar opção PIX se não for plano */}
+                          {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowBrickRetryButton(false);
+                                setPaymentMethod("pix");
+                              }}
+                            >
+                              Pagar com PIX
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -2708,6 +2757,37 @@ export function PaymentModal({
                       id="cardPaymentBrick"
                       className="mp-brick-container min-h-[400px]"
                     ></div>
+
+                    {/* Botão de retry quando Brick apresentar erro de validação */}
+                    {showBrickRetryButton && (
+                      <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800 mb-3">
+                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou usar PIX como alternativa.
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => window.location.reload()}
+                          >
+                            🔄 Recarregar página
+                          </Button>
+                          {/* Mostrar opção PIX se não for plano */}
+                          {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setShowBrickRetryButton(false);
+                                setPaymentMethod("pix");
+                              }}
+                            >
+                              Pagar com PIX
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
