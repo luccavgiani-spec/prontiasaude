@@ -29,48 +29,68 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
 
     // Verify admin role from Authorization header
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("[import-users] Missing or invalid Authorization header");
       return new Response(JSON.stringify({ error: "Authorization header required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user: callingUser }, error: authError } = await supabaseClient.auth.getUser(token);
+    // Cliente para validar o token do usuário (usa ANON_KEY + Authorization header)
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // Validar o token do usuário
+    const { data: { user: callingUser }, error: authError } = await supabaseAuth.auth.getUser();
     
     if (authError || !callingUser) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+      console.error("[import-users] Auth error:", authError?.message);
+      return new Response(JSON.stringify({ 
+        error: "Invalid token", 
+        details: authError?.message || "User not found" 
+      }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // Check if user is admin
-    const { data: roleData } = await supabaseClient
+    console.log(`[import-users] Authenticated user: ${callingUser.email} (${callingUser.id})`);
+
+    // Cliente admin para operações privilegiadas (criar usuários, verificar roles, etc)
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
+    // Check if user is admin usando o cliente admin
+    const { data: roleData, error: roleError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", callingUser.id)
       .eq("role", "admin")
       .single();
 
-    if (!roleData) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
+    if (roleError || !roleData) {
+      console.error("[import-users] Admin check failed:", roleError?.message);
+      return new Response(JSON.stringify({ 
+        error: "Admin access required",
+        details: "User does not have admin role"
+      }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
+
+    console.log(`[import-users] Admin verified: ${callingUser.email}`);
 
     const { users } = await req.json() as { users: ImportUserPayload[] };
 
@@ -91,19 +111,19 @@ serve(async (req) => {
     for (const user of users) {
       try {
         // Check if email already exists in auth.users
-        const { data: existingUsers } = await supabaseClient.auth.admin.listUsers();
+        const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === user.email.toLowerCase());
 
         if (existingUser) {
           // User already exists - update patients.user_id if needed
-          const { data: patient } = await supabaseClient
+          const { data: patient } = await supabaseAdmin
             .from("patients")
             .select("id, user_id")
             .eq("email", user.email.toLowerCase())
             .single();
 
           if (patient && !patient.user_id) {
-            await supabaseClient
+            await supabaseAdmin
               .from("patients")
               .update({ user_id: existingUser.id })
               .eq("id", patient.id);
@@ -150,7 +170,7 @@ serve(async (req) => {
           createUserData.password = randomPassword;
         }
 
-        const { data: newUser, error: createError } = await supabaseClient.auth.admin.createUser(createUserData);
+        const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser(createUserData);
 
         if (createError) {
           console.error(`[import-users] Error creating user ${user.email}:`, createError);
@@ -164,21 +184,21 @@ serve(async (req) => {
         }
 
         // Update patients.user_id
-        const { data: patient } = await supabaseClient
+        const { data: patient } = await supabaseAdmin
           .from("patients")
           .select("id")
           .eq("email", user.email.toLowerCase())
           .single();
 
         if (patient) {
-          await supabaseClient
+          await supabaseAdmin
             .from("patients")
             .update({ user_id: newUser.user.id })
             .eq("id", patient.id);
         }
 
         // Add user role
-        await supabaseClient
+        await supabaseAdmin
           .from("user_roles")
           .insert({
             user_id: newUser.user.id,
