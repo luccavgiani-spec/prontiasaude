@@ -25,6 +25,7 @@ import SalesTab from "@/components/admin/SalesTab";
 import PlansManagement from "@/components/admin/PlansManagement";
 import ClickLifeOverrideCard from "@/components/admin/ClickLifeOverrideCard";
 import CommunicareOverrideCard from "@/components/admin/CommunicareOverrideCard";
+import ServicesManagement from "@/components/admin/ServicesManagement";
 
 interface ContentItem {
   id: string;
@@ -374,6 +375,7 @@ const AdminDashboard = () => {
               <SelectContent className="bg-background z-50">
                 <SelectItem value="relatorios">📊 Relatórios</SelectItem>
                 <SelectItem value="vendas">💰 Vendas</SelectItem>
+                <SelectItem value="servicos">📦 Serviços</SelectItem>
                 <SelectItem value="planos">📋 Planos</SelectItem>
                 <SelectItem value="cupons">🎟️ Cupons</SelectItem>
                 <SelectItem value="empresas">Empresas</SelectItem>
@@ -385,9 +387,10 @@ const AdminDashboard = () => {
               </SelectContent>
             </Select>
           ) : (
-            <TabsList className="grid w-full max-w-6xl grid-cols-10">
+            <TabsList className="grid w-full max-w-7xl grid-cols-11">
               <TabsTrigger value="relatorios">📊 Relatórios</TabsTrigger>
               <TabsTrigger value="vendas">💰 Vendas</TabsTrigger>
+              <TabsTrigger value="servicos">📦 Serviços</TabsTrigger>
               <TabsTrigger value="planos">📋 Planos</TabsTrigger>
               <TabsTrigger value="cupons">🎟️ Cupons</TabsTrigger>
               <TabsTrigger value="empresas">Empresas</TabsTrigger>
@@ -398,6 +401,10 @@ const AdminDashboard = () => {
               <TabsTrigger value="pagamentos">💳 Testes MP</TabsTrigger>
             </TabsList>
           )}
+
+          <TabsContent value="servicos">
+            <ServicesManagement />
+          </TabsContent>
 
           <TabsContent value="conteudo">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
