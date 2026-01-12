@@ -12,20 +12,36 @@ import { format, startOfDay, startOfWeek, isAfter, parseISO, startOfMonth, endOf
 import { ptBR } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
-// 🔒 Data mínima para filtrar vendas de teste (apenas vendas reais a partir de 21/11/2025)
-const SALES_START_DATE = '2025-11-21T00:00:00.000Z';
+// 🔒 Data mínima para filtrar vendas (inclui dados migrados a partir de outubro/2025)
+const SALES_START_DATE = '2025-10-01T00:00:00.000Z';
 
 // 💰 Mapeamento de SKUs para preços em centavos
 const SKU_PRICES: Record<string, number> = {
+  // Consultas avulsas (SKUs atuais)
   'ITC6534': 4390,      // Clínico Geral
   'ZXW2165': 3999,      // Psicólogo
   'OVM9892': 11990,     // Laudo Psicológico
   'ULT3571': 4390,      // Solicitação de Exames
+  
+  // SKUs migrados (variantes encontradas nos dados)
+  'RZP5755': 4390,      // Clínico (variante)
+  'CCP1566': 3999,      // Psicólogo (variante)
+  'TQP5720': 4390,      // Serviço adicional
+  'VPN5132': 4390,      // Serviço adicional
+  'BIR7668': 4390,      // Serviço adicional
+  'HXR8516': 4390,      // Serviço adicional
+  'QOP1101': 4390,      // Serviço adicional
+  
+  // SKUs legados (dados históricos)
+  'consulta-clinico-geral': 4390,
+  'CLK-CLINICO': 4390,
+  
   // Planos mensais
   'IND_SEM_ESP_1M': 1999,
   'IND_COM_ESP_1M': 2399,
   'FAM_SEM_ESP_1M': 3499,
   'FAM_COM_ESP_1M': 4390,
+  
   // Planos anuais
   'IND_SEM_ESP_12M': 19990,
   'IND_COM_ESP_12M': 23990,
