@@ -386,6 +386,7 @@ export type Database = {
           discount_percent: number | null
           final_amount: number | null
           id: string
+          order_id: string | null
           original_amount: number | null
           owner_email: string | null
           owner_id: string | null
@@ -410,6 +411,7 @@ export type Database = {
           discount_percent?: number | null
           final_amount?: number | null
           id?: string
+          order_id?: string | null
           original_amount?: number | null
           owner_email?: string | null
           owner_id?: string | null
@@ -434,6 +436,7 @@ export type Database = {
           discount_percent?: number | null
           final_amount?: number | null
           id?: string
+          order_id?: string | null
           original_amount?: number | null
           owner_email?: string | null
           owner_id?: string | null
@@ -870,9 +873,11 @@ export type Database = {
       pending_payments: {
         Row: {
           amount: number | null
+          amount_original: number | null
           coupon_code: string | null
           coupon_owner_id: string | null
           created_at: string | null
+          discount_percent: number | null
           external_reference: string | null
           id: string
           order_id: string | null
@@ -890,9 +895,11 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          amount_original?: number | null
           coupon_code?: string | null
           coupon_owner_id?: string | null
           created_at?: string | null
+          discount_percent?: number | null
           external_reference?: string | null
           id?: string
           order_id?: string | null
@@ -910,9 +917,11 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          amount_original?: number | null
           coupon_code?: string | null
           coupon_owner_id?: string | null
           created_at?: string | null
+          discount_percent?: number | null
           external_reference?: string | null
           id?: string
           order_id?: string | null
