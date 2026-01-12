@@ -950,6 +950,7 @@ export type Database = {
       }
       services: {
         Row: {
+          allows_recurring: boolean | null
           category: string | null
           created_at: string | null
           description: string | null
@@ -958,10 +959,13 @@ export type Database = {
           name: string
           price: number | null
           price_cents: number | null
+          recurring_frequency: number | null
+          recurring_frequency_type: string | null
           sku: string | null
           updated_at: string | null
         }
         Insert: {
+          allows_recurring?: boolean | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -970,10 +974,13 @@ export type Database = {
           name: string
           price?: number | null
           price_cents?: number | null
+          recurring_frequency?: number | null
+          recurring_frequency_type?: string | null
           sku?: string | null
           updated_at?: string | null
         }
         Update: {
+          allows_recurring?: boolean | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -982,6 +989,8 @@ export type Database = {
           name?: string
           price?: number | null
           price_cents?: number | null
+          recurring_frequency?: number | null
+          recurring_frequency_type?: string | null
           sku?: string | null
           updated_at?: string | null
         }
