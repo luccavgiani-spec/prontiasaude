@@ -8,9 +8,22 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2 } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
+import { ImportUsersModal } from './ImportUsersModal';
+
+interface Patient {
+  id: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  cpf?: string;
+  phone_e164?: string;
+  profile_complete: boolean;
+  user_id?: string;
+  created_at: string;
+}
 
 interface User {
   id: string;
@@ -29,66 +42,142 @@ interface User {
   };
   activePlan?: boolean;
   planCode?: string;
+  hasAuthAccount?: boolean;
+  authProvider?: 'email' | 'google' | 'none';
 }
 
 export default function UserRegistrationsTab() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [activationModalOpen, setActivationModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [clicklifeLoading, setClicklifeLoading] = useState<string | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [stats, setStats] = useState({
+    total: 0,
+    withAccount: 0,
+    withoutAccount: 0,
+    profileComplete: 0,
+    withPlan: 0
+  });
   const limit = 50;
 
   useEffect(() => {
-    loadUsers();
-  }, [page, roleFilter]);
+    loadPatients();
+  }, [page, statusFilter]);
 
-  const loadUsers = async () => {
+  const loadPatients = async () => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      // Fetch all patients directly from the patients table
+      let query = supabase
+        .from('patients')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
 
-      const { data, error } = await supabase.functions.invoke('user-management', {
-        body: {
-          operation: 'list',
-          page,
-          limit,
-          search: search || undefined,
-          role: roleFilter !== 'all' ? roleFilter : undefined,
-        },
-      });
+      // Apply search filter
+      if (search) {
+        query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,cpf.ilike.%${search}%`);
+      }
+
+      const { data: patients, error } = await query;
 
       if (error) throw error;
 
+      // Get total count for stats
+      const { count: totalCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true });
+
+      const { count: withAccountCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .not('user_id', 'is', null);
+
+      const { count: profileCompleteCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .eq('profile_complete', true);
+
+      // Transform patients to User format
       const usersWithPlans = await Promise.all(
-        (data.users || []).map(async (user: User) => {
+        (patients || []).map(async (patient: Patient) => {
           try {
-            const plan = await getPatientPlan(user.email, true); // Força busca por email (contexto admin)
+            const plan = await getPatientPlan(patient.email, true);
             const now = new Date();
             const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at) : null;
             const isActive = expiresAt && expiresAt > now && plan?.status === 'active';
-            
+
             return {
-              ...user,
+              id: patient.user_id || patient.id,
+              email: patient.email || '',
+              created_at: patient.created_at,
+              roles: [],
+              patient: {
+                first_name: patient.first_name,
+                last_name: patient.last_name,
+                cpf: patient.cpf,
+                phone_e164: patient.phone_e164,
+                profile_complete: patient.profile_complete || false,
+              },
               activePlan: isActive,
               planCode: plan?.plan_code,
-            };
+              hasAuthAccount: !!patient.user_id,
+              authProvider: patient.user_id ? 'email' : 'none',
+            } as User;
           } catch (error) {
-            console.error(`Error loading plan for ${user.email}:`, error);
-            return { ...user, activePlan: false };
+            console.error(`Error loading plan for ${patient.email}:`, error);
+            return {
+              id: patient.user_id || patient.id,
+              email: patient.email || '',
+              created_at: patient.created_at,
+              roles: [],
+              patient: {
+                first_name: patient.first_name,
+                last_name: patient.last_name,
+                cpf: patient.cpf,
+                phone_e164: patient.phone_e164,
+                profile_complete: patient.profile_complete || false,
+              },
+              activePlan: false,
+              hasAuthAccount: !!patient.user_id,
+              authProvider: patient.user_id ? 'email' : 'none',
+            } as User;
           }
         })
       );
 
-      setUsers(usersWithPlans);
+      // Apply status filter
+      let filteredUsers = usersWithPlans;
+      if (statusFilter === 'with_account') {
+        filteredUsers = usersWithPlans.filter(u => u.hasAuthAccount);
+      } else if (statusFilter === 'without_account') {
+        filteredUsers = usersWithPlans.filter(u => !u.hasAuthAccount);
+      } else if (statusFilter === 'with_plan') {
+        filteredUsers = usersWithPlans.filter(u => u.activePlan);
+      }
+
+      setUsers(filteredUsers);
+
+      // Count users with active plans
+      const withPlanCount = usersWithPlans.filter(u => u.activePlan).length;
+
+      setStats({
+        total: totalCount || 0,
+        withAccount: withAccountCount || 0,
+        withoutAccount: (totalCount || 0) - (withAccountCount || 0),
+        profileComplete: profileCompleteCount || 0,
+        withPlan: withPlanCount
+      });
+
     } catch (error) {
-      console.error('Error loading users:', error);
-      toast.error('Erro ao carregar usuários');
+      console.error('Error loading patients:', error);
+      toast.error('Erro ao carregar pacientes');
     } finally {
       setLoading(false);
     }
@@ -114,14 +203,13 @@ export default function UserRegistrationsTab() {
       }
 
       toast.success('Usuário deletado com sucesso');
-      loadUsers();
+      loadPatients();
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Erro ao deletar usuário');
     }
   };
 
-  // ✅ NOVO: Ativar manualmente na ClickLife
   const handleClickLifeActivation = async (user: User) => {
     if (!user.patient?.cpf) {
       toast.error('Usuário não possui CPF cadastrado');
@@ -157,23 +245,23 @@ export default function UserRegistrationsTab() {
   };
 
   const exportCSV = () => {
-    const headers = ['Email', 'Nome', 'CPF', 'Telefone', 'Data Cadastro', 'Último Login', 'Status', 'Roles'];
+    const headers = ['Email', 'Nome', 'CPF', 'Telefone', 'Data Cadastro', 'Conta Auth', 'Perfil Completo', 'Plano Ativo'];
     const rows = users.map(u => [
       u.email,
       `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.trim(),
       u.patient?.cpf || '',
-      u.patient?.phone_e164 || u.phone || '',
+      u.patient?.phone_e164 || '',
       new Date(u.created_at).toLocaleDateString('pt-BR'),
-      u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleDateString('pt-BR') : 'Nunca',
-      u.email_confirmed_at ? 'Ativo' : 'Pendente',
-      u.roles.join(', '),
+      u.hasAuthAccount ? 'Sim' : 'Não',
+      u.patient?.profile_complete ? 'Sim' : 'Não',
+      u.activePlan ? 'Sim' : 'Não',
     ]);
 
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `usuarios-${new Date().toISOString()}.csv`;
+    link.download = `pacientes-${new Date().toISOString()}.csv`;
     link.click();
   };
 
@@ -185,7 +273,7 @@ export default function UserRegistrationsTab() {
   };
 
   if (loading) {
-    return <div className="p-8 text-center">Carregando cadastros...</div>;
+    return <div className="p-8 text-center">Carregando pacientes...</div>;
   }
 
   return (
@@ -194,33 +282,31 @@ export default function UserRegistrationsTab() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Pacientes</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
+            <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Usuários Ativos</CardTitle>
+            <CardTitle className="text-sm font-medium">Com Conta Auth</CardTitle>
+            <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.email_confirmed_at).length}
-            </div>
+            <div className="text-2xl font-bold text-green-600">{stats.withAccount}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Cadastros Hoje</CardTitle>
+            <CardTitle className="text-sm font-medium">Sem Conta Auth</CardTitle>
+            <UserX className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => new Date(u.created_at).toDateString() === new Date().toDateString()).length}
-            </div>
+            <div className="text-2xl font-bold text-orange-600">{stats.withoutAccount}</div>
           </CardContent>
         </Card>
 
@@ -229,13 +315,39 @@ export default function UserRegistrationsTab() {
             <CardTitle className="text-sm font-medium">Perfis Completos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.patient?.profile_complete).length}
-            </div>
+            <div className="text-2xl font-bold">{stats.profileComplete}</div>
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Com Plano Ativo</CardTitle>
+            <Shield className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-primary">{stats.withPlan}</div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Alert for users without auth */}
+      {stats.withoutAccount > 0 && (
+        <div className="flex items-center gap-3 p-4 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-orange-600" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
+              {stats.withoutAccount} pacientes sem conta de autenticação
+            </p>
+            <p className="text-xs text-orange-600 dark:text-orange-400">
+              Importe os usuários do backup SQL para criar as contas com senhas preservadas.
+            </p>
+          </div>
+          <Button onClick={() => setImportModalOpen(true)} variant="outline" className="border-orange-300">
+            <Upload className="h-4 w-4 mr-2" />
+            Importar Usuários
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex justify-between items-center gap-4">
@@ -246,44 +358,50 @@ export default function UserRegistrationsTab() {
               placeholder="Buscar por email, nome ou CPF..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadUsers()}
+              onKeyDown={(e) => e.key === 'Enter' && loadPatients()}
               className="pl-10"
             />
           </div>
 
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-40">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-48">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todas Roles</SelectItem>
-              <SelectItem value="user">Usuário</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-              <SelectItem value="company">Empresa</SelectItem>
+              <SelectItem value="all">Todos os Pacientes</SelectItem>
+              <SelectItem value="with_account">Com Conta Auth</SelectItem>
+              <SelectItem value="without_account">Sem Conta Auth</SelectItem>
+              <SelectItem value="with_plan">Com Plano Ativo</SelectItem>
             </SelectContent>
           </Select>
 
-          <Button onClick={loadUsers}>
+          <Button onClick={loadPatients}>
             <Search className="h-4 w-4 mr-2" />
             Buscar
           </Button>
         </div>
 
-        <Button variant="outline" onClick={exportCSV}>
-          <Download className="h-4 w-4 mr-2" />
-          Exportar CSV
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+            <Upload className="h-4 w-4 mr-2" />
+            Importar Backup
+          </Button>
+          <Button variant="outline" onClick={exportCSV}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar CSV
+          </Button>
+        </div>
       </div>
 
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Usuários Cadastrados</CardTitle>
+          <CardTitle>Pacientes Cadastrados</CardTitle>
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              Nenhum usuário encontrado
+              Nenhum paciente encontrado
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -295,9 +413,7 @@ export default function UserRegistrationsTab() {
                     <TableHead>CPF</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Cadastrado em</TableHead>
-                    <TableHead>Último Login</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Role</TableHead>
+                    <TableHead>Status Login</TableHead>
                     <TableHead>Perfil</TableHead>
                     <TableHead>Plano Ativo</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -313,29 +429,19 @@ export default function UserRegistrationsTab() {
                           : '-'}
                       </TableCell>
                       <TableCell className="font-mono text-sm">{formatCPF(user.patient?.cpf)}</TableCell>
-                      <TableCell>{user.patient?.phone_e164 || user.phone || '-'}</TableCell>
+                      <TableCell>{user.patient?.phone_e164 || '-'}</TableCell>
                       <TableCell>{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell>
-                        {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString('pt-BR') : 'Nunca'}
-                      </TableCell>
-                      <TableCell>
-                        {user.email_confirmed_at ? (
-                          <Badge variant="default">Ativo</Badge>
+                        {user.hasAuthAccount ? (
+                          <Badge variant="default" className="bg-green-600">
+                            <UserCheck className="h-3 w-3 mr-1" />
+                            Conta Ativa
+                          </Badge>
                         ) : (
-                          <Badge variant="secondary">Pendente</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.roles.length > 0 ? (
-                          <div className="flex gap-1">
-                            {user.roles.map(role => (
-                              <Badge key={role} variant="outline">
-                                {role}
-                              </Badge>
-                            ))}
-                          </div>
-                        ) : (
-                          '-'
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                            <UserX className="h-3 w-3 mr-1" />
+                            Sem Conta
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell>
@@ -347,7 +453,7 @@ export default function UserRegistrationsTab() {
                       </TableCell>
                       <TableCell>
                         {user.activePlan ? (
-                          <Badge variant="default" className="bg-green-600">✓ Ativo</Badge>
+                          <Badge variant="default" className="bg-green-600">✓ {user.planCode}</Badge>
                         ) : (
                           <Badge variant="secondary">✗ Sem plano</Badge>
                         )}
@@ -363,8 +469,7 @@ export default function UserRegistrationsTab() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {/* ✅ NOVO: Botão para ativar na ClickLife */}
-                          {user.patient?.cpf && (
+                          {user.patient?.cpf && user.hasAuthAccount && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -381,8 +486,7 @@ export default function UserRegistrationsTab() {
                             </Button>
                           )}
                           
-                          {/* Botão para ativar/renovar plano */}
-                          {user.patient && (
+                          {user.patient && user.hasAuthAccount && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -397,14 +501,16 @@ export default function UserRegistrationsTab() {
                             </Button>
                           )}
                           
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(user.id)}
-                            title="Excluir"
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {user.hasAuthAccount && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(user.id)}
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -435,6 +541,16 @@ export default function UserRegistrationsTab() {
         </Button>
       </div>
 
+      {/* Import Modal */}
+      <ImportUsersModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onSuccess={() => {
+          setImportModalOpen(false);
+          loadPatients();
+        }}
+      />
+
       {/* Modal de Ativação Manual */}
       {selectedUser && (
         <ManualPlanActivationModal
@@ -453,7 +569,7 @@ export default function UserRegistrationsTab() {
           onSuccess={() => {
             setActivationModalOpen(false);
             setSelectedUser(null);
-            loadUsers();
+            loadPatients();
             toast.success('Plano ativado com sucesso!');
           }}
         />
@@ -495,21 +611,19 @@ export default function UserRegistrationsTab() {
                   <p>{new Date(viewingUser.created_at).toLocaleString('pt-BR')}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Último Login</label>
-                  <p>{viewingUser.last_sign_in_at ? new Date(viewingUser.last_sign_in_at).toLocaleString('pt-BR') : 'Nunca'}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Status da Conta</label>
+                  <div className="mt-1">
+                    {viewingUser.hasAuthAccount ? (
+                      <Badge variant="default" className="bg-green-600">Conta Ativa</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-orange-100 text-orange-700">Sem Conta Auth</Badge>
+                    )}
+                  </div>
                 </div>
               </div>
 
               {/* Status */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Status Email</label>
-                  <div className="mt-1">
-                    <Badge variant={viewingUser.email_confirmed_at ? 'default' : 'secondary'}>
-                      {viewingUser.email_confirmed_at ? 'Confirmado' : 'Pendente'}
-                    </Badge>
-                  </div>
-                </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Perfil</label>
                   <div className="mt-1">
@@ -528,19 +642,9 @@ export default function UserRegistrationsTab() {
                 </div>
               </div>
 
-              {/* Roles */}
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Roles</label>
-                <div className="flex gap-2 mt-1">
-                  {viewingUser.roles.length > 0 ? viewingUser.roles.map(role => (
-                    <Badge key={role} variant="outline">{role}</Badge>
-                  )) : <span className="text-muted-foreground text-sm">Nenhuma role</span>}
-                </div>
-              </div>
-
               {/* ID Técnico */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground">User ID</label>
+                <label className="text-sm font-medium text-muted-foreground">Patient/User ID</label>
                 <p className="font-mono text-xs text-muted-foreground">{viewingUser.id}</p>
               </div>
             </div>
