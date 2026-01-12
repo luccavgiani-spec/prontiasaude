@@ -6,13 +6,20 @@ export async function ensurePatientRow(userId: string) {
   const { data, error } = await supabase
     .from('patients')
     .select('id')
-    .eq('id', userId)
+    .eq('user_id', userId)
     .maybeSingle();
 
   if (error) throw error;
   if (data?.id) return true;
 
-  const { error: insErr } = await supabase.from('patients').insert({ id: userId });
+  // Buscar email do usuário autenticado
+  const { data: authData } = await supabase.auth.getUser();
+  const userEmail = authData?.user?.email;
+
+  const { error: insErr } = await supabase.from('patients').insert({ 
+    user_id: userId,
+    email: userEmail 
+  });
   // Ignora conflito se linha foi criada por trigger em paralelo
   if (insErr && insErr.code !== '23505') throw insErr;
   return true;
@@ -52,8 +59,16 @@ export async function upsertPatientBasic(payload: {
   if (!/^\d{8}$/.test(cleanCep)) throw new Error('CEP deve ter 8 dígitos.');
   if (!payload.city || !payload.state) throw new Error('Cidade e UF são obrigatórios.');
 
+  // Buscar patient.id existente pelo user_id
+  const { data: existingPatient } = await supabase
+    .from('patients')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
   const update = {
-    id: userId,
+    ...(existingPatient?.id ? { id: existingPatient.id } : {}),
+    user_id: userId,
     email: userEmail,
     first_name: payload.first_name,
     last_name: payload.last_name,
@@ -72,7 +87,9 @@ export async function upsertPatientBasic(payload: {
     profile_complete: true
   };
 
-  const { error } = await supabase.from('patients').upsert(update).eq('id', userId);
+  const { error } = await supabase
+    .from('patients')
+    .upsert(update, { onConflict: 'user_id' });
   if (error) {
     console.error('Supabase upsert error (patients):', error);
     throw new Error(error.message || 'Falha ao salvar seus dados.');

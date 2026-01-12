@@ -96,7 +96,7 @@ const AuthCallback = () => {
       const { data, error } = await supabase
         .from('patients')
         .select('profile_complete')
-        .eq('id', session.user.id)
+        .eq('user_id', session.user.id)
         .maybeSingle();
 
       if (error) {
