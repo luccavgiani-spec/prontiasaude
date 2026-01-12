@@ -105,12 +105,8 @@ const EmpresaConvites = lazy(() => import("./pages/empresa/Convites"));
 const ClubeBen = lazy(() => import("./pages/ClubeBen"));
 const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
 const ClickLifeSSO = lazy(() => import("./pages/ClickLifeSSO"));
-const LandingPage = lazy(() => import("./pages/LandingPage"));
 
 const queryClient = new QueryClient();
-
-// Rotas com layout standalone (sem navbar/footer)
-const STANDALONE_ROUTES = ['/lp'];
 
 // Scroll to top component and track page views
 const ScrollToTop = () => {
@@ -126,15 +122,8 @@ const ScrollToTop = () => {
   return null;
 };
 
-// Layout component that conditionally renders navbar/footer
+// Layout component
 const AppLayout = ({ children }: { children: React.ReactNode }) => {
-  const { pathname } = useLocation();
-  const isStandalone = STANDALONE_ROUTES.some(route => pathname.startsWith(route));
-
-  if (isStandalone) {
-    return <>{children}</>;
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-muted/30">
       <PromoTopBar />
@@ -168,7 +157,6 @@ const App = () => (
           >
             <Routes>
               <Route path="/" element={<Index />} />
-              <Route path="/lp" element={<LandingPage />} />
               <Route path="/quem-somos" element={<QuemSomos />} />
               <Route path="/servicos" element={<Servicos />} />
               <Route path="/servicos/consulta" element={<Consulta />} />
@@ -230,26 +218,11 @@ const App = () => (
             </Routes>
           </Suspense>
         </AppLayout>
-        {/* Float buttons only on non-standalone routes */}
-        <FloatButtons />
+        <ConsultNowFloatButton />
+        <WhatsAppFloatButton />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
-
-// Float buttons component that hides on standalone routes
-const FloatButtons = () => {
-  const { pathname } = useLocation();
-  const isStandalone = STANDALONE_ROUTES.some(route => pathname.startsWith(route));
-
-  if (isStandalone) return null;
-
-  return (
-    <>
-      <ConsultNowFloatButton />
-      <WhatsAppFloatButton />
-    </>
-  );
-};
 
 export default App;
