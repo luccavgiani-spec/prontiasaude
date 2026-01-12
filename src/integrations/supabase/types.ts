@@ -16,25 +16,49 @@ export type Database = {
     Tables: {
       admin_content: {
         Row: {
+          blog_category: string | null
           content: Json | null
+          content_type: string | null
           created_at: string | null
+          description: string | null
+          destination: string | null
+          external_link: string | null
+          file_url: string | null
           id: string
           section: string
+          title: string | null
           updated_at: string | null
+          url: string | null
         }
         Insert: {
+          blog_category?: string | null
           content?: Json | null
+          content_type?: string | null
           created_at?: string | null
+          description?: string | null
+          destination?: string | null
+          external_link?: string | null
+          file_url?: string | null
           id?: string
           section: string
+          title?: string | null
           updated_at?: string | null
+          url?: string | null
         }
         Update: {
+          blog_category?: string | null
           content?: Json | null
+          content_type?: string | null
           created_at?: string | null
+          description?: string | null
+          destination?: string | null
+          external_link?: string | null
+          file_url?: string | null
           id?: string
           section?: string
+          title?: string | null
           updated_at?: string | null
+          url?: string | null
         }
         Relationships: []
       }
@@ -73,8 +97,10 @@ export type Database = {
           id: string
           meeting_url: string | null
           notes: string | null
+          order_id: string | null
           patient_id: string | null
           provider: string | null
+          redirect_url: string | null
           scheduled_date: string | null
           service_code: string | null
           service_name: string | null
@@ -93,8 +119,10 @@ export type Database = {
           id?: string
           meeting_url?: string | null
           notes?: string | null
+          order_id?: string | null
           patient_id?: string | null
           provider?: string | null
+          redirect_url?: string | null
           scheduled_date?: string | null
           service_code?: string | null
           service_name?: string | null
@@ -113,8 +141,10 @@ export type Database = {
           id?: string
           meeting_url?: string | null
           notes?: string | null
+          order_id?: string | null
           patient_id?: string | null
           provider?: string | null
+          redirect_url?: string | null
           scheduled_date?: string | null
           service_code?: string | null
           service_name?: string | null
@@ -250,6 +280,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_temporary_password: boolean | null
+          must_change_password: boolean | null
           password_hash: string | null
           updated_at: string | null
           user_id: string | null
@@ -260,6 +291,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_temporary_password?: boolean | null
+          must_change_password?: boolean | null
           password_hash?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -270,6 +302,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_temporary_password?: boolean | null
+          must_change_password?: boolean | null
           password_hash?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -906,6 +939,7 @@ export type Database = {
           is_active: boolean | null
           name: string
           price: number | null
+          price_cents: number | null
           sku: string | null
           updated_at: string | null
         }
@@ -917,6 +951,7 @@ export type Database = {
           is_active?: boolean | null
           name: string
           price?: number | null
+          price_cents?: number | null
           sku?: string | null
           updated_at?: string | null
         }
@@ -928,6 +963,7 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           price?: number | null
+          price_cents?: number | null
           sku?: string | null
           updated_at?: string | null
         }
