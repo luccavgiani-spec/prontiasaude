@@ -105,8 +105,12 @@ const EmpresaConvites = lazy(() => import("./pages/empresa/Convites"));
 const ClubeBen = lazy(() => import("./pages/ClubeBen"));
 const ClubeBenAuth = lazy(() => import("./pages/ClubeBenAuth"));
 const ClickLifeSSO = lazy(() => import("./pages/ClickLifeSSO"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
 
 const queryClient = new QueryClient();
+
+// Rotas com layout standalone (sem navbar/footer)
+const STANDALONE_ROUTES = ['/lp'];
 
 // Scroll to top component and track page views
 const ScrollToTop = () => {
@@ -122,6 +126,25 @@ const ScrollToTop = () => {
   return null;
 };
 
+// Layout component that conditionally renders navbar/footer
+const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const { pathname } = useLocation();
+  const isStandalone = STANDALONE_ROUTES.some(route => pathname.startsWith(route));
+
+  if (isStandalone) {
+    return <>{children}</>;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-muted/30">
+      <PromoTopBar />
+      <Navbar />
+      <main className="flex-1">{children}</main>
+      <Footer />
+    </div>
+  );
+};
+
 // Initialize Meta tracking and Web Vitals once
 if (typeof window !== "undefined") {
   initMetaTracking();
@@ -135,87 +158,98 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <ScrollToTop />
-        <div className="min-h-screen flex flex-col bg-muted/30">
-          <PromoTopBar />
-          <Navbar />
-          <main className="flex-1">
-            <Suspense
-              fallback={
-                <div className="min-h-screen flex items-center justify-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-                </div>
-              }
-            >
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/quem-somos" element={<QuemSomos />} />
-                <Route path="/servicos" element={<Servicos />} />
-                <Route path="/servicos/consulta" element={<Consulta />} />
-                <Route path="/servicos/psicologa" element={<Psicologa />} />
-                <Route path="/servicos/medicos_especialistas" element={<MedicosEspecialistas />} />
-                <Route path="/servicos/laudos_psicologicos" element={<LaudosPsicologicos />} />
-                <Route path="/servicos/solicitacao_exames" element={<SolicitacaoExames />} />
-                <Route path="/servicos/:slug" element={<ServicoDetalhe />} />
-                <Route path="/planos" element={<Planos />} />
-                <Route path="/empresas" element={<Empresas />} />
-                <Route path="/empresasdobem" element={<EmpresasDoBem />} />
-                <Route path="/blogs-artigos" element={<BlogsIndex />} />
-                <Route path="/blogs-artigos/:slug" element={<BlogArticlePage />} />
-                <Route path="/paciente" element={<Paciente />} />
-                <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
+        <AppLayout>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/lp" element={<LandingPage />} />
+              <Route path="/quem-somos" element={<QuemSomos />} />
+              <Route path="/servicos" element={<Servicos />} />
+              <Route path="/servicos/consulta" element={<Consulta />} />
+              <Route path="/servicos/psicologa" element={<Psicologa />} />
+              <Route path="/servicos/medicos_especialistas" element={<MedicosEspecialistas />} />
+              <Route path="/servicos/laudos_psicologicos" element={<LaudosPsicologicos />} />
+              <Route path="/servicos/solicitacao_exames" element={<SolicitacaoExames />} />
+              <Route path="/servicos/:slug" element={<ServicoDetalhe />} />
+              <Route path="/planos" element={<Planos />} />
+              <Route path="/empresas" element={<Empresas />} />
+              <Route path="/empresasdobem" element={<EmpresasDoBem />} />
+              <Route path="/blogs-artigos" element={<BlogsIndex />} />
+              <Route path="/blogs-artigos/:slug" element={<BlogArticlePage />} />
+              <Route path="/paciente" element={<Paciente />} />
+              <Route path="/solicitacao_exame" element={<ConfirmacaoExame />} />
 
-                {/* Auth routes */}
-                <Route path="/entrar" element={<Entrar />} />
-                <Route path="/cadastrar" element={<Cadastrar />} />
-                <Route path="/esqueci-senha" element={<EsqueciSenha />} />
-                <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/auth/reset" element={<ResetPassword />} />
-                <Route path="/nova-senha" element={<NovaSenha />} />
-                <Route path="/completar-perfil" element={<CompletarPerfil />} />
-                <Route path="/agendamento" element={<Agendamento />} />
-                <Route path="/area-do-paciente" element={<AreaDoPaciente />} />
-                {/* Wellness pages */}
-                <Route path="/saude-mental" element={<SaudeMental />} />
-                <Route path="/livros" element={<Livros />} />
-                <Route path="/playlists" element={<Playlists />} />
-                <Route path="/receitas-saudaveis" element={<ReceitasSaudaveis />} />
+              {/* Auth routes */}
+              <Route path="/entrar" element={<Entrar />} />
+              <Route path="/cadastrar" element={<Cadastrar />} />
+              <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/auth/reset" element={<ResetPassword />} />
+              <Route path="/nova-senha" element={<NovaSenha />} />
+              <Route path="/completar-perfil" element={<CompletarPerfil />} />
+              <Route path="/agendamento" element={<Agendamento />} />
+              <Route path="/area-do-paciente" element={<AreaDoPaciente />} />
+              {/* Wellness pages */}
+              <Route path="/saude-mental" element={<SaudeMental />} />
+              <Route path="/livros" element={<Livros />} />
+              <Route path="/playlists" element={<Playlists />} />
+              <Route path="/receitas-saudaveis" element={<ReceitasSaudaveis />} />
 
-                {/* ClubeBen routes */}
-                <Route path="/clubeben" element={<ClubeBen />} />
-                <Route path="/auth" element={<ClubeBenAuth />} />
-                
-                {/* SSO route */}
-                <Route path="/sso" element={<ClickLifeSSO />} />
+              {/* ClubeBen routes */}
+              <Route path="/clubeben" element={<ClubeBen />} />
+              <Route path="/auth" element={<ClubeBenAuth />} />
+              
+              {/* SSO route */}
+              <Route path="/sso" element={<ClickLifeSSO />} />
 
-                {/* Footer pages */}
-                <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
-                <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
-                <Route path="/disque-denuncia" element={<DisqueDenuncia />} />
-                <Route path="/termos" element={<Termos />} />
-                <Route path="/privacidade" element={<Privacidade />} />
-                {/* Admin routes */}
-                <Route path="/admin/login" element={<AdminLogin />} />
-                <Route path="/admin/dashboard" element={<AdminDashboard />} />
-                {/* Empresa routes */}
-                <Route path="/empresa/login" element={<EmpresaLogin />} />
-                <Route path="/empresa" element={<EmpresaDashboard />} />
-                <Route path="/empresa/perfil" element={<EmpresaPerfil />} />
-                <Route path="/empresa/seguranca" element={<EmpresaSeguranca />} />
-                <Route path="/empresa/trocar-senha" element={<EmpresaTrocarSenha />} />
-                <Route path="/empresa/funcionarios" element={<EmpresaFuncionarios />} />
-                <Route path="/empresa/convites" element={<EmpresaConvites />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
-        </div>
-        <ConsultNowFloatButton />
-        <WhatsAppFloatButton />
+              {/* Footer pages */}
+              <Route path="/trabalhe-conosco" element={<TrabalheConosco />} />
+              <Route path="/seja-nosso-parceiro" element={<SejaNossParceiro />} />
+              <Route path="/disque-denuncia" element={<DisqueDenuncia />} />
+              <Route path="/termos" element={<Termos />} />
+              <Route path="/privacidade" element={<Privacidade />} />
+              {/* Admin routes */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              {/* Empresa routes */}
+              <Route path="/empresa/login" element={<EmpresaLogin />} />
+              <Route path="/empresa" element={<EmpresaDashboard />} />
+              <Route path="/empresa/perfil" element={<EmpresaPerfil />} />
+              <Route path="/empresa/seguranca" element={<EmpresaSeguranca />} />
+              <Route path="/empresa/trocar-senha" element={<EmpresaTrocarSenha />} />
+              <Route path="/empresa/funcionarios" element={<EmpresaFuncionarios />} />
+              <Route path="/empresa/convites" element={<EmpresaConvites />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
+        </AppLayout>
+        {/* Float buttons only on non-standalone routes */}
+        <FloatButtons />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
 );
+
+// Float buttons component that hides on standalone routes
+const FloatButtons = () => {
+  const { pathname } = useLocation();
+  const isStandalone = STANDALONE_ROUTES.some(route => pathname.startsWith(route));
+
+  if (isStandalone) return null;
+
+  return (
+    <>
+      <ConsultNowFloatButton />
+      <WhatsAppFloatButton />
+    </>
+  );
+};
 
 export default App;
