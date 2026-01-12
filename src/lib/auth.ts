@@ -44,8 +44,8 @@ export const getPatient = async (userId: string): Promise<Patient | null> => {
   const { data, error } = await supabase
     .from('patients' as any)
     .select('*')
-    .eq('id', userId)
-    .single();
+    .eq('user_id', userId)
+    .maybeSingle();
     
   if (error) {
     console.error('Error fetching patient:', error);
