@@ -102,7 +102,6 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
           discount_percentage: discount,
           pix_key: formData.pixKey.trim() || null,
           is_active: true,
-          is_admin_coupon: true,
         });
 
       if (error) {
