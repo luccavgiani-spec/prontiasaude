@@ -9,6 +9,27 @@ import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, Trending
 // Data mínima para filtrar vendas (histórico desde março/2025)
 const SALES_START_DATE = '2025-03-01T00:00:00.000Z';
 
+// Emails de teste a serem ignorados nos relatórios
+const TEST_EMAILS = [
+  'victoria_toledo_@hotmail.com',
+  'luccavgiani@gmail.com',
+  'luccapbe420@gmail.com',
+  'sandra.toledo@atccontabil.com.br',
+  'suporte@prontiasaude.com.br',
+  'teste@clubeben.com',
+  'teste@teste.com',
+  'joao.maria.teste01@gmail.com',
+];
+
+// Função para verificar se é email de teste
+const isTestEmail = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  const lowerEmail = email.toLowerCase();
+  return TEST_EMAILS.some(testEmail => 
+    lowerEmail.includes(testEmail.toLowerCase())
+  );
+};
+
 interface MetricsData {
   totalRevenue: number;
   totalSales: number;
@@ -183,23 +204,23 @@ export default function ReportsTab() {
         couponUsesResult,
         activePlansResult
       ] = await Promise.all([
-        // Appointments - consultas avulsas
+        // Appointments - consultas avulsas (com email para filtrar testes)
         supabase
           .from('appointments')
-          .select('id, service_code, provider, created_at, status, order_id')
+          .select('id, service_code, provider, created_at, status, order_id, email')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
-        // Pending payments aprovados
+        // Pending payments aprovados (com email para filtrar testes)
         supabase
           .from('pending_payments')
-          .select('id, sku, created_at, status, order_id, amount')
+          .select('id, sku, created_at, status, order_id, amount, patient_email')
           .eq('status', 'approved')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
-        // Patient plans para contagem de planos
+        // Patient plans para contagem de planos (com email para filtrar testes)
         supabase
           .from('patient_plans')
-          .select('id, plan_code, created_at, status, activated_by')
+          .select('id, plan_code, created_at, status, activated_by, email')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
         // Pacientes novos
@@ -222,9 +243,10 @@ export default function ReportsTab() {
           .gte('plan_expires_at', todayStr),
       ]);
 
-      const appointments = appointmentsResult.data || [];
-      const pendingPayments = pendingPaymentsResult.data || [];
-      const plans = plansResult.data || [];
+      // Filtrar emails de teste de todas as fontes de vendas
+      const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));
+      const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => !isTestEmail(pp.patient_email));
+      const plans = (plansResult.data || []).filter(plan => !isTestEmail(plan.email));
       const patients = patientsResult.data || [];
       const couponUses = couponUsesResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
