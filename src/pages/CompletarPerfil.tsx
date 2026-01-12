@@ -646,7 +646,7 @@ const CompletarPerfil = () => {
       if (redirectUrl) {
         window.location.href = decodeURIComponent(redirectUrl);
       } else {
-        navigate('/servicos');
+        navigate('/area-do-paciente');
       }
     } catch (error: any) {
       toast({
