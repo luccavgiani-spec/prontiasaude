@@ -33,22 +33,32 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // Verify admin role from Authorization header
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("[import-users] Missing or invalid Authorization header");
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+    if (!authHeader) {
+      console.error("[import-users] Missing Authorization header");
       return new Response(JSON.stringify({ error: "Authorization header required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // Cliente para validar o token do usuário (usa ANON_KEY + Authorization header)
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
+    // Extrair o token JWT do header
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    if (!token) {
+      console.error("[import-users] Empty token after parsing header");
+      return new Response(JSON.stringify({ error: "Invalid authorization format" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
-    // Validar o token do usuário
-    const { data: { user: callingUser }, error: authError } = await supabaseAuth.auth.getUser();
+    console.log(`[import-users] Token received, length: ${token.length}`);
+
+    // Cliente para validar o token do usuário (usa ANON_KEY)
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Validar o token do usuário passando o JWT explicitamente
+    const { data: { user: callingUser }, error: authError } = await supabaseAuth.auth.getUser(token);
     
     if (authError || !callingUser) {
       console.error("[import-users] Auth error:", authError?.message);
