@@ -91,6 +91,16 @@ interface DailyChartData {
   revenue: number;
 }
 
+// 🛡️ Helper para formatação segura de datas (evita crash com null/undefined)
+const safeFormatDate = (dateString: string | null | undefined, formatStr: string = "dd/MM/yyyy HH:mm"): string => {
+  if (!dateString) return "-";
+  try {
+    return format(parseISO(dateString), formatStr, { locale: ptBR });
+  } catch {
+    return "-";
+  }
+};
+
 const SalesTab = () => {
   const { toast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -364,11 +374,11 @@ const SalesTab = () => {
       apt.email,
       apt.service_name || "-",
       apt.service_code,
-      format(parseISO(apt.start_at_local), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+      safeFormatDate(apt.start_at_local),
       apt.status,
       apt.provider || "-",
       apt.order_id || "-",
-      format(parseISO(apt.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }),
+      safeFormatDate(apt.created_at),
       apt.redirect_url || apt.teams_join_url || "-",
     ]);
 
@@ -755,7 +765,7 @@ const SalesTab = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {format(parseISO(apt.start_at_local), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {safeFormatDate(apt.start_at_local)}
                       </TableCell>
                       <TableCell>{getStatusBadge(apt.status)}</TableCell>
                       <TableCell>{getProviderBadge(apt.provider)}</TableCell>
@@ -785,7 +795,7 @@ const SalesTab = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        {format(parseISO(apt.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {safeFormatDate(apt.created_at)}
                       </TableCell>
                     </TableRow>
                   ))
