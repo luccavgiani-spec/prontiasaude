@@ -8,11 +8,21 @@ export interface PatientPlan {
   created_at?: string;
 }
 
+// Helper: retorna data de hoje no formato YYYY-MM-DD (para comparar com DATE do banco)
+const getTodayDateString = (): string => {
+  const now = new Date();
+  return now.toISOString().split('T')[0]; // "2026-01-12"
+};
+
 export const getPatientPlan = async (email: string, byEmailOnly: boolean = false): Promise<PatientPlan | null> => {
   try {
     // Tentar buscar usuário logado primeiro
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id;
+    
+    // Usar data de hoje (YYYY-MM-DD) para comparar com plan_expires_at (DATE)
+    // Isso garante que planos que expiram "hoje" ainda são válidos durante todo o dia
+    const todayStr = getTodayDateString();
     
     // PRIORIDADE 1: Buscar por user_id (se logado E não for busca apenas por email)
     if (userId && !byEmailOnly) {
@@ -21,7 +31,7 @@ export const getPatientPlan = async (email: string, byEmailOnly: boolean = false
         .select('id, plan_code, plan_expires_at, status, created_at')
         .eq('user_id', userId)
         .eq('status', 'active')
-        .gte('plan_expires_at', new Date().toISOString())
+        .gte('plan_expires_at', todayStr)
         .order('plan_expires_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -39,7 +49,7 @@ export const getPatientPlan = async (email: string, byEmailOnly: boolean = false
       .select('id, plan_code, plan_expires_at, status, created_at')
       .eq('email', normalizedEmail)
       .eq('status', 'active')
-      .gte('plan_expires_at', new Date().toISOString())
+      .gte('plan_expires_at', todayStr)
       .order('plan_expires_at', { ascending: false })
       .limit(1)
       .maybeSingle();

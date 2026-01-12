@@ -45,18 +45,23 @@ function normalizeGender(gender: string | undefined | null): 'M' | 'F' {
   return 'F';
 }
 
-// Normalizar telefone (robusto)
-function normalizePhone(phone: string | undefined | null): string {
-  if (!phone) return '11999999999';
+// Normalizar telefone (robusto) - NÃO usar fallback placeholder
+function normalizePhone(phone: string | undefined | null): string | null {
+  if (!phone) return null;
   let clean = phone.replace(/\D/g, '');
   // Se começa com 55 e tem pelo menos 12 dígitos (55 + DDD + 8/9 dígitos), remover 55
   if (clean.startsWith('55') && clean.length >= 12) {
     clean = clean.substring(2);
   }
+  // Bloquear número placeholder conhecido
+  if (clean === '11999999999' || clean === '5511999999999') {
+    console.warn('[normalizePhone] Telefone placeholder detectado - rejeitando');
+    return null;
+  }
   // Garantir que tem pelo menos 10 dígitos (DDD + número)
   if (clean.length < 10) {
     console.warn('[normalizePhone] Telefone muito curto:', clean);
-    return '11999999999';
+    return null;
   }
   return clean;
 }
@@ -1266,15 +1271,31 @@ serve(async (req) => {
         // Gerar token único
         const inviteToken = crypto.randomUUID();
 
-        // Inserir convite
+        // Buscar patient_id do titular para a coluna titular_patient_id
+        const { data: titularPatient } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!titularPatient?.id) {
+          console.error('[invite-familiar] Titular patient not found for user:', user.id);
+          return new Response(
+            JSON.stringify({ error: 'Perfil do titular não encontrado' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Inserir convite com colunas CORRETAS: titular_patient_id e token
         const { error: insertError } = await supabase
           .from('pending_family_invites')
           .insert({
-            titular_id: user.id,
+            titular_patient_id: titularPatient.id,
             titular_plan_id: plan_id,
             email: email.toLowerCase(),
-            invite_token: inviteToken,
-            status: 'pending'
+            token: inviteToken,
+            status: 'pending',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
           });
 
         if (insertError) {
@@ -1336,12 +1357,26 @@ serve(async (req) => {
 
         const { invite_id } = body as ResendFamilyInviteRequest;
 
-        // Buscar convite
+        // Buscar patient_id do titular
+        const { data: titularPatient } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (!titularPatient?.id) {
+          return new Response(
+            JSON.stringify({ error: 'Perfil do titular não encontrado' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Buscar convite usando colunas CORRETAS: titular_patient_id e token
         const { data: invite, error: inviteError } = await supabase
           .from('pending_family_invites')
           .select('*, patient_plans(plan_code)')
           .eq('id', invite_id)
-          .eq('titular_id', user.id)
+          .eq('titular_patient_id', titularPatient.id)
           .eq('status', 'pending')
           .single();
 
@@ -1357,10 +1392,11 @@ serve(async (req) => {
         const newExpires = new Date();
         newExpires.setDate(newExpires.getDate() + 7);
 
+        // Usar coluna CORRETA: token (não invite_token)
         await supabase
           .from('pending_family_invites')
           .update({
-            invite_token: newToken,
+            token: newToken,
             expires_at: newExpires.toISOString()
           })
           .eq('id', invite_id);
@@ -1410,11 +1446,11 @@ serve(async (req) => {
           );
         }
 
-        // Buscar convite válido
+        // Buscar convite válido usando coluna CORRETA: token (não invite_token)
         const { data: invite, error: inviteError } = await supabase
           .from('pending_family_invites')
           .select('*, patient_plans(plan_code, plan_expires_at)')
-          .eq('invite_token', invite_token)
+          .eq('token', invite_token)
           .eq('status', 'pending')
           .single();
 
@@ -1478,12 +1514,12 @@ serve(async (req) => {
         if (existingPlan) {
           console.log('[activate-family-member] User already has active plan:', existingPlan.plan_code);
           
-          // Marcar convite como completo mesmo assim
+          // Marcar convite como completo mesmo assim (usar accepted_at, não completed_at)
           await supabase
             .from('pending_family_invites')
             .update({
               status: 'completed',
-              completed_at: new Date().toISOString()
+              accepted_at: new Date().toISOString()
             })
             .eq('id', invite.id);
 
@@ -1516,12 +1552,12 @@ serve(async (req) => {
           );
         }
 
-        // Marcar convite como completo
+        // Marcar convite como completo (usar accepted_at, não completed_at)
         await supabase
           .from('pending_family_invites')
           .update({
             status: 'completed',
-            completed_at: new Date().toISOString()
+            accepted_at: new Date().toISOString()
           })
           .eq('id', invite.id);
 
@@ -1540,11 +1576,11 @@ serve(async (req) => {
             .eq('email', invite.email)
             .maybeSingle();
 
-          // Buscar CPF do titular
+          // Buscar CPF do titular usando coluna CORRETA: titular_patient_id
           const { data: titularData } = await supabase
             .from('patients')
             .select('cpf')
-            .eq('id', invite.titular_id)
+            .eq('id', invite.titular_patient_id)
             .single();
 
           // Buscar plan_code REAL do plano do titular (não confiar no join)
