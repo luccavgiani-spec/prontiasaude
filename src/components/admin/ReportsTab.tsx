@@ -270,7 +270,7 @@ export default function ReportsTab() {
             created_at: pp.created_at || new Date().toISOString(),
             order_id: pp.order_id,
             source: 'pending_payment',
-            price: pp.amount ? Number(pp.amount) * 100 : (SKU_PRICES[sku] || 0),
+            price: pp.amount ? Number(pp.amount) : (SKU_PRICES[sku] || 0),
           });
         }
       });
