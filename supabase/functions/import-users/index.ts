@@ -120,6 +120,19 @@ serve(async (req) => {
 
     for (const user of users) {
       try {
+        // Pular usuários Google OAuth (sem encrypted_password)
+        // Eles serão recriados automaticamente quando fizerem login com Google
+        if (!user.encrypted_password) {
+          console.log(`[import-users] Skipping Google OAuth user: ${user.email}`);
+          results.push({
+            email: user.email,
+            status: "skipped",
+            message: "Usuário Google OAuth - será recriado no primeiro login"
+          });
+          skipped++;
+          continue;
+        }
+
         // Check if email already exists in auth.users
         const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
         const existingUser = existingUsers?.users?.find(u => u.email?.toLowerCase() === user.email.toLowerCase());
@@ -156,29 +169,18 @@ serve(async (req) => {
           continue;
         }
 
-        // Create user with preserved password hash
+        // Create user with preserved password hash (apenas email/senha)
         const createUserData: {
           email: string;
           email_confirm: boolean;
-          password?: string;
-          password_hash?: string;
+          password_hash: string;
           user_metadata?: Record<string, unknown>;
         } = {
           email: user.email,
-          email_confirm: true, // Auto-confirm since they were already confirmed
+          email_confirm: true,
+          password_hash: user.encrypted_password,
           user_metadata: user.raw_user_meta_data || {}
         };
-
-        // If has encrypted_password (email/password user), use password_hash
-        // If no encrypted_password (Google OAuth user), don't set password
-        if (user.encrypted_password) {
-          createUserData.password_hash = user.encrypted_password;
-        } else {
-          // For OAuth users, we need to set a random password (they won't use it)
-          // They'll continue using Google OAuth to sign in
-          const randomPassword = crypto.randomUUID() + "Aa1!";
-          createUserData.password = randomPassword;
-        }
 
         const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser(createUserData);
 
