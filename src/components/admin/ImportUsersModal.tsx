@@ -277,14 +277,34 @@ export function ImportUsersModal({ open, onOpenChange, onSuccess }: ImportUsersM
         
         if (error) {
           console.error('Error importing batch:', error);
+          
+          // Tentar extrair mensagem de erro detalhada
+          let errorMessage = error.message || 'Erro desconhecido';
+          
+          // Se o erro tiver context com detalhes da API
+          try {
+            if (error.context) {
+              const ctx = error.context;
+              if (ctx.error) errorMessage = ctx.error;
+              if (ctx.details) errorMessage += `: ${ctx.details}`;
+            }
+          } catch {
+            // Fallback para mensagem genérica
+          }
+          
           // Add error results for this batch
           batch.forEach(u => {
             allResults.push({
               email: u.email,
               status: 'error',
-              message: error.message
+              message: errorMessage
             });
           });
+          
+          // Mostrar toast com erro específico no primeiro batch
+          if (i === 0) {
+            toast.error(`Erro na importação: ${errorMessage}`);
+          }
         } else if (data?.results) {
           allResults.push(...data.results);
         }
