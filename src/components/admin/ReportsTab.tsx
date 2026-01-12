@@ -3,8 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
-import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp } from 'lucide-react';
+import { PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
+import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent } from 'lucide-react';
+
+// Data mínima para filtrar vendas (histórico desde março/2025)
+const SALES_START_DATE = '2025-03-01T00:00:00.000Z';
 
 interface MetricsData {
   totalRevenue: number;
@@ -13,47 +16,120 @@ interface MetricsData {
   totalAppointments: number;
   revenueByMonth: Array<{ month: string; revenue: number }>;
   appointmentsByPlatform: Array<{ platform: string; count: number }>;
-  salesByPlan: Array<{ plan: string; count: number; revenue: number }>;
+  salesByType: Array<{ type: string; count: number; revenue: number }>;
+  salesBySku: Array<{ sku: string; name: string; count: number; revenue: number }>;
   couponsByService: Array<{ service: string; count: number }>;
   activePlans: number;
+  averageTicket: number;
 }
 
-// Mapeamento de preços por plano (em centavos)
-const PLAN_PRICES: Record<string, number> = {
-  'INDIVIDUAL_1M': 1490,
-  'INDIVIDUAL_3M': 3990,
-  'INDIVIDUAL_6M': 7490,
-  'INDIVIDUAL_12M': 11990,
-  'FAM_SEM_ESP_1M': 2490,
-  'FAM_SEM_ESP_3M': 6990,
-  'FAM_SEM_ESP_6M': 12990,
-  'FAM_SEM_ESP_12M': 19990,
-  'FAM_COM_ESP_1M': 3490,
-  'FAM_COM_ESP_3M': 9990,
-  'FAM_COM_ESP_6M': 17990,
-  'FAM_COM_ESP_12M': 29990,
-  'EMP_INDIVIDUAL': 0, // Empresa paga
+// Mapeamento de preços por SKU (em centavos) - inclui serviços avulsos e planos
+const SKU_PRICES: Record<string, number> = {
+  // Consultas avulsas
+  'ITC6534': 4390,      // Clínico Geral
+  'ZXW2165': 3999,      // Psicólogo
+  'OVM9892': 11990,     // Laudo Psicológico
+  'ULT3571': 4390,      // Solicitação de Exames
+  
+  // Médicos Especialistas (R$89,90)
+  'VHH8883': 8990,      // Endocrinologista
+  'TVQ5046': 8990,      // Ortopedista
+  'TQP5720': 8990,      // Cardiologista
+  'HGG3503': 8990,      // Dermatologista
+  'TSB0751': 8990,      // Gastroenterologista
+  'CCP1566': 8990,      // Ginecologista
+  'FKS5964': 8990,      // Oftalmologista
+  'HMG9544': 8990,      // Pediatra
+  'HME8366': 8990,      // Otorrinolaringologista
+  'DYY8522': 8990,      // Médico da Família
+  'LZF3879': 8990,      // Nutrólogo
+  'YZD9932': 8990,      // Geriatria
+  'UDH3250': 8990,      // Reumatologista
+  'PKS9388': 8990,      // Neurologista
+  'MYX5186': 8990,      // Infectologista
+  
+  // Outros profissionais
+  'BIR7668': 5490,      // Personal Trainer
+  'VPN5132': 6990,      // Nutricionista
+  'HXR8516': 3999,      // Psicólogo 4 sessões
+  'YME9025': 3999,      // Psicólogo 8 sessões
+  'QOP1101': 8990,      // Psiquiatra
+  
+  // SKUs legados
+  'RZP5755': 4390,
+  'consulta-clinico-geral': 4390,
+  'CLK-CLINICO': 4390,
+  
+  // Planos
+  'INDIVIDUAL_1M': 1990,
+  'INDIVIDUAL_3M': 4990,
+  'INDIVIDUAL_6M': 8990,
+  'INDIVIDUAL_12M': 14990,
+  'IND_SEM_ESP_1M': 1999,
+  'IND_COM_ESP_1M': 2399,
+  'IND_SEM_ESP_12M': 19990,
+  'IND_COM_ESP_12M': 23990,
+  'FAM_SEM_ESP_1M': 3499,
+  'FAM_SEM_ESP_3M': 9990,
+  'FAM_SEM_ESP_6M': 17990,
+  'FAM_SEM_ESP_12M': 34990,
+  'FAM_COM_ESP_1M': 4390,
+  'FAM_COM_ESP_3M': 12990,
+  'FAM_COM_ESP_6M': 23990,
+  'FAM_COM_ESP_12M': 43900,
+  'EMP_INDIVIDUAL': 0,
   'EMP_FAMILIAR': 0,
 };
 
-const PLAN_NAMES: Record<string, string> = {
-  'INDIVIDUAL_1M': 'Individual 1 mês',
-  'INDIVIDUAL_3M': 'Individual 3 meses',
-  'INDIVIDUAL_6M': 'Individual 6 meses',
-  'INDIVIDUAL_12M': 'Individual 12 meses',
-  'FAM_SEM_ESP_1M': 'Familiar s/ Esp. 1 mês',
-  'FAM_SEM_ESP_3M': 'Familiar s/ Esp. 3 meses',
-  'FAM_SEM_ESP_6M': 'Familiar s/ Esp. 6 meses',
-  'FAM_SEM_ESP_12M': 'Familiar s/ Esp. 12 meses',
-  'FAM_COM_ESP_1M': 'Familiar c/ Esp. 1 mês',
-  'FAM_COM_ESP_3M': 'Familiar c/ Esp. 3 meses',
-  'FAM_COM_ESP_6M': 'Familiar c/ Esp. 6 meses',
-  'FAM_COM_ESP_12M': 'Familiar c/ Esp. 12 meses',
-  'EMP_INDIVIDUAL': 'Empresarial Individual',
-  'EMP_FAMILIAR': 'Empresarial Familiar',
+// Nomes amigáveis para SKUs
+const SKU_NAMES: Record<string, string> = {
+  'ITC6534': 'Clínico Geral',
+  'ZXW2165': 'Psicólogo',
+  'OVM9892': 'Laudo Psicológico',
+  'ULT3571': 'Solicitação de Exames',
+  'VHH8883': 'Endocrinologista',
+  'TVQ5046': 'Ortopedista',
+  'TQP5720': 'Cardiologista',
+  'HGG3503': 'Dermatologista',
+  'TSB0751': 'Gastroenterologista',
+  'CCP1566': 'Ginecologista',
+  'FKS5964': 'Oftalmologista',
+  'HMG9544': 'Pediatra',
+  'HME8366': 'Otorrinolaringologista',
+  'DYY8522': 'Médico da Família',
+  'LZF3879': 'Nutrólogo',
+  'YZD9932': 'Geriatria',
+  'UDH3250': 'Reumatologista',
+  'PKS9388': 'Neurologista',
+  'MYX5186': 'Infectologista',
+  'BIR7668': 'Personal Trainer',
+  'VPN5132': 'Nutricionista',
+  'HXR8516': 'Psicólogo 4 sessões',
+  'YME9025': 'Psicólogo 8 sessões',
+  'QOP1101': 'Psiquiatra',
+  'INDIVIDUAL_1M': 'Plano Individual 1 mês',
+  'INDIVIDUAL_3M': 'Plano Individual 3 meses',
+  'INDIVIDUAL_6M': 'Plano Individual 6 meses',
+  'INDIVIDUAL_12M': 'Plano Individual 12 meses',
+  'FAM_SEM_ESP_1M': 'Plano Familiar s/ Esp. 1 mês',
+  'FAM_SEM_ESP_6M': 'Plano Familiar s/ Esp. 6 meses',
+  'FAM_SEM_ESP_12M': 'Plano Familiar s/ Esp. 12 meses',
+  'FAM_COM_ESP_1M': 'Plano Familiar c/ Esp. 1 mês',
+  'FAM_COM_ESP_6M': 'Plano Familiar c/ Esp. 6 meses',
+  'FAM_COM_ESP_12M': 'Plano Familiar c/ Esp. 12 meses',
 };
 
-const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
+const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--chart-1))'];
+
+// Determinar se um SKU é de plano ou serviço avulso
+const isPlanSku = (sku: string): boolean => {
+  return sku?.includes('_') && (
+    sku.startsWith('INDIVIDUAL') || 
+    sku.startsWith('FAM_') || 
+    sku.startsWith('IND_') ||
+    sku.startsWith('EMP_')
+  );
+};
 
 export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
@@ -65,9 +141,11 @@ export default function ReportsTab() {
     totalAppointments: 0,
     revenueByMonth: [],
     appointmentsByPlatform: [],
-    salesByPlan: [],
+    salesByType: [],
+    salesBySku: [],
     couponsByService: [],
     activePlans: 0,
+    averageTicket: 0,
   });
 
   useEffect(() => {
@@ -81,6 +159,7 @@ export default function ReportsTab() {
     else if (period === '30d') startDate.setDate(startDate.getDate() - 30);
     else if (period === '90d') startDate.setDate(startDate.getDate() - 90);
     else if (period === '365d') startDate.setDate(startDate.getDate() - 365);
+    else if (period === 'all') return { startDate: new Date(SALES_START_DATE), endDate };
     return { startDate, endDate };
   };
 
@@ -95,28 +174,47 @@ export default function ReportsTab() {
       const endISO = endDate.toISOString();
       const todayStr = new Date().toISOString().split('T')[0];
 
-      // Buscar dados em paralelo
-      const [plansResult, patientsResult, appointmentsResult, couponUsesResult, activePlansResult] = await Promise.all([
+      // Buscar dados em paralelo de TODAS as fontes de vendas
+      const [
+        appointmentsResult,
+        pendingPaymentsResult,
+        plansResult,
+        patientsResult,
+        couponUsesResult,
+        activePlansResult
+      ] = await Promise.all([
+        // Appointments - consultas avulsas
+        supabase
+          .from('appointments')
+          .select('id, service_code, provider, created_at, status, order_id')
+          .gte('created_at', startISO)
+          .lte('created_at', endISO),
+        // Pending payments aprovados
+        supabase
+          .from('pending_payments')
+          .select('id, sku, created_at, status, order_id, amount')
+          .eq('status', 'approved')
+          .gte('created_at', startISO)
+          .lte('created_at', endISO),
+        // Patient plans para contagem de planos
         supabase
           .from('patient_plans')
           .select('id, plan_code, created_at, status, activated_by')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
+        // Pacientes novos
         supabase
           .from('patients')
           .select('id, created_at')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
-        supabase
-          .from('appointments')
-          .select('id, provider, created_at, status')
-          .gte('created_at', startISO)
-          .lte('created_at', endISO),
+        // Cupons usados
         supabase
           .from('coupon_uses')
           .select('id, service_or_plan_name, created_at')
           .gte('created_at', startISO)
           .lte('created_at', endISO),
+        // Planos ativos
         supabase
           .from('patient_plans')
           .select('id')
@@ -124,43 +222,112 @@ export default function ReportsTab() {
           .gte('plan_expires_at', todayStr),
       ]);
 
+      const appointments = appointmentsResult.data || [];
+      const pendingPayments = pendingPaymentsResult.data || [];
       const plans = plansResult.data || [];
       const patients = patientsResult.data || [];
-      const appointments = appointmentsResult.data || [];
       const couponUses = couponUsesResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
 
-      // Calcular vendas (apenas planos não-empresariais que foram pagos)
+      // Combinar vendas de appointments + pending_payments (sem duplicatas por order_id)
+      interface UnifiedSale {
+        id: string;
+        sku: string;
+        created_at: string;
+        order_id: string | null;
+        source: 'appointment' | 'pending_payment' | 'plan';
+        price: number;
+        provider?: string;
+      }
+
+      const salesMap = new Map<string, UnifiedSale>();
+
+      // Adicionar appointments
+      appointments.forEach(apt => {
+        const key = apt.order_id || `apt-${apt.id}`;
+        if (!salesMap.has(key)) {
+          const sku = apt.service_code || '';
+          salesMap.set(key, {
+            id: apt.id,
+            sku,
+            created_at: apt.created_at,
+            order_id: apt.order_id,
+            source: 'appointment',
+            price: SKU_PRICES[sku] || 0,
+            provider: apt.provider,
+          });
+        }
+      });
+
+      // Adicionar pending_payments que não estão em appointments
+      pendingPayments.forEach(pp => {
+        const key = pp.order_id || `pp-${pp.id}`;
+        if (!salesMap.has(key)) {
+          const sku = pp.sku || '';
+          salesMap.set(key, {
+            id: pp.id,
+            sku,
+            created_at: pp.created_at || new Date().toISOString(),
+            order_id: pp.order_id,
+            source: 'pending_payment',
+            price: pp.amount ? Number(pp.amount) * 100 : (SKU_PRICES[sku] || 0),
+          });
+        }
+      });
+
+      // Adicionar planos pagos (não empresariais e não manuais)
       const paidPlans = plans.filter(p => 
         !p.plan_code?.startsWith('EMP_') && 
         p.activated_by !== 'admin_manual'
       );
-      const totalSales = paidPlans.length;
 
-      // Calcular receita total
-      let totalRevenue = 0;
-      paidPlans.forEach(p => {
-        const price = PLAN_PRICES[p.plan_code] || 0;
-        totalRevenue += price;
+      paidPlans.forEach(plan => {
+        const key = `plan-${plan.id}`;
+        if (!salesMap.has(key)) {
+          salesMap.set(key, {
+            id: plan.id,
+            sku: plan.plan_code,
+            created_at: plan.created_at || new Date().toISOString(),
+            order_id: null,
+            source: 'plan',
+            price: SKU_PRICES[plan.plan_code] || 0,
+          });
+        }
       });
+
+      const allSales = Array.from(salesMap.values());
+      const totalSales = allSales.length;
+      const totalRevenue = allSales.reduce((sum, sale) => sum + sale.price, 0);
+      const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 
       // Receita por mês
       const revenueByMonth: Record<string, number> = {};
-      paidPlans.forEach(p => {
-        const month = new Date(p.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        const price = PLAN_PRICES[p.plan_code] || 0;
-        revenueByMonth[month] = (revenueByMonth[month] || 0) + price;
+      allSales.forEach(sale => {
+        const month = new Date(sale.created_at).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        revenueByMonth[month] = (revenueByMonth[month] || 0) + sale.price;
       });
 
-      // Vendas por plano
-      const salesByPlanMap: Record<string, { count: number; revenue: number }> = {};
-      paidPlans.forEach(p => {
-        const planCode = p.plan_code || 'Outros';
-        if (!salesByPlanMap[planCode]) {
-          salesByPlanMap[planCode] = { count: 0, revenue: 0 };
+      // Vendas por tipo (Consultas vs Planos)
+      const salesByTypeMap: Record<string, { count: number; revenue: number }> = {
+        'Consultas Avulsas': { count: 0, revenue: 0 },
+        'Planos': { count: 0, revenue: 0 },
+      };
+
+      allSales.forEach(sale => {
+        const type = isPlanSku(sale.sku) ? 'Planos' : 'Consultas Avulsas';
+        salesByTypeMap[type].count++;
+        salesByTypeMap[type].revenue += sale.price;
+      });
+
+      // Vendas por SKU (top 10)
+      const salesBySkuMap: Record<string, { count: number; revenue: number }> = {};
+      allSales.forEach(sale => {
+        const sku = sale.sku || 'Desconhecido';
+        if (!salesBySkuMap[sku]) {
+          salesBySkuMap[sku] = { count: 0, revenue: 0 };
         }
-        salesByPlanMap[planCode].count++;
-        salesByPlanMap[planCode].revenue += PLAN_PRICES[planCode] || 0;
+        salesBySkuMap[sku].count++;
+        salesBySkuMap[sku].revenue += sale.price;
       });
 
       // Atendimentos por plataforma
@@ -192,15 +359,15 @@ export default function ReportsTab() {
       });
 
       setMetrics({
-        totalRevenue: totalRevenue / 100, // Converter centavos para reais
+        totalRevenue: totalRevenue / 100,
         totalSales,
         totalPatients: patients.length,
         totalAppointments: appointments.length,
         activePlans: activePlansCount,
+        averageTicket: averageTicket / 100,
         revenueByMonth: Object.entries(revenueByMonth)
           .map(([month, revenue]) => ({ month, revenue: revenue / 100 }))
           .sort((a, b) => {
-            // Ordenar por data
             const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
             const [monthA, yearA] = a.month.split('/');
             const [monthB, yearB] = b.month.split('/');
@@ -210,13 +377,22 @@ export default function ReportsTab() {
         appointmentsByPlatform: Object.entries(platformGroups)
           .filter(([_, count]) => count > 0)
           .map(([platform, count]) => ({ platform, count })),
-        salesByPlan: Object.entries(salesByPlanMap)
-          .map(([plan, data]) => ({
-            plan: PLAN_NAMES[plan] || plan,
+        salesByType: Object.entries(salesByTypeMap)
+          .filter(([_, data]) => data.count > 0)
+          .map(([type, data]) => ({
+            type,
+            count: data.count,
+            revenue: data.revenue / 100,
+          })),
+        salesBySku: Object.entries(salesBySkuMap)
+          .map(([sku, data]) => ({
+            sku,
+            name: SKU_NAMES[sku] || sku,
             count: data.count,
             revenue: data.revenue / 100,
           }))
-          .sort((a, b) => b.count - a.count),
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10),
         couponsByService: Object.entries(couponsByServiceMap)
           .map(([service, count]) => ({ service, count }))
           .sort((a, b) => b.count - a.count),
@@ -231,19 +407,24 @@ export default function ReportsTab() {
   const exportCSV = () => {
     const lines = [
       'Relatório de Métricas Prontia',
-      `Período: ${period === '7d' ? '7 dias' : period === '30d' ? '30 dias' : period === '90d' ? '90 dias' : '365 dias'}`,
+      `Período: ${period === '7d' ? '7 dias' : period === '30d' ? '30 dias' : period === '90d' ? '90 dias' : period === 'all' ? 'Histórico completo' : '365 dias'}`,
       `Gerado em: ${new Date().toLocaleString('pt-BR')}`,
       '',
       'RESUMO',
       `Receita Total,${metrics.totalRevenue.toFixed(2)}`,
       `Total de Vendas,${metrics.totalSales}`,
+      `Ticket Médio,${metrics.averageTicket.toFixed(2)}`,
       `Novos Pacientes,${metrics.totalPatients}`,
       `Planos Ativos,${metrics.activePlans}`,
       `Atendimentos,${metrics.totalAppointments}`,
       '',
-      'VENDAS POR PLANO',
-      'Plano,Quantidade,Receita',
-      ...metrics.salesByPlan.map(p => `${p.plan},${p.count},${p.revenue.toFixed(2)}`),
+      'VENDAS POR TIPO',
+      'Tipo,Quantidade,Receita',
+      ...metrics.salesByType.map(t => `${t.type},${t.count},${t.revenue.toFixed(2)}`),
+      '',
+      'TOP 10 SERVIÇOS/PLANOS',
+      'Serviço,Quantidade,Receita',
+      ...metrics.salesBySku.map(s => `${s.name},${s.count},${s.revenue.toFixed(2)}`),
       '',
       'ATENDIMENTOS POR PLATAFORMA',
       'Plataforma,Quantidade',
@@ -274,7 +455,7 @@ export default function ReportsTab() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex gap-3">
           <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-48">
               <Calendar className="h-4 w-4 mr-2" />
               <SelectValue />
             </SelectTrigger>
@@ -283,6 +464,7 @@ export default function ReportsTab() {
               <SelectItem value="30d">Últimos 30 dias</SelectItem>
               <SelectItem value="90d">Últimos 90 dias</SelectItem>
               <SelectItem value="365d">Último ano</SelectItem>
+              <SelectItem value="all">Histórico completo</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -294,7 +476,7 @@ export default function ReportsTab() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Receita</CardTitle>
@@ -315,7 +497,20 @@ export default function ReportsTab() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{metrics.totalSales}</div>
-            <p className="text-xs text-muted-foreground mt-1">planos vendidos</p>
+            <p className="text-xs text-muted-foreground mt-1">total de transações</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+            <Percent className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-600">
+              {metrics.averageTicket.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">por venda</p>
           </CardContent>
         </Card>
 
@@ -382,31 +577,60 @@ export default function ReportsTab() {
           </CardContent>
         </Card>
 
-        {/* Vendas por Plano */}
+        {/* Vendas por Tipo */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Vendas por Plano</CardTitle>
+            <CardTitle className="text-lg">Vendas por Tipo</CardTitle>
           </CardHeader>
           <CardContent>
-            {metrics.salesByPlan.length > 0 ? (
+            {metrics.salesByType.length > 0 ? (
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie
-                    data={metrics.salesByPlan}
+                    data={metrics.salesByType}
                     dataKey="count"
-                    nameKey="plan"
+                    nameKey="type"
                     cx="50%"
                     cy="50%"
                     outerRadius={90}
-                    label={({ plan, count }) => `${count}`}
+                    label={({ type, count }) => `${type}: ${count}`}
                   >
-                    {metrics.salesByPlan.map((_, index) => (
+                    {metrics.salesByType.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value: number, name: string) => [value, name]} />
                   <Legend />
                 </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[280px] text-muted-foreground">
+                Sem vendas no período
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Serviços/Planos */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Top 10 Serviços/Planos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {metrics.salesBySku.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={metrics.salesBySku} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis type="number" />
+                  <YAxis dataKey="name" type="category" width={120} className="text-xs" />
+                  <Tooltip 
+                    formatter={(value: number, name: string) => {
+                      if (name === 'count') return [value, 'Vendas'];
+                      return [`R$ ${value.toFixed(2)}`, 'Receita'];
+                    }}
+                  />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Vendas" />
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-[280px] text-muted-foreground">
@@ -441,7 +665,7 @@ export default function ReportsTab() {
         </Card>
 
         {/* Cupons Utilizados */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-lg">Cupons Utilizados</CardTitle>
           </CardHeader>
