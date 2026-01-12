@@ -99,7 +99,10 @@ Deno.serve(async (req) => {
     }
 
     // Validar tipo de cupom vs tipo de item
-    if (coupon.coupon_type !== item_type) {
+    // Cupons do sistema (owner_user_id = NULL) são universais - funcionam para qualquer tipo
+    const isSystemCoupon = coupon.owner_user_id === null;
+    
+    if (!isSystemCoupon && coupon.coupon_type !== item_type) {
       const expectedType = item_type === 'SERVICE' ? 'serviços avulsos' : 'planos';
       console.log('[validate-coupon] Tipo incompatível:', { coupon_type: coupon.coupon_type, item_type });
       return new Response(
@@ -109,6 +112,10 @@ Deno.serve(async (req) => {
         } as ValidateCouponResponse),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+    
+    if (isSystemCoupon) {
+      console.log('[validate-coupon] System coupon detected - accepting any item type');
     }
 
     // Opcional: impedir que o usuário use seu próprio cupom
