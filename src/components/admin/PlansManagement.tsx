@@ -75,6 +75,7 @@ interface PlanWithDetails extends PatientPlan {
   cep?: string;
   subscription_status?: string;
   next_payment_date?: string;
+  is_titular?: boolean;
 }
 
 interface Dependente {
@@ -149,6 +150,15 @@ const PlansManagement = () => {
 
       if (error) throw error;
 
+      // Fetch all titular_plan_ids from pending_family_invites to identify titulars
+      const { data: titularInvites } = await supabase
+        .from('pending_family_invites')
+        .select('titular_plan_id');
+      
+      const titularPlanIds = new Set(
+        (titularInvites || []).map(inv => inv.titular_plan_id)
+      );
+
       // Fetch patient details for each plan
       const plansWithDetails: PlanWithDetails[] = [];
       
@@ -175,6 +185,9 @@ const PlansManagement = () => {
           patientData = data;
         }
 
+        // Check if this plan is a titular (has invites referencing it)
+        const isTitular = isFamilyPlan(plan.plan_code) && titularPlanIds.has(plan.id);
+
         plansWithDetails.push({
           ...plan,
           first_name: patientData?.first_name || undefined,
@@ -186,6 +199,7 @@ const PlansManagement = () => {
           city: patientData?.city || undefined,
           state: patientData?.state || undefined,
           cep: patientData?.cep || undefined,
+          is_titular: isTitular,
         });
       }
 
@@ -632,7 +646,7 @@ const PlansManagement = () => {
                       <>
                         <TableRow className="hover:bg-muted/50">
                           <TableCell>
-                            {isFamilyPlan(plan.plan_code) && (
+                            {plan.is_titular && (
                               <CollapsibleTrigger asChild>
                                 <Button
                                   variant="ghost"
@@ -720,7 +734,7 @@ const PlansManagement = () => {
                         </TableRow>
                         
                         {/* Dependentes Row */}
-                        {isFamilyPlan(plan.plan_code) && expandedPlans.has(plan.id) && (
+                        {plan.is_titular && expandedPlans.has(plan.id) && (
                           <TableRow className="bg-muted/30">
                             <TableCell colSpan={9} className="p-4">
                               <CollapsibleContent>
