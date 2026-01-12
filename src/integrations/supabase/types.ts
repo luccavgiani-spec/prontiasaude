@@ -608,6 +608,7 @@ export type Database = {
           gender: string | null
           id: string
           last_name: string | null
+          manychat_contact_id: string | null
           marketing_opt_in: boolean | null
           neighborhood: string | null
           phone_e164: string | null
@@ -640,6 +641,7 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string | null
+          manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           neighborhood?: string | null
           phone_e164?: string | null
@@ -672,6 +674,7 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string | null
+          manychat_contact_id?: string | null
           marketing_opt_in?: boolean | null
           neighborhood?: string | null
           phone_e164?: string | null
