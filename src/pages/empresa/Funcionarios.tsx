@@ -17,10 +17,10 @@ import BulkInviteModal from '@/components/empresa/BulkInviteModal';
 
 interface Employee {
   id: string;
-  nome: string;
+  first_name: string | null;
+  last_name: string | null;
   cpf: string;
   email: string;
-  telefone: string;
   created_at: string;
 }
 
@@ -81,12 +81,12 @@ export default function EmpresaFuncionarios() {
     try {
       const { data, error } = await supabase
         .from('company_employees')
-        .select('id, nome, cpf, email, telefone, created_at')
+        .select('id, cpf, email, first_name, last_name, created_at')
         .eq('company_id', company.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setEmployees(data || []);
+      setEmployees((data || []) as Employee[]);
     } catch (error) {
       toast.error('Erro ao carregar funcionários');
     } finally {
@@ -681,10 +681,10 @@ export default function EmpresaFuncionarios() {
                   <TableBody>
                     {employees.map((employee) => (
                       <TableRow key={employee.id}>
-                        <TableCell>{employee.nome}</TableCell>
+                        <TableCell>{employee.first_name} {employee.last_name}</TableCell>
                         <TableCell className="font-mono">{employee.cpf}</TableCell>
                         <TableCell>{employee.email}</TableCell>
-                        <TableCell>{employee.telefone}</TableCell>
+                        <TableCell>-</TableCell>
                         <TableCell>{new Date(employee.created_at).toLocaleDateString('pt-BR')}</TableCell>
                         <TableCell className="text-right">
                           <Button

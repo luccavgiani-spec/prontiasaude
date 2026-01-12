@@ -32,14 +32,14 @@ const Livros = () => {
       if (!error && data) {
         const formattedContent = data.map(item => ({
           id: item.id,
-          title: item.title,
+          title: item.title || '',
           description: item.description || '',
           type: item.content_type as 'video' | 'pdf' | 'link' | 'post' | 'image',
           url: item.url || item.external_link || '',
-          content: item.content || '',
+          content: typeof item.content === 'string' ? item.content : '',
           fileUrl: item.file_url || '',
           externalLink: item.external_link || '',
-          createdAt: new Date(item.created_at)
+          createdAt: new Date(item.created_at || Date.now())
         }));
         setContent(formattedContent);
       }

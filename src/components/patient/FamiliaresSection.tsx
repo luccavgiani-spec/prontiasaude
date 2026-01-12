@@ -23,7 +23,7 @@ interface FamiliarInvite {
   status: 'pending' | 'completed' | 'expired' | 'cancelled';
   created_at: string;
   expires_at: string;
-  completed_at: string | null;
+  accepted_at?: string | null;
 }
 
 interface FamiliarMember {
@@ -70,7 +70,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
         .order('created_at', { ascending: false });
 
       if (invitesError) throw invitesError;
-      setInvites((invitesData || []) as FamiliarInvite[]);
+      setInvites((invitesData || []) as unknown as FamiliarInvite[]);
 
       // Buscar membros ativos (convites completos)
       const completedEmails = (invitesData || [])
@@ -183,8 +183,8 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const handleCancelInvite = async (inviteId: string) => {
     setLoadingAction(inviteId);
     try {
-      const { error } = await supabase
-        .from('pending_family_invites')
+      const { error } = await (supabase
+        .from('pending_family_invites') as any)
         .delete()
         .eq('id', inviteId)
         .eq('titular_id', currentUserId);

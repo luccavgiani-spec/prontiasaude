@@ -26,7 +26,8 @@ export default function SpecialtiesSelector({
       } = await supabase.from('admin_settings').select('value').eq('key', 'communicare_specialties').maybeSingle();
       if (error) throw error;
       if (data?.value) {
-        const parsed = JSON.parse(data.value);
+        const valueStr = typeof data.value === 'string' ? data.value : JSON.stringify(data.value);
+        const parsed = JSON.parse(valueStr);
         setSelected(Array.isArray(parsed) ? parsed : []);
       }
     } catch (error) {

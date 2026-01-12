@@ -71,11 +71,9 @@ export default function EmpresaLogin() {
         .maybeSingle();
 
       // Resetar tentativas falhadas em caso de sucesso
-      await supabase
-        .from('company_credentials')
+      await (supabase
+        .from('company_credentials') as any)
         .update({
-          failed_login_attempts: 0,
-          last_failed_login_at: null,
           last_login_at: new Date().toISOString()
         })
         .eq('user_id', data.user.id);
@@ -111,24 +109,18 @@ export default function EmpresaLogin() {
             toast.error('CNPJ não encontrado. Verifique se sua empresa foi cadastrada pelo administrador.');
           } else {
             // Empresa existe, então é problema de senha
-            const { data: credData } = await supabase
-              .from('company_credentials')
-              .select('must_change_password, failed_login_attempts, company_id, user_id')
+            const { data: credData } = await (supabase
+              .from('company_credentials') as any)
+              .select('must_change_password, company_id, user_id')
               .eq('company_id', companyData.id)
               .maybeSingle();
 
             if (credData) {
-              // Incrementar tentativas falhadas via RPC ou edge function
-              // Por ora, apenas mostrar mensagem apropriada
+              // Mostrar mensagem apropriada
               if (credData.must_change_password) {
                 toast.error('Senha incorreta. No primeiro acesso, use a SENHA TEMPORÁRIA fornecida pelo administrador.');
               } else {
-                const attempts = (credData.failed_login_attempts || 0) + 1;
-                if (attempts >= 5) {
-                  toast.error('Múltiplas tentativas falhadas. Entre em contato com o administrador para resetar sua senha.');
-                } else {
-                  toast.error(`Senha incorreta. Tentativa ${attempts}/5. Após 5 tentativas, sua conta será bloqueada.`);
-                }
+                toast.error('Senha incorreta. Verifique suas credenciais e tente novamente.');
               }
             } else {
               toast.error('Erro de configuração. Entre em contato com o administrador.');

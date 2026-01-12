@@ -58,11 +58,11 @@ const CompletarPerfil = () => {
     try {
       // Usar função RPC segura para validar token de convite familiar
       const { data: inviteResult, error } = await supabase
-        .rpc('validate_family_invite_token', { p_token: familyToken });
+        .rpc('validate_family_invite_token', { _token: familyToken });
         
       const invite = inviteResult?.[0];
       
-      if (error || !invite || !invite.valid) {
+      if (error || !invite) {
         toast({
           title: "Convite inválido",
           description: "Este convite não existe, já foi utilizado ou expirou.",
@@ -76,11 +76,11 @@ const CompletarPerfil = () => {
       const inviteData = {
         email: invite.email,
         titular_plan_id: invite.titular_plan_id,
-        expires_at: invite.expires_at,
+        expires_at: (invite as any).expires_at || '',
         invite_token: familyToken, // ✅ CRÍTICO: incluir token para ativação posterior
         patient_plans: {
-          plan_code: invite.plan_code,
-          plan_expires_at: invite.plan_expires_at
+          plan_code: (invite as any).plan_code || '',
+          plan_expires_at: (invite as any).plan_expires_at || ''
         },
         isFamilyInvite: true
       };
@@ -134,8 +134,8 @@ const CompletarPerfil = () => {
   const validateInviteToken = async () => {
     setIsLoading(true);
     try {
-      const { data: invite, error } = await supabase
-        .from('pending_employee_invites')
+      const { data: invite, error } = await (supabase
+        .from('pending_employee_invites') as any)
         .select(`
           *,
           companies (

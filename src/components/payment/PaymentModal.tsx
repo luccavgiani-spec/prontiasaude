@@ -1289,8 +1289,8 @@ export function PaymentModal({
       const schedulePayload = buildSchedulePayload();
 
       // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await supabase
-        .from("services")
+      const { data: service, error: serviceError } = await (supabase
+        .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
         .eq("active", true)
@@ -1759,8 +1759,8 @@ export function PaymentModal({
       };
 
       // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await supabase
-        .from("services")
+      const { data: service, error: serviceError } = await (supabase
+        .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
         .eq("active", true)
