@@ -21,6 +21,21 @@ verify_jwt = false
 [functions.mp-create-payment]
 verify_jwt = false
 
+[functions.mp-create-subscription]
+verify_jwt = false
+
+[functions.mp-subscription-webhook]
+verify_jwt = false
+
+[functions.mp-cancel-subscription]
+verify_jwt = true
+
+[functions.mp-pause-subscription]
+verify_jwt = true
+
+[functions.mp-update-subscription-card]
+verify_jwt = true
+
 [functions.appointments-manager]
 verify_jwt = false
 
@@ -59,4 +74,3 @@ verify_jwt = false
 
 [functions.meta-capi]
 verify_jwt = false
-
