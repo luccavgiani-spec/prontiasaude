@@ -475,6 +475,13 @@ interface DisablePlanRequest {
   email: string;
 }
 
+interface ChangePlanRequest {
+  operation: 'change_plan';
+  plan_id: string;
+  new_plan_code: string;
+  new_expires_at?: string;
+}
+
 interface ActivatePlanManualRequest {
   operation: 'activate_plan_manual';
   patient_email: string;
@@ -953,6 +960,85 @@ serve(async (req) => {
             success: true,
             message: `Plano desabilitado com sucesso para ${email}`,
             plan: updatedPlan[0]
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'change_plan': {
+        const { plan_id, new_plan_code, new_expires_at } = body as ChangePlanRequest;
+        
+        if (!plan_id || !new_plan_code) {
+          return new Response(
+            JSON.stringify({ error: 'plan_id e new_plan_code são obrigatórios' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Check if user is admin
+        const token = authHeader!.replace('Bearer ', '');
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        
+        if (authError || !user) {
+          return new Response(
+            JSON.stringify({ error: 'Não autorizado' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!roles || roles.role !== 'admin') {
+          return new Response(
+            JSON.stringify({ error: 'Apenas administradores podem alterar planos' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Build update object
+        const updateData: Record<string, any> = {
+          plan_code: new_plan_code,
+          updated_at: new Date().toISOString()
+        };
+        
+        if (new_expires_at) {
+          updateData.plan_expires_at = new_expires_at;
+        }
+        
+        // Update the plan
+        const { data: updatedPlan, error: updateError } = await supabase
+          .from('patient_plans')
+          .update(updateData)
+          .eq('id', plan_id)
+          .select()
+          .single();
+        
+        if (updateError) {
+          console.error('[change_plan] Error:', updateError);
+          return new Response(
+            JSON.stringify({ error: 'Erro ao alterar plano' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (!updatedPlan) {
+          return new Response(
+            JSON.stringify({ error: 'Plano não encontrado' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[change_plan] Plan updated:', { plan_id, new_plan_code, updatedPlan });
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: `Plano alterado com sucesso`,
+            plan: updatedPlan
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
