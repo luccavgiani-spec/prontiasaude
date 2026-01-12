@@ -12,8 +12,8 @@ import { format, startOfDay, startOfWeek, isAfter, parseISO, startOfMonth, endOf
 import { ptBR } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 
-// 🔒 Data mínima para filtrar vendas (inclui dados migrados a partir de outubro/2025)
-const SALES_START_DATE = '2025-10-01T00:00:00.000Z';
+// 🔒 Data mínima para filtrar vendas (histórico completo desde março/2025)
+const SALES_START_DATE = '2025-03-01T00:00:00.000Z';
 
 // 💰 Mapeamento de SKUs para preços em centavos
 const SKU_PRICES: Record<string, number> = {
@@ -23,16 +23,32 @@ const SKU_PRICES: Record<string, number> = {
   'OVM9892': 11990,     // Laudo Psicológico
   'ULT3571': 4390,      // Solicitação de Exames
   
-  // SKUs migrados (variantes encontradas nos dados)
-  'RZP5755': 4390,      // Clínico (variante)
-  'CCP1566': 3999,      // Psicólogo (variante)
-  'TQP5720': 4390,      // Serviço adicional
-  'VPN5132': 4390,      // Serviço adicional
-  'BIR7668': 4390,      // Serviço adicional
-  'HXR8516': 4390,      // Serviço adicional
-  'QOP1101': 4390,      // Serviço adicional
+  // MÉDICOS ESPECIALISTAS (R$89,90)
+  'VHH8883': 8990,      // Endocrinologista
+  'TVQ5046': 8990,      // Ortopedista
+  'TQP5720': 8990,      // Cardiologista
+  'HGG3503': 8990,      // Dermatologista
+  'TSB0751': 8990,      // Gastroenterologista
+  'CCP1566': 8990,      // Ginecologista
+  'FKS5964': 8990,      // Oftalmologista
+  'HMG9544': 8990,      // Pediatra
+  'HME8366': 8990,      // Otorrinolaringologista
+  'DYY8522': 8990,      // Médico da Família
+  'LZF3879': 8990,      // Nutrólogo
+  'YZD9932': 8990,      // Geriatria
+  'UDH3250': 8990,      // Reumatologista
+  'PKS9388': 8990,      // Neurologista
+  'MYX5186': 8990,      // Infectologista
+  
+  // OUTROS PROFISSIONAIS
+  'BIR7668': 5490,      // Personal Trainer (R$54,90)
+  'VPN5132': 6990,      // Nutricionista (R$69,90)
+  'HXR8516': 3999,      // Psicólogo 4 sessões
+  'YME9025': 3999,      // Psicólogo 8 sessões
+  'QOP1101': 8990,      // Psiquiatra
   
   // SKUs legados (dados históricos)
+  'RZP5755': 4390,      // Clínico (variante)
   'consulta-clinico-geral': 4390,
   'CLK-CLINICO': 4390,
   
@@ -90,11 +106,11 @@ const SalesTab = () => {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
-  // 📆 Gerar lista de meses disponíveis (desde Nov/2025)
+  // 📆 Gerar lista de meses disponíveis (desde Mar/2025)
   const availableMonths = useMemo(() => {
     const months: { value: string; label: string }[] = [];
     const now = new Date();
-    const startDate = new Date(2025, 10, 1); // Nov 2025
+    const startDate = new Date(2025, 2, 1); // Mar 2025
 
     for (let i = 0; i < 24; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -112,14 +128,52 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      const { data, error } = await supabase
+      // 1. Buscar appointments normalmente
+      const { data: appointmentsData, error: aptError } = await supabase
         .from("appointments")
         .select("*")
-        .gte("created_at", SALES_START_DATE) // 🔒 Filtro de data mínima
+        .gte("created_at", SALES_START_DATE)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
-      setAppointments(data || []);
+      if (aptError) throw aptError;
+
+      // 2. Buscar pending_payments approved que não têm appointment correspondente
+      const { data: pendingPaymentsData, error: ppError } = await supabase
+        .from("pending_payments")
+        .select("*")
+        .eq("status", "approved")
+        .gte("created_at", SALES_START_DATE);
+
+      if (ppError) {
+        console.warn("Erro ao buscar pending_payments:", ppError);
+      }
+
+      // 3. Combinar: appointments + pending_payments sem appointment
+      const appointmentOrderIds = new Set(
+        appointmentsData?.map(a => a.order_id).filter(Boolean)
+      );
+      
+      const missingFromPending = (pendingPaymentsData || [])
+        .filter(pp => pp.order_id && !appointmentOrderIds.has(pp.order_id))
+        .map(pp => ({
+          id: pp.id,
+          appointment_id: `PP-${pp.order_id?.slice(0, 8)}`,
+          email: pp.patient_email || '',
+          service_code: pp.sku || '',
+          service_name: pp.sku ? `Serviço ${pp.sku}` : 'Serviço',
+          start_at_local: pp.created_at || new Date().toISOString(),
+          duration_min: 30,
+          status: 'approved',
+          order_id: pp.order_id,
+          provider: 'pending_payment',
+          redirect_url: null,
+          created_at: pp.created_at || new Date().toISOString(),
+          updated_at: pp.updated_at || new Date().toISOString(),
+        })) as Appointment[];
+
+      console.log(`📊 Loaded ${appointmentsData?.length || 0} appointments + ${missingFromPending.length} from pending_payments`);
+      
+      setAppointments([...(appointmentsData || []), ...missingFromPending]);
     } catch (error) {
       console.error("Erro ao carregar vendas:", error);
       toast({
