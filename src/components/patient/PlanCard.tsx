@@ -1,16 +1,29 @@
 import prontiaLogo from "@/assets/prontia-icon-misto.webp";
 import prontiaIcon from "@/assets/prontia-icon-misto.webp";
 import { formatPlanName } from "@/lib/patient-plan";
+import { RefreshCw, Calendar } from "lucide-react";
 
 interface PlanCardProps {
   patientName: string;
   planCode: string;
   planCreatedAt: string;
   cpf: string;
+  isRecurring?: boolean;
+  nextPaymentDate?: string;
 }
 
 export const PlanCard = (props: PlanCardProps) => {
   const formatInscriptionDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  const formatNextPayment = (dateString?: string) => {
+    if (!dateString) return null;
     const date = new Date(dateString);
     return date.toLocaleDateString("pt-BR", {
       day: "2-digit",
@@ -42,6 +55,12 @@ export const PlanCard = (props: PlanCardProps) => {
             <div className="text-right">
               <div className="text-xs md:text-sm font-medium" style={{ color: '#fbaa03' }}>Plano de Saúde</div>
               <div className="text-base md:text-lg font-bold">Plano Ativo</div>
+              {props.isRecurring && (
+                <div className="flex items-center gap-1 mt-1 text-xs" style={{ color: '#fbaa03' }}>
+                  <RefreshCw className="w-3 h-3" />
+                  Renovação Automática
+                </div>
+              )}
             </div>
           </div>
 
@@ -69,9 +88,20 @@ export const PlanCard = (props: PlanCardProps) => {
               </div>
             </div>
 
-            <div>
-              <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Data de Inscrição</div>
-              <div className="text-sm md:text-base font-semibold">{formatInscriptionDate(props.planCreatedAt)}</div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs md:text-sm font-medium opacity-80 mb-1">Data de Inscrição</div>
+                <div className="text-sm md:text-base font-semibold">{formatInscriptionDate(props.planCreatedAt)}</div>
+              </div>
+              
+              {props.isRecurring && props.nextPaymentDate && (
+                <div>
+                  <div className="text-xs md:text-sm font-medium opacity-80 mb-1 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Próxima Cobrança
+                  </div>
+                  <div className="text-sm md:text-base font-semibold">{formatNextPayment(props.nextPaymentDate)}</div>
+                </div>
+              )}
             </div>
           </div>
 
