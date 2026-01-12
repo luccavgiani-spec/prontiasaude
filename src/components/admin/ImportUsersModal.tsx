@@ -39,106 +39,203 @@ export function ImportUsersModal({ open, onOpenChange, onSuccess }: ImportUsersM
   const [results, setResults] = useState<ImportResult[]>([]);
   const [step, setStep] = useState<'input' | 'preview' | 'importing' | 'done'>('input');
 
+  /**
+   * Parser robusto para SQL com formato de linha única
+   * Lida corretamente com JSON contendo parênteses e aspas escapadas
+   */
+  const parseColumnsFromRecord = (record: string): string[] => {
+    const columns: string[] = [];
+    let current = '';
+    let inString = false;
+    let stringChar = '';
+    let depth = 0; // Para rastrear objetos JSON aninhados
+    
+    for (let i = 0; i < record.length; i++) {
+      const char = record[i];
+      const prevChar = i > 0 ? record[i - 1] : '';
+      
+      // Detectar início/fim de string (aspas simples)
+      if (char === "'" && prevChar !== '\\') {
+        // Verificar se é aspas escapada '' (PostgreSQL)
+        if (inString && stringChar === "'" && record[i + 1] === "'") {
+          current += char;
+          continue;
+        }
+        
+        if (!inString) {
+          inString = true;
+          stringChar = char;
+        } else if (stringChar === char) {
+          inString = false;
+          stringChar = '';
+        }
+        current += char;
+        continue;
+      }
+      
+      // Rastrear profundidade de JSON (apenas fora de strings)
+      if (!inString) {
+        if (char === '{' || char === '[') depth++;
+        if (char === '}' || char === ']') depth--;
+      }
+      
+      // Separador de colunas (vírgula fora de string e fora de JSON)
+      if (char === ',' && !inString && depth === 0) {
+        columns.push(current.trim());
+        current = '';
+        continue;
+      }
+      
+      current += char;
+    }
+    
+    // Adicionar última coluna
+    if (current.trim()) {
+      columns.push(current.trim());
+    }
+    
+    return columns;
+  };
+
+  const cleanValue = (val: string): string | null => {
+    val = val.trim();
+    if (val === 'NULL' || val === 'null') return null;
+    // Remover aspas simples externas
+    if (val.startsWith("'") && val.endsWith("'")) {
+      val = val.slice(1, -1);
+    }
+    // Tratar aspas escapadas do PostgreSQL
+    val = val.replace(/''/g, "'");
+    return val;
+  };
+
   const parseSQL = () => {
     setAnalyzing(true);
     
     try {
       const users: ParsedUser[] = [];
       
-      // Match INSERT statements for auth.users
-      // Pattern: VALUES ('uuid', 'instance_id', 'aud', 'role', 'email', 'encrypted_password', ...)
-      const insertPattern = /\(([^)]+)\)/g;
-      const matches = sqlContent.matchAll(insertPattern);
+      // Encontrar início dos VALUES
+      const valuesMatch = sqlContent.match(/VALUES\s*\(/i);
+      if (!valuesMatch) {
+        toast.error('Formato SQL inválido. Não encontrou VALUES.');
+        setAnalyzing(false);
+        return;
+      }
       
-      for (const match of matches) {
-        const values = match[1];
+      const valuesStart = valuesMatch.index! + valuesMatch[0].length - 1; // -1 para incluir o (
+      let valuesContent = sqlContent.substring(valuesStart);
+      
+      // Remover possível ; no final
+      valuesContent = valuesContent.replace(/;\s*$/, '');
+      
+      // Dividir registros por "), (" - mas precisamos ser cuidadosos
+      // Primeiro, remover ( inicial e ) final
+      valuesContent = valuesContent.trim();
+      if (valuesContent.startsWith('(')) valuesContent = valuesContent.substring(1);
+      if (valuesContent.endsWith(')')) valuesContent = valuesContent.slice(0, -1);
+      
+      // Agora dividir por "), (" ou "),("
+      // Precisamos fazer isso de forma segura, considerando que pode haver ) dentro de strings
+      const records: string[] = [];
+      let currentRecord = '';
+      let inString = false;
+      let depth = 0;
+      
+      for (let i = 0; i < valuesContent.length; i++) {
+        const char = valuesContent[i];
+        const prevChar = i > 0 ? valuesContent[i - 1] : '';
         
-        // Split by comma but respect quoted strings
-        const parts: string[] = [];
-        let current = '';
-        let inQuote = false;
-        let quoteChar = '';
-        
-        for (let i = 0; i < values.length; i++) {
-          const char = values[i];
-          
-          if ((char === "'" || char === '"') && (i === 0 || values[i-1] !== '\\')) {
-            if (!inQuote) {
-              inQuote = true;
-              quoteChar = char;
-            } else if (char === quoteChar) {
-              inQuote = false;
-            }
+        // Detectar strings
+        if (char === "'" && prevChar !== '\\') {
+          if (inString && valuesContent[i + 1] === "'") {
+            currentRecord += char;
+            continue;
           }
+          inString = !inString;
+        }
+        
+        if (!inString) {
+          if (char === '{' || char === '[' || char === '(') depth++;
+          if (char === '}' || char === ']') depth--;
           
-          if (char === ',' && !inQuote) {
-            parts.push(current.trim());
-            current = '';
-          } else {
-            current += char;
+          // Detectar fim de registro: ), ( ou ),(
+          if (char === ')' && depth === 0) {
+            // Verificar se próximos caracteres são ", (" ou ",("
+            const ahead = valuesContent.substring(i + 1, i + 10).trim();
+            if (ahead.startsWith(',') && ahead.includes('(')) {
+              records.push(currentRecord.trim());
+              currentRecord = '';
+              // Pular até o próximo (
+              while (i < valuesContent.length && valuesContent[i] !== '(') i++;
+              continue;
+            }
           }
         }
-        if (current) parts.push(current.trim());
         
-        // auth.users table columns (typical order):
-        // 0: instance_id, 1: id, 2: aud, 3: role, 4: email, 5: encrypted_password
-        // 6: email_confirmed_at, 7: invited_at, 8: confirmation_token, 9: confirmation_sent_at
-        // 10: recovery_token, 11: recovery_sent_at, 12: email_change_token_new, 13: email_change
-        // 14: email_change_sent_at, 15: last_sign_in_at, 16: raw_app_meta_data, 17: raw_user_meta_data
-        // 18: is_super_admin, 19: created_at, 20: updated_at, 21: phone, 22: phone_confirmed_at
-        // 23: phone_change, 24: phone_change_token, 25: phone_change_sent_at, 26: email_change_token_current
-        // 27: email_change_confirm_status, 28: banned_until, 29: reauthentication_token, 30: reauthentication_sent_at
-        // 31: is_sso_user, 32: deleted_at, 33: is_anonymous
-        
-        if (parts.length >= 6) {
-          const cleanValue = (val: string) => {
-            val = val.trim();
-            if (val === 'NULL' || val === 'null') return null;
-            // Remove quotes
-            if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
-              val = val.slice(1, -1);
-            }
-            // Handle escaped quotes
-            val = val.replace(/''/g, "'").replace(/\\'/g, "'");
-            return val;
-          };
+        currentRecord += char;
+      }
+      
+      // Adicionar último registro
+      if (currentRecord.trim()) {
+        records.push(currentRecord.trim());
+      }
+      
+      console.log(`[ImportUsers] Encontrados ${records.length} registros no SQL`);
+      
+      // Processar cada registro
+      for (const record of records) {
+        try {
+          const columns = parseColumnsFromRecord(record);
           
-          const email = cleanValue(parts[4]);
-          const encryptedPassword = cleanValue(parts[5]);
-          const emailConfirmedAt = cleanValue(parts[6]);
-          const rawUserMetaDataStr = cleanValue(parts[17]);
-          const createdAt = cleanValue(parts[19]);
+          // auth.users table columns (typical order):
+          // 0: instance_id, 1: id, 2: aud, 3: role, 4: email, 5: encrypted_password
+          // 6: email_confirmed_at, 7: invited_at, 8: confirmation_token, 9: confirmation_sent_at
+          // 10: recovery_token, 11: recovery_sent_at, 12: email_change_token_new, 13: email_change
+          // 14: email_change_sent_at, 15: last_sign_in_at, 16: raw_app_meta_data, 17: raw_user_meta_data
+          // 18: is_super_admin, 19: created_at, 20: updated_at
           
-          // Validate email
-          if (email && email.includes('@')) {
-            let rawUserMetaData: Record<string, unknown> = {};
+          if (columns.length >= 6) {
+            const email = cleanValue(columns[4]);
+            const encryptedPassword = cleanValue(columns[5]);
+            const emailConfirmedAt = columns[6] ? cleanValue(columns[6]) : null;
+            const rawUserMetaDataStr = columns[17] ? cleanValue(columns[17]) : null;
+            const createdAt = columns[19] ? cleanValue(columns[19]) : null;
             
-            if (rawUserMetaDataStr) {
-              try {
-                rawUserMetaData = JSON.parse(rawUserMetaDataStr);
-              } catch {
-                // Ignore parse errors
+            // Validar email
+            if (email && email.includes('@')) {
+              let rawUserMetaData: Record<string, unknown> = {};
+              
+              if (rawUserMetaDataStr) {
+                try {
+                  rawUserMetaData = JSON.parse(rawUserMetaDataStr);
+                } catch {
+                  // Ignorar erros de parse JSON
+                }
               }
+              
+              // Detectar provider
+              const providers = rawUserMetaData?.providers as string[] | undefined;
+              const provider = rawUserMetaData?.provider as string || 
+                               (providers?.includes('google') ? 'google' : 
+                               encryptedPassword ? 'email' : 'unknown');
+              
+              users.push({
+                email,
+                encrypted_password: encryptedPassword,
+                raw_user_meta_data: rawUserMetaData,
+                email_confirmed_at: emailConfirmedAt || undefined,
+                created_at: createdAt || undefined,
+                provider
+              });
             }
-            
-            // Detect provider from metadata
-            const provider = rawUserMetaData?.provider as string || 
-                             (rawUserMetaData?.providers as string[])?.includes('google') ? 'google' : 
-                             encryptedPassword ? 'email' : 'unknown';
-            
-            users.push({
-              email,
-              encrypted_password: encryptedPassword,
-              raw_user_meta_data: rawUserMetaData,
-              email_confirmed_at: emailConfirmedAt || undefined,
-              created_at: createdAt || undefined,
-              provider
-            });
           }
+        } catch (recordError) {
+          console.warn('[ImportUsers] Erro ao processar registro:', recordError);
         }
       }
       
-      // Remove duplicates by email
+      // Remover duplicatas por email
       const uniqueUsers = users.filter((user, index, self) => 
         index === self.findIndex(u => u.email.toLowerCase() === user.email.toLowerCase())
       );
