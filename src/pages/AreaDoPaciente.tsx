@@ -43,13 +43,16 @@ const AreaDoPaciente = () => {
       const {
         data,
         error
-      } = await supabase.from('patients').select('*').eq('id', session.user.id).maybeSingle();
+      } = await supabase.from('patients').select('*').eq('user_id', session.user.id).maybeSingle();
+      
       if (error) {
         console.error('Fetch patient error:', error);
         window.location.replace('/completar-perfil');
         return;
       }
-      if (!data?.profile_complete) {
+      
+      // Se não encontrou paciente ou perfil incompleto, redirecionar
+      if (!data || !data.profile_complete) {
         window.location.replace('/completar-perfil');
         return;
       }

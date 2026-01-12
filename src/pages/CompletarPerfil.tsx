@@ -662,7 +662,19 @@ const CompletarPerfil = () => {
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
       <Card className="w-full max-w-2xl">
-        <CardHeader className="text-center">
+        <CardHeader className="text-center relative">
+          {/* Botão de logout sempre visível para usuários autenticados */}
+          {currentUser && !inviteToken && !familyToken && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={handleLogout}
+              className="absolute right-4 top-4 text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              Sair
+            </Button>
+          )}
           <CardTitle className="text-2xl font-bold text-foreground">Completar Perfil</CardTitle>
           <CardDescription>
             Complete TODAS as informações abaixo para acessar o atendimento
