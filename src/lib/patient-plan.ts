@@ -65,7 +65,7 @@ export const getPatientPlan = async (email: string, byEmailOnly: boolean = false
 export const formatPlanName = (planCode?: string): string => {
   if (!planCode) return 'Nenhum plano ativo';
   
-  // ✅ NOVO: Detectar planos empresariais
+  // ✅ Detectar planos empresariais
   if (planCode.startsWith('EMPRESA_')) {
     const companyName = planCode
       .replace('EMPRESA_', '')
@@ -77,9 +77,35 @@ export const formatPlanName = (planCode?: string): string => {
   }
   
   const planNames: Record<string, string> = {
+    // Individuais com Especialistas
+    'IND_COM_ESP_1M': 'Individual com Especialistas - Mensal',
+    'IND_COM_ESP_3M': 'Individual com Especialistas - Trimestral',
+    'IND_COM_ESP_6M': 'Individual com Especialistas - Semestral',
+    'IND_COM_ESP_12M': 'Individual com Especialistas - Anual',
+    
+    // Individuais sem Especialistas
+    'IND_SEM_ESP_1M': 'Individual sem Especialistas - Mensal',
+    'IND_SEM_ESP_3M': 'Individual sem Especialistas - Trimestral',
+    'IND_SEM_ESP_6M': 'Individual sem Especialistas - Semestral',
+    'IND_SEM_ESP_12M': 'Individual sem Especialistas - Anual',
+    
+    // Familiares com Especialistas
+    'FAM_COM_ESP_1M': 'Familiar com Especialistas - Mensal',
+    'FAM_COM_ESP_3M': 'Familiar com Especialistas - Trimestral',
+    'FAM_COM_ESP_6M': 'Familiar com Especialistas - Semestral',
+    'FAM_COM_ESP_12M': 'Familiar com Especialistas - Anual',
+    
+    // Familiares sem Especialistas
+    'FAM_SEM_ESP_1M': 'Familiar sem Especialistas - Mensal',
+    'FAM_SEM_ESP_3M': 'Familiar sem Especialistas - Trimestral',
+    'FAM_SEM_ESP_6M': 'Familiar sem Especialistas - Semestral',
+    'FAM_SEM_ESP_12M': 'Familiar sem Especialistas - Anual',
+    
+    // Legados
     'BASIC': 'Plano Básico',
     'PREMIUM': 'Plano Premium',
     'FAMILY': 'Plano Família',
+    'FAM_BASIC': 'Plano Família Básico',
     'CONSULTA_CLINICA': 'Consulta Clínica',
   };
   
