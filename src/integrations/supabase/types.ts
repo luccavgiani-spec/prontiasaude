@@ -66,7 +66,9 @@ export type Database = {
         Row: {
           appointment_id: string | null
           created_at: string | null
+          duration_min: number | null
           duration_minutes: number | null
+          email: string | null
           external_data: Json | null
           id: string
           meeting_url: string | null
@@ -74,15 +76,19 @@ export type Database = {
           patient_id: string | null
           provider: string | null
           scheduled_date: string | null
+          service_code: string | null
           service_name: string | null
           specialty: string | null
+          start_at_local: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
           appointment_id?: string | null
           created_at?: string | null
+          duration_min?: number | null
           duration_minutes?: number | null
+          email?: string | null
           external_data?: Json | null
           id?: string
           meeting_url?: string | null
@@ -90,15 +96,19 @@ export type Database = {
           patient_id?: string | null
           provider?: string | null
           scheduled_date?: string | null
+          service_code?: string | null
           service_name?: string | null
           specialty?: string | null
+          start_at_local?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
           appointment_id?: string | null
           created_at?: string | null
+          duration_min?: number | null
           duration_minutes?: number | null
+          email?: string | null
           external_data?: Json | null
           id?: string
           meeting_url?: string | null
@@ -106,8 +116,10 @@ export type Database = {
           patient_id?: string | null
           provider?: string | null
           scheduled_date?: string | null
+          service_code?: string | null
           service_name?: string | null
           specialty?: string | null
+          start_at_local?: string | null
           status?: string | null
           updated_at?: string | null
         }
@@ -334,49 +346,73 @@ export type Database = {
       }
       coupon_uses: {
         Row: {
+          coupon_code: string | null
           coupon_id: string
           created_at: string | null
           discount_amount: number | null
+          discount_percent: number | null
           final_amount: number | null
           id: string
           original_amount: number | null
+          owner_email: string | null
+          owner_id: string | null
+          owner_name: string | null
+          owner_pix_key: string | null
           payment_id: string | null
           reviewed: boolean | null
           reviewed_at: string | null
           reviewed_by: string | null
+          service_or_plan_name: string | null
           service_sku: string | null
+          status: string | null
           used_by_email: string | null
           used_by_name: string | null
           used_by_user_id: string | null
         }
         Insert: {
+          coupon_code?: string | null
           coupon_id: string
           created_at?: string | null
           discount_amount?: number | null
+          discount_percent?: number | null
           final_amount?: number | null
           id?: string
           original_amount?: number | null
+          owner_email?: string | null
+          owner_id?: string | null
+          owner_name?: string | null
+          owner_pix_key?: string | null
           payment_id?: string | null
           reviewed?: boolean | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          service_or_plan_name?: string | null
           service_sku?: string | null
+          status?: string | null
           used_by_email?: string | null
           used_by_name?: string | null
           used_by_user_id?: string | null
         }
         Update: {
+          coupon_code?: string | null
           coupon_id?: string
           created_at?: string | null
           discount_amount?: number | null
+          discount_percent?: number | null
           final_amount?: number | null
           id?: string
           original_amount?: number | null
+          owner_email?: string | null
+          owner_id?: string | null
+          owner_name?: string | null
+          owner_pix_key?: string | null
           payment_id?: string | null
           reviewed?: boolean | null
           reviewed_at?: string | null
           reviewed_by?: string | null
+          service_or_plan_name?: string | null
           service_sku?: string | null
+          status?: string | null
           used_by_email?: string | null
           used_by_name?: string | null
           used_by_user_id?: string | null
@@ -484,7 +520,7 @@ export type Database = {
           cancelled_at: string | null
           cancelled_reason: string | null
           created_at: string | null
-          end_date: string | null
+          email: string | null
           id: string
           mp_payer_id: string | null
           mp_subscription_id: string | null
@@ -492,10 +528,12 @@ export type Database = {
           patient_id: string | null
           payment_method: string | null
           plan_code: string
+          plan_expires_at: string | null
           start_date: string | null
           status: string | null
           subscription_status: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           activated_at?: string | null
@@ -503,7 +541,7 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_reason?: string | null
           created_at?: string | null
-          end_date?: string | null
+          email?: string | null
           id?: string
           mp_payer_id?: string | null
           mp_subscription_id?: string | null
@@ -511,10 +549,12 @@ export type Database = {
           patient_id?: string | null
           payment_method?: string | null
           plan_code: string
+          plan_expires_at?: string | null
           start_date?: string | null
           status?: string | null
           subscription_status?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           activated_at?: string | null
@@ -522,7 +562,7 @@ export type Database = {
           cancelled_at?: string | null
           cancelled_reason?: string | null
           created_at?: string | null
-          end_date?: string | null
+          email?: string | null
           id?: string
           mp_payer_id?: string | null
           mp_subscription_id?: string | null
@@ -530,10 +570,12 @@ export type Database = {
           patient_id?: string | null
           payment_method?: string | null
           plan_code?: string
+          plan_expires_at?: string | null
           start_date?: string | null
           status?: string | null
           subscription_status?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -547,11 +589,16 @@ export type Database = {
       }
       patients: {
         Row: {
+          address_line: string | null
+          address_number: string | null
           birth_date: string | null
           cep: string | null
           city: string | null
           clicklife_patient_id: string | null
           clubeben_id: string | null
+          clubeben_last_sync: string | null
+          clubeben_retry_count: number | null
+          clubeben_status: string | null
           clubeben_synced_at: string | null
           complement: string | null
           cpf: string | null
@@ -561,20 +608,29 @@ export type Database = {
           gender: string | null
           id: string
           last_name: string | null
+          marketing_opt_in: boolean | null
           neighborhood: string | null
-          number: string | null
-          phone: string | null
+          phone_e164: string | null
+          profile_complete: boolean | null
+          source: string | null
           state: string | null
-          street: string | null
+          status_email: number | null
+          status_sms: number | null
+          terms_accepted_at: string | null
           updated_at: string | null
           user_id: string | null
         }
         Insert: {
+          address_line?: string | null
+          address_number?: string | null
           birth_date?: string | null
           cep?: string | null
           city?: string | null
           clicklife_patient_id?: string | null
           clubeben_id?: string | null
+          clubeben_last_sync?: string | null
+          clubeben_retry_count?: number | null
+          clubeben_status?: string | null
           clubeben_synced_at?: string | null
           complement?: string | null
           cpf?: string | null
@@ -584,20 +640,29 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string | null
+          marketing_opt_in?: boolean | null
           neighborhood?: string | null
-          number?: string | null
-          phone?: string | null
+          phone_e164?: string | null
+          profile_complete?: boolean | null
+          source?: string | null
           state?: string | null
-          street?: string | null
+          status_email?: number | null
+          status_sms?: number | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
         Update: {
+          address_line?: string | null
+          address_number?: string | null
           birth_date?: string | null
           cep?: string | null
           city?: string | null
           clicklife_patient_id?: string | null
           clubeben_id?: string | null
+          clubeben_last_sync?: string | null
+          clubeben_retry_count?: number | null
+          clubeben_status?: string | null
           clubeben_synced_at?: string | null
           complement?: string | null
           cpf?: string | null
@@ -607,11 +672,15 @@ export type Database = {
           gender?: string | null
           id?: string
           last_name?: string | null
+          marketing_opt_in?: boolean | null
           neighborhood?: string | null
-          number?: string | null
-          phone?: string | null
+          phone_e164?: string | null
+          profile_complete?: boolean | null
+          source?: string | null
           state?: string | null
-          street?: string | null
+          status_email?: number | null
+          status_sms?: number | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -621,12 +690,14 @@ export type Database = {
         Row: {
           accepted_at: string | null
           company_id: string
+          completed_at: string | null
           cpf: string | null
           created_at: string | null
           email: string
           expires_at: string | null
           first_name: string | null
           id: string
+          invited_at: string | null
           last_name: string | null
           status: string | null
           token: string | null
@@ -635,12 +706,14 @@ export type Database = {
         Insert: {
           accepted_at?: string | null
           company_id: string
+          completed_at?: string | null
           cpf?: string | null
           created_at?: string | null
           email: string
           expires_at?: string | null
           first_name?: string | null
           id?: string
+          invited_at?: string | null
           last_name?: string | null
           status?: string | null
           token?: string | null
@@ -649,12 +722,14 @@ export type Database = {
         Update: {
           accepted_at?: string | null
           company_id?: string
+          completed_at?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string
           expires_at?: string | null
           first_name?: string | null
           id?: string
+          invited_at?: string | null
           last_name?: string | null
           status?: string | null
           token?: string | null
@@ -901,7 +976,7 @@ export type Database = {
           code: string
           coupon_type: string | null
           created_at: string | null
-          discount_percent: number | null
+          discount_percentage: number | null
           id: string
           is_active: boolean | null
           owner_user_id: string | null
@@ -912,7 +987,7 @@ export type Database = {
           code: string
           coupon_type?: string | null
           created_at?: string | null
-          discount_percent?: number | null
+          discount_percentage?: number | null
           id?: string
           is_active?: boolean | null
           owner_user_id?: string | null
@@ -923,7 +998,7 @@ export type Database = {
           code?: string
           coupon_type?: string | null
           created_at?: string | null
-          discount_percent?: number | null
+          discount_percentage?: number | null
           id?: string
           is_active?: boolean | null
           owner_user_id?: string | null
