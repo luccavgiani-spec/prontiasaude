@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     const { data: patient, error: fetchError } = await supabase
       .from('patients')
       .select('*')
-      .eq('id', user_id)
+      .eq('user_id', user_id)
       .single();
 
     if (fetchError || !patient) {

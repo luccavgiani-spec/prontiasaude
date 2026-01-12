@@ -83,7 +83,9 @@ export const PlanCard = (props: PlanCardProps) => {
               <div>
                 <div className="text-xs md:text-sm font-medium opacity-80 mb-1">CPF</div>
                 <div className="text-sm md:text-base font-semibold">
-                  {props.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
+                  {props.cpf && props.cpf.length >= 11 
+                    ? props.cpf.replace(/\D/g, '').replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+                    : 'Não informado'}
                 </div>
               </div>
             </div>
