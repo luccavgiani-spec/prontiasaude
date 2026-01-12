@@ -30,10 +30,11 @@ interface CouponUse {
   service_or_plan_name: string;
   owner_email: string;
   owner_pix_key: string | null;
-  amount_original: number;
-  amount_discounted: number;
-  discount_percentage: number;
-  used_at: string;
+  original_amount: number;
+  discount_amount: number;
+  final_amount: number;
+  discount_percent: number;
+  created_at: string;
   reviewed: boolean;
   reviewed_at: string | null;
   reviewed_by: string | null;
@@ -56,12 +57,10 @@ interface PendingCoupon {
   id: string;
   payment_id: string;
   order_id: string | null;
-  email: string;
+  patient_email: string;
   coupon_code: string;
   sku: string | null;
-  amount_cents: number;
-  amount_original: number | null;
-  discount_percentage: number | null;
+  amount: number;
   status: string;
   created_at: string;
 }
@@ -405,7 +404,7 @@ export function CouponsTab() {
                   {pendingCoupons.map((pending) => (
                     <TableRow key={pending.id}>
                       <TableCell className="font-medium text-xs">
-                        {pending.email}
+                        {pending.patient_email}
                       </TableCell>
                       
                       <TableCell>
@@ -419,11 +418,11 @@ export function CouponsTab() {
                       </TableCell>
                       
                       <TableCell className="text-right text-muted-foreground">
-                        R$ {((pending.amount_original || 0) / 100).toFixed(2)}
+                        R$ {((pending.amount || 0) / 100).toFixed(2)}
                       </TableCell>
                       
                       <TableCell className="text-right font-semibold text-yellow-600">
-                        R$ {(pending.amount_cents / 100).toFixed(2)}
+                        R$ {(pending.amount / 100).toFixed(2)}
                       </TableCell>
                       
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -434,7 +433,7 @@ export function CouponsTab() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleVerifyPayment(pending.payment_id, pending.email)}
+                          onClick={() => handleVerifyPayment(pending.payment_id, pending.patient_email)}
                           disabled={verifyingPayment === pending.payment_id}
                           className="h-8"
                         >
@@ -597,13 +596,13 @@ export function CouponsTab() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
-                        R$ {(use.amount_original / 100).toFixed(2)}
+                        R$ {(use.original_amount / 100).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-green-600">
-                        R$ {(use.amount_discounted / 100).toFixed(2)}
+                        R$ {(use.final_amount / 100).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(parseISO(use.used_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        {format(parseISO(use.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                       </TableCell>
                     </TableRow>
                   ))}

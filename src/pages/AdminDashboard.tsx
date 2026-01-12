@@ -263,8 +263,8 @@ const AdminDashboard = () => {
         return;
       }
 
-      const { error } = await supabase
-        .from('admin_content')
+      const { error } = await (supabase
+        .from('admin_content') as any)
         .insert({
           title: contentForm.title,
           description: contentForm.description,
