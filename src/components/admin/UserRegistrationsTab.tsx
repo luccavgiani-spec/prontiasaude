@@ -109,9 +109,11 @@ export default function UserRegistrationsTab() {
         (patients || []).map(async (patient: Patient) => {
           try {
             const plan = await getPatientPlan(patient.email, true);
+            // Para plan_expires_at (DATE), considerar ativo se expira hoje ou depois
+            // Normalizar expiresAt para fim do dia para garantir que "hoje" é válido
+            const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at + 'T23:59:59') : null;
             const now = new Date();
-            const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at) : null;
-            const isActive = expiresAt && expiresAt > now && plan?.status === 'active';
+            const isActive = expiresAt && expiresAt >= now && plan?.status === 'active';
 
             return {
               id: patient.user_id || patient.id,
