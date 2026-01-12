@@ -36,6 +36,136 @@ function mapSkuToName(sku: string): string {
   return SERVICE_NAMES[sku] || sku;
 }
 
+// ✅ NOVO: Helper function to register patient in Communicare (após compra)
+async function registerCommunicarePatientSimple(
+  cpf: string,
+  nome: string,
+  email: string,
+  telefone: string,
+  sexo: string,
+  birthDate?: string
+): Promise<{ success: boolean; patientId?: number; error?: string }> {
+  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
+                        'https://api-patients-production.communicare.com.br';
+  const API_TOKEN = Deno.env.get('COMMUNICARE_API_TOKEN');
+
+  if (!API_TOKEN) {
+    console.log('[registerCommunicare] ⚠️ COMMUNICARE_API_TOKEN não configurado - pulando cadastro');
+    return { success: false, error: 'COMMUNICARE_API_TOKEN não configurado' };
+  }
+
+  try {
+    console.log('[registerCommunicare] 📝 Iniciando cadastro do paciente na Communicare');
+    console.log('[registerCommunicare] CPF:', cpf.substring(0, 3) + '***');
+
+    const cpfClean = cpf.replace(/\D/g, '');
+    const phoneClean = telefone.replace(/\D/g, '');
+    
+    // Extrair DDI e número (ex: +5511999999999 → ddi: 55, mobile: 11999999999)
+    const ddi = phoneClean.startsWith('55') ? '55' : '55';
+    const mobileNumber = phoneClean.replace(/^55/, '');
+    
+    // Converter birth_date de YYYY-MM-DD para DDMMYYYY (formato Communicare)
+    let birthDateFormatted = "01011990"; // Fallback
+    if (birthDate) {
+      try {
+        const parts = birthDate.split('-');
+        if (parts.length === 3) {
+          const [year, month, day] = parts;
+          birthDateFormatted = `${day}${month}${year}`;
+          console.log('[registerCommunicare] Data de nascimento:', birthDate, '→', birthDateFormatted);
+        }
+      } catch (e) {
+        console.warn('[registerCommunicare] Erro ao converter birth_date, usando fallback:', e);
+      }
+    }
+
+    // Mapear gênero
+    const genderFormatted = (sexo === 'M' || sexo === 'F') ? sexo : 'M';
+
+    const patientPayload = {
+      name: nome,
+      cpf: cpfClean,
+      mobileNumber: mobileNumber,
+      email: email,
+      ddi: ddi,
+      birthDate: birthDateFormatted,
+      gender: genderFormatted,
+      workingArea: "Outro",
+      jogPosition: "Outro",
+    };
+    
+    console.log('[registerCommunicare] Payload:', JSON.stringify(patientPayload, null, 2));
+
+    const res = await fetch(`${PATIENTS_BASE}/v1/patient`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'api_token': API_TOKEN,
+      },
+      body: JSON.stringify(patientPayload)
+    });
+    
+    const resText = await res.text();
+    console.log('[registerCommunicare] Response status:', res.status);
+    console.log('[registerCommunicare] Response body:', resText);
+    
+    // 201 = criado, 409 = já existe (ambos são sucesso)
+    if (res.status === 201 || res.status === 409 || res.status === 200) {
+      console.log('[registerCommunicare] ✅ Paciente criado ou já existente na Communicare');
+      
+      let patientId: number | undefined;
+      
+      try {
+        const postData = JSON.parse(resText);
+        patientId = postData.id || postData.patientId;
+        
+        if (patientId) {
+          console.log('[registerCommunicare] ✓ patientId obtido:', patientId);
+          return { success: true, patientId };
+        }
+      } catch (e) {
+        console.log('[registerCommunicare] POST response não contém ID, consultando via GET...');
+      }
+      
+      // Se não tiver ID no POST, fazer GET
+      const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+        method: 'GET',
+        headers: { 'api_token': API_TOKEN }
+      });
+      
+      if (getRes.ok) {
+        const getBody = await getRes.text();
+        try {
+          const getData = JSON.parse(getBody);
+          if (Array.isArray(getData)) {
+            patientId = getData[0]?.id;
+          } else {
+            patientId = getData.id;
+          }
+          
+          if (patientId) {
+            console.log('[registerCommunicare] ✓ patientId obtido via GET:', patientId);
+            return { success: true, patientId };
+          }
+        } catch (e) {
+          console.error('[registerCommunicare] Erro ao parsear GET response:', e);
+        }
+      }
+      
+      // Sucesso sem ID é ok (paciente criado)
+      return { success: true };
+    }
+    
+    console.error('[registerCommunicare] ❌ Erro ao criar paciente:', res.status, resText);
+    return { success: false, error: `HTTP ${res.status}: ${resText}` };
+
+  } catch (error) {
+    console.error('[registerCommunicare] ❌ Exception:', error);
+    return { success: false, error: error.message || 'Exception during Communicare registration' };
+  }
+}
+
 // Helper function to register patient in ClickLife (simplified version)
 async function registerClickLifePatientSimple(
   cpf: string,
@@ -766,8 +896,44 @@ Deno.serve(async (req) => {
         
         if (clicklifeResult.success) {
           console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso');
+          
+          // ✅ Atualizar timestamp de registro ClickLife
+          await supabaseAdmin
+            .from('patients')
+            .update({ clicklife_registered_at: new Date().toISOString() })
+            .eq('email', patientData.email || schedulePayload.email);
         } else {
           console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (continuando para WhatsApp):', clicklifeResult.error);
+        }
+        
+        // ✅ NOVO: CADASTRO SIMULTÂNEO NA COMMUNICARE (especialista sem plano)
+        console.log('[mp-webhook] 🏥 Cadastro Communicare (especialista sem plano)...');
+        
+        const communicareResult = await registerCommunicarePatientSimple(
+          patientData.cpf || '',
+          nomeCompleto,
+          patientData.email || schedulePayload.email,
+          patientData.phone_e164 || '',
+          patientData.gender || 'F',
+          patientData.birth_date
+        );
+        
+        if (communicareResult.success) {
+          console.log('[mp-webhook] ✅ Paciente cadastrado na Communicare com sucesso');
+          
+          const updateData: any = { 
+            communicare_registered_at: new Date().toISOString() 
+          };
+          if (communicareResult.patientId) {
+            updateData.communicare_patient_id = String(communicareResult.patientId);
+          }
+          
+          await supabaseAdmin
+            .from('patients')
+            .update(updateData)
+            .eq('email', patientData.email || schedulePayload.email);
+        } else {
+          console.warn('[mp-webhook] ⚠️ Falha no cadastro Communicare:', communicareResult.error);
         }
       } else {
         // Registrar falha quando não há dados do paciente
@@ -1004,11 +1170,50 @@ Deno.serve(async (req) => {
       
       if (clicklifeResult.success) {
         console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso (universal)');
+        
+        // ✅ Atualizar timestamp de registro ClickLife
+        await supabaseAdmin
+          .from('patients')
+          .update({ clicklife_registered_at: new Date().toISOString() })
+          .eq('email', patientData.email || schedulePayload.email);
       } else {
         console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (universal):', clicklifeResult.error);
       }
+      
+      // ✅ NOVO: CADASTRO SIMULTÂNEO NA COMMUNICARE
+      console.log('[mp-webhook] 🏥 Cadastro universal na Communicare...');
+      
+      const communicareResult = await registerCommunicarePatientSimple(
+        patientData.cpf,
+        nomeCompleto,
+        patientData.email || schedulePayload.email,
+        patientData.phone_e164 || '',
+        patientData.gender || 'F',
+        patientData.birth_date
+      );
+      
+      if (communicareResult.success) {
+        console.log('[mp-webhook] ✅ Paciente cadastrado na Communicare com sucesso (universal)');
+        
+        // Atualizar timestamps e patientId na tabela patients
+        const updateData: any = { 
+          communicare_registered_at: new Date().toISOString() 
+        };
+        if (communicareResult.patientId) {
+          updateData.communicare_patient_id = String(communicareResult.patientId);
+        }
+        
+        await supabaseAdmin
+          .from('patients')
+          .update(updateData)
+          .eq('email', patientData.email || schedulePayload.email);
+          
+        console.log('[mp-webhook] 📝 Timestamps Communicare atualizados');
+      } else {
+        console.warn('[mp-webhook] ⚠️ Falha no cadastro Communicare (universal):', communicareResult.error);
+      }
     } else {
-      console.log('[mp-webhook] ⚠️ Pulando cadastro ClickLife - dados incompletos do paciente');
+      console.log('[mp-webhook] ⚠️ Pulando cadastro ClickLife/Communicare - dados incompletos do paciente');
     }
 
     console.log('[mp-webhook] 📞 Chamando schedule-redirect para payment:', payment.id);

@@ -631,11 +631,14 @@ export type Database = {
           cep: string | null
           city: string | null
           clicklife_patient_id: string | null
+          clicklife_registered_at: string | null
           clubeben_id: string | null
           clubeben_last_sync: string | null
           clubeben_retry_count: number | null
           clubeben_status: string | null
           clubeben_synced_at: string | null
+          communicare_patient_id: string | null
+          communicare_registered_at: string | null
           complement: string | null
           cpf: string | null
           created_at: string | null
@@ -664,11 +667,14 @@ export type Database = {
           cep?: string | null
           city?: string | null
           clicklife_patient_id?: string | null
+          clicklife_registered_at?: string | null
           clubeben_id?: string | null
           clubeben_last_sync?: string | null
           clubeben_retry_count?: number | null
           clubeben_status?: string | null
           clubeben_synced_at?: string | null
+          communicare_patient_id?: string | null
+          communicare_registered_at?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string | null
@@ -697,11 +703,14 @@ export type Database = {
           cep?: string | null
           city?: string | null
           clicklife_patient_id?: string | null
+          clicklife_registered_at?: string | null
           clubeben_id?: string | null
           clubeben_last_sync?: string | null
           clubeben_retry_count?: number | null
           clubeben_status?: string | null
           clubeben_synced_at?: string | null
+          communicare_patient_id?: string | null
+          communicare_registered_at?: string | null
           complement?: string | null
           cpf?: string | null
           created_at?: string | null
