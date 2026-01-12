@@ -264,15 +264,51 @@ export function ImportUsersModal({ open, onOpenChange, onSuccess }: ImportUsersM
     setResults([]);
     
     try {
+      // Obter sessão do admin logado - CRÍTICO: precisamos do access_token real
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        toast.error('Sessão expirada. Faça login novamente.');
+        setImporting(false);
+        setStep('input');
+        return;
+      }
+
+      console.log(`[ImportUsers] Token length: ${session.access_token.length}`);
+
       // Import in batches of 10
       const batchSize = 10;
       const allResults: ImportResult[] = [];
       
-      for (let i = 0; i < parsedUsers.length; i += batchSize) {
-        const batch = parsedUsers.slice(i, i + batchSize);
+      // Filtrar apenas usuários email/senha (pular Google OAuth)
+      const usersToImport = parsedUsers.filter(u => u.encrypted_password);
+      
+      // Adicionar resultados para usuários Google (pulados)
+      const googleUsers = parsedUsers.filter(u => !u.encrypted_password);
+      googleUsers.forEach(u => {
+        allResults.push({
+          email: u.email,
+          status: 'skipped',
+          message: 'Usuário Google OAuth - será recriado no primeiro login'
+        });
+      });
+      
+      if (usersToImport.length === 0) {
+        setResults(allResults);
+        setProgress(100);
+        setStep('done');
+        toast.info('Nenhum usuário email/senha para importar. Usuários Google serão recriados no primeiro login.');
+        return;
+      }
+      
+      for (let i = 0; i < usersToImport.length; i += batchSize) {
+        const batch = usersToImport.slice(i, i + batchSize);
         
         const { data, error } = await supabase.functions.invoke('import-users', {
-          body: { users: batch }
+          body: { users: batch },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`
+          }
         });
         
         if (error) {
@@ -309,7 +345,7 @@ export function ImportUsersModal({ open, onOpenChange, onSuccess }: ImportUsersM
           allResults.push(...data.results);
         }
         
-        setProgress(Math.min(100, Math.round(((i + batch.length) / parsedUsers.length) * 100)));
+        setProgress(Math.min(100, Math.round(((i + batch.length) / usersToImport.length) * 100)));
         setResults([...allResults]);
       }
       
