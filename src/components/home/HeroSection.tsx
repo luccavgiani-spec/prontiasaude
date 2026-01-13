@@ -30,7 +30,7 @@ export function HeroSection() {
     // Verificar se perfil está completo
     const {
       data: patient
-    } = await supabase.from('patients').select('profile_complete').eq('id', user.id).maybeSingle();
+    } = await supabase.from('patients').select('profile_complete').eq('user_id', user.id).maybeSingle();
     if (!patient?.profile_complete) {
       localStorage.setItem('returnUrl', '/');
       localStorage.setItem('pendingService', JSON.stringify({
@@ -48,7 +48,7 @@ export function HeroSection() {
       // Tem plano ativo: buscar dados completos do paciente
       const {
         data: patient
-      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
+      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast.error('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
