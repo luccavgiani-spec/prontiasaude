@@ -1096,23 +1096,32 @@ serve(async (req) => {
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + parseInt(duration_days));
 
-        // Buscar user_id se não fornecido
-        let userId = patient_id;
-        if (!userId) {
-          const { data: patient } = await supabase
-            .from('patients')
-            .select('id')
-            .eq('email', patient_email)
-            .single();
-          
-          userId = patient?.id;
+        // Buscar dados completos do paciente
+        const { data: patient } = await supabase
+          .from('patients')
+          .select('id, user_id')
+          .eq('email', patient_email)
+          .single();
+
+        if (!patient) {
+          console.error('[activate_plan_manual] Patient not found:', patient_email);
+          return new Response(
+            JSON.stringify({ error: 'Paciente não encontrado com este email' }),
+            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
+
+        console.log('[activate_plan_manual] Found patient:', { 
+          patient_id: patient.id, 
+          user_id: patient.user_id 
+        });
 
         // Upsert plano na tabela patient_plans
         const { error: upsertError } = await supabase
           .from('patient_plans')
           .upsert({
-            user_id: userId,
+            patient_id: patient.id,           // ID da tabela patients
+            user_id: patient.user_id,         // ID do auth.users (pode ser null)
             email: patient_email.toLowerCase().trim(),
             plan_code: plan_code,
             status: 'active',
