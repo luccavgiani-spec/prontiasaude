@@ -8,10 +8,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle, AlertTriangle, Edit, Phone, FileWarning } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
+import { EditPatientModal } from './EditPatientModal';
+import { validateCPF } from '@/lib/cpf-validator';
 
 interface Patient {
   id: string;
@@ -20,6 +22,13 @@ interface Patient {
   last_name?: string;
   cpf?: string;
   phone_e164?: string;
+  birth_date?: string;
+  gender?: string;
+  cep?: string;
+  address_line?: string;
+  address_number?: string;
+  city?: string;
+  state?: string;
   profile_complete: boolean;
   user_id?: string;
   created_at: string;
@@ -27,6 +36,7 @@ interface Patient {
 
 interface User {
   id: string;
+  patientId: string; // Keep patient.id for editing
   email: string;
   created_at: string;
   last_sign_in_at?: string;
@@ -38,13 +48,28 @@ interface User {
     last_name?: string;
     cpf?: string;
     phone_e164?: string;
+    birth_date?: string;
+    gender?: string;
+    cep?: string;
+    address_line?: string;
+    address_number?: string;
+    city?: string;
+    state?: string;
     profile_complete: boolean;
   };
   activePlan?: boolean;
   planCode?: string;
   hasAuthAccount?: boolean;
   authProvider?: 'email' | 'google' | 'none';
+  // Data quality flags
+  hasInvalidCpf?: boolean;
+  hasPlaceholderPhone?: boolean;
+  hasMissingCriticalData?: boolean;
 }
+
+// Constants for placeholder detection
+const PLACEHOLDER_PHONE = '+5511999999999';
+const PLACEHOLDER_CPF = '00000000000';
 
 export default function UserRegistrationsTab() {
   const [loading, setLoading] = useState(true);
@@ -57,18 +82,34 @@ export default function UserRegistrationsTab() {
   const [clicklifeLoading, setClicklifeLoading] = useState<string | null>(null);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     withAccount: 0,
     withoutAccount: 0,
     profileComplete: 0,
-    withPlan: 0
+    withPlan: 0,
+    incompleteData: 0,
+    invalidPhone: 0,
+    invalidCpf: 0,
+    criticalWithPlan: 0
   });
   const limit = 50;
 
   useEffect(() => {
     loadPatients();
   }, [page, statusFilter]);
+
+  const isPlaceholderPhone = (phone?: string) => phone === PLACEHOLDER_PHONE;
+  const isInvalidCpf = (cpf?: string) => {
+    if (!cpf) return false;
+    const cleaned = cpf.replace(/\D/g, '');
+    return cleaned === PLACEHOLDER_CPF || (cleaned.length === 11 && !validateCPF(cleaned));
+  };
+  const hasCriticalDataMissing = (patient?: User['patient']) => {
+    if (!patient) return true;
+    return !patient.cpf || !patient.phone_e164 || isPlaceholderPhone(patient.phone_e164) || isInvalidCpf(patient.cpf);
+  };
 
   const loadPatients = async () => {
     setLoading(true);
@@ -104,6 +145,27 @@ export default function UserRegistrationsTab() {
         .select('*', { count: 'exact', head: true })
         .eq('profile_complete', true);
 
+      // Count data quality issues
+      const { count: invalidPhoneCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .eq('phone_e164', PLACEHOLDER_PHONE);
+
+      const { count: invalidCpfCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .eq('cpf', PLACEHOLDER_CPF);
+
+      const { count: missingCpfCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .is('cpf', null);
+
+      const { count: missingPhoneCount } = await supabase
+        .from('patients')
+        .select('*', { count: 'exact', head: true })
+        .is('phone_e164', null);
+
       // Transform patients to User format
       const usersWithPlans = await Promise.all(
         (patients || []).map(async (patient: Patient) => {
@@ -115,40 +177,65 @@ export default function UserRegistrationsTab() {
             const now = new Date();
             const isActive = expiresAt && expiresAt >= now && plan?.status === 'active';
 
+            const patientData = {
+              first_name: patient.first_name,
+              last_name: patient.last_name,
+              cpf: patient.cpf,
+              phone_e164: patient.phone_e164,
+              birth_date: patient.birth_date,
+              gender: patient.gender,
+              cep: patient.cep,
+              address_line: patient.address_line,
+              address_number: patient.address_number,
+              city: patient.city,
+              state: patient.state,
+              profile_complete: patient.profile_complete || false,
+            };
+
             return {
               id: patient.user_id || patient.id,
+              patientId: patient.id,
               email: patient.email || '',
               created_at: patient.created_at,
               roles: [],
-              patient: {
-                first_name: patient.first_name,
-                last_name: patient.last_name,
-                cpf: patient.cpf,
-                phone_e164: patient.phone_e164,
-                profile_complete: patient.profile_complete || false,
-              },
+              patient: patientData,
               activePlan: isActive,
               planCode: plan?.plan_code,
               hasAuthAccount: !!patient.user_id,
               authProvider: patient.user_id ? 'email' : 'none',
+              hasInvalidCpf: isInvalidCpf(patient.cpf),
+              hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
+              hasMissingCriticalData: hasCriticalDataMissing(patientData),
             } as User;
           } catch (error) {
             console.error(`Error loading plan for ${patient.email}:`, error);
+            const patientData = {
+              first_name: patient.first_name,
+              last_name: patient.last_name,
+              cpf: patient.cpf,
+              phone_e164: patient.phone_e164,
+              birth_date: patient.birth_date,
+              gender: patient.gender,
+              cep: patient.cep,
+              address_line: patient.address_line,
+              address_number: patient.address_number,
+              city: patient.city,
+              state: patient.state,
+              profile_complete: patient.profile_complete || false,
+            };
             return {
               id: patient.user_id || patient.id,
+              patientId: patient.id,
               email: patient.email || '',
               created_at: patient.created_at,
               roles: [],
-              patient: {
-                first_name: patient.first_name,
-                last_name: patient.last_name,
-                cpf: patient.cpf,
-                phone_e164: patient.phone_e164,
-                profile_complete: patient.profile_complete || false,
-              },
+              patient: patientData,
               activePlan: false,
               hasAuthAccount: !!patient.user_id,
               authProvider: patient.user_id ? 'email' : 'none',
+              hasInvalidCpf: isInvalidCpf(patient.cpf),
+              hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
+              hasMissingCriticalData: hasCriticalDataMissing(patientData),
             } as User;
           }
         })
@@ -162,19 +249,33 @@ export default function UserRegistrationsTab() {
         filteredUsers = usersWithPlans.filter(u => !u.hasAuthAccount);
       } else if (statusFilter === 'with_plan') {
         filteredUsers = usersWithPlans.filter(u => u.activePlan);
+      } else if (statusFilter === 'incomplete_data') {
+        filteredUsers = usersWithPlans.filter(u => u.hasMissingCriticalData);
+      } else if (statusFilter === 'invalid_phone') {
+        filteredUsers = usersWithPlans.filter(u => u.hasPlaceholderPhone);
+      } else if (statusFilter === 'invalid_cpf') {
+        filteredUsers = usersWithPlans.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
+      } else if (statusFilter === 'critical_with_plan') {
+        filteredUsers = usersWithPlans.filter(u => u.activePlan && u.hasMissingCriticalData);
       }
 
       setUsers(filteredUsers);
 
       // Count users with active plans
       const withPlanCount = usersWithPlans.filter(u => u.activePlan).length;
+      const incompleteDataCount = usersWithPlans.filter(u => u.hasMissingCriticalData).length;
+      const criticalWithPlanCount = usersWithPlans.filter(u => u.activePlan && u.hasMissingCriticalData).length;
 
       setStats({
         total: totalCount || 0,
         withAccount: withAccountCount || 0,
         withoutAccount: (totalCount || 0) - (withAccountCount || 0),
         profileComplete: profileCompleteCount || 0,
-        withPlan: withPlanCount
+        withPlan: withPlanCount,
+        incompleteData: incompleteDataCount,
+        invalidPhone: invalidPhoneCount || 0,
+        invalidCpf: (invalidCpfCount || 0) + (missingCpfCount || 0),
+        criticalWithPlan: criticalWithPlanCount
       });
 
     } catch (error) {
@@ -246,8 +347,29 @@ export default function UserRegistrationsTab() {
     }
   };
 
+  const handleEditPatient = (user: User) => {
+    setEditingPatient({
+      id: user.patientId,
+      email: user.email,
+      first_name: user.patient?.first_name,
+      last_name: user.patient?.last_name,
+      cpf: user.patient?.cpf,
+      phone_e164: user.patient?.phone_e164,
+      birth_date: user.patient?.birth_date,
+      gender: user.patient?.gender,
+      cep: user.patient?.cep,
+      address_line: user.patient?.address_line,
+      address_number: user.patient?.address_number,
+      city: user.patient?.city,
+      state: user.patient?.state,
+      profile_complete: user.patient?.profile_complete || false,
+      user_id: user.hasAuthAccount ? user.id : undefined,
+      created_at: user.created_at,
+    });
+  };
+
   const exportCSV = () => {
-    const headers = ['Email', 'Nome', 'CPF', 'Telefone', 'Data Cadastro', 'Conta Auth', 'Perfil Completo', 'Plano Ativo'];
+    const headers = ['Email', 'Nome', 'CPF', 'Telefone', 'Data Cadastro', 'Conta Auth', 'Perfil Completo', 'Plano Ativo', 'Dados Válidos'];
     const rows = users.map(u => [
       u.email,
       `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.trim(),
@@ -257,6 +379,7 @@ export default function UserRegistrationsTab() {
       u.hasAuthAccount ? 'Sim' : 'Não',
       u.patient?.profile_complete ? 'Sim' : 'Não',
       u.activePlan ? 'Sim' : 'Não',
+      u.hasMissingCriticalData ? 'Não' : 'Sim',
     ]);
 
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
@@ -268,23 +391,58 @@ export default function UserRegistrationsTab() {
   };
 
   const formatCPF = (cpf?: string) => {
-    if (!cpf) return 'N/A';
+    if (!cpf) return null;
     const cleaned = cpf.replace(/\D/g, '');
     if (cleaned.length !== 11) return cpf;
     return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
   };
 
+  const renderCpfCell = (user: User) => {
+    const cpf = user.patient?.cpf;
+    if (!cpf) {
+      return <Badge variant="destructive" className="text-xs">Sem CPF</Badge>;
+    }
+    if (cpf === PLACEHOLDER_CPF) {
+      return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">CPF Placeholder</Badge>;
+    }
+    if (!validateCPF(cpf)) {
+      return (
+        <div className="flex items-center gap-1">
+          <span className="font-mono text-sm">{formatCPF(cpf)}</span>
+          <Badge variant="outline" className="text-xs border-red-500 text-red-600">Inválido</Badge>
+        </div>
+      );
+    }
+    return <span className="font-mono text-sm">{formatCPF(cpf)}</span>;
+  };
+
+  const renderPhoneCell = (user: User) => {
+    const phone = user.patient?.phone_e164;
+    if (!phone) {
+      return <Badge variant="destructive" className="text-xs">Sem Telefone</Badge>;
+    }
+    if (phone === PLACEHOLDER_PHONE) {
+      return <Badge variant="outline" className="text-xs border-orange-500 text-orange-600">Placeholder</Badge>;
+    }
+    return <span>{phone}</span>;
+  };
+
   if (loading) {
-    return <div className="p-8 text-center">Carregando pacientes...</div>;
+    return (
+      <div className="p-8 text-center flex items-center justify-center gap-2">
+        <Loader2 className="h-5 w-5 animate-spin" />
+        Carregando pacientes...
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Pacientes</CardTitle>
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -294,7 +452,7 @@ export default function UserRegistrationsTab() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Com Conta Auth</CardTitle>
+            <CardTitle className="text-sm font-medium">Com Conta</CardTitle>
             <UserCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -304,7 +462,7 @@ export default function UserRegistrationsTab() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Sem Conta Auth</CardTitle>
+            <CardTitle className="text-sm font-medium">Sem Conta</CardTitle>
             <UserX className="h-4 w-4 text-orange-600" />
           </CardHeader>
           <CardContent>
@@ -314,23 +472,56 @@ export default function UserRegistrationsTab() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Perfis Completos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.profileComplete}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Com Plano Ativo</CardTitle>
+            <CardTitle className="text-sm font-medium">Com Plano</CardTitle>
             <Shield className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-primary">{stats.withPlan}</div>
           </CardContent>
         </Card>
+
+        <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-950/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Tel. Placeholder</CardTitle>
+            <Phone className="h-4 w-4 text-orange-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{stats.invalidPhone}</div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">CPF Inválido</CardTitle>
+            <FileWarning className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.invalidCpf}</div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Critical Alert - Patients with plan but missing data */}
+      {stats.criticalWithPlan > 0 && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+          <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              ⚠️ {stats.criticalWithPlan} paciente(s) com plano ativo têm dados incompletos
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Esses pacientes podem ter problemas ao usar o plano (sem CPF ou telefone válido).
+            </p>
+          </div>
+          <Button 
+            onClick={() => setStatusFilter('critical_with_plan')} 
+            variant="outline" 
+            className="border-red-300 text-red-700 hover:bg-red-100"
+          >
+            Ver Pacientes Críticos
+          </Button>
+        </div>
+      )}
 
       {/* Alert for users without auth */}
       {stats.withoutAccount > 0 && (
@@ -352,9 +543,9 @@ export default function UserRegistrationsTab() {
       )}
 
       {/* Filters */}
-      <div className="flex justify-between items-center gap-4">
-        <div className="flex gap-4 flex-1">
-          <div className="relative flex-1 max-w-sm">
+      <div className="flex justify-between items-center gap-4 flex-wrap">
+        <div className="flex gap-4 flex-1 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por email, nome ou CPF..."
@@ -366,7 +557,7 @@ export default function UserRegistrationsTab() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
+            <SelectTrigger className="w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -374,6 +565,10 @@ export default function UserRegistrationsTab() {
               <SelectItem value="with_account">Com Conta Auth</SelectItem>
               <SelectItem value="without_account">Sem Conta Auth</SelectItem>
               <SelectItem value="with_plan">Com Plano Ativo</SelectItem>
+              <SelectItem value="incomplete_data">⚠️ Dados Incompletos</SelectItem>
+              <SelectItem value="invalid_phone">📱 Telefone Placeholder</SelectItem>
+              <SelectItem value="invalid_cpf">🆔 CPF Inválido/Ausente</SelectItem>
+              <SelectItem value="critical_with_plan">🚨 Críticos com Plano</SelectItem>
             </SelectContent>
           </Select>
 
@@ -386,11 +581,11 @@ export default function UserRegistrationsTab() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportModalOpen(true)}>
             <Upload className="h-4 w-4 mr-2" />
-            Importar Backup
+            Importar
           </Button>
           <Button variant="outline" onClick={exportCSV}>
             <Download className="h-4 w-4 mr-2" />
-            Exportar CSV
+            Exportar
           </Button>
         </div>
       </div>
@@ -398,7 +593,10 @@ export default function UserRegistrationsTab() {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Pacientes Cadastrados</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>Pacientes Cadastrados</span>
+            <Badge variant="secondary">{users.length} exibidos</Badge>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {users.length === 0 ? (
@@ -414,54 +612,61 @@ export default function UserRegistrationsTab() {
                     <TableHead>Nome</TableHead>
                     <TableHead>CPF</TableHead>
                     <TableHead>Telefone</TableHead>
-                    <TableHead>Cadastrado em</TableHead>
-                    <TableHead>Status Login</TableHead>
-                    <TableHead>Perfil</TableHead>
-                    <TableHead>Plano Ativo</TableHead>
+                    <TableHead>Cadastrado</TableHead>
+                    <TableHead>Login</TableHead>
+                    <TableHead>Plano</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-mono text-sm">{user.email}</TableCell>
+                    <TableRow 
+                      key={user.patientId} 
+                      className={user.activePlan && user.hasMissingCriticalData ? 'bg-red-50/50 dark:bg-red-950/20' : ''}
+                    >
+                      <TableCell className="font-mono text-sm max-w-[200px] truncate" title={user.email}>
+                        {user.email}
+                      </TableCell>
                       <TableCell>
                         {user.patient?.first_name && user.patient?.last_name
                           ? `${user.patient.first_name} ${user.patient.last_name}`
-                          : '-'}
+                          : user.patient?.first_name || <Badge variant="secondary" className="text-xs">Sem nome</Badge>}
                       </TableCell>
-                      <TableCell className="font-mono text-sm">{formatCPF(user.patient?.cpf)}</TableCell>
-                      <TableCell>{user.patient?.phone_e164 || '-'}</TableCell>
-                      <TableCell>{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell>{renderCpfCell(user)}</TableCell>
+                      <TableCell>{renderPhoneCell(user)}</TableCell>
+                      <TableCell className="text-sm">{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
                       <TableCell>
                         {user.hasAuthAccount ? (
-                          <Badge variant="default" className="bg-green-600">
+                          <Badge variant="default" className="bg-green-600 text-xs">
                             <UserCheck className="h-3 w-3 mr-1" />
-                            Conta Ativa
+                            Ativo
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300">
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 text-xs">
                             <UserX className="h-3 w-3 mr-1" />
-                            Sem Conta
+                            Sem
                           </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {user.patient?.profile_complete ? (
-                          <Badge variant="default">✓</Badge>
-                        ) : (
-                          <Badge variant="secondary">✗</Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         {user.activePlan ? (
-                          <Badge variant="default" className="bg-green-600">✓ {user.planCode}</Badge>
+                          <Badge variant="default" className="bg-green-600 text-xs">✓ {user.planCode}</Badge>
                         ) : (
-                          <Badge variant="secondary">✗ Sem plano</Badge>
+                          <Badge variant="secondary" className="text-xs">✗</Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex justify-end gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Editar Dados"
+                            onClick={() => handleEditPatient(user)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          
                           <Button 
                             variant="ghost" 
                             size="sm" 
@@ -553,6 +758,17 @@ export default function UserRegistrationsTab() {
         }}
       />
 
+      {/* Edit Patient Modal */}
+      <EditPatientModal
+        open={!!editingPatient}
+        onOpenChange={(open) => !open && setEditingPatient(null)}
+        patient={editingPatient}
+        onSuccess={() => {
+          setEditingPatient(null);
+          loadPatients();
+        }}
+      />
+
       {/* Modal de Ativação Manual */}
       {selectedUser && (
         <ManualPlanActivationModal
@@ -586,6 +802,22 @@ export default function UserRegistrationsTab() {
           
           {viewingUser && (
             <div className="space-y-6">
+              {/* Data Quality Warnings */}
+              {viewingUser.hasMissingCriticalData && (
+                <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                  <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
+                    <AlertTriangle className="h-4 w-4" />
+                    <span className="text-sm font-medium">Dados críticos incompletos</span>
+                  </div>
+                  <ul className="text-xs text-red-600 dark:text-red-400 mt-1 ml-6 list-disc">
+                    {!viewingUser.patient?.cpf && <li>CPF não cadastrado</li>}
+                    {viewingUser.hasInvalidCpf && <li>CPF inválido ou placeholder</li>}
+                    {!viewingUser.patient?.phone_e164 && <li>Telefone não cadastrado</li>}
+                    {viewingUser.hasPlaceholderPhone && <li>Telefone é placeholder</li>}
+                  </ul>
+                </div>
+              )}
+
               {/* Informações Básicas */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -598,11 +830,15 @@ export default function UserRegistrationsTab() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">CPF</label>
-                  <p className="font-mono">{formatCPF(viewingUser.patient?.cpf)}</p>
+                  <div className="flex items-center gap-2">
+                    {renderCpfCell(viewingUser)}
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Telefone</label>
-                  <p>{viewingUser.patient?.phone_e164 || '-'}</p>
+                  <div className="flex items-center gap-2">
+                    {renderPhoneCell(viewingUser)}
+                  </div>
                 </div>
               </div>
 
@@ -646,8 +882,25 @@ export default function UserRegistrationsTab() {
 
               {/* ID Técnico */}
               <div>
-                <label className="text-sm font-medium text-muted-foreground">Patient/User ID</label>
-                <p className="font-mono text-xs text-muted-foreground">{viewingUser.id}</p>
+                <label className="text-sm font-medium text-muted-foreground">Patient ID</label>
+                <p className="font-mono text-xs text-muted-foreground">{viewingUser.patientId}</p>
+              </div>
+              {viewingUser.hasAuthAccount && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">User ID (Auth)</label>
+                  <p className="font-mono text-xs text-muted-foreground">{viewingUser.id}</p>
+                </div>
+              )}
+
+              {/* Quick Edit Button */}
+              <div className="pt-4 border-t">
+                <Button onClick={() => {
+                  setViewingUser(null);
+                  handleEditPatient(viewingUser);
+                }} className="w-full">
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar Dados do Paciente
+                </Button>
               </div>
             </div>
           )}
