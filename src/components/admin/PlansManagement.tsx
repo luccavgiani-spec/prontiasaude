@@ -165,18 +165,28 @@ const PlansManagement = () => {
       for (const plan of plans || []) {
         let patientData = null;
         
-        // Try to get patient by user_id first
-        if (plan.user_id) {
+        // Try to get patient by patient_id first (correct field from patient_plans)
+        if (plan.patient_id) {
           const { data } = await supabase
             .from('patients')
             .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
-            .eq('id', plan.user_id)
+            .eq('id', plan.patient_id)
             .maybeSingle();
           patientData = data;
         }
         
-        // If no patient found, try by email
-        if (!patientData) {
+        // Fallback: try by user_id (patients.user_id = plan.user_id)
+        if (!patientData && plan.user_id) {
+          const { data } = await supabase
+            .from('patients')
+            .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
+            .eq('user_id', plan.user_id)
+            .maybeSingle();
+          patientData = data;
+        }
+        
+        // Last fallback: try by email
+        if (!patientData && plan.email) {
           const { data } = await supabase
             .from('patients')
             .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
