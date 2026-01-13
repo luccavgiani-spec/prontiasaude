@@ -222,10 +222,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    // DELETE USER
+    // DELETE USER (via DELETE method)
     if (operation === 'delete' && req.method === 'DELETE') {
       const userId = url.searchParams.get('user_id');
       if (!userId) throw new Error('user_id required');
+
+      const { error } = await supabaseClient.auth.admin.deleteUser(userId);
+      if (error) throw error;
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // DELETE USER (via POST method - compatibilidade com frontend)
+    if ((operation === 'delete_user' || operation === 'delete') && req.method === 'POST') {
+      const bodyText = await req.text();
+      const bodyData = bodyText ? JSON.parse(bodyText) : {};
+      const userId = bodyData.user_id;
+      
+      if (!userId) throw new Error('user_id required');
+
+      console.log('[user-management] Deleting user via POST:', userId);
 
       const { error } = await supabaseClient.auth.admin.deleteUser(userId);
       if (error) throw error;
