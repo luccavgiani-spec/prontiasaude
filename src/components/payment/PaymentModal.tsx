@@ -322,7 +322,7 @@ export function PaymentModal({
 
       setIsUserLoggedIn(true);
 
-      const { data: patient } = await supabase.from("patients").select("*").eq("id", user.id).single();
+      const { data: patient } = await supabase.from("patients").select("*").eq("user_id", user.id).single();
 
       if (patient) {
         const hasData = !!(

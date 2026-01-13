@@ -69,7 +69,7 @@ export default function Consulta() {
     const { data: patient } = await supabase
       .from('patients')
       .select('profile_complete')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     if (!patient?.profile_complete) {
@@ -93,7 +93,7 @@ export default function Consulta() {
       const { data: patient } = await supabase
         .from('patients')
         .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('id', user.id)
+        .eq('user_id', user.id)
         .maybeSingle();
 
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
