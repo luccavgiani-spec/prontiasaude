@@ -794,7 +794,7 @@ export default function UserRegistrationsTab() {
           open={activationModalOpen}
           onOpenChange={setActivationModalOpen}
           user={{
-            id: selectedUser.id,
+            id: selectedUser.patientId || selectedUser.id,
             email: selectedUser.email,
             name: `${selectedUser.patient?.first_name || ''} ${selectedUser.patient?.last_name || ''}`.trim(),
             cpf: selectedUser.patient?.cpf,

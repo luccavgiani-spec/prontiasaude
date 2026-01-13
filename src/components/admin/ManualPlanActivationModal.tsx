@@ -86,6 +86,13 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
         return;
       }
 
+      // Verificar se a resposta indica sucesso
+      if (!data?.success) {
+        console.error('[ManualPlanActivationModal] Failed:', data);
+        toast.error(data?.error || 'Erro ao ativar plano');
+        return;
+      }
+
       toast.success(`Plano ${planCode} ativado com sucesso!`);
       onSuccess();
     } catch (error) {
