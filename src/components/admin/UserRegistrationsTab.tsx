@@ -6,9 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle, AlertTriangle, Edit, Phone, FileWarning } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle, AlertTriangle, Edit, Phone, FileWarning, HeartPulse } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
@@ -83,6 +84,9 @@ export default function UserRegistrationsTab() {
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [quickConsultUser, setQuickConsultUser] = useState<User | null>(null);
+  const [quickConsultProvider, setQuickConsultProvider] = useState<'clicklife' | 'communicare'>('clicklife');
+  const [quickConsultLoading, setQuickConsultLoading] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
     withAccount: 0,
@@ -366,6 +370,53 @@ export default function UserRegistrationsTab() {
       user_id: user.hasAuthAccount ? user.id : undefined,
       created_at: user.created_at,
     });
+  };
+
+  const handleQuickConsult = async () => {
+    if (!quickConsultUser) return;
+    
+    setQuickConsultLoading(true);
+    
+    try {
+      const payload = {
+        cpf: quickConsultUser.patient?.cpf || '',
+        email: quickConsultUser.email,
+        nome: `${quickConsultUser.patient?.first_name || ''} ${quickConsultUser.patient?.last_name || ''}`.trim(),
+        telefone: quickConsultUser.patient?.phone_e164 || '',
+        sku: 'ITC6534', // Clínico Geral (Pronto Atendimento)
+        plano_ativo: !!quickConsultUser.activePlan,
+        sexo: quickConsultUser.patient?.gender || 'F',
+        birth_date: quickConsultUser.patient?.birth_date,
+        force_provider: quickConsultProvider,
+      };
+      
+      console.log('[QuickConsult] Criando consulta:', { provider: quickConsultProvider, email: payload.email });
+      
+      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        body: payload,
+      });
+      
+      if (error) throw error;
+      
+      if (data?.ok && data?.url) {
+        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}!`);
+        
+        // Copiar URL para clipboard
+        await navigator.clipboard.writeText(data.url);
+        toast.info('Link da consulta copiado para a área de transferência!');
+        
+        // Abrir em nova aba
+        window.open(data.url, '_blank');
+      } else {
+        toast.error(data?.error || 'Erro ao criar consulta');
+      }
+    } catch (error) {
+      console.error('Erro ao criar consulta:', error);
+      toast.error('Erro ao criar consulta rápida');
+    } finally {
+      setQuickConsultLoading(false);
+      setQuickConsultUser(null);
+    }
   };
 
   const exportCSV = () => {
@@ -670,6 +721,24 @@ export default function UserRegistrationsTab() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
+                            title="Consulta Rápida"
+                            onClick={() => {
+                              if (!user.patient?.cpf) {
+                                toast.error('Paciente não possui CPF cadastrado');
+                                return;
+                              }
+                              setQuickConsultUser(user);
+                              setQuickConsultProvider('clicklife');
+                            }}
+                            disabled={!user.patient?.cpf}
+                            className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                          >
+                            <HeartPulse className="h-4 w-4" />
+                          </Button>
+                          
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
                             title="Ver Detalhes"
                             onClick={() => setViewingUser(user)}
                           >
@@ -792,6 +861,76 @@ export default function UserRegistrationsTab() {
           }}
         />
       )}
+
+      {/* Modal de Consulta Rápida */}
+      <Dialog open={!!quickConsultUser} onOpenChange={() => setQuickConsultUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HeartPulse className="h-5 w-5 text-purple-600" />
+              Criar Consulta Rápida
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Info do Paciente */}
+            <div className="bg-muted p-3 rounded-lg">
+              <p className="font-medium">
+                {quickConsultUser?.patient?.first_name} {quickConsultUser?.patient?.last_name}
+              </p>
+              <p className="text-sm text-muted-foreground">{quickConsultUser?.email}</p>
+              <p className="text-sm font-mono">{formatCPF(quickConsultUser?.patient?.cpf)}</p>
+            </div>
+            
+            {/* Seleção de Provedor */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Escolha o Provedor:</label>
+              <RadioGroup 
+                value={quickConsultProvider} 
+                onValueChange={(v) => setQuickConsultProvider(v as 'clicklife' | 'communicare')}
+              >
+                <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted cursor-pointer">
+                  <RadioGroupItem value="clicklife" id="clicklife" />
+                  <label htmlFor="clicklife" className="cursor-pointer flex-1">
+                    <span className="font-medium">ClickLife</span>
+                    <p className="text-sm text-muted-foreground">Pronto atendimento imediato</p>
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted cursor-pointer">
+                  <RadioGroupItem value="communicare" id="communicare" />
+                  <label htmlFor="communicare" className="cursor-pointer flex-1">
+                    <span className="font-medium">Communicare</span>
+                    <p className="text-sm text-muted-foreground">Fila de atendimento</p>
+                  </label>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setQuickConsultUser(null)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleQuickConsult} 
+              disabled={quickConsultLoading}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {quickConsultLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Criando...
+                </>
+              ) : (
+                <>
+                  <HeartPulse className="h-4 w-4 mr-2" />
+                  Criar Consulta
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Detalhes do Usuário */}
       <Dialog open={!!viewingUser} onOpenChange={(open) => !open && setViewingUser(null)}>
