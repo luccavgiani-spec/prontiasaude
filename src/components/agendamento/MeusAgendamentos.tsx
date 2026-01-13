@@ -124,7 +124,7 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       </Badge>;
   };
 
-  // Filtrar apenas consultas criadas nas últimas 24 horas
+  // Filtrar apenas consultas criadas nas últimas 24 horas (TODOS os providers)
   const now = new Date();
   const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   
@@ -133,10 +133,6 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
     const createdDate = new Date(apt.created_at);
     const isRecent = createdDate >= last24Hours;
     
-    // ✅ FILTRAR APENAS COMMUNICARE (baseado no campo provider)
-    // Excluir: ClickLife (provider='clicklife') e WhatsApp (outros valores)
-    const isCommunicare = apt.provider?.toLowerCase() === 'communicare';
-    
     // Log de comparação de datas
     console.log('[MeusAgendamentos] Recent filter:', {
       appointment_id: apt.appointment_id,
@@ -144,13 +140,13 @@ const MeusAgendamentos: React.FC<MeusAgendamentosProps> = ({
       last_24h: last24Hours.toISOString(),
       is_recent: isRecent,
       provider: apt.provider,
-      is_communicare: isCommunicare,
       has_teams: !!apt.teams_join_url,
       has_redirect: !!apt.redirect_url,
       status: apt.status
     });
     
-    return isRecent && isCommunicare;
+    // ✅ Mostrar TODAS as consultas recentes (ClickLife, Communicare, etc.)
+    return isRecent;
   }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return <div className="w-full space-y-6">

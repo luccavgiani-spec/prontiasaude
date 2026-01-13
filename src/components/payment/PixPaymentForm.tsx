@@ -21,11 +21,12 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState(0);
   
-  // Hook para polling automático
+  // Hook para polling automático - agora chama check-payment-status ativamente
   const { redirectUrl: autoRedirectUrl, isChecking, attempts } = usePaymentRedirect({
     orderId,
     email,
-    enabled: !redirectUrl && (!!orderId || !!email),
+    paymentId,
+    enabled: !redirectUrl && (!!orderId || !!email || !!paymentId),
     maxAttempts: 20,
     intervalMs: 3000
   });
