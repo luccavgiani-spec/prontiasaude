@@ -98,7 +98,7 @@ export function MeusCuponsCard() {
       // Buscar nome do paciente
       const {
         data: patient
-      } = await supabase.from('patients').select('first_name').eq('id', user.id).single();
+      } = await supabase.from('patients').select('first_name').eq('user_id', user.id).single();
       const userName = patient?.first_name || 'USER';
       const code = generateCouponCode(userName, user.id, type);
       const discountPercentage = 5;

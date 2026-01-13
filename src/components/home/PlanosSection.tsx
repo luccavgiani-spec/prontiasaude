@@ -304,7 +304,7 @@ export function PlanosSection() {
         // Buscar dados do paciente
         const {
           data: patient
-        } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).single();
+        } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).single();
         if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
           sonnerToast.error('Complete seu cadastro antes de agendar');
           navigate('/completar-perfil');

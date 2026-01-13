@@ -41,7 +41,7 @@ const ConsultNowFloatButton = () => {
       // 2. Verificar se perfil está completo
       const {
         data: patient
-      } = await supabase.from('patients').select('profile_complete, cpf, first_name, last_name, phone_e164, gender').eq('id', user.id).maybeSingle();
+      } = await supabase.from('patients').select('profile_complete, cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
       if (!patient?.profile_complete) {
         localStorage.setItem('returnUrl', window.location.pathname);
         localStorage.setItem('pendingService', JSON.stringify({
