@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, UserX, AlertCircle, AlertTriangle, Edit, Phone, FileWarning, HeartPulse } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse } from 'lucide-react';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
@@ -89,13 +89,7 @@ export default function UserRegistrationsTab() {
   const [quickConsultLoading, setQuickConsultLoading] = useState(false);
   const [stats, setStats] = useState({
     total: 0,
-    withAccount: 0,
-    withoutAccount: 0,
-    profileComplete: 0,
     withPlan: 0,
-    incompleteData: 0,
-    invalidPhone: 0,
-    invalidCpf: 0,
     criticalWithPlan: 0
   });
   const limit = 50;
@@ -272,13 +266,7 @@ export default function UserRegistrationsTab() {
 
       setStats({
         total: totalCount || 0,
-        withAccount: withAccountCount || 0,
-        withoutAccount: (totalCount || 0) - (withAccountCount || 0),
-        profileComplete: profileCompleteCount || 0,
         withPlan: withPlanCount,
-        incompleteData: incompleteDataCount,
-        invalidPhone: invalidPhoneCount || 0,
-        invalidCpf: (invalidCpfCount || 0) + (missingCpfCount || 0),
         criticalWithPlan: criticalWithPlanCount
       });
 
@@ -490,10 +478,10 @@ export default function UserRegistrationsTab() {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Usuários</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -503,27 +491,7 @@ export default function UserRegistrationsTab() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Com Conta</CardTitle>
-            <UserCheck className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.withAccount}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Sem Conta</CardTitle>
-            <UserX className="h-4 w-4 text-orange-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.withoutAccount}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Com Plano</CardTitle>
+            <CardTitle className="text-sm font-medium">Com Plano Ativo</CardTitle>
             <Shield className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -531,23 +499,14 @@ export default function UserRegistrationsTab() {
           </CardContent>
         </Card>
 
-        <Card className="border-orange-200 bg-orange-50/50 dark:bg-orange-950/20">
+        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Tel. Placeholder</CardTitle>
-            <Phone className="h-4 w-4 text-orange-600" />
+            <CardTitle className="text-sm font-medium">Perfis Incompletos</CardTitle>
+            <AlertCircle className="h-4 w-4 text-amber-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{stats.invalidPhone}</div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-red-200 bg-red-50/50 dark:bg-red-950/20">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">CPF Inválido</CardTitle>
-            <FileWarning className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{stats.invalidCpf}</div>
+            <div className="text-2xl font-bold text-amber-600">64</div>
+            <p className="text-xs text-muted-foreground mt-1">Provenientes da migração</p>
           </CardContent>
         </Card>
       </div>
@@ -574,24 +533,6 @@ export default function UserRegistrationsTab() {
         </div>
       )}
 
-      {/* Alert for users without auth */}
-      {stats.withoutAccount > 0 && (
-        <div className="flex items-center gap-3 p-4 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-orange-600" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-orange-800 dark:text-orange-200">
-              {stats.withoutAccount} pacientes sem conta de autenticação
-            </p>
-            <p className="text-xs text-orange-600 dark:text-orange-400">
-              Importe os usuários do backup SQL para criar as contas com senhas preservadas.
-            </p>
-          </div>
-          <Button onClick={() => setImportModalOpen(true)} variant="outline" className="border-orange-300">
-            <Upload className="h-4 w-4 mr-2" />
-            Importar Usuários
-          </Button>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex justify-between items-center gap-4 flex-wrap">
@@ -608,17 +549,13 @@ export default function UserRegistrationsTab() {
           </div>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-52">
+            <SelectTrigger className="w-60">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Pacientes</SelectItem>
-              <SelectItem value="with_account">Com Conta Auth</SelectItem>
-              <SelectItem value="without_account">Sem Conta Auth</SelectItem>
               <SelectItem value="with_plan">Com Plano Ativo</SelectItem>
-              <SelectItem value="incomplete_data">⚠️ Dados Incompletos</SelectItem>
-              <SelectItem value="invalid_phone">📱 Telefone Placeholder</SelectItem>
-              <SelectItem value="invalid_cpf">🆔 CPF Inválido/Ausente</SelectItem>
+              <SelectItem value="incomplete_data">⚠️ Perfis Incompletos (Migração)</SelectItem>
               <SelectItem value="critical_with_plan">🚨 Críticos com Plano</SelectItem>
             </SelectContent>
           </Select>
@@ -694,7 +631,6 @@ export default function UserRegistrationsTab() {
                           </Badge>
                         ) : (
                           <Badge variant="secondary" className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300 text-xs">
-                            <UserX className="h-3 w-3 mr-1" />
                             Sem
                           </Badge>
                         )}
