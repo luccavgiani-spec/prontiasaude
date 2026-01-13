@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.import-users]
 verify_jwt = false
 
-[functions.auth-send-email]
-verify_jwt = false
-
 [functions.reset-admin-password]
 verify_jwt = false
 
