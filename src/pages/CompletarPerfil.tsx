@@ -113,7 +113,7 @@ const CompletarPerfil = () => {
             city: patient.city || '',
             state: patient.state || '',
             address_number: patient.address_number || '',
-            address_complement: patient.address_complement || '',
+            address_complement: patient.complement || '',
             terms_accepted: true
           });
         }
@@ -218,7 +218,7 @@ const CompletarPerfil = () => {
               city: patient.city || '',
               state: patient.state || '',
               address_number: patient.address_number || '',
-              address_complement: patient.address_complement || '',
+              address_complement: patient.complement || '',
               terms_accepted: true
             });
             
@@ -265,7 +265,7 @@ const CompletarPerfil = () => {
         gender: patient.gender || "",
         cep: patient.cep || "",
         address_number: patient.address_number || "",
-        address_complement: patient.address_complement || "",
+        address_complement: patient.complement || "",
         city: patient.city || "",
         state: patient.state || "",
         terms_accepted: !!patient.terms_accepted_at

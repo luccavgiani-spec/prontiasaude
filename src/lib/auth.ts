@@ -13,7 +13,7 @@ export interface Patient {
   gender?: string;
   cep?: string;
   address_number?: string;
-  address_complement?: string;
+  complement?: string;
   city?: string;
   state?: string;
   source?: string;
