@@ -463,7 +463,7 @@ async function saveAppointment(
       status: 'confirmed',
       provider: provider,
       redirect_url: redirectUrl,
-      teams_join_url: redirectUrl,
+      meeting_url: redirectUrl,
       order_id: payload.order_id
     };
     
