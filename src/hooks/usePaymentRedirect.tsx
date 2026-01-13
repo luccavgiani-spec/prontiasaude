@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface UsePaymentRedirectOptions {
   orderId?: string;
   email?: string;
+  paymentId?: string;
   enabled?: boolean;
   maxAttempts?: number;
   intervalMs?: number;
@@ -12,6 +13,7 @@ interface UsePaymentRedirectOptions {
 export function usePaymentRedirect({
   orderId,
   email,
+  paymentId,
   enabled = true,
   maxAttempts = 20,
   intervalMs = 3000
@@ -19,16 +21,46 @@ export function usePaymentRedirect({
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [attempts, setAttempts] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!enabled || (!orderId && !email) || attempts >= maxAttempts) {
+    if (!enabled || (!orderId && !email && !paymentId) || attempts >= maxAttempts) {
       return;
     }
 
     setIsChecking(true);
 
-    const checkForAppointment = async () => {
+    const checkForPayment = async () => {
       try {
+        console.log('[usePaymentRedirect] Checking payment status...', { orderId, paymentId, email, attempt: attempts + 1 });
+
+        // Estratégia 1: Chamar check-payment-status para verificar E criar appointment se aprovado
+        if (paymentId || orderId) {
+          const { data, error } = await supabase.functions.invoke('check-payment-status', {
+            body: { 
+              payment_id: paymentId,
+              order_id: orderId,
+              email: email
+            }
+          });
+
+          if (!error && data?.approved && data?.redirect_url) {
+            console.log('[usePaymentRedirect] ✅ Payment approved! Redirect URL:', data.redirect_url);
+            setRedirectUrl(data.redirect_url);
+            setIsChecking(false);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            return;
+          }
+          
+          // Se não aprovado ainda, incrementar tentativas
+          if (data?.status === 'pending') {
+            console.log('[usePaymentRedirect] ⏳ Payment still pending...');
+            setAttempts((prev) => prev + 1);
+            return;
+          }
+        }
+
+        // Estratégia 2: Buscar appointment direto no banco (fallback)
         let query = supabase
           .from('appointments')
           .select('redirect_url, created_at, order_id')
@@ -42,17 +74,19 @@ export function usePaymentRedirect({
           query = query.eq('email', email);
         }
 
-        const { data, error } = await query;
+        const { data: appointmentData, error: appointmentError } = await query;
 
-        if (error) {
-          console.error('[usePaymentRedirect] Error checking appointment:', error);
+        if (appointmentError) {
+          console.error('[usePaymentRedirect] Error checking appointment:', appointmentError);
+          setAttempts((prev) => prev + 1);
           return;
         }
 
-        if (data && data.length > 0 && data[0].redirect_url) {
-          console.log('[usePaymentRedirect] Redirect URL found:', data[0].redirect_url);
-          setRedirectUrl(data[0].redirect_url);
+        if (appointmentData && appointmentData.length > 0 && appointmentData[0].redirect_url) {
+          console.log('[usePaymentRedirect] ✅ Appointment found! Redirect URL:', appointmentData[0].redirect_url);
+          setRedirectUrl(appointmentData[0].redirect_url);
           setIsChecking(false);
+          if (intervalRef.current) clearInterval(intervalRef.current);
         } else {
           setAttempts((prev) => prev + 1);
         }
@@ -63,16 +97,18 @@ export function usePaymentRedirect({
     };
 
     // Initial check
-    checkForAppointment();
+    checkForPayment();
 
     // Set up interval
-    const intervalId = setInterval(checkForAppointment, intervalMs);
+    intervalRef.current = setInterval(checkForPayment, intervalMs);
 
     return () => {
-      clearInterval(intervalId);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
       setIsChecking(false);
     };
-  }, [orderId, email, enabled, attempts, maxAttempts, intervalMs]);
+  }, [orderId, email, paymentId, enabled, attempts, maxAttempts, intervalMs]);
 
   return {
     redirectUrl,
