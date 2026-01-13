@@ -971,6 +971,37 @@ export function PaymentModal({
     // Detectar se a compra veio da janela ClickLife
     const fromClicklife = document.referrer?.toLowerCase().includes("clicklife");
 
+    // ✅ Capturar cookies Meta para CAPI server-side
+    const getFbp = (): string | undefined => {
+      try {
+        const fbpCookie = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('_fbp='));
+        return fbpCookie ? fbpCookie.split('=')[1] : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+    
+    const getFbc = (): string | undefined => {
+      try {
+        // Primeiro tentar pegar fbclid da URL (mais recente)
+        const urlParams = new URLSearchParams(window.location.search);
+        const fbclid = urlParams.get('fbclid');
+        if (fbclid) {
+          return `fb.1.${Math.floor(Date.now() / 1000)}.${fbclid}`;
+        }
+        
+        // Senão, tentar cookie existente
+        const fbcCookie = document.cookie
+          .split('; ')
+          .find(row => row.startsWith('_fbc='));
+        return fbcCookie ? fbcCookie.split('=')[1] : undefined;
+      } catch {
+        return undefined;
+      }
+    };
+
     const payload: any = {
       email: formData.email,
       cpf: (formData.cpf || "").replace(/\D/g, ""),
@@ -981,7 +1012,11 @@ export function PaymentModal({
       plano_ativo: false,
       horario_iso: new Date().toISOString(),
       source: fromClicklife ? "clicklife" : "web",
-      registration_date: patientCreatedAt || new Date().toISOString(), // ✅ FASE 2.1: Data real de cadastro
+      registration_date: patientCreatedAt || new Date().toISOString(),
+      // ✅ Dados para Meta CAPI server-side
+      fbp: getFbp(),
+      fbc: getFbc(),
+      client_user_agent: navigator.userAgent,
     };
 
     // Adicionar sexo se disponível (M ou F)

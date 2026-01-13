@@ -898,6 +898,8 @@ export type Database = {
           payment_method: string | null
           processed: boolean | null
           processed_at: string | null
+          purchase_confirmed_event_id: string | null
+          purchase_confirmed_sent: boolean | null
           sku: string | null
           status: string | null
           updated_at: string | null
@@ -920,6 +922,8 @@ export type Database = {
           payment_method?: string | null
           processed?: boolean | null
           processed_at?: string | null
+          purchase_confirmed_event_id?: string | null
+          purchase_confirmed_sent?: boolean | null
           sku?: string | null
           status?: string | null
           updated_at?: string | null
@@ -942,6 +946,8 @@ export type Database = {
           payment_method?: string | null
           processed?: boolean | null
           processed_at?: string | null
+          purchase_confirmed_event_id?: string | null
+          purchase_confirmed_sent?: boolean | null
           sku?: string | null
           status?: string | null
           updated_at?: string | null
