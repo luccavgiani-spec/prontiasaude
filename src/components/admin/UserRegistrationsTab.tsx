@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
@@ -80,13 +81,19 @@ export default function UserRegistrationsTab() {
   const [page, setPage] = useState(1);
   const [activationModalOpen, setActivationModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [clicklifeLoading, setClicklifeLoading] = useState<string | null>(null);
+  
   const [viewingUser, setViewingUser] = useState<User | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
   const [quickConsultUser, setQuickConsultUser] = useState<User | null>(null);
   const [quickConsultProvider, setQuickConsultProvider] = useState<'clicklife' | 'communicare'>('clicklife');
   const [quickConsultLoading, setQuickConsultLoading] = useState(false);
+  
+  // Platform activation modal state
+  const [platformActivationUser, setPlatformActivationUser] = useState<User | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<'clicklife' | 'communicare'>('clicklife');
+  const [platformActivationLoading, setPlatformActivationLoading] = useState(false);
+  
   const [stats, setStats] = useState({
     total: 0,
     withPlan: 0,
@@ -305,37 +312,46 @@ export default function UserRegistrationsTab() {
     }
   };
 
-  const handleClickLifeActivation = async (user: User) => {
-    if (!user.patient?.cpf) {
-      toast.error('Usuário não possui CPF cadastrado');
+  const handlePlatformActivation = async () => {
+    if (!platformActivationUser) return;
+    
+    if (!platformActivationUser.patient?.cpf) {
+      toast.error('Paciente não possui CPF cadastrado');
       return;
     }
 
-    setClicklifeLoading(user.id);
+    setPlatformActivationLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('activate-clicklife-manual', {
+      const functionName = selectedPlatform === 'clicklife' 
+        ? 'activate-clicklife-manual' 
+        : 'activate-communicare-manual';
+      
+      console.log(`[PlatformActivation] Ativando na ${selectedPlatform}:`, platformActivationUser.email);
+      
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
-          email: user.email
+          email: platformActivationUser.email
         }
       });
 
       if (error) {
-        console.error('Error activating ClickLife:', error);
-        toast.error('Erro ao ativar na ClickLife: ' + (error.message || 'Erro desconhecido'));
+        console.error(`Error activating ${selectedPlatform}:`, error);
+        toast.error(`Erro ao ativar na ${selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare'}: ${error.message || 'Erro desconhecido'}`);
         return;
       }
 
       if (data?.success) {
-        toast.success('Paciente ativado na ClickLife com sucesso!');
+        toast.success(`Paciente ativado na ${selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare'} com sucesso!`);
+        setPlatformActivationUser(null);
       } else {
         toast.error('Falha na ativação: ' + (data?.error || 'Erro desconhecido'));
       }
     } catch (error) {
-      console.error('Error activating ClickLife:', error);
-      toast.error('Erro ao ativar na ClickLife');
+      console.error(`Error activating ${selectedPlatform}:`, error);
+      toast.error(`Erro ao ativar na ${selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare'}`);
     } finally {
-      setClicklifeLoading(null);
+      setPlatformActivationLoading(false);
     }
   };
 
@@ -681,20 +697,18 @@ export default function UserRegistrationsTab() {
                             <Eye className="h-4 w-4" />
                           </Button>
                           
-                          {user.patient?.cpf && user.hasAuthAccount && (
+                          {user.patient?.cpf && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleClickLifeActivation(user)}
-                              disabled={clicklifeLoading === user.id}
-                              title="Ativar na ClickLife"
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              onClick={() => {
+                                setPlatformActivationUser(user);
+                                setSelectedPlatform('clicklife');
+                              }}
+                              title="Ativar em Plataforma (ClickLife ou Communicare)"
+                              className="text-teal-600 hover:text-teal-700 hover:bg-teal-50"
                             >
-                              {clicklifeLoading === user.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Stethoscope className="h-4 w-4" />
-                              )}
+                              <UserPlus className="h-4 w-4" />
                             </Button>
                           )}
                           
@@ -865,6 +879,99 @@ export default function UserRegistrationsTab() {
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Ativação em Plataforma */}
+      <Dialog open={!!platformActivationUser} onOpenChange={(open) => !open && setPlatformActivationUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-teal-600" />
+              Ativar Paciente em Plataforma
+            </DialogTitle>
+          </DialogHeader>
+          
+          {platformActivationUser && (
+            <div className="space-y-6">
+              {/* Dados do Paciente */}
+              <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Paciente:</span>
+                  <span className="text-sm font-medium">
+                    {platformActivationUser.patient?.first_name} {platformActivationUser.patient?.last_name}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">Email:</span>
+                  <span className="text-sm font-mono">{platformActivationUser.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">CPF:</span>
+                  <span className="text-sm font-mono">
+                    {platformActivationUser.patient?.cpf?.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Seleção de Plataforma */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Escolha a plataforma:</Label>
+                <RadioGroup 
+                  value={selectedPlatform} 
+                  onValueChange={(value: 'clicklife' | 'communicare') => setSelectedPlatform(value)}
+                  className="space-y-3"
+                >
+                  <div className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedPlatform === 'clicklife' ? 'border-teal-500 bg-teal-50 dark:bg-teal-950' : 'hover:bg-muted/50'}`}>
+                    <RadioGroupItem value="clicklife" id="clicklife" />
+                    <div className="flex-1">
+                      <Label htmlFor="clicklife" className="cursor-pointer font-medium">ClickLife</Label>
+                      <p className="text-xs text-muted-foreground">Pronto atendimento imediato</p>
+                    </div>
+                    <Stethoscope className="h-5 w-5 text-blue-500" />
+                  </div>
+                  
+                  <div className={`flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedPlatform === 'communicare' ? 'border-teal-500 bg-teal-50 dark:bg-teal-950' : 'hover:bg-muted/50'}`}>
+                    <RadioGroupItem value="communicare" id="communicare" />
+                    <div className="flex-1">
+                      <Label htmlFor="communicare" className="cursor-pointer font-medium">Communicare</Label>
+                      <p className="text-xs text-muted-foreground">Sistema de agendamento</p>
+                    </div>
+                    <HeartPulse className="h-5 w-5 text-purple-500" />
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setPlatformActivationUser(null)}
+                  className="flex-1"
+                  disabled={platformActivationLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handlePlatformActivation}
+                  disabled={platformActivationLoading}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700"
+                >
+                  {platformActivationLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Ativando...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Ativar
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

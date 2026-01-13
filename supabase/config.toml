@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.patient-data-report]
 verify_jwt = false
+
+[functions.activate-communicare-manual]
+verify_jwt = false
