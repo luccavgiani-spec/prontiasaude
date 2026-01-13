@@ -536,26 +536,14 @@ const CompletarPerfil = () => {
         return;
       }
       
-      // ✅ VERIFICAR EMAIL DUPLICADO (se mudou)
-      if (activeUser.email !== formData.first_name) { // Verificar se email mudou
-        const { data: existingEmail } = await supabase
-          .from('patients')
-          .select('id')
-          .eq('email', activeUser.email)
-          .neq('user_id', activeUser.id)
-          .maybeSingle();
-
-        if (existingEmail) {
-          toast({
-            title: "⚠️ Email já cadastrado",
-            description: "Este email já está em uso por outra conta.",
-            variant: "destructive",
-            className: "bg-yellow-50 border-yellow-500 text-yellow-900"
-          });
-          setIsLoading(false);
-          return;
-        }
-      }
+      // Log antes de salvar perfil
+      console.log('[CompletarPerfil] 📋 Salvando perfil:', {
+        user_id: activeUser.id,
+        email: activeUser.email,
+        cpf: formData.cpf ? '***' + formData.cpf.replace(/\D/g, '').slice(-4) : 'VAZIO',
+        phone: formData.phone_e164 ? '***' + formData.phone_e164.slice(-4) : 'VAZIO',
+        cep: formData.cep || 'VAZIO',
+      });
       
       await upsertPatientBasic({
         first_name: formData.first_name,
@@ -572,6 +560,25 @@ const CompletarPerfil = () => {
         state: formData.state,
         termsAccepted: formData.terms_accepted,
         source: inviteData ? 'empresa_invite' : undefined
+      });
+      
+      // ✅ Verificar se dados foram salvos corretamente
+      const { data: savedPatient, error: checkError } = await supabase
+        .from('patients')
+        .select('cpf, phone_e164, cep, profile_complete')
+        .eq('user_id', activeUser.id)
+        .maybeSingle();
+
+      if (checkError || !savedPatient?.cpf) {
+        console.error('[CompletarPerfil] ❌ Dados não foram salvos:', { savedPatient, checkError });
+        throw new Error('Não foi possível salvar seus dados. Tente novamente.');
+      }
+
+      console.log('[CompletarPerfil] ✅ Perfil salvo com sucesso:', {
+        cpf: '***' + savedPatient.cpf.slice(-4),
+        phone: savedPatient.phone_e164 ? '***' + savedPatient.phone_e164.slice(-4) : null,
+        cep: savedPatient.cep,
+        profile_complete: savedPatient.profile_complete
       });
       
       // SE FOR CONVITE DE EMPRESA, ativar plano via Edge Function segura
