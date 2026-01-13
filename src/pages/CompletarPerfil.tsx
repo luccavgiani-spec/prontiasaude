@@ -504,7 +504,7 @@ const CompletarPerfil = () => {
         .from('patients')
         .select('id')
         .eq('cpf', formData.cpf.replace(/\D/g, ''))
-        .neq('id', activeUser.id)
+        .neq('user_id', activeUser.id)
         .maybeSingle();
 
       if (existingCPF) {
@@ -524,7 +524,7 @@ const CompletarPerfil = () => {
           .from('patients')
           .select('id')
           .eq('email', activeUser.email)
-          .neq('id', activeUser.id)
+          .neq('user_id', activeUser.id)
           .maybeSingle();
 
         if (existingEmail) {
