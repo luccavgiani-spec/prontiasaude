@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle } from "lucide-react";
+import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Check } from "lucide-react";
 import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, formatPhoneMask, validateCEP, formatCEP } from "@/lib/validations";
 import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 
@@ -39,6 +40,44 @@ const Cadastrar = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Calcular progresso do formulário
+  const progressSteps = useMemo(() => {
+    return [
+      {
+        name: 'Dados Pessoais',
+        complete: Boolean(formData.first_name.trim() && formData.last_name.trim() && validateEmail(formData.email))
+      },
+      {
+        name: 'Endereço',
+        complete: Boolean(
+          validateCEP(formData.cep) && 
+          formData.logradouro.trim() && 
+          formData.numero.trim() && 
+          formData.cidade.trim() && 
+          formData.uf.trim()
+        )
+      },
+      {
+        name: 'Documentos',
+        complete: Boolean(
+          validateCPF(formData.cpf) && 
+          validatePhoneE164(formData.phone_e164) && 
+          validateBirthDate(formData.birth_date) && 
+          formData.gender
+        )
+      },
+      {
+        name: 'Segurança',
+        complete: Boolean(isPasswordValid(formData.password) && formData.terms_accepted)
+      }
+    ];
+  }, [formData]);
+
+  const progressPercent = useMemo(() => {
+    const completed = progressSteps.filter(s => s.complete).length;
+    return (completed / progressSteps.length) * 100;
+  }, [progressSteps]);
 
   const fetchAddressByCEP = async (cep: string) => {
     if (!validateCEP(cep)) return;
@@ -453,6 +492,36 @@ const Cadastrar = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* Indicador de Progresso */}
+          <div className="mb-2">
+            <div className="flex justify-between items-start mb-3">
+              {progressSteps.map((step, index) => (
+                <div key={index} className="flex flex-col items-center flex-1">
+                  <div 
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+                      step.complete 
+                        ? 'bg-primary text-primary-foreground shadow-md' 
+                        : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {step.complete ? <Check className="h-4 w-4" /> : index + 1}
+                  </div>
+                  <span 
+                    className={`text-xs mt-1.5 text-center hidden sm:block transition-colors ${
+                      step.complete ? 'text-primary font-medium' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {step.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <Progress value={progressPercent} className="h-2" />
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              {progressSteps.filter(s => s.complete).length} de {progressSteps.length} etapas concluídas
+            </p>
+          </div>
+
           <form onSubmit={handleSignUpWithPassword} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
