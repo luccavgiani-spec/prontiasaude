@@ -393,10 +393,12 @@ const Cadastrar = () => {
 
     toast({
       title: "✅ Cadastro realizado com sucesso!",
-      description: `Enviamos um email de confirmação para ${formData.email}. Verifique sua caixa de entrada.`,
-      duration: 6000,
+      description: "Bem-vindo(a)! Você será redirecionado para sua área.",
+      duration: 4000,
     });
-    navigate('/entrar');
+    // Usuário JÁ está logado após signUp com auto-confirm
+    // Redirecionar para callback que leva para /area-do-paciente
+    navigate('/auth/callback');
     
     setIsLoading(false);
   };
