@@ -301,6 +301,107 @@ async function registerClickLifePatientSimple(
   }
 }
 
+// ✅ NOVO: Helper para enviar evento purchase_confirmed via Meta CAPI com deduplicação
+async function sendPurchaseConfirmedCAPI(
+  supabaseAdmin: any,
+  orderId: string | null,
+  paymentId: string | number,
+  value: number,
+  schedulePayload: any
+): Promise<{ success: boolean; skipped?: boolean; error?: string }> {
+  
+  const eventId = String(paymentId);
+  
+  try {
+    // 1. Verificar deduplicação (por order_id OU payment_id)
+    let queryBuilder = supabaseAdmin
+      .from('pending_payments')
+      .select('purchase_confirmed_sent')
+      .eq('purchase_confirmed_sent', true);
+    
+    if (orderId) {
+      queryBuilder = queryBuilder.eq('order_id', orderId);
+    } else {
+      queryBuilder = queryBuilder.eq('payment_id', String(paymentId));
+    }
+    
+    const { data: existing } = await queryBuilder.maybeSingle();
+    
+    if (existing?.purchase_confirmed_sent) {
+      console.log('[CAPI] ⚠️ purchase_confirmed já enviado, pulando:', { orderId, paymentId });
+      return { success: true, skipped: true };
+    }
+
+    // 2. Preparar payload CAPI
+    const capiPayload = {
+      event_name: 'purchase_confirmed',
+      event_time: Math.floor(Date.now() / 1000),
+      event_source_url: 'https://prontiasaude.com.br/pagamento',
+      value: value,
+      currency: 'BRL',
+      order_id: orderId || eventId,
+      fbp: schedulePayload?.fbp,
+      fbc: schedulePayload?.fbc,
+      client_user_agent: schedulePayload?.client_user_agent,
+    };
+
+    console.log('[CAPI] 📤 Enviando purchase_confirmed:', {
+      event_id: eventId,
+      order_id: capiPayload.order_id,
+      value: capiPayload.value,
+      has_fbp: !!capiPayload.fbp,
+      has_fbc: !!capiPayload.fbc,
+    });
+
+    // 3. Chamar edge function meta-capi com SERVICE_ROLE_KEY
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-capi`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+      },
+      body: JSON.stringify(capiPayload),
+    });
+
+    const result = await res.json();
+    
+    if (!res.ok) {
+      console.error('[CAPI] ❌ Erro ao enviar:', result);
+      return { success: false, error: result.error || 'Meta CAPI error' };
+    }
+
+    console.log('[CAPI] ✅ purchase_confirmed enviado:', result);
+
+    // 4. Marcar como enviado (deduplicação)
+    if (orderId) {
+      await supabaseAdmin
+        .from('pending_payments')
+        .update({ 
+          purchase_confirmed_sent: true,
+          purchase_confirmed_event_id: eventId
+        })
+        .eq('order_id', orderId);
+    } else {
+      await supabaseAdmin
+        .from('pending_payments')
+        .update({ 
+          purchase_confirmed_sent: true,
+          purchase_confirmed_event_id: eventId
+        })
+        .eq('payment_id', String(paymentId));
+    }
+
+    return { success: true };
+    
+  } catch (error) {
+    console.error('[CAPI] ❌ Exception:', error);
+    return { success: false, error: error.message || 'Exception' };
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -601,6 +702,15 @@ Deno.serve(async (req) => {
         }
       });
 
+      // ✅ CAPI: Enviar purchase_confirmed para Meta
+      await sendPurchaseConfirmedCAPI(
+        supabaseAdmin,
+        payment.metadata?.order_id || null,
+        payment.id,
+        payment.transaction_amount,
+        schedulePayload
+      );
+
       // Marcar pending_payment como processado
       if (payment.metadata?.order_id) {
         await supabaseAdmin
@@ -773,6 +883,15 @@ Deno.serve(async (req) => {
           redirect_type: 'psicologo_sem_plano_agendar_cc'
         }
       });
+
+      // ✅ CAPI: Enviar purchase_confirmed para Meta
+      await sendPurchaseConfirmedCAPI(
+        supabaseAdmin,
+        payment.metadata?.order_id || null,
+        payment.id,
+        payment.transaction_amount,
+        schedulePayload
+      );
 
       if (payment.metadata?.order_id) {
         await supabaseAdmin
@@ -1016,6 +1135,15 @@ Deno.serve(async (req) => {
           clicklife_error: clicklifeResult.error || null
         }
       });
+
+      // ✅ CAPI: Enviar purchase_confirmed para Meta
+      await sendPurchaseConfirmedCAPI(
+        supabaseAdmin,
+        payment.metadata?.order_id || null,
+        payment.id,
+        payment.transaction_amount,
+        schedulePayload
+      );
 
       // Marcar como processado
       if (payment.metadata?.order_id) {
@@ -1373,6 +1501,17 @@ Deno.serve(async (req) => {
           schedule_error: scheduledOk ? null : (scheduleError?.message || 'no_appointment_found')
         }
       });
+
+    // ✅ CAPI: Enviar purchase_confirmed para Meta (apenas para vendas aprovadas)
+    if (scheduledOk) {
+      await sendPurchaseConfirmedCAPI(
+        supabaseAdmin,
+        payment.metadata?.order_id || null,
+        payment.id,
+        payment.transaction_amount,
+        schedulePayload
+      );
+    }
 
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
 
