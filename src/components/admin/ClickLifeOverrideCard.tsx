@@ -36,11 +36,14 @@ export default function ClickLifeOverrideCard() {
     try {
       const { data, error } = await supabase
         .from('admin_settings')
-        .upsert({ 
-          key: 'force_clicklife_pronto_atendimento', 
-          value: newValue,
-          updated_at: new Date().toISOString()
-        })
+        .upsert(
+          { 
+            key: 'force_clicklife_pronto_atendimento', 
+            value: newValue,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'key' }
+        )
         .select()
         .single();
 

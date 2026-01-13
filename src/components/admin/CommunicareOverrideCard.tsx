@@ -36,11 +36,14 @@ export default function CommunicareOverrideCard() {
     try {
       const { data, error } = await supabase
         .from('admin_settings')
-        .upsert({ 
-          key: 'force_communicare_clinico', 
-          value: newValue,
-          updated_at: new Date().toISOString()
-        })
+        .upsert(
+          { 
+            key: 'force_communicare_clinico', 
+            value: newValue,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'key' }
+        )
         .select()
         .single();
 
