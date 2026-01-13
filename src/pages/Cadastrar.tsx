@@ -291,7 +291,7 @@ const Cadastrar = () => {
           city: formData.cidade,
           state: formData.uf,
           address_number: formData.numero,
-          address_complement: formData.complemento,
+          complement: formData.complemento,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
@@ -317,8 +317,8 @@ const Cadastrar = () => {
       try {
         const { error: insertError } = await supabase
           .from('patients')
-          .insert({
-            id: signUpData.user.id,
+          .upsert({
+            user_id: signUpData.user.id,
             first_name: formData.first_name,
             last_name: formData.last_name,
             email: formData.email,
@@ -329,17 +329,23 @@ const Cadastrar = () => {
             cep: formData.cep,
             address_line: formData.address_line,
             address_number: formData.numero,
-            address_complement: formData.complemento,
+            complement: formData.complemento,
             city: formData.cidade,
             state: formData.uf,
             terms_accepted_at: new Date().toISOString(),
             marketing_opt_in: formData.marketing_opt_in,
             profile_complete: true
-          });
+          }, { onConflict: 'user_id' });
 
         if (insertError && insertError.code !== '23505') {
           // 23505 = duplicate key (ignore se já existe)
           console.error('[Cadastro] Erro ao criar paciente:', insertError);
+          toast({
+            title: "Erro ao salvar perfil",
+            description: "Sua conta foi criada, mas houve um erro ao salvar seus dados. Por favor, complete seu perfil após fazer login.",
+            variant: "warning",
+            duration: 8000,
+          });
         }
       } catch (syncError) {
         console.error('[Cadastro] Exceção ao sincronizar paciente:', syncError);
@@ -392,7 +398,7 @@ const Cadastrar = () => {
           city: formData.cidade,
           state: formData.uf,
           address_number: formData.numero,
-          address_complement: formData.complemento,
+          complement: formData.complemento,
           cpf: formData.cpf,
           phone_e164: formData.phone_e164,
           birth_date: formData.birth_date,
