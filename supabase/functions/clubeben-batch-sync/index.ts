@@ -25,11 +25,12 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    // Buscar pacientes com plano ativo mas clubeben_status != 'active'
+    // Buscar pacientes com clubeben_status diferente de 'active' OU NULL
+    // que tenham CPF, birth_date e email preenchidos
     const { data: patientsToSync, error: fetchError } = await supabase
       .from('patients')
       .select('id, email, cpf, birth_date')
-      .neq('clubeben_status', 'active')
+      .or('clubeben_status.is.null,clubeben_status.neq.active')
       .not('cpf', 'is', null)
       .not('birth_date', 'is', null)
       .not('email', 'is', null);
