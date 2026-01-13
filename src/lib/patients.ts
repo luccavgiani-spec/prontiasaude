@@ -52,9 +52,14 @@ export async function upsertPatientBasic(payload: {
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');
   if (!payload.first_name || !payload.last_name) throw new Error('Nome e sobrenome são obrigatórios.');
-  if (!/^\+?\d{10,16}$/.test(payload.phone_e164)) throw new Error('Telefone inválido. Use formato E.164 (ex.: +5511999999999).');
-  // Bloquear telefone placeholder conhecido
-  if (payload.phone_e164 === '+5511999999999') throw new Error('Por favor, informe um telefone válido (não use o número de exemplo).');
+  if (!/^\+?\d{10,16}$/.test(payload.phone_e164)) {
+    throw new Error('Telefone inválido. Use formato E.164 (ex.: +5511912345678).');
+  }
+  // Bloquear telefones placeholder conhecidos
+  const BLOCKED_PHONES = ['+5511999999999', '+5500000000000', '+55999999999', '+5511111111111'];
+  if (BLOCKED_PHONES.includes(payload.phone_e164)) {
+    throw new Error('Por favor, informe um telefone válido (não use números de exemplo ou repetidos).');
+  }
   if (!/^\d{11}$/.test(cleanCpf)) throw new Error('CPF deve ter 11 dígitos.');
   if (!payload.birth_date) throw new Error('Data de nascimento é obrigatória.');
   if (!payload.gender || !['M', 'F', 'I'].includes(payload.gender)) throw new Error('Gênero inválido.');

@@ -342,12 +342,30 @@ const CompletarPerfil = () => {
       toast({ title: "Erro", description: "Endereço é obrigatório.", variant: "destructive" });
       return false;
     }
+    // Validação de CPF mais rigorosa
+    const cleanedCpf = formData.cpf.replace(/\D/g, '');
+    if (!cleanedCpf || cleanedCpf.length !== 11) {
+      toast({ title: "Erro", description: "CPF é obrigatório e deve ter 11 dígitos.", variant: "destructive" });
+      return false;
+    }
     if (!validateCPF(formData.cpf)) {
-      toast({ title: "Erro", description: "CPF deve ter 11 dígitos.", variant: "destructive" });
+      toast({ title: "Erro", description: "CPF inválido. Verifique os dígitos informados.", variant: "destructive" });
+      return false;
+    }
+    
+    // Validação de telefone mais rigorosa - bloquear placeholders
+    if (!formData.phone_e164 || formData.phone_e164.trim() === '') {
+      toast({ title: "Erro", description: "Telefone é obrigatório.", variant: "destructive" });
       return false;
     }
     if (!validatePhoneE164(formData.phone_e164)) {
-      toast({ title: "Erro", description: "Telefone inválido. Use o formato: +5511999999999", variant: "destructive" });
+      toast({ title: "Erro", description: "Telefone inválido. Use o formato: (11) 99999-9999", variant: "destructive" });
+      return false;
+    }
+    // Bloquear telefones placeholder conhecidos
+    const blockedPhones = ['+5511999999999', '+5500000000000', '+55999999999', '+5511111111111'];
+    if (blockedPhones.includes(formData.phone_e164)) {
+      toast({ title: "Erro", description: "Por favor, informe seu telefone real (não use números de exemplo).", variant: "destructive" });
       return false;
     }
     if (!validateBirthDate(formData.birth_date)) {
