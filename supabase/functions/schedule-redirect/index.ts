@@ -520,7 +520,7 @@ Deno.serve(async (req) => {
       .eq('key', 'force_clicklife_pronto_atendimento')
       .maybeSingle();
     
-    if (overrideSettings?.value === 'true' && payload.sku === 'ITC6534') {
+    if ((overrideSettings?.value === true || overrideSettings?.value === 'true') && payload.sku === 'ITC6534') {
       console.log('[schedule-redirect] 🚨 OVERRIDE ATIVO: Forçando ClickLife para Pronto Atendimento');
       return await redirectClickLife(payload, '8', corsHeaders);
     }
@@ -808,7 +808,7 @@ Deno.serve(async (req) => {
       .eq('key', 'force_clicklife')
       .maybeSingle();
 
-    if (forceData?.value === 'true') {
+    if (forceData?.value === true || forceData?.value === 'true') {
       console.log('[schedule-redirect] Admin override: Forçando ClickLife');
       return await redirectClickLife(payload, 'admin_override', corsHeaders);
     }
@@ -820,7 +820,7 @@ Deno.serve(async (req) => {
       .eq('key', 'force_communicare_clinico')
       .maybeSingle();
 
-    if (forceCommData?.value === 'true' && payload.sku === 'ITC6534') {
+    if ((forceCommData?.value === true || forceCommData?.value === 'true') && payload.sku === 'ITC6534') {
       console.log('[schedule-redirect] Admin override: Forçando Communicare para Clínico Geral');
       return await redirectCommunicare(payload, supabase, corsHeaders);
     }
