@@ -123,12 +123,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Gravar métrica de venda
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      );
-
+      // Gravar métrica de venda (usando supabaseAdmin já declarado acima)
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
         amount_cents: Math.round(payment.transaction_amount * 100),

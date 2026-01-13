@@ -618,32 +618,48 @@ Deno.serve(async (req) => {
       }
     });
 
-    // ✅ CUPOM: Salvar em pending_payments se houver cupom aplicado
-    if (hasCoupon && paymentRequest.metadata?.coupon_id) {
-      try {
-        const { error: pendingPaymentError } = await supabaseAdmin
-          .from('pending_payments')
-          .insert({
-            payment_id: String(responseData.id),
-            email: paymentRequest.payer.email,
-            status: responseData.status || 'pending',
-            order_id: paymentRequest.metadata.order_id,
-            sku: sku,
-            amount_cents: service.price_cents,
-            coupon_id: paymentRequest.metadata.coupon_id,
-            coupon_code: paymentRequest.metadata.coupon_code,
-            amount_original: paymentRequest.metadata.amount_original,
-            discount_percentage: paymentRequest.metadata.discount_percentage
-          });
-
-        if (pendingPaymentError) {
-          console.error('[mp-create-payment] ⚠️ Erro ao salvar pending_payment com cupom:', pendingPaymentError);
-        } else {
-          console.log('[mp-create-payment] ✅ Pending payment com cupom salvo');
+    // ✅ SEMPRE salvar em pending_payments para TODOS os pagamentos PIX (com ou sem cupom)
+    try {
+      const pendingPaymentData: any = {
+        payment_id: String(responseData.id),
+        patient_email: paymentRequest.payer.email,
+        patient_name: `${paymentRequest.payer.first_name || ''} ${paymentRequest.payer.last_name || ''}`.trim() || null,
+        patient_cpf: paymentRequest.payer?.identification?.number?.replace(/\D/g, '') || null,
+        status: responseData.status || 'pending',
+        order_id: paymentRequest.metadata.order_id,
+        sku: sku,
+        amount: hasCoupon 
+          ? (paymentRequest.metadata.amount_discounted! / 100) 
+          : expectedAmount,
+        amount_original: service.price_cents / 100,
+        payment_method: paymentData.payment_method_id || 'pix',
+        payment_data: {
+          schedulePayload: paymentRequest.metadata.schedulePayload
         }
-      } catch (err) {
-        console.error('[mp-create-payment] ⚠️ Erro ao processar pending_payment:', err);
+      };
+
+      // Adicionar campos de cupom se houver
+      if (hasCoupon && paymentRequest.metadata?.coupon_id) {
+        pendingPaymentData.coupon_code = paymentRequest.metadata.coupon_code;
+        pendingPaymentData.coupon_owner_id = paymentRequest.metadata.owner_user_id;
+        pendingPaymentData.discount_percent = paymentRequest.metadata.discount_percentage;
       }
+
+      const { error: pendingPaymentError } = await supabaseAdmin
+        .from('pending_payments')
+        .insert(pendingPaymentData);
+
+      if (pendingPaymentError) {
+        console.error('[mp-create-payment] ⚠️ Erro ao salvar pending_payment:', pendingPaymentError);
+      } else {
+        console.log('[mp-create-payment] ✅ Pending payment salvo:', {
+          payment_id: responseData.id,
+          order_id: paymentRequest.metadata.order_id,
+          has_coupon: hasCoupon
+        });
+      }
+    } catch (err) {
+      console.error('[mp-create-payment] ⚠️ Erro ao processar pending_payment:', err);
     }
 
     return new Response(
