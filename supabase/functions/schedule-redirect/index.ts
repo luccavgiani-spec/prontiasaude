@@ -190,6 +190,7 @@ interface SchedulePayload {
   birth_date?: string; // ✅ NOVO: Data de nascimento (formato YYYY-MM-DD)
   order_id?: string;
   payment_id?: string;
+  force_provider?: 'clicklife' | 'communicare'; // ✅ NOVO: Forçar provedor (admin)
 }
 
 // Função loginClickLifePatient removida - ClickLife não suporta login via API
@@ -522,6 +523,17 @@ Deno.serve(async (req) => {
     if (overrideSettings?.value === 'true' && payload.sku === 'ITC6534') {
       console.log('[schedule-redirect] 🚨 OVERRIDE ATIVO: Forçando ClickLife para Pronto Atendimento');
       return await redirectClickLife(payload, '8', corsHeaders);
+    }
+
+    // ✅ ADMIN FORCE PROVIDER: Permitir admin forçar ClickLife ou Communicare
+    if (payload.force_provider) {
+      console.log(`[schedule-redirect] 🚨 ADMIN FORCE: Forçando ${payload.force_provider}`);
+      
+      if (payload.force_provider === 'clicklife') {
+        return await redirectClickLife(payload, 'Admin forçou ClickLife', corsHeaders);
+      } else if (payload.force_provider === 'communicare') {
+        return await redirectCommunicare(payload, supabase, corsHeaders);
+      }
     }
 
     // ✅ GUARD: Nunca processar SKUs de PLANO (assinaturas)
