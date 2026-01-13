@@ -23,7 +23,7 @@ export default function CommunicareOverrideCard() {
         .eq('key', 'force_communicare_clinico')
         .maybeSingle();
 
-      setIsActive(data?.value === 'true');
+      setIsActive(data?.value === true);
     } catch (error) {
       console.error('Error loading override status:', error);
     } finally {
@@ -38,7 +38,7 @@ export default function CommunicareOverrideCard() {
         .from('admin_settings')
         .upsert({ 
           key: 'force_communicare_clinico', 
-          value: newValue ? 'true' : 'false',
+          value: newValue,
           updated_at: new Date().toISOString()
         })
         .select()

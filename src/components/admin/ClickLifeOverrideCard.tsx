@@ -23,7 +23,7 @@ export default function ClickLifeOverrideCard() {
         .eq('key', 'force_clicklife_pronto_atendimento')
         .maybeSingle();
 
-      setIsActive(data?.value === 'true');
+      setIsActive(data?.value === true);
     } catch (error) {
       console.error('Error loading override status:', error);
     } finally {
@@ -38,7 +38,7 @@ export default function ClickLifeOverrideCard() {
         .from('admin_settings')
         .upsert({ 
           key: 'force_clicklife_pronto_atendimento', 
-          value: newValue ? 'true' : 'false',
+          value: newValue,
           updated_at: new Date().toISOString()
         })
         .select()
