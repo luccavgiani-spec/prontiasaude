@@ -80,7 +80,7 @@ export async function upsertPatientBasic(payload: {
     gender: payload.gender,
     cep: cleanCep,
     address_number: payload.address_number,
-    address_complement: payload.address_complement || null,
+    complement: payload.address_complement || null,
     city: payload.city,
     state: payload.state,
     source: payload.source || 'site',
