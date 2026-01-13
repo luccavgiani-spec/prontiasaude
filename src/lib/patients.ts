@@ -68,8 +68,7 @@ export async function upsertPatientBasic(payload: {
     .eq('user_id', userId)
     .maybeSingle();
 
-  const update = {
-    ...(existingPatient?.id ? { id: existingPatient.id } : {}),
+  const updateData = {
     user_id: userId,
     email: userEmail,
     first_name: payload.first_name,
@@ -89,12 +88,24 @@ export async function upsertPatientBasic(payload: {
     profile_complete: true
   };
 
-  const { error } = await supabase
-    .from('patients')
-    .upsert(update, { onConflict: 'user_id' });
-  if (error) {
-    console.error('Supabase upsert error (patients):', error);
-    throw new Error(error.message || 'Falha ao salvar seus dados.');
+  // Lógica explícita: UPDATE se existe, INSERT se não
+  if (existingPatient?.id) {
+    const { error } = await supabase
+      .from('patients')
+      .update(updateData)
+      .eq('id', existingPatient.id);
+    if (error) {
+      console.error('Supabase update error (patients):', error);
+      throw new Error(error.message || 'Falha ao salvar seus dados.');
+    }
+  } else {
+    const { error } = await supabase
+      .from('patients')
+      .insert(updateData);
+    if (error) {
+      console.error('Supabase insert error (patients):', error);
+      throw new Error(error.message || 'Falha ao salvar seus dados.');
+    }
   }
 
   // Send to GAS webhook
