@@ -562,19 +562,34 @@ const CompletarPerfil = () => {
         source: inviteData ? 'empresa_invite' : undefined
       });
       
-      // ✅ Verificar se dados foram salvos corretamente
+      // ✅ Verificar se dados foram salvos corretamente (verificação robusta)
       const { data: savedPatient, error: checkError } = await supabase
         .from('patients')
-        .select('cpf, phone_e164, cep, profile_complete')
+        .select('id, user_id, cpf, phone_e164, cep, first_name, last_name, birth_date, profile_complete')
         .eq('user_id', activeUser.id)
         .maybeSingle();
 
-      if (checkError || !savedPatient?.cpf) {
-        console.error('[CompletarPerfil] ❌ Dados não foram salvos:', { savedPatient, checkError });
-        throw new Error('Não foi possível salvar seus dados. Tente novamente.');
+      // Verificação mais completa dos campos críticos
+      const missingFields: string[] = [];
+      if (!savedPatient?.cpf) missingFields.push('CPF');
+      if (!savedPatient?.first_name) missingFields.push('Nome');
+      if (!savedPatient?.last_name) missingFields.push('Sobrenome');
+      if (!savedPatient?.phone_e164) missingFields.push('Telefone');
+      if (!savedPatient?.birth_date) missingFields.push('Data de Nascimento');
+
+      if (checkError || missingFields.length > 0) {
+        console.error('[CompletarPerfil] ❌ Dados não foram salvos corretamente:', { 
+          savedPatient, 
+          checkError,
+          missingFields,
+          expectedUserId: activeUser.id
+        });
+        throw new Error(`Não foi possível salvar seus dados. Campos faltando: ${missingFields.join(', ')}. Tente novamente.`);
       }
 
       console.log('[CompletarPerfil] ✅ Perfil salvo com sucesso:', {
+        patient_id: savedPatient.id,
+        user_id: savedPatient.user_id,
         cpf: '***' + savedPatient.cpf.slice(-4),
         phone: savedPatient.phone_e164 ? '***' + savedPatient.phone_e164.slice(-4) : null,
         cep: savedPatient.cep,

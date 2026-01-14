@@ -56,22 +56,53 @@ export const getPatient = async (userId: string): Promise<Patient | null> => {
 };
 
 export const upsertPatient = async (userId: string, patientData: Partial<Patient>): Promise<Patient | null> => {
-  const { data, error } = await supabase
+  // Primeiro, verificar se já existe registro com esse user_id
+  const { data: existing } = await supabase
     .from('patients' as any)
-    .upsert({ 
-      id: userId, 
-      ...patientData,
-      updated_at: new Date().toISOString()
-    })
-    .select()
-    .single();
-    
-  if (error) {
-    console.error('Error upserting patient:', error);
-    throw error;
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  let result;
+  const existingRecord = existing as unknown as { id: string } | null;
+  
+  if (existingRecord) {
+    // UPDATE: registro existe, atualizar pelo id real
+    const { data, error } = await supabase
+      .from('patients' as any)
+      .update({ 
+        ...patientData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', existingRecord.id)
+      .select()
+      .single();
+      
+    if (error) {
+      console.error('[upsertPatient] Error updating patient:', error);
+      throw error;
+    }
+    result = data;
+  } else {
+    // INSERT: registro não existe, criar novo
+    const { data, error } = await supabase
+      .from('patients' as any)
+      .insert({ 
+        user_id: userId,
+        ...patientData,
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+      
+    if (error) {
+      console.error('[upsertPatient] Error inserting patient:', error);
+      throw error;
+    }
+    result = data;
   }
   
-  return data as unknown as Patient;
+  return result as unknown as Patient;
 };
 
 export const checkAuthFlow = async (userId: string): Promise<string> => {

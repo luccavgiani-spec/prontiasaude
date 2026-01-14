@@ -965,10 +965,11 @@ Deno.serve(async (req) => {
       }
 
       // ✅ NOVO: Criar patient record (para aparecer na /area-do-paciente)
+      // CORREÇÃO: Usar user_id ao invés de id para upsert correto
       const { error: patientError } = await supabaseClient
         .from('patients')
         .upsert({
-          id: authUser.user.id,
+          user_id: authUser.user.id,
           first_name: employeeData.nome.split(' ')[0],
           last_name: employeeData.nome.split(' ').slice(1).join(' ') || '',
           cpf: cpfClean,
@@ -985,7 +986,7 @@ Deno.serve(async (req) => {
           profile_complete: true,
           intake_complete: false,
           terms_accepted_at: new Date().toISOString(),
-        });
+        }, { onConflict: 'user_id' });
 
       if (patientError) {
         console.error('[company-operations] Patient creation failed:', patientError.message);
