@@ -41,6 +41,14 @@ Deno.serve(async (req) => {
 
     const url = new URL(req.url);
     
+    // ===== CRÍTICO: Ler body UMA ÚNICA VEZ e reutilizar =====
+    let bodyData: Record<string, any> = {};
+    if (req.method === 'POST') {
+      const bodyText = await req.text();
+      bodyData = bodyText ? JSON.parse(bodyText) : {};
+      console.log('[user-management] Body parsed once:', JSON.stringify(bodyData));
+    }
+    
     // Ler parâmetros do BODY (se POST) ou QUERY (se GET)
     let operation = 'list';
     let page = 1;
@@ -49,8 +57,6 @@ Deno.serve(async (req) => {
     let roleFilter: string | undefined;
     
     if (req.method === 'POST') {
-      const bodyText = await req.text();
-      const bodyData = bodyText ? JSON.parse(bodyText) : {};
       operation = bodyData.operation || 'list';
       page = bodyData.page || 1;
       limit = bodyData.limit || 50;
@@ -196,9 +202,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // UPDATE USER ROLE
+    // UPDATE USER ROLE (usa bodyData já parseado)
     if (operation === 'update_role' && req.method === 'POST') {
-      const { user_id, role, action } = await req.json();
+      const { user_id, role, action } = bodyData;
+      
+      if (!user_id || !role || !action) {
+        throw new Error('user_id, role e action são obrigatórios');
+      }
+      
+      console.log('[user-management] Updating role:', { user_id, role, action });
       
       if (action === 'add') {
         const { error } = await supabaseClient
@@ -227,6 +239,8 @@ Deno.serve(async (req) => {
       const userId = url.searchParams.get('user_id');
       if (!userId) throw new Error('user_id required');
 
+      console.log('[user-management] Deleting user via DELETE:', userId);
+
       const { error } = await supabaseClient.auth.admin.deleteUser(userId);
       if (error) throw error;
 
@@ -236,10 +250,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // DELETE USER (via POST method - compatibilidade com frontend)
+    // DELETE USER (via POST method - usa bodyData já parseado)
     if ((operation === 'delete_user' || operation === 'delete') && req.method === 'POST') {
-      const bodyText = await req.text();
-      const bodyData = bodyText ? JSON.parse(bodyText) : {};
       const userId = bodyData.user_id;
       
       if (!userId) throw new Error('user_id required');
