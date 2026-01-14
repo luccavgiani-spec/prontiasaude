@@ -139,11 +139,15 @@ Deno.serve(async (req) => {
         }
       });
 
-      // Marcar pending_payment como processado
+      // Marcar pending_payment como processado E status como approved
       if (order_id || payment.metadata?.order_id) {
         await supabaseAdmin
           .from('pending_payments')
-          .update({ processed: true, processed_at: new Date().toISOString() })
+          .update({ 
+            processed: true, 
+            processed_at: new Date().toISOString(),
+            status: 'approved' // ← CORREÇÃO: Atualizar status para aparecer na aba Vendas
+          })
           .eq('order_id', order_id || payment.metadata?.order_id);
       }
 

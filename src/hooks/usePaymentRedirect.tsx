@@ -15,7 +15,7 @@ export function usePaymentRedirect({
   email,
   paymentId,
   enabled = true,
-  maxAttempts = 20,
+  maxAttempts = 60, // Aumentado de 20 para 60 (3 minutos de polling para PIX)
   intervalMs = 3000
 }: UsePaymentRedirectOptions) {
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
