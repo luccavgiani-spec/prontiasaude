@@ -30,23 +30,29 @@ const EsqueciSenha = () => {
 
     setIsLoading(true);
     
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/nova-senha`
-    });
-
-    if (error) {
-      toast({
-        title: "Erro ao enviar email",
-        description: error.message,
-        variant: "destructive",
+    try {
+      // Usar edge function customizada
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: { email: email.toLowerCase() }
       });
-      setIsLoading(false);
-    } else {
+
+      if (error) {
+        throw error;
+      }
+
       setEmailSent(true);
       toast({
         title: "Email enviado!",
         description: "Verifique sua caixa de entrada para redefinir sua senha.",
       });
+    } catch (error: any) {
+      console.error("Erro ao solicitar recuperação:", error);
+      toast({
+        title: "Erro ao enviar email",
+        description: error.message || "Tente novamente mais tarde.",
+        variant: "destructive",
+      });
+    } finally {
       setIsLoading(false);
     }
   };

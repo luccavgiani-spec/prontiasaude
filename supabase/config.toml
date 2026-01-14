@@ -14,3 +14,12 @@ verify_jwt = false
 
 [functions.activate-communicare-manual]
 verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.validate-reset-token]
+verify_jwt = false
+
+[functions.complete-password-reset]
+verify_jwt = false

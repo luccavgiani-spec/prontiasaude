@@ -15,6 +15,7 @@ const NovaSenha = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isValidSession, setIsValidSession] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -25,7 +26,53 @@ const NovaSenha = () => {
     const handleSessionSetup = async () => {
       console.log('🔍 Verificando sessão para nova senha...');
       
-      // 1. Verificar se há código de troca (PKCE flow)
+      // Verificar se há token customizado (novo fluxo)
+      const customToken = searchParams.get('token');
+      
+      if (customToken) {
+        console.log('🔐 Token customizado detectado, validando...');
+        try {
+          const { data, error } = await supabase.functions.invoke('validate-reset-token', {
+            body: { token: customToken }
+          });
+
+          if (error) throw error;
+
+          if (data?.valid && data?.email) {
+            console.log('✅ Token válido para:', data.email);
+            if (mounted) {
+              setIsValidSession(true);
+              setUserEmail(data.email);
+              setSessionChecked(true);
+            }
+            return;
+          } else {
+            console.log('❌ Token inválido:', data?.error);
+            if (mounted) {
+              toast({
+                title: "Link inválido ou expirado",
+                description: data?.error || "O link de recuperação não é mais válido.",
+                variant: "destructive",
+              });
+              setSessionChecked(true);
+            }
+            return;
+          }
+        } catch (error: any) {
+          console.error('❌ Erro ao validar token:', error);
+          if (mounted) {
+            toast({
+              title: "Erro ao validar link",
+              description: "Ocorreu um erro ao validar o link de recuperação.",
+              variant: "destructive",
+            });
+            setSessionChecked(true);
+          }
+          return;
+        }
+      }
+
+      // Fluxos legados do Supabase (mantidos para compatibilidade)
       const code = searchParams.get('code');
       const type = searchParams.get('type');
       const token_hash = searchParams.get('token_hash');
@@ -43,7 +90,6 @@ const NovaSenha = () => {
           return;
         }
 
-        // 2. Verificar fluxo legado com token_hash
         if (token_hash && type === 'recovery') {
           console.log('🔐 Fluxo legado detectado');
           if (mounted) {
@@ -53,7 +99,6 @@ const NovaSenha = () => {
           return;
         }
 
-        // 3. Verificar sessão existente
         const { data: { session } } = await supabase.auth.getSession();
         
         if (!mounted) return;
@@ -86,7 +131,6 @@ const NovaSenha = () => {
       }
     };
 
-    // Listener para mudanças de estado de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       console.log('🔄 Auth state change:', event);
       
@@ -137,32 +181,66 @@ const NovaSenha = () => {
     setIsLoading(true);
     console.log('🔄 Tentando atualizar senha...');
     
-    const { error } = await supabase.auth.updateUser({
-      password: password
-    });
+    // Verificar se é o novo fluxo (token customizado)
+    const customToken = searchParams.get('token');
+    
+    if (customToken) {
+      try {
+        const { data, error } = await supabase.functions.invoke('complete-password-reset', {
+          body: { 
+            token: customToken,
+            new_password: password
+          }
+        });
 
-    if (error) {
-      console.error('❌ Erro ao atualizar senha:', error);
-      toast({
-        title: "Erro ao redefinir senha",
-        description: error.message === "Auth session missing!" 
-          ? "Sessão expirada. Solicite um novo link de reset." 
-          : error.message,
-        variant: "destructive",
-      });
+        if (error) throw error;
+
+        if (data?.success) {
+          console.log('✅ Senha atualizada com sucesso');
+          toast({
+            title: "Senha redefinida",
+            description: "Sua senha foi alterada com sucesso. Faça login com a nova senha.",
+          });
+          navigate('/entrar');
+        } else {
+          throw new Error(data?.error || 'Erro ao atualizar senha');
+        }
+      } catch (error: any) {
+        console.error('❌ Erro ao atualizar senha:', error);
+        toast({
+          title: "Erro ao redefinir senha",
+          description: error.message || "Tente novamente mais tarde.",
+          variant: "destructive",
+        });
+      }
     } else {
-      console.log('✅ Senha atualizada com sucesso');
-      toast({
-        title: "Senha redefinida",
-        description: "Sua senha foi alterada com sucesso.",
+      // Fluxo legado Supabase
+      const { error } = await supabase.auth.updateUser({
+        password: password
       });
-      navigate('/area-do-paciente');
+
+      if (error) {
+        console.error('❌ Erro ao atualizar senha:', error);
+        toast({
+          title: "Erro ao redefinir senha",
+          description: error.message === "Auth session missing!" 
+            ? "Sessão expirada. Solicite um novo link de reset." 
+            : error.message,
+          variant: "destructive",
+        });
+      } else {
+        console.log('✅ Senha atualizada com sucesso');
+        toast({
+          title: "Senha redefinida",
+          description: "Sua senha foi alterada com sucesso.",
+        });
+        navigate('/area-do-paciente');
+      }
     }
     
     setIsLoading(false);
   };
 
-  // Loading state while checking session
   if (!sessionChecked) {
     return (
       <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -178,7 +256,6 @@ const NovaSenha = () => {
     );
   }
 
-  // Invalid session state
   if (!isValidSession) {
     return (
       <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -209,7 +286,10 @@ const NovaSenha = () => {
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-foreground">Criar nova senha</CardTitle>
           <CardDescription>
-            Defina sua nova senha para acessar sua conta
+            {userEmail 
+              ? `Defina uma nova senha para ${userEmail}` 
+              : "Defina sua nova senha para acessar sua conta"
+            }
           </CardDescription>
         </CardHeader>
         <CardContent>
