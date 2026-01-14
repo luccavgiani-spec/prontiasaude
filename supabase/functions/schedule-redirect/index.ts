@@ -467,19 +467,43 @@ async function saveAppointment(
       order_id: payload.order_id
     };
     
-    const { error } = await supabase
+    // UPSERT para evitar duplicação por race condition
+    const { data: insertedData, error } = await supabase
       .from('appointments')
-      .insert(appointmentData);
+      .upsert(appointmentData, { 
+        onConflict: 'order_id',
+        ignoreDuplicates: true 
+      })
+      .select()
+      .maybeSingle();
     
     if (error) {
       console.error('[saveAppointment] ❌ ERRO ao salvar appointment:', error);
       throw error;
-    } else {
-      console.log('[saveAppointment] ✅ APPOINTMENT SALVO COM SUCESSO!');
-      console.log('[saveAppointment] Appointment ID:', appointmentId);
-      console.log('[saveAppointment] Email:', payload.email);
-      console.log('[saveAppointment] Redirect URL:', redirectUrl);
     }
+    
+    // Se já existia (race condition evitada), buscar o appointment existente
+    if (!insertedData && payload.order_id) {
+      const { data: existing } = await supabase
+        .from('appointments')
+        .select('appointment_id, redirect_url')
+        .eq('order_id', payload.order_id)
+        .maybeSingle();
+      
+      if (existing) {
+        console.log('[saveAppointment] ✅ Usando appointment existente (race condition evitada)');
+        return { 
+          appointment_id: existing.appointment_id, 
+          redirect_url: existing.redirect_url || redirectUrl,
+          existing: true 
+        };
+      }
+    }
+    
+    console.log('[saveAppointment] ✅ APPOINTMENT SALVO COM SUCESSO!');
+    console.log('[saveAppointment] Appointment ID:', appointmentId);
+    console.log('[saveAppointment] Email:', payload.email);
+    console.log('[saveAppointment] Redirect URL:', redirectUrl);
     
     return { appointment_id: appointmentId, redirect_url: redirectUrl, existing: false };
   } catch (error) {
@@ -687,12 +711,36 @@ Deno.serve(async (req) => {
       console.log('[schedule-redirect] Dados incompletos (raw), buscando na tabela patients...');
       
       try {
-        // Buscar patient pelo email usando query direta
-        const { data: patientData, error: patientError } = await supabase
-          .from('patients')
-          .select('id, cpf, first_name, last_name, phone_e164, gender, birth_date')
-          .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
-          .maybeSingle();
+        // Buscar patient pelo user_id primeiro
+        let patientData = null;
+        const { data: userData } = await supabase.auth.getUser();
+        
+        if (userData?.user?.id) {
+          const { data: patientByUserId } = await supabase
+            .from('patients')
+            .select('id, cpf, first_name, last_name, phone_e164, gender, birth_date')
+            .eq('user_id', userData.user.id)
+            .maybeSingle();
+          
+          if (patientByUserId) {
+            patientData = patientByUserId;
+            console.log('[schedule-redirect] ✓ Paciente encontrado por user_id');
+          }
+        }
+        
+        // Fallback: buscar por email se não encontrou por user_id
+        if (!patientData && payload.email) {
+          const { data: patientByEmail } = await supabase
+            .from('patients')
+            .select('id, cpf, first_name, last_name, phone_e164, gender, birth_date')
+            .eq('email', payload.email)
+            .maybeSingle();
+          
+          if (patientByEmail) {
+            patientData = patientByEmail;
+            console.log('[schedule-redirect] ✓ Paciente encontrado por email');
+          }
+        }
         
         if (patientData) {
           payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
