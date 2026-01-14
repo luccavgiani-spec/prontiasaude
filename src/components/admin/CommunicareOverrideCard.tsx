@@ -17,15 +17,25 @@ export default function CommunicareOverrideCard() {
 
   const loadStatus = async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_communicare_clinico')
         .maybeSingle();
 
-      setIsActive(data?.value === true);
+      if (error) {
+        console.error('[CommunicareOverride] Error loading:', error);
+        throw error;
+      }
+
+      // Tratar valor jsonb corretamente (pode vir como boolean, string ou objeto)
+      const rawValue = data?.value;
+      const boolValue = rawValue === true || rawValue === 'true';
+      console.log('[CommunicareOverride] Loaded value:', rawValue, '-> parsed:', boolValue);
+      setIsActive(boolValue);
     } catch (error) {
-      console.error('Error loading override status:', error);
+      console.error('[CommunicareOverride] Error loading override status:', error);
+      setIsActive(false);
     } finally {
       setLoading(false);
     }
@@ -33,8 +43,11 @@ export default function CommunicareOverrideCard() {
 
   const toggleOverride = async (newValue: boolean) => {
     setSaving(true);
+    console.log('[CommunicareOverride] Toggling to:', newValue);
+    
     try {
-      const { data, error } = await supabase
+      // Usar upsert com valor booleano puro
+      const { error } = await supabase
         .from('admin_settings')
         .upsert(
           { 
@@ -43,28 +56,39 @@ export default function CommunicareOverrideCard() {
             updated_at: new Date().toISOString()
           },
           { onConflict: 'key' }
-        )
-        .select()
-        .single();
+        );
 
-      if (error) throw error;
-
-      if (!data) {
-        throw new Error('Alteração não foi aplicada. Verifique suas permissões.');
+      if (error) {
+        console.error('[CommunicareOverride] Upsert error:', error);
+        throw error;
       }
 
-      // Recarregar status para confirmar
-      await loadStatus();
+      // Verificar se foi salvo corretamente
+      const { data: verifyData, error: verifyError } = await supabase
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'force_communicare_clinico')
+        .single();
+
+      if (verifyError) {
+        console.error('[CommunicareOverride] Verify error:', verifyError);
+        throw verifyError;
+      }
+
+      console.log('[CommunicareOverride] Verified saved value:', verifyData?.value);
+      
+      const savedValue = verifyData?.value === true || verifyData?.value === 'true';
+      setIsActive(savedValue);
 
       toast.success(
-        newValue 
+        savedValue 
           ? '🔵 Override ativado! Clínico Geral agora vai SEMPRE para Communicare'
           : '✅ Override desativado. Lógica de redirecionamento voltou ao normal'
       );
     } catch (err) {
-      console.error('Error toggling override:', err);
+      console.error('[CommunicareOverride] Error toggling override:', err);
       toast.error(`Erro ao alterar configuração: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
-      // Recarregar status em caso de erro também
+      // Recarregar status em caso de erro
       await loadStatus();
     } finally {
       setSaving(false);
