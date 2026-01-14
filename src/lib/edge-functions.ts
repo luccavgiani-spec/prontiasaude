@@ -4,9 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
  * URL base das Edge Functions no Lovable Cloud
  * As edge functions permanecem no Lovable Cloud, mas acessam o banco Supabase antigo via secrets
  */
-const EDGE_FUNCTIONS_URL = "https://ploqujuhpwutpcibedbr.supabase.co/functions/v1";
-const LOVABLE_CLOUD_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
+const EDGE_FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 /**
  * Invoca uma Edge Function do Lovable Cloud
@@ -28,9 +27,11 @@ export async function invokeEdgeFunction<T = any>(
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      apikey: LOVABLE_CLOUD_ANON_KEY,
+      apikey: SUPABASE_ANON_KEY,
       ...options?.headers,
     };
+
+    headers["Authorization"] = session?.access_token ? `Bearer ${session.access_token}` : `Bearer ${SUPABASE_ANON_KEY}`;
 
     // Se o usuário está logado, incluir token de auth
     if (session?.access_token) {
