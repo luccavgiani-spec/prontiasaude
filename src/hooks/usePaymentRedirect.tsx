@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface UsePaymentRedirectOptions {
@@ -22,19 +22,58 @@ export function usePaymentRedirect({
   const [isChecking, setIsChecking] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const attemptsRef = useRef(0);
+  const isMountedRef = useRef(true);
+  const hasFoundUrlRef = useRef(false);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
-    if (!enabled || (!orderId && !email && !paymentId) || attempts >= maxAttempts) {
+    // Limpar interval anterior
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (!enabled || (!orderId && !email && !paymentId)) {
       return;
     }
 
+    // Reset state quando parâmetros mudam
+    attemptsRef.current = 0;
+    hasFoundUrlRef.current = false;
+    setAttempts(0);
     setIsChecking(true);
+    setRedirectUrl(null);
 
     const checkForPayment = async () => {
-      try {
-        console.log('[usePaymentRedirect] Checking payment status...', { orderId, paymentId, email, attempt: attempts + 1 });
+      if (!isMountedRef.current || hasFoundUrlRef.current) return;
+      
+      if (attemptsRef.current >= maxAttempts) {
+        console.log('[usePaymentRedirect] Max attempts reached');
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+        if (isMountedRef.current) setIsChecking(false);
+        return;
+      }
 
-        // Estratégia 1: Chamar check-payment-status para verificar E criar appointment se aprovado
+      attemptsRef.current++;
+      if (isMountedRef.current) setAttempts(attemptsRef.current);
+      
+      try {
+        console.log('[usePaymentRedirect] Checking payment status...', { 
+          orderId, paymentId, email, attempt: attemptsRef.current 
+        });
+
+        // Estratégia 1: check-payment-status (cria appointment se aprovado)
         if (paymentId || orderId) {
           const { data, error } = await supabase.functions.invoke('check-payment-status', {
             body: { 
@@ -45,22 +84,26 @@ export function usePaymentRedirect({
           });
 
           if (!error && data?.approved && data?.redirect_url) {
-            console.log('[usePaymentRedirect] ✅ Payment approved! Redirect URL:', data.redirect_url);
-            setRedirectUrl(data.redirect_url);
-            setIsChecking(false);
-            if (intervalRef.current) clearInterval(intervalRef.current);
+            console.log('[usePaymentRedirect] ✅ Payment approved!', data.redirect_url);
+            hasFoundUrlRef.current = true;
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
+            if (isMountedRef.current) {
+              setRedirectUrl(data.redirect_url);
+              setIsChecking(false);
+            }
             return;
           }
           
-          // Se não aprovado ainda, incrementar tentativas
-          if (data?.status === 'pending') {
-            console.log('[usePaymentRedirect] ⏳ Payment still pending...');
-            setAttempts((prev) => prev + 1);
-            return;
+          // Log status para debug
+          if (data?.status) {
+            console.log('[usePaymentRedirect] Status:', data.status);
           }
         }
 
-        // Estratégia 2: Buscar appointment direto no banco (fallback)
+        // Estratégia 2: Buscar appointment direto (fallback)
         let query = supabase
           .from('appointments')
           .select('redirect_url, created_at, order_id')
@@ -74,41 +117,38 @@ export function usePaymentRedirect({
           query = query.eq('email', email);
         }
 
-        const { data: appointmentData, error: appointmentError } = await query;
+        const { data: appointmentData } = await query;
 
-        if (appointmentError) {
-          console.error('[usePaymentRedirect] Error checking appointment:', appointmentError);
-          setAttempts((prev) => prev + 1);
-          return;
-        }
-
-        if (appointmentData && appointmentData.length > 0 && appointmentData[0].redirect_url) {
-          console.log('[usePaymentRedirect] ✅ Appointment found! Redirect URL:', appointmentData[0].redirect_url);
-          setRedirectUrl(appointmentData[0].redirect_url);
-          setIsChecking(false);
-          if (intervalRef.current) clearInterval(intervalRef.current);
-        } else {
-          setAttempts((prev) => prev + 1);
+        if (appointmentData?.[0]?.redirect_url) {
+          console.log('[usePaymentRedirect] ✅ Appointment found!', appointmentData[0].redirect_url);
+          hasFoundUrlRef.current = true;
+          if (intervalRef.current) {
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+          if (isMountedRef.current) {
+            setRedirectUrl(appointmentData[0].redirect_url);
+            setIsChecking(false);
+          }
         }
       } catch (err) {
         console.error('[usePaymentRedirect] Exception:', err);
-        setAttempts((prev) => prev + 1);
       }
     };
 
     // Initial check
     checkForPayment();
 
-    // Set up interval
+    // Set up interval (só se ainda não encontrou URL)
     intervalRef.current = setInterval(checkForPayment, intervalMs);
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
-      setIsChecking(false);
     };
-  }, [orderId, email, paymentId, enabled, attempts, maxAttempts, intervalMs]);
+  }, [orderId, email, paymentId, enabled, maxAttempts, intervalMs]); // REMOVIDO 'attempts'
 
   return {
     redirectUrl,
