@@ -42,13 +42,16 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
     }
   }, [attempts, isChecking, redirectUrl, autoRedirectUrl]);
 
-  // Redirecionar quando URL estiver disponível
+  // Redirecionar quando URL estiver disponível (de qualquer fonte)
   useEffect(() => {
-    if (autoRedirectUrl && !redirectUrl) {
+    const url = autoRedirectUrl || redirectUrl;
+    if (url) {
+      console.log('[PixPaymentForm] ✅ Redirect URL detected, redirecting to:', url);
       toast.success('Pagamento confirmado! Redirecionando...');
+      // Redirecionar mais rápido
       setTimeout(() => {
-        window.location.href = autoRedirectUrl;
-      }, 1500);
+        window.location.href = url;
+      }, 800);
     }
   }, [autoRedirectUrl, redirectUrl]);
 

@@ -1569,6 +1569,16 @@ export function PaymentModal({
           setTimeout(() => {
             window.location.href = scheduleData.url;
           }, 1500);
+        } else {
+          // Fallback: URL não veio imediatamente, iniciar polling
+          console.log('[Card Payment] ⚠️ URL não retornada, iniciando polling de fallback');
+          toast.success("✅ Pagamento aprovado!", {
+            description: "Preparando seu atendimento...",
+          });
+          // Iniciar polling via status
+          setPaymentStatus("approved");
+          setPaymentId(data.payment_id);
+          pollPaymentStatus(data.payment_id, orderId);
         }
       } else if (data.status === "pending" && data.status_detail === "pending_challenge") {
         // Usuário precisa completar desafio 3DS
