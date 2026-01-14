@@ -92,10 +92,10 @@ serve(async (req) => {
       }
     } else {
       // Create new patient record if none exists
+      // CORREÇÃO: Remover 'id:' e usar apenas 'user_id' para upsert correto
       const { error: patientError } = await supabase
         .from('patients')
         .upsert({
-          id: newUserId,
           user_id: newUserId,
           email: email,
           first_name: 'Suporte',
@@ -103,7 +103,7 @@ serve(async (req) => {
           profile_complete: true,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'user_id' });
 
       if (patientError) {
         console.error('Error creating patient record:', patientError);
