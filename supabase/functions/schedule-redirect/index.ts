@@ -682,10 +682,21 @@ Deno.serve(async (req) => {
         : `Psicólogo COM plano ativo (${payload.sku})`;
       
       console.log(`[schedule-redirect] ✓ ${motivo} → WhatsApp Suporte 0800`);
+      
+      const whatsappUrl = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta';
+      
+      // ✅ CORREÇÃO: Salvar appointment ANTES de retornar para permitir polling do frontend
+      try {
+        await saveAppointment(payload, 'whatsapp_specialist', whatsappUrl, supabase);
+        console.log('[schedule-redirect] ✅ Appointment salvo para especialista/psicólogo com plano');
+      } catch (saveError) {
+        console.error('[schedule-redirect] ⚠️ Erro ao salvar appointment (continuando):', saveError);
+      }
+      
       return new Response(
         JSON.stringify({
           ok: true,
-          url: 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta',
+          url: whatsappUrl,
           provider: 'whatsapp_specialist'
         }),
         {
