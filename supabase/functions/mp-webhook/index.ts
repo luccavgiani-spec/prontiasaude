@@ -1105,7 +1105,7 @@ Deno.serve(async (req) => {
 
       const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      await supabaseAdmin.from('appointments').insert({
+      const { error: appointmentError } = await supabaseAdmin.from('appointments').insert({
         appointment_id: appointmentId,
         email: schedulePayload.email,
         service_code: schedulePayload.sku,
@@ -1118,6 +1118,21 @@ Deno.serve(async (req) => {
         teams_join_url: whatsappUrl,
         order_id: orderId
       });
+
+      if (appointmentError) {
+        console.error('[mp-webhook] ❌ ERRO ao criar appointment (especialista):', appointmentError);
+        // Retorna erro para permitir retry do webhook
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Failed to create appointment',
+          details: appointmentError.message
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      console.log('[mp-webhook] ✅ Appointment criado com sucesso:', appointmentId);
 
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
