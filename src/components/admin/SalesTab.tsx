@@ -138,11 +138,12 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      // 1. Buscar appointments normalmente
+      // 1. Buscar appointments COM order_id (vendas reais, não links manuais)
       const { data: appointmentsData, error: aptError } = await supabase
         .from("appointments")
         .select("*")
         .gte("created_at", SALES_START_DATE)
+        .not("order_id", "is", null)  // Filtra apenas vendas reais (com order_id)
         .order("created_at", { ascending: false });
 
       if (aptError) throw aptError;
