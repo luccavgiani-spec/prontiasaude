@@ -172,12 +172,27 @@ export function HeroSection() {
           <div className="relative z-10 rounded-3xl overflow-hidden shadow-2xl h-full">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/20 via-transparent to-transparent z-10 pointer-events-none" />
             <picture className="hero-picture">
-              <source type="image/webp" srcSet="/assets/hero-mobile-420.webp 672w, /assets/hero-tablet-768.webp 768w, /assets/hero-desktop-1600.webp 1600w" sizes="(max-width: 600px) 672px, (max-width: 1024px) 768px, 1600px" />
-              <img src="/assets/hero-mobile-420.webp" alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" className="w-full h-full object-contain object-center" width={672} height={416} loading="eager" fetchPriority="high" decoding="async" style={{
+              {/* WebP otimizado com srcset responsivo */}
+              <source 
+                type="image/webp" 
+                srcSet="/assets/hero-mobile-420.webp 420w, /assets/hero-tablet-768.webp 768w, /assets/hero-desktop-1600.webp 1600w" 
+                sizes="(max-width: 600px) 100vw, (max-width: 1024px) 50vw, 800px" 
+              />
+              <img 
+                src="/assets/hero-mobile-420.webp" 
+                alt="Médico profissional sorridente em consulta online, pronto para atendê-lo com qualidade e empatia" 
+                className="w-full h-full object-contain object-center" 
+                width={672} 
+                height={416} 
+                loading="eager" 
+                fetchPriority="high" 
+                decoding="async" 
+                style={{
                   aspectRatio: '672/416',
                   objectFit: 'contain',
                   maxHeight: '400px'
-                }} />
+                }} 
+              />
             </picture>
           </div>
             </div>

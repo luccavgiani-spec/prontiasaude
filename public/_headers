@@ -1,27 +1,42 @@
-# Cache headers para otimização de performance
+# Cache headers para otimização de performance - PageSpeed 90+
 
-# Assets com hash no nome (imutáveis)
+# JS e CSS com hash (imutáveis - 1 ano)
+/assets/js/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+# Assets gerais com hash no nome (imutáveis)
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Imagens sem hash
+# Imagens WebP sem hash
 /*.webp
   Cache-Control: public, max-age=2592000
 
+# Imagens AVIF sem hash
+/*.avif
+  Cache-Control: public, max-age=2592000
+
+# Outras imagens
 /*.png
   Cache-Control: public, max-age=2592000
 
 /*.jpg
   Cache-Control: public, max-age=2592000
 
-# Fontes
+# Fontes (1 ano - imutáveis)
 /fonts/*
   Cache-Control: public, max-age=31536000, immutable
 
-# HTML
+# HTML (5 minutos - permite atualizações rápidas)
 /*.html
   Cache-Control: public, max-age=300
 
-# Service Worker
+/
+  Cache-Control: public, max-age=300
+
+# Service Worker (sempre revalidar)
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate

@@ -1,5 +1,4 @@
 import Stepper, { Step } from "@/components/bits/Stepper";
-import consultaImage from "@/assets/medical-team-realistic.jpg";
 
 export default function ComoFuncionaStepper() {
   return (
@@ -27,22 +26,24 @@ export default function ComoFuncionaStepper() {
           </div>
         </div>
 
-        {/* manter exatamente a mesma imagem da seção atual */}
+        {/* Imagem otimizada com lazy loading */}
         <div className="order-first md:order-none">
           <picture>
             <source 
               srcSet="/assets/medical-team-realistic-600.webp 600w, 
                       /assets/medical-team-realistic-1200.webp 1200w"
               type="image/webp"
-              sizes="(max-width: 768px) 100vw, 600px"
+              sizes="(max-width: 768px) 100vw, 50vw"
             />
             <img 
-              src={consultaImage} 
+              src="/assets/medical-team-realistic-600.webp" 
               alt="Equipe médica profissional em consulta online" 
               width="600"
               height="400"
               loading="lazy"
+              decoding="async"
               className="w-full rounded-3xl shadow-xl"
+              style={{ aspectRatio: '600/400' }}
             />
           </picture>
         </div>

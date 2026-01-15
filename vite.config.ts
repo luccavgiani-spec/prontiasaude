@@ -81,6 +81,15 @@ export default defineConfig(({ mode }) => ({
           
           // Icons (common, but can be optimized)
           'vendor-icons': ['lucide-react'],
+          
+          // Motion (pesado - lazy load)
+          'vendor-motion': ['motion'],
+          
+          // Charts (usado apenas em admin)
+          'vendor-charts': ['recharts'],
+          
+          // Mercado Pago (lazy - só no checkout)
+          'vendor-mp': ['@mercadopago/sdk-react'],
         },
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.');
