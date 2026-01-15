@@ -396,11 +396,11 @@ const Entrar = () => {
               <div className="text-center space-y-2">
                 <Link 
                   to="/esqueci-senha"
-                  className="text-sm text-muted-foreground hover:text-primary block"
+                  className="text-xl text-muted-foreground hover:text-primary block"
                 >
                   Esqueci minha senha
                 </Link>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xl text-muted-foreground">
                   Não tem uma conta?{" "}
                   <Link to="/cadastrar" className="text-primary hover:underline">
                     Criar conta
