@@ -683,7 +683,7 @@ Deno.serve(async (req) => {
       
       console.log(`[schedule-redirect] ✓ ${motivo} → WhatsApp Suporte 0800`);
       
-      const whatsappUrl = 'https://wa.me/5508000008780?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta';
+      const whatsappUrl = 'https://wa.me/5511933359187?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta';
       
       // ✅ CORREÇÃO: Salvar appointment ANTES de retornar para permitir polling do frontend
       try {
