@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
   try {
     const { payment_id, email, order_id } = await req.json();
     
-    console.log('[check-payment-status] Verificando pagamento:', payment_id);
+    console.log('[check-payment-status] ==============================');
+    console.log('[check-payment-status] 🔍 Verificando pagamento:', { payment_id, order_id, email });
 
     const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN');
     if (!MP_ACCESS_TOKEN) {
@@ -39,23 +40,30 @@ Deno.serve(async (req) => {
     }
 
     const payment = await response.json();
-    console.log('[check-payment-status] Status do payment:', payment.status);
+    console.log('[check-payment-status] 📊 Status do payment:', payment.status);
+    console.log('[check-payment-status] 📦 Metadata:', JSON.stringify(payment.metadata));
 
     // Se aprovado, processar criação de appointment
     if (payment.status === 'approved') {
+      console.log('[check-payment-status] ✅ Pagamento APROVADO! Processando...');
+      
       const schedulePayload = payment.metadata?.schedulePayload || payment.metadata?.schedule_payload;
       
       if (!schedulePayload) {
-        console.error('[check-payment-status] schedulePayload não encontrado no metadata');
+        console.error('[check-payment-status] ❌ schedulePayload NÃO encontrado no metadata!');
+        console.error('[check-payment-status] Metadata keys:', Object.keys(payment.metadata || {}));
         return new Response(JSON.stringify({ 
           success: false,
           status: payment.status,
-          error: 'Dados de agendamento não encontrados'
+          approved: true,
+          error: 'Dados de agendamento não encontrados no pagamento'
         }), {
           status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
+      
+      console.log('[check-payment-status] 📋 schedulePayload encontrado:', JSON.stringify(schedulePayload));
 
       const supabase = createClient(
         Deno.env.get('SUPABASE_URL')!,

@@ -21,21 +21,22 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
   const [checking, setChecking] = useState(false);
   const [progress, setProgress] = useState(0);
   
-  // Hook para polling automático - agora chama check-payment-status ativamente
-  const { redirectUrl: autoRedirectUrl, isChecking, attempts } = usePaymentRedirect({
+  // ✅ CORREÇÃO: Aumentar tempo de polling para PIX (6 minutos = 120 tentativas x 3s)
+  // Hook para polling automático - chama check-payment-status ativamente
+  const { redirectUrl: autoRedirectUrl, isChecking, attempts, hasTimedOut } = usePaymentRedirect({
     orderId,
     email,
     paymentId,
     enabled: !redirectUrl && (!!orderId || !!email || !!paymentId),
-    maxAttempts: 20,
-    intervalMs: 3000
+    maxAttempts: 120, // 6 minutos de polling (120 x 3s = 360s)
+    intervalMs: 3000  // Verificar a cada 3 segundos
   });
 
   // Atualizar progress bar baseado nas tentativas
   useEffect(() => {
     if (isChecking && attempts > 0) {
       // Calcular progresso: 0% a 95% durante polling (nunca 100% até confirmar)
-      const percentage = Math.min((attempts / 20) * 95, 95);
+      const percentage = Math.min((attempts / 120) * 95, 95);
       setProgress(percentage);
     } else if (redirectUrl || autoRedirectUrl) {
       setProgress(100);
@@ -172,7 +173,19 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
           <div className="space-y-2">
             <Progress value={progress} className="h-2" />
             <p className="text-xs text-center text-muted-foreground">
-              Verificando pagamento... (tentativa {attempts}/20)
+              Verificando pagamento... ({Math.ceil(attempts * 3 / 60)} min)
+            </p>
+          </div>
+        )}
+        
+        {/* Timeout message */}
+        {hasTimedOut && !redirectUrl && !autoRedirectUrl && (
+          <div className="rounded-lg p-4 text-center border-2 bg-yellow-50 border-yellow-200">
+            <p className="text-sm text-yellow-700">
+              Tempo limite atingido. Clique em "Verificar Status" ou acesse sua{' '}
+              <a href="/area-do-paciente" className="text-primary hover:underline font-medium">
+                Área do Paciente
+              </a>.
             </p>
           </div>
         )}
