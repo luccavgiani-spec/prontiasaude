@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.complete-password-reset]
 verify_jwt = false
+
+[functions.reconcile-pending-payments]
+verify_jwt = false
