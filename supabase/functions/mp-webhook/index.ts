@@ -57,6 +57,7 @@ async function registerCommunicarePatientSimple(
   try {
     console.log('[registerCommunicare] 📝 Iniciando cadastro do paciente na Communicare');
     console.log('[registerCommunicare] CPF:', cpf.substring(0, 3) + '***');
+    console.log('[registerCommunicare] birth_date recebido:', birthDate || 'NULL');
 
     const cpfClean = cpf.replace(/\D/g, '');
     const phoneClean = telefone.replace(/\D/g, '');
@@ -67,17 +68,27 @@ async function registerCommunicarePatientSimple(
     
     // Converter birth_date de YYYY-MM-DD para DDMMYYYY (formato Communicare)
     let birthDateFormatted = "01011990"; // Fallback
-    if (birthDate) {
+    let usedFallback = true;
+    
+    if (birthDate && birthDate !== '1990-01-01') {
       try {
         const parts = birthDate.split('-');
         if (parts.length === 3) {
           const [year, month, day] = parts;
-          birthDateFormatted = `${day}${month}${year}`;
-          console.log('[registerCommunicare] Data de nascimento:', birthDate, '→', birthDateFormatted);
+          // Validar que não é uma data genérica
+          if (year !== '1990' || month !== '01' || day !== '01') {
+            birthDateFormatted = `${day}${month}${year}`;
+            usedFallback = false;
+            console.log('[registerCommunicare] ✅ Data de nascimento REAL:', birthDate, '→', birthDateFormatted);
+          }
         }
       } catch (e) {
-        console.warn('[registerCommunicare] Erro ao converter birth_date, usando fallback:', e);
+        console.warn('[registerCommunicare] Erro ao converter birth_date:', e);
       }
+    }
+    
+    if (usedFallback) {
+      console.warn('[registerCommunicare] ⚠️ FALLBACK: Usando data genérica 01011990 (birth_date original:', birthDate, ')');
     }
 
     // Mapear gênero
@@ -195,21 +206,36 @@ async function registerClickLifePatientSimple(
     const ddd = telefoneLimpo.substring(0, 2);
     const numero = telefoneLimpo.substring(2);
 
+    console.log('[registerClickLife] birth_date recebido:', birthDate || 'NULL');
+    
     // Normalizar e converter data de nascimento para DD-MM-YYYY
     let birthDateFormatted = '01-01-1990'; // fallback
-    if (birthDate) {
+    let usedFallback = true;
+    
+    if (birthDate && birthDate !== '1990-01-01') {
       if (birthDate.includes('-')) {
         const parts = birthDate.split('-');
         if (parts.length === 3) {
           if (parts[0].length === 4) {
             // YYYY-MM-DD -> DD-MM-YYYY
-            birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            const [year, month, day] = parts;
+            // Validar que não é data genérica
+            if (year !== '1990' || month !== '01' || day !== '01') {
+              birthDateFormatted = `${day}-${month}-${year}`;
+              usedFallback = false;
+              console.log('[registerClickLife] ✅ Data de nascimento REAL:', birthDate, '→', birthDateFormatted);
+            }
           } else {
             // Já está em DD-MM-YYYY
             birthDateFormatted = birthDate;
+            usedFallback = false;
           }
         }
       }
+    }
+    
+    if (usedFallback) {
+      console.warn('[registerClickLife] ⚠️ FALLBACK: Usando data genérica 01-01-1990 (birth_date original:', birthDate, ')');
     }
 
     const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
@@ -938,6 +964,8 @@ Deno.serve(async (req) => {
       if (!patientData) {
         console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
         
+        // ✅ CORRIGIDO: NÃO usar fallback '1990-01-01' ao criar paciente
+        // O birth_date será preenchido depois quando o usuário completar o perfil
         const newPatientData = {
           email: schedulePayload.email,
           cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
@@ -945,10 +973,14 @@ Deno.serve(async (req) => {
           last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || payment.payer?.last_name || 'Sobrenome',
           phone_e164: schedulePayload.telefone || payment.payer?.phone?.area_code + payment.payer?.phone?.number,
           gender: schedulePayload.sexo || 'F',
-          birth_date: schedulePayload.birth_date || '1990-01-01',
+          birth_date: (schedulePayload.birth_date && schedulePayload.birth_date !== '1990-01-01') 
+            ? schedulePayload.birth_date 
+            : null, // ✅ NULL em vez de fallback genérico
           profile_complete: false,
           source: 'pix_payment'
         };
+        
+        console.log('[mp-webhook] 📝 Criando paciente com birth_date:', newPatientData.birth_date || 'NULL (sem fallback)');
         
         const { data: createdPatient, error: createError } = await supabaseAdmin
           .from('patients')
@@ -1207,7 +1239,8 @@ Deno.serve(async (req) => {
     if (!patientData) {
       console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
       
-      // Preparar dados do novo paciente (sem id - Supabase gera automaticamente)
+      // ✅ CORRIGIDO: NÃO usar fallback '1990-01-01' ao criar paciente
+      // O birth_date será preenchido depois quando o usuário completar o perfil
       const newPatientData = {
         email: schedulePayload.email,
         cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
@@ -1215,10 +1248,14 @@ Deno.serve(async (req) => {
         last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || payment.payer?.last_name || 'Sobrenome',
         phone_e164: schedulePayload.telefone || payment.payer?.phone?.area_code + payment.payer?.phone?.number,
         gender: schedulePayload.sexo || 'F', // Fallback para feminino
-        birth_date: schedulePayload.birth_date || '1990-01-01', // Fallback genérico
+        birth_date: (schedulePayload.birth_date && schedulePayload.birth_date !== '1990-01-01') 
+          ? schedulePayload.birth_date 
+          : null, // ✅ NULL em vez de fallback genérico
         profile_complete: false,
         source: 'pix_payment'
       };
+      
+      console.log('[mp-webhook] 📝 Criando paciente (fluxo normal) com birth_date:', newPatientData.birth_date || 'NULL (sem fallback)');
       
       console.log('[mp-webhook] Dados do novo paciente:', {
         email: newPatientData.email,
