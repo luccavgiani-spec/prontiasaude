@@ -166,7 +166,15 @@ Deno.serve(async (req) => {
 
           if (schedulePayload && !dryRun) {
             // Chamar schedule-redirect para criar appointment
-            console.log(`[reconcile-pending-payments] Chamando schedule-redirect...`);
+            // IMPORTANTE: Injetar order_id e payment_id no payload para que o appointment
+            // seja criado corretamente e apareça na aba de Vendas
+            console.log(`[reconcile-pending-payments] Chamando schedule-redirect com order_id: ${payment.order_id}`);
+            
+            const enrichedPayload = {
+              ...schedulePayload,
+              order_id: payment.order_id,
+              payment_id: payment.payment_id
+            };
             
             const scheduleResponse = await fetch(
               `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-redirect`,
@@ -176,7 +184,7 @@ Deno.serve(async (req) => {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
                 },
-                body: JSON.stringify(schedulePayload)
+                body: JSON.stringify(enrichedPayload)
               }
             );
 
