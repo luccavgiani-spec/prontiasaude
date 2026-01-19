@@ -1,23 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Base URL das Edge Functions do MESMO projeto do Supabase do site
- * (vem do VITE_SUPABASE_URL do build)
+ * Base URL das Edge Functions do projeto Supabase original (ploqujuhpwutpcibedbr)
+ * Usa VITE_SUPABASE_URL do build ou fallback para URL hardcoded do projeto original
  */
-const SUPABASE_URL = (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_URL = 
+  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined ||
+  "https://ploqujuhpwutpcibedbr.supabase.co";
 
-// Use anon_key (legado) OU publishable_key (sb_publishable_...) se existir.
-// Prioridade: publishable > anon (porque alguns projetos podem bloquear legacy).
-const SUPABASE_PUBLIC_KEY =
-  ((import.meta as any).env?.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ||
-  ((import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined);
-
-if (!SUPABASE_URL) {
-  throw new Error("VITE_SUPABASE_URL não definido no ambiente.");
-}
-if (!SUPABASE_PUBLIC_KEY) {
-  throw new Error("VITE_SUPABASE_PUBLISHABLE_KEY ou VITE_SUPABASE_ANON_KEY não definido no ambiente.");
-}
+/**
+ * Chave pública do Supabase (anon key do projeto original)
+ */
+const SUPABASE_ANON_KEY = 
+  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined ||
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I";
 
 const EDGE_FUNCTIONS_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1`;
 
@@ -37,12 +33,12 @@ export async function invokeEdgeFunction<T = any>(
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      apikey: SUPABASE_PUBLIC_KEY,
+      apikey: SUPABASE_ANON_KEY,
       ...options.headers,
     };
 
-    // Se tem usuário logado, usa o access_token; se não, usa a public key.
-    headers["Authorization"] = `Bearer ${accessToken || SUPABASE_PUBLIC_KEY}`;
+    // Se tem usuário logado, usa o access_token; se não, usa a anon key.
+    headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
 
     const response = await fetch(`${EDGE_FUNCTIONS_URL}/${functionName}`, {
       method: options.method || "POST",
