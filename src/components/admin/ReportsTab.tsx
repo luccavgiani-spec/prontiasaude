@@ -20,6 +20,13 @@ const TEST_EMAILS = [
   'teste@clubeben.com',
   'teste@teste.com',
   'joao.maria.teste01@gmail.com',
+  // Emails de teste/dev adicionais
+  'cristielli@outlook.com',
+  'nevescristiellis@gmail.com',
+  'jpaulo.siqueira@gmail.com',
+  'kaiquehenrique890@gmail.com',
+  'matheuspereiradeoliveira09@gmail.com',
+  'eliana.atc@hotmail.com',
 ];
 
 // Função para verificar se é email de teste
@@ -54,6 +61,7 @@ interface MetricsData {
     firstPurchase: string;
     lastPurchase: string;
     lifetimeDays: number;
+    totalSpent: number;
   }>;
 }
 
@@ -266,8 +274,9 @@ export default function ReportsTab() {
         // ALL historical payments for recurrence analysis (desde SALES_START_DATE)
         supabase
           .from('pending_payments')
-          .select('id, patient_email, created_at, status, order_id')
+          .select('id, patient_email, created_at, status, order_id, amount, sku')
           .eq('status', 'approved')
+          .eq('processed', true)
           .gte('created_at', SALES_START_DATE)
       ]);
 
@@ -402,8 +411,8 @@ export default function ReportsTab() {
       });
 
       // ========== RECURRENCE ANALYSIS ==========
-      // Build map of email -> purchases sorted by date
-      const customerPurchasesMap = new Map<string, Array<{ date: string; orderId: string | null }>>();
+      // Build map of email -> purchases sorted by date with amount
+      const customerPurchasesMap = new Map<string, Array<{ date: string; orderId: string | null; amount: number }>>();
       
       allTimePayments.forEach(payment => {
         const email = payment.patient_email?.toLowerCase();
@@ -412,9 +421,14 @@ export default function ReportsTab() {
         if (!customerPurchasesMap.has(email)) {
           customerPurchasesMap.set(email, []);
         }
+        
+        // Calcular valor: usar amount do pagamento ou fallback para SKU_PRICES
+        const amount = payment.amount ? Number(payment.amount) : (SKU_PRICES[payment.sku || ''] || 0);
+        
         customerPurchasesMap.get(email)!.push({
           date: payment.created_at || new Date().toISOString(),
           orderId: payment.order_id,
+          amount,
         });
       });
       
@@ -439,10 +453,13 @@ export default function ReportsTab() {
         firstPurchase: string;
         lastPurchase: string;
         lifetimeDays: number;
+        totalSpent: number;
       }> = [];
       
       customerPurchasesMap.forEach((purchases, email) => {
         const count = purchases.length;
+        const totalSpent = purchases.reduce((sum, p) => sum + p.amount, 0);
+        
         if (count >= 2) {
           recurringCustomers++;
           
@@ -456,6 +473,7 @@ export default function ReportsTab() {
             firstPurchase: firstDate.toLocaleDateString('pt-BR'),
             lastPurchase: lastDate.toLocaleDateString('pt-BR'),
             lifetimeDays,
+            totalSpent,
           });
         }
         
@@ -945,6 +963,7 @@ export default function ReportsTab() {
                       <TableRow>
                         <TableHead>Email</TableHead>
                         <TableHead className="text-center">Compras</TableHead>
+                        <TableHead className="text-center">Total Gasto</TableHead>
                         <TableHead className="text-center">Primeira</TableHead>
                         <TableHead className="text-center">Última</TableHead>
                         <TableHead className="text-center">Tempo (dias)</TableHead>
@@ -958,6 +977,9 @@ export default function ReportsTab() {
                           </TableCell>
                           <TableCell className="text-center font-bold text-primary">
                             {customer.totalPurchases}
+                          </TableCell>
+                          <TableCell className="text-center font-semibold text-green-600">
+                            {(customer.totalSpent / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </TableCell>
                           <TableCell className="text-center text-muted-foreground text-sm">
                             {customer.firstPurchase}
