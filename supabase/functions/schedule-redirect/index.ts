@@ -728,8 +728,19 @@ Deno.serve(async (req) => {
     });
 
     // 2. Enriquecer payload se campos estiverem vazios após normalização
-    if (!payload.cpf || !payload.nome || !payload.telefone || !payload.sexo) {
-      console.log('[schedule-redirect] Dados incompletos (raw), buscando na tabela patients...');
+    // ✅ CORRIGIDO: Agora busca birth_date SEMPRE que ausente, independente dos outros campos
+    const needsBasicEnrichment = !payload.cpf || !payload.nome || !payload.telefone || !payload.sexo;
+    const needsBirthDateEnrichment = !payload.birth_date;
+    
+    if (needsBasicEnrichment || needsBirthDateEnrichment) {
+      console.log('[schedule-redirect] Buscando dados na tabela patients...', {
+        reason: needsBasicEnrichment ? 'campos_incompletos' : 'birth_date_ausente',
+        has_cpf: !!payload.cpf,
+        has_nome: !!payload.nome,
+        has_telefone: !!payload.telefone,
+        has_sexo: !!payload.sexo,
+        has_birth_date: !!payload.birth_date
+      });
       
       try {
         // Buscar patient pelo user_id primeiro
@@ -763,28 +774,47 @@ Deno.serve(async (req) => {
           }
         }
         
-        if (patientData) {
-          payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
-          payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
-          payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
+        // Fallback: buscar por CPF se não encontrou pelos métodos anteriores
+        if (!patientData && payload.cpf) {
+          const { data: patientByCpf } = await supabase
+            .from('patients')
+            .select('id, cpf, first_name, last_name, phone_e164, gender, birth_date')
+            .eq('cpf', payload.cpf)
+            .maybeSingle();
           
-          // ✅ Enriquecer gênero se ausente
-          if (!payload.sexo && patientData.gender) {
-            const mappedGender = mapGender(patientData.gender);
-            if (mappedGender) {
-              payload.sexo = mappedGender;
-              console.log('[schedule-redirect] ✓ Gênero obtido de patients:', {
-                raw: patientData.gender,
-                normalized: mappedGender,
-                fonte: 'patients_table'
-              });
+          if (patientByCpf) {
+            patientData = patientByCpf;
+            console.log('[schedule-redirect] ✓ Paciente encontrado por CPF');
+          }
+        }
+        
+        if (patientData) {
+          // Enriquecer campos básicos apenas se necessário
+          if (needsBasicEnrichment) {
+            payload.cpf = payload.cpf || (patientData.cpf || '').replace(/\D/g, '');
+            payload.nome = payload.nome || `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+            payload.telefone = payload.telefone || (patientData.phone_e164 || '').replace(/\D/g, '');
+            
+            // ✅ Enriquecer gênero se ausente
+            if (!payload.sexo && patientData.gender) {
+              const mappedGender = mapGender(patientData.gender);
+              if (mappedGender) {
+                payload.sexo = mappedGender;
+                console.log('[schedule-redirect] ✓ Gênero obtido de patients:', {
+                  raw: patientData.gender,
+                  normalized: mappedGender,
+                  fonte: 'patients_table'
+                });
+              }
             }
           }
           
-          // ✅ Enriquecer birth_date se ausente
+          // ✅ SEMPRE enriquecer birth_date se ausente (independente dos outros campos)
           if (!payload.birth_date && patientData.birth_date) {
             payload.birth_date = patientData.birth_date;
             console.log('[schedule-redirect] ✓ birth_date obtido de patients:', patientData.birth_date);
+          } else if (!payload.birth_date && !patientData.birth_date) {
+            console.warn('[schedule-redirect] ⚠️ birth_date ausente no payload E no banco para:', payload.email?.substring(0, 3) + '***');
           }
           
           console.log('[schedule-redirect] ✓ Dados enriquecidos via patients table');
@@ -811,7 +841,7 @@ Deno.serve(async (req) => {
             }
           }
         } else {
-          console.warn('[schedule-redirect] Paciente não encontrado na tabela patients:', patientError);
+          console.warn('[schedule-redirect] Paciente não encontrado na tabela patients');
         }
       } catch (enrichError) {
         console.error('[schedule-redirect] Erro ao enriquecer dados:', enrichError);
@@ -1261,17 +1291,27 @@ async function createCommunicarePatient(
   
   // Converter birth_date de YYYY-MM-DD para DDMMYYYY (formato Communicare)
   let birthDateFormatted = "01011990"; // Fallback
-  if (payload.birth_date) {
+  let usedBirthDateFallback = true;
+  
+  if (payload.birth_date && payload.birth_date !== '1990-01-01') {
     try {
       const parts = payload.birth_date.split('-');
       if (parts.length === 3) {
         const [year, month, day] = parts;
-        birthDateFormatted = `${day}${month}${year}`;
-        console.log('[Communicare Patients] Data de nascimento:', payload.birth_date, '→', birthDateFormatted);
+        // Verificar se não é a data genérica
+        if (!(year === '1990' && month === '01' && day === '01')) {
+          birthDateFormatted = `${day}${month}${year}`;
+          usedBirthDateFallback = false;
+          console.log('[Communicare Patients] ✅ Data de nascimento REAL:', payload.birth_date, '→', birthDateFormatted);
+        }
       }
     } catch (e) {
-      console.warn('[Communicare Patients] Erro ao converter birth_date, usando fallback:', e);
+      console.warn('[Communicare Patients] Erro ao converter birth_date:', e);
     }
+  }
+  
+  if (usedBirthDateFallback) {
+    console.warn('[Communicare Patients] ⚠️ FALLBACK: Usando data genérica 01011990 (birth_date recebido:', payload.birth_date || 'NULO', ')');
   }
 
   // Mapear gênero (já vem normalizado como 'M' ou 'F')
