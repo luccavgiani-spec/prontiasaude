@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
-import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent, RefreshCw } from 'lucide-react';
+import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Data mínima para filtrar vendas (histórico desde março/2025)
@@ -45,26 +45,6 @@ interface MetricsData {
   }>;
   activePlans: number;
   averageTicket: number;
-  // Recurrence metrics
-  recurrenceRate: number;
-  recurringCustomers: number;
-  totalUniqueCustomers: number;
-  customersByFrequency: Array<{
-    frequency: string;
-    count: number;
-  }>;
-  salesByCustomerType: Array<{
-    month: string;
-    newCustomers: number;
-    returningCustomers: number;
-  }>;
-  topRecurringCustomers: Array<{
-    email: string;
-    totalPurchases: number;
-    firstPurchase: string;
-    lastPurchase: string;
-    lifetimeDays: number;
-  }>;
 }
 
 // Mapeamento de preços por SKU (em centavos) - inclui serviços avulsos e planos
@@ -187,15 +167,6 @@ const SKU_NAMES: Record<string, string> = {
 };
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))', 'hsl(var(--chart-1))'];
 
-// Ofuscar email para privacidade
-const obfuscateEmail = (email: string): string => {
-  if (!email) return '***';
-  const [local, domain] = email.split('@');
-  if (!domain) return `${email.slice(0, 2)}***`;
-  if (local.length <= 2) return `${local[0]}***@${domain}`;
-  return `${local.slice(0, 2)}***@${domain}`;
-};
-
 // Determinar se um SKU é de plano ou serviço avulso
 const isPlanSku = (sku: string): boolean => {
   return sku?.includes('_') && (sku.startsWith('INDIVIDUAL') || sku.startsWith('FAM_') || sku.startsWith('IND_') || sku.startsWith('EMP_'));
@@ -213,13 +184,7 @@ export default function ReportsTab() {
     salesByType: [],
     salesBySku: [],
     activePlans: 0,
-    averageTicket: 0,
-    recurrenceRate: 0,
-    recurringCustomers: 0,
-    totalUniqueCustomers: 0,
-    customersByFrequency: [],
-    salesByCustomerType: [],
-    topRecurringCustomers: []
+    averageTicket: 0
   });
   useEffect(() => {
     loadMetrics();
@@ -254,9 +219,7 @@ export default function ReportsTab() {
       const todayStr = new Date().toISOString().split('T')[0];
 
       // Buscar dados em paralelo de TODAS as fontes de vendas
-      const [appointmentsResult, pendingPaymentsResult, plansResult, patientsResult, activePlansResult,
-      // Fetch ALL historical sales for recurrence calculation
-      allTimePaymentsResult] = await Promise.all([
+      const [appointmentsResult, pendingPaymentsResult, plansResult, patientsResult, activePlansResult] = await Promise.all([
       // Appointments - consultas avulsas (com email para filtrar testes)
       supabase.from('appointments').select('id, service_code, provider, created_at, status, order_id, email').gte('created_at', startISO).lte('created_at', endISO),
       // Pending payments aprovados (com email para filtrar testes)
@@ -266,9 +229,7 @@ export default function ReportsTab() {
       // Pacientes novos
       supabase.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
       // Planos ativos
-      supabase.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr),
-      // ALL historical payments for recurrence analysis (desde SALES_START_DATE)
-      supabase.from('pending_payments').select('id, patient_email, created_at, status, order_id').eq('status', 'approved').gte('created_at', SALES_START_DATE)]);
+      supabase.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr)]);
 
       // Filtrar emails de teste de todas as fontes de vendas
       const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));
@@ -276,7 +237,6 @@ export default function ReportsTab() {
       const plans = (plansResult.data || []).filter(plan => !isTestEmail(plan.email));
       const patients = patientsResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
-      const allTimePayments = (allTimePaymentsResult.data || []).filter(pp => !isTestEmail(pp.patient_email));
 
       // Combinar vendas de appointments + pending_payments (sem duplicatas por order_id)
       interface UnifiedSale {
@@ -410,120 +370,6 @@ export default function ReportsTab() {
         }
       });
 
-      // ========== RECURRENCE ANALYSIS ==========
-      // Build map of email -> purchases sorted by date
-      const customerPurchasesMap = new Map<string, Array<{
-        date: string;
-        orderId: string | null;
-      }>>();
-      allTimePayments.forEach(payment => {
-        const email = payment.patient_email?.toLowerCase();
-        if (!email) return;
-        if (!customerPurchasesMap.has(email)) {
-          customerPurchasesMap.set(email, []);
-        }
-        customerPurchasesMap.get(email)!.push({
-          date: payment.created_at || new Date().toISOString(),
-          orderId: payment.order_id
-        });
-      });
-
-      // Sort purchases by date for each customer
-      customerPurchasesMap.forEach((purchases, email) => {
-        purchases.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      });
-
-      // Calculate recurrence metrics
-      const totalUniqueCustomers = customerPurchasesMap.size;
-      let recurringCustomers = 0;
-      const frequencyBuckets: Record<string, number> = {
-        '1 compra': 0,
-        '2 compras': 0,
-        '3 compras': 0,
-        '4+ compras': 0
-      };
-      const topRecurringList: Array<{
-        email: string;
-        totalPurchases: number;
-        firstPurchase: string;
-        lastPurchase: string;
-        lifetimeDays: number;
-      }> = [];
-      customerPurchasesMap.forEach((purchases, email) => {
-        const count = purchases.length;
-        if (count >= 2) {
-          recurringCustomers++;
-          const firstDate = new Date(purchases[0].date);
-          const lastDate = new Date(purchases[count - 1].date);
-          const lifetimeDays = Math.round((lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-          topRecurringList.push({
-            email,
-            totalPurchases: count,
-            firstPurchase: firstDate.toLocaleDateString('pt-BR'),
-            lastPurchase: lastDate.toLocaleDateString('pt-BR'),
-            lifetimeDays
-          });
-        }
-        if (count === 1) frequencyBuckets['1 compra']++;else if (count === 2) frequencyBuckets['2 compras']++;else if (count === 3) frequencyBuckets['3 compras']++;else if (count >= 4) frequencyBuckets['4+ compras']++;
-      });
-
-      // Sort top recurring customers by total purchases DESC
-      topRecurringList.sort((a, b) => b.totalPurchases - a.totalPurchases);
-      const topRecurringCustomers = topRecurringList.slice(0, 10);
-      const recurrenceRate = totalUniqueCustomers > 0 ? recurringCustomers / totalUniqueCustomers * 100 : 0;
-
-      // Build sales by customer type per month (new vs returning)
-      const salesByCustomerTypeMap: Record<string, {
-        newCustomers: number;
-        returningCustomers: number;
-      }> = {};
-      const customerFirstPurchaseDate = new Map<string, Date>();
-
-      // First pass: determine first purchase date for each customer
-      customerPurchasesMap.forEach((purchases, email) => {
-        if (purchases.length > 0) {
-          customerFirstPurchaseDate.set(email, new Date(purchases[0].date));
-        }
-      });
-
-      // Second pass: classify each sale in the period as new or returning
-      allTimePayments.forEach(payment => {
-        const email = payment.patient_email?.toLowerCase();
-        if (!email) return;
-        const saleDate = new Date(payment.created_at || new Date().toISOString());
-        // Only count sales in the selected period
-        if (saleDate < startDate || saleDate > endDate) return;
-        const monthKey = saleDate.toLocaleDateString('pt-BR', {
-          month: 'short',
-          year: '2-digit'
-        });
-        if (!salesByCustomerTypeMap[monthKey]) {
-          salesByCustomerTypeMap[monthKey] = {
-            newCustomers: 0,
-            returningCustomers: 0
-          };
-        }
-        const firstPurchase = customerFirstPurchaseDate.get(email);
-        if (firstPurchase && saleDate.getTime() === firstPurchase.getTime()) {
-          salesByCustomerTypeMap[monthKey].newCustomers++;
-        } else {
-          salesByCustomerTypeMap[monthKey].returningCustomers++;
-        }
-      });
-      const customersByFrequency = Object.entries(frequencyBuckets).map(([frequency, count]) => ({
-        frequency,
-        count
-      }));
-      const salesByCustomerType = Object.entries(salesByCustomerTypeMap).map(([month, data]) => ({
-        month,
-        ...data
-      })).sort((a, b) => {
-        const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-        const [monthA, yearA] = a.month.split('/');
-        const [monthB, yearB] = b.month.split('/');
-        if (yearA !== yearB) return yearA.localeCompare(yearB);
-        return months.indexOf(monthA.toLowerCase()) - months.indexOf(monthB.toLowerCase());
-      });
       setMetrics({
         totalRevenue: totalRevenue / 100,
         totalSales,
@@ -555,13 +401,7 @@ export default function ReportsTab() {
           name: SKU_NAMES[sku] || sku,
           count: data.count,
           revenue: data.revenue / 100
-        })).sort((a, b) => b.count - a.count).slice(0, 10),
-        recurrenceRate,
-        recurringCustomers,
-        totalUniqueCustomers,
-        customersByFrequency,
-        salesByCustomerType,
-        topRecurringCustomers
+        })).sort((a, b) => b.count - a.count).slice(0, 10)
       });
     } catch (error) {
       console.error('Error loading metrics:', error);
@@ -775,118 +615,6 @@ export default function ReportsTab() {
           </CardContent>
         </Card>
 
-        {/* Análise de Recorrência */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <RefreshCw className="h-5 w-5" />
-              Análise de Recorrência de Clientes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {/* KPI de Recorrência */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {metrics.recurrenceRate.toFixed(1)}%
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Taxa de Recorrência</p>
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold">{metrics.recurringCustomers}</div>
-                
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold">{metrics.totalUniqueCustomers}</div>
-                <p className="text-xs text-muted-foreground mt-1">Total de Clientes</p>
-              </div>
-              <div className="p-4 bg-muted/50 rounded-lg text-center">
-                <div className="text-2xl font-bold">
-                  {metrics.totalUniqueCustomers - metrics.recurringCustomers}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Compra Única</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico: Novos vs Recorrentes por Mês */}
-              <div>
-                <h4 className="font-medium mb-3 text-sm">Novos vs Recorrentes por Mês</h4>
-                {metrics.salesByCustomerType.length > 0 ? <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={metrics.salesByCustomerType}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="month" className="text-xs" />
-                      <YAxis className="text-xs" />
-                      <Tooltip formatter={(value: number, name: string) => [value, name === 'newCustomers' ? 'Novos' : 'Recorrentes']} />
-                      <Legend formatter={value => value === 'newCustomers' ? 'Novos' : 'Recorrentes'} />
-                      <Bar dataKey="newCustomers" stackId="a" fill="hsl(var(--chart-2))" name="newCustomers" radius={[0, 0, 0, 0]} />
-                      <Bar dataKey="returningCustomers" stackId="a" fill="hsl(var(--primary))" name="returningCustomers" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer> : <div className="flex items-center justify-center h-[220px] text-muted-foreground">
-                    Sem dados no período
-                  </div>}
-              </div>
-
-              {/* Gráfico: Distribuição de Frequência */}
-              <div>
-                <h4 className="font-medium mb-3 text-sm">Distribuição de Frequência de Compras</h4>
-                {metrics.customersByFrequency.length > 0 && metrics.customersByFrequency.some(f => f.count > 0) ? <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={metrics.customersByFrequency} dataKey="count" nameKey="frequency" cx="50%" cy="50%" outerRadius={70} label={({
-                    frequency,
-                    count
-                  }) => count > 0 ? `${frequency}: ${count}` : ''}>
-                        {metrics.customersByFrequency.map((_, index) => <Cell key={`cell-freq-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer> : <div className="flex items-center justify-center h-[220px] text-muted-foreground">
-                    Sem dados de frequência
-                  </div>}
-              </div>
-            </div>
-
-            {/* Tabela: Top Clientes Recorrentes */}
-            <div className="mt-6">
-              <h4 className="font-medium mb-3 text-sm">🔄 Top 10 Clientes Recorrentes</h4>
-              {metrics.topRecurringCustomers.length > 0 ? <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead className="text-center">Compras</TableHead>
-                        <TableHead className="text-center">Primeira</TableHead>
-                        <TableHead className="text-center">Última</TableHead>
-                        <TableHead className="text-center">Tempo (dias)</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {metrics.topRecurringCustomers.map((customer, idx) => <TableRow key={idx}>
-                          <TableCell className="font-mono text-sm">
-                            {obfuscateEmail(customer.email)}
-                          </TableCell>
-                          <TableCell className="text-center font-bold text-primary">
-                            {customer.totalPurchases}
-                          </TableCell>
-                          <TableCell className="text-center text-muted-foreground text-sm">
-                            {customer.firstPurchase}
-                          </TableCell>
-                          <TableCell className="text-center text-muted-foreground text-sm">
-                            {customer.lastPurchase}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {customer.lifetimeDays}
-                          </TableCell>
-                        </TableRow>)}
-                    </TableBody>
-                  </Table>
-                </div> : <div className="flex items-center justify-center h-[100px] text-muted-foreground border rounded-lg">
-                  Nenhum cliente recorrente encontrado
-                </div>}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>;
 }
