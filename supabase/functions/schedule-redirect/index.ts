@@ -216,16 +216,26 @@ async function registerClickLifePatient(
   
   // ✅ Converter YYYY-MM-DD para DD-MM-YYYY (formato ClickLife)
   let datanascimento = "01-01-1990"; // Fallback
-  if (birthDate) {
+  let usedFallback = true;
+  
+  console.log('[ClickLife] birth_date recebido:', birthDate || 'NULL');
+  
+  if (birthDate && birthDate !== '1990-01-01') {
     try {
       const [year, month, day] = birthDate.split('-');
-      if (year && month && day) {
+      // Validar que não é data genérica
+      if (year && month && day && (year !== '1990' || month !== '01' || day !== '01')) {
         datanascimento = `${day}-${month}-${year}`;
-        console.log('[ClickLife] Data de nascimento convertida:', birthDate, '→', datanascimento);
+        usedFallback = false;
+        console.log('[ClickLife] ✅ Data de nascimento REAL convertida:', birthDate, '→', datanascimento);
       }
     } catch (e) {
-      console.warn('[ClickLife] Erro ao converter birth_date, usando fallback:', e);
+      console.warn('[ClickLife] Erro ao converter birth_date:', e);
     }
+  }
+  
+  if (usedFallback) {
+    console.warn('[ClickLife] ⚠️ FALLBACK: Usando data genérica 01-01-1990 (birth_date original:', birthDate, ')');
   }
   
   const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
