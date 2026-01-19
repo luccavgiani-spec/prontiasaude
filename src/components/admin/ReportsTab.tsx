@@ -736,9 +736,7 @@ export default function ReportsTab() {
 
         {/* Top Serviços/Planos */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Top 10 Serviços/Planos</CardTitle>
-          </CardHeader>
+          
           <CardContent>
             {metrics.salesBySku.length > 0 ? <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={metrics.salesBySku} layout="vertical">
