@@ -574,19 +574,18 @@ export default function ReportsTab() {
           </CardContent>
         </Card>
 
-        {/* Top Serviços/Planos */}
+        {/* Quantidade de Vendas por Serviço */}
         <Card>
-          
+          <CardHeader>
+            <CardTitle className="text-lg">Quantidade de Vendas por Serviço</CardTitle>
+          </CardHeader>
           <CardContent>
             {metrics.salesBySku.length > 0 ? <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={metrics.salesBySku} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis type="number" />
                   <YAxis dataKey="name" type="category" width={120} className="text-xs" />
-                  <Tooltip formatter={(value: number, name: string) => {
-                if (name === 'count') return [value, 'Vendas'];
-                return [`R$ ${value.toFixed(2)}`, 'Receita'];
-              }} />
+                  <Tooltip formatter={(value: number) => [value, 'Quantidade vendida']} />
                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Vendas" />
                 </BarChart>
               </ResponsiveContainer> : <div className="flex items-center justify-center h-[280px] text-muted-foreground">
