@@ -694,19 +694,22 @@ Deno.serve(async (req) => {
       }
 
       // Criar registro na tabela companies
+      // ✅ CORREÇÃO: Removido created_by/updated_by (colunas não existem no schema)
+      const wasAuthUserCreated = !existingUser;
       const { data: companyData, error: companyError } = await supabaseClient
         .from('companies')
         .insert({
           ...company,
-          created_by: user.id,
-          updated_by: user.id,
         })
         .select()
         .single();
 
       if (companyError) {
-        // Rollback: deletar usuário criado
-        await supabaseClient.auth.admin.deleteUser(authData.user.id);
+        console.error('[CREATE] Failed to insert company:', companyError.message);
+        // Rollback: só deletar usuário se foi criado nesta requisição
+        if (wasAuthUserCreated) {
+          await supabaseClient.auth.admin.deleteUser(authData.user.id);
+        }
         throw new Error(`Failed to create company: ${companyError.message}`);
       }
 
@@ -850,11 +853,11 @@ Deno.serve(async (req) => {
       // ✅ CORREÇÃO: Usar bodyData já parseado (evita erro "Body already consumed")
       const updates = bodyData;
 
+      // ✅ CORREÇÃO: Removido updated_by (coluna não existe no schema)
       const { data, error } = await supabaseClient
         .from('companies')
         .update({
           ...updates,
-          updated_by: user.id,
         })
         .eq('id', companyId)
         .select()
