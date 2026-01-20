@@ -650,8 +650,8 @@ Deno.serve(async (req) => {
 
     // CREATE COMPANY
     if (req.method === 'POST' && operation === 'create') {
-      const body = await req.json();
-      const { company, temporaryPassword } = body as { company: CompanyData; temporaryPassword?: string };
+      // ✅ CORREÇÃO: Usar bodyData já parseado (evita erro "Body already consumed")
+      const { company, temporaryPassword } = bodyData as { company: CompanyData; temporaryPassword?: string };
 
       // Gerar senha se não fornecida
       const password = temporaryPassword || generateTemporaryPassword(12);
@@ -847,7 +847,8 @@ Deno.serve(async (req) => {
     // UPDATE COMPANY
     if (req.method === 'PUT') {
       const companyId = path[path.length - 1];
-      const updates = await req.json();
+      // ✅ CORREÇÃO: Usar bodyData já parseado (evita erro "Body already consumed")
+      const updates = bodyData;
 
       const { data, error } = await supabaseClient
         .from('companies')
