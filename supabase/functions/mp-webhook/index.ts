@@ -1536,6 +1536,38 @@ Deno.serve(async (req) => {
     // ✅ Determinar sucesso do agendamento
     const scheduledOk = !scheduleError && (scheduleData?.url || scheduleData?.appointment_id);
     
+    // ✅ CORREÇÃO: Verificar e garantir que order_id foi persistido no appointment
+    if (scheduledOk && scheduleData?.appointment_id && payment.metadata?.order_id) {
+      try {
+        const { data: verifyApt } = await supabaseAdmin
+          .from('appointments')
+          .select('order_id')
+          .eq('appointment_id', scheduleData.appointment_id)
+          .maybeSingle();
+        
+        if (!verifyApt?.order_id) {
+          console.log('[mp-webhook] ⚠️ Appointment criado sem order_id, atualizando...');
+          const { error: updateError } = await supabaseAdmin
+            .from('appointments')
+            .update({ 
+              order_id: payment.metadata.order_id,
+              updated_at: new Date().toISOString()
+            })
+            .eq('appointment_id', scheduleData.appointment_id);
+          
+          if (updateError) {
+            console.error('[mp-webhook] ❌ Erro ao atualizar order_id:', updateError);
+          } else {
+            console.log('[mp-webhook] ✅ order_id vinculado ao appointment:', payment.metadata.order_id);
+          }
+        } else {
+          console.log('[mp-webhook] ✓ order_id já presente no appointment');
+        }
+      } catch (verifyErr) {
+        console.error('[mp-webhook] ⚠️ Erro ao verificar order_id no appointment:', verifyErr);
+      }
+    }
+    
     // ✅ Gravar métrica de venda
     await supabaseAdmin
       .from('metrics')
