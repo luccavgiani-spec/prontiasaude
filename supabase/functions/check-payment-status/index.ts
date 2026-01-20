@@ -87,6 +87,28 @@ Deno.serve(async (req) => {
         if (existingAppointment) {
           console.log('[check-payment-status] ⚠️ Appointment já existe para order_id:', orderIdToCheck);
           console.log('[check-payment-status] Retornando dados existentes em vez de criar duplicado');
+          
+          // ✅ CORREÇÃO: Garantir que pending_payment seja marcado como processado
+          // mesmo quando o appointment já existe (resolve problema de vendas não contabilizadas)
+          try {
+            const { error: updateError } = await supabaseAdmin
+              .from('pending_payments')
+              .update({ 
+                processed: true, 
+                processed_at: new Date().toISOString(),
+                status: 'approved'
+              })
+              .eq('order_id', orderIdToCheck);
+            
+            if (updateError) {
+              console.error('[check-payment-status] ⚠️ Erro ao atualizar pending_payment:', updateError);
+            } else {
+              console.log('[check-payment-status] ✅ pending_payment atualizado para processed=true');
+            }
+          } catch (updateErr) {
+            console.error('[check-payment-status] ⚠️ Exceção ao atualizar pending_payment:', updateErr);
+          }
+          
           return new Response(JSON.stringify({ 
             success: true,
             status: payment.status,
