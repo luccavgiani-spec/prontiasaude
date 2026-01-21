@@ -1040,6 +1040,55 @@ export function PaymentModal({
       console.log(`[pollPaymentStatus] Tentativa ${attempts}/${maxAttempts} - Buscando appointment...`);
 
       try {
+        // 🔄 FALLBACK: A cada 3ª tentativa (~24s), chamar check-payment-status para reconciliar
+        // Isso recupera pagamentos quando o webhook do Mercado Pago falha (ocorre em ~8% dos PIX)
+        if (attempts % 3 === 0 && paymentId) {
+          console.log(`[pollPaymentStatus] 🔄 Tentativa ${attempts}: Executando check-payment-status como fallback...`);
+          try {
+            const { data: checkData, error: checkError } = await supabase.functions.invoke('check-payment-status', {
+              body: { 
+                payment_id: paymentId, 
+                order_id: orderId, 
+                email: formData.email 
+              }
+            });
+            
+            if (!checkError && checkData?.approved && checkData?.redirect_url) {
+              console.log('[pollPaymentStatus] ✅ check-payment-status encontrou pagamento aprovado!', checkData);
+              clearInterval(interval);
+              setIsPollingPayment(false);
+              
+              localStorage.removeItem('pendingPixOrderId');
+              localStorage.removeItem('pendingPixEmail');
+              
+              // 🎯 Track Purchase event (PIX recuperado via fallback)
+              trackPurchase({
+                value: amount / 100,
+                order_id: orderId,
+                email: formData.email,
+                content_name: serviceName,
+                contents: [{
+                  id: sku,
+                  quantity: 1,
+                  item_price: amount / 100
+                }]
+              });
+              console.log("[Meta Tracking] 💰 Purchase event disparado (PIX fallback):", { value: amount / 100, order_id: orderId });
+              
+              toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
+              setTimeout(() => {
+                window.location.href = checkData.redirect_url;
+              }, 1500);
+              return; // Sair do interval
+            } else if (checkData?.status) {
+              console.log(`[pollPaymentStatus] check-payment-status status: ${checkData.status}`);
+            }
+          } catch (fallbackError) {
+            console.warn('[pollPaymentStatus] ⚠️ Falha no fallback check-payment-status:', fallbackError);
+            // Continuar com o polling normal
+          }
+        }
+
         // Buscar appointments do usuário
         const result = await getAppointments(formData.email);
 
