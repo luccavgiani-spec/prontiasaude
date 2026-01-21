@@ -106,6 +106,7 @@ export function PaymentModal({
   } | null>(null);
   const [threeDSecureUrl, setThreeDSecureUrl] = useState<string | null>(null);
   const [patientCreatedAt, setPatientCreatedAt] = useState<string | null>(null);
+  const [patientBirthDate, setPatientBirthDate] = useState<string | null>(null); // ✅ Data de nascimento real
 
   // Estados para overlay de erro global
   const [showErrorOverlay, setShowErrorOverlay] = useState(false);
@@ -337,6 +338,7 @@ export function PaymentModal({
         setHasRequiredData(hasData);
         setPatientGender(patient.gender || "");
         setPatientCreatedAt(patient.created_at); // ✅ FASE 2.1: Capturar data real de cadastro
+        setPatientBirthDate(patient.birth_date || null); // ✅ Capturar data de nascimento real
 
         if (hasData) {
           setFormData({
@@ -1022,6 +1024,11 @@ export function PaymentModal({
     // Adicionar sexo se disponível (M ou F)
     if (patientGender) {
       payload.sexo = patientGender === "male" ? "M" : patientGender === "female" ? "F" : patientGender;
+    }
+
+    // ✅ Incluir data de nascimento real para Communicare/ClickLife
+    if (patientBirthDate) {
+      payload.birth_date = patientBirthDate;
     }
 
     return payload;
