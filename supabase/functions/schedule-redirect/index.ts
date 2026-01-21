@@ -974,8 +974,20 @@ Deno.serve(async (req) => {
     // 5. Verificar disponibilidade na Communicare
     const communicareSpecialties = await getCommunicareSpecialties(supabase);
     
+    // ✅ Mapeamento de sinônimos: nome comercial → nome técnico do provider
+    const SPECIALTY_SYNONYMS: Record<string, string> = {
+      'pronto atendimento': 'clinico geral',  // SKU ITC6534 - nome do site vs nome Communicare
+    };
+    
     // ✅ Normalizar payload.especialidade
-    const especialidadeNormalized = normalize(payload.especialidade || '');
+    let especialidadeNormalized = normalize(payload.especialidade || '');
+    
+    // ✅ Aplicar mapeamento de sinônimo se existir
+    if (SPECIALTY_SYNONYMS[especialidadeNormalized]) {
+      const mapped = SPECIALTY_SYNONYMS[especialidadeNormalized];
+      console.log('[schedule-redirect] Especialidade mapeada:', especialidadeNormalized, '→', mapped);
+      especialidadeNormalized = mapped;
+    }
     
     // ✅ Normalizar TODAS as especialidades Communicare
     const communicareNormalized = communicareSpecialties.map(s => normalize(s));
