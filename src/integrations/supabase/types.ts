@@ -1198,6 +1198,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      mark_password_changed: { Args: never; Returns: boolean }
       validate_family_invite_token: {
         Args: { _token: string }
         Returns: {
