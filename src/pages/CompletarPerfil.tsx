@@ -455,9 +455,10 @@ const CompletarPerfil = () => {
             if (inviteData.isFamilyInvite) {
               sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
               localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
-            } else {
-              sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
-              localStorage.setItem('pending_invite_token', inviteData.invite_token);
+          } else {
+              // ✅ Convite empresarial - usar inviteData.token (nome real da coluna no banco)
+              sessionStorage.setItem('pending_invite_token', inviteData.token);
+              localStorage.setItem('pending_invite_token', inviteData.token);
             }
             
             toast({
@@ -604,7 +605,7 @@ const CompletarPerfil = () => {
           const { data: planResult, error: planError } = await supabase.functions.invoke('company-operations', {
             body: {
               operation: 'activate-employee-plan',
-              invite_token: inviteData.invite_token,
+              invite_token: inviteData.token, // ✅ Usar .token (nome real da coluna no banco)
               employee_data: {
                 nome: `${formData.first_name} ${formData.last_name}`,
                 cpf: formData.cpf.replace(/\D/g, ''),
