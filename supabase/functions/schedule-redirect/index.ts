@@ -900,7 +900,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 1. Verificar override do admin
+    // ========================================
+    // HIERARQUIA DE ROTEAMENTO (ORDEM CORRETA)
+    // ========================================
+    // 1. Override EMERGÊNCIA ClickLife (força TUDO para ClickLife)
+    // 2. Funcionário de empresa com plano ativo → ClickLife
+    // 3. Plano ativo individual (DB ou payload) → ClickLife
+    // 4. Override Communicare (apenas para SEM plano) → Communicare
+    // 5. Horário/Dia fora do comercial → ClickLife
+    // 6. Especialidade disponível Communicare → Communicare
+    // ========================================
+
+    // 1. ✅ Override EMERGÊNCIA: Forçar ClickLife para TUDO (prioridade máxima)
     const { data: forceData } = await supabase
       .from('admin_settings')
       .select('value')
@@ -908,23 +919,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (forceData?.value === true || forceData?.value === 'true') {
-      console.log('[schedule-redirect] Admin override: Forçando ClickLife');
-      return await redirectClickLife(payload, 'admin_override', corsHeaders);
+      console.log('[schedule-redirect] 🚨 OVERRIDE EMERGÊNCIA: Forçando ClickLife para TODOS');
+      return await redirectClickLife(payload, 'admin_override_emergency', corsHeaders);
     }
 
-    // 2. Verificar override Clínico Geral → Communicare (NOVO)
-    const { data: forceCommData } = await supabase
-      .from('admin_settings')
-      .select('value')
-      .eq('key', 'force_communicare_clinico')
-      .maybeSingle();
-
-    if ((forceCommData?.value === true || forceCommData?.value === 'true') && payload.sku === 'ITC6534') {
-      console.log('[schedule-redirect] Admin override: Forçando Communicare para Clínico Geral');
-      return await redirectCommunicare(payload, supabase, corsHeaders);
-    }
-
-    // 3. Verificar se é funcionário de empresa com plano ativo
+    // 2. ✅ Verificar se é funcionário de empresa com plano ativo → ClickLife
     const cpfClean = payload.cpf.replace(/\D/g, '');
     const { data: employeeData } = await supabase
       .from('company_employees')
@@ -933,13 +932,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (employeeData?.has_active_plan) {
-      console.log('[schedule-redirect] Funcionário com plano ativo detectado → ClickLife');
-      // Enriquecer payload com IDs da empresa
+      console.log('[schedule-redirect] ✓ Funcionário com plano ATIVO → ClickLife (ignora overrides)');
       payload.plano_ativo = true;
       return await redirectClickLife(payload, 'employee_with_plan', corsHeaders);
     }
 
-    // 3.5. ✅ Verificar plano ativo no banco de dados (backup do frontend)
+    // 3. ✅ Verificar plano ativo no banco de dados → ClickLife (ANTES do override Communicare)
     const { data: patientPlan } = await supabase
       .from('patient_plans')
       .select('plan_code, plan_expires_at, status')
@@ -949,28 +947,41 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (patientPlan) {
-      console.log('[schedule-redirect] ✓ Plano ativo encontrado no banco:', {
+      console.log('[schedule-redirect] ✓ Plano ATIVO no banco → ClickLife (ignora overrides):', {
         email: payload.email,
         plan_code: patientPlan.plan_code,
         expires_at: patientPlan.plan_expires_at
       });
       payload.plano_ativo = true;
+      payload.plan_code = patientPlan.plan_code;
       return await redirectClickLife(payload, 'active_plan_db', corsHeaders);
     }
 
-    // 4. Verificar plano ativo (payload direto - fallback)
-  if (payload.plano_ativo) {
-    console.log('[schedule-redirect] ✓ Plano ativo detectado → ClickLife', {
-      sku: payload.sku,
-      email: payload.email,
-      cpf: payload.cpf?.substring(0, 3) + '***',
-      especialidade: payload.especialidade,
-      sexo: payload.sexo,
-      sexo_fonte: payload.sexo === 'F' && !payload.order_id ? 'fallback' : 'payload_or_patients'
-    });
+    // 3.5. ✅ Verificar plano ativo do payload (fallback) → ClickLife
+    if (payload.plano_ativo) {
+      console.log('[schedule-redirect] ✓ Plano ATIVO (payload) → ClickLife (ignora overrides)', {
+        sku: payload.sku,
+        email: payload.email,
+        cpf: payload.cpf?.substring(0, 3) + '***'
+      });
+      return await redirectClickLife(payload, 'active_plan_payload', corsHeaders);
+    }
 
-    return await redirectClickLife(payload, 'active_plan', corsHeaders);
-  }
+    // ========================================
+    // A PARTIR DAQUI: APENAS USUÁRIOS SEM PLANO ATIVO
+    // ========================================
+
+    // 4. ✅ Override Communicare para Clínico Geral (APENAS SEM PLANO)
+    const { data: forceCommData } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'force_communicare_clinico')
+      .maybeSingle();
+
+    if ((forceCommData?.value === true || forceCommData?.value === 'true') && payload.sku === 'ITC6534') {
+      console.log('[schedule-redirect] Override Communicare ativo (usuário SEM plano) → Communicare');
+      return await redirectCommunicare(payload, supabase, corsHeaders);
+    }
 
     // 5. Verificar horário e especialidade
     const horario = payload.horario_iso ? new Date(payload.horario_iso) : new Date();

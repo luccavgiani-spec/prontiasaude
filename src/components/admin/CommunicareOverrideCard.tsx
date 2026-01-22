@@ -114,9 +114,9 @@ export default function CommunicareOverrideCard() {
           🔵 FORÇAR CLÍNICO GERAL → COMMUNICARE
         </CardTitle>
         <CardDescription>
-          Sobrescreve a lógica de redirecionamento e força o Clínico Geral para Communicare (independente de horário/dia).
+          Força usuários <strong className="text-red-600">SEM PLANO ATIVO</strong> do Clínico Geral para Communicare (independente de horário/dia).
           <br />
-          <span className="text-blue-600 font-medium">🎯 Útil para atender finais de semana/noites via Communicare</span>
+          <span className="text-green-600 font-medium">✅ Usuários COM plano ativo sempre vão para ClickLife (override ignorado)</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
