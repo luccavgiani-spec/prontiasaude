@@ -69,18 +69,17 @@ export default function EmpresaTrocarSenha() {
 
       console.log('[TrocarSenha] Senha atualizada no Auth, atualizando credentials...');
 
-      // Atualizar flag must_change_password
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error: updateError } = await supabase
-          .from('company_credentials')
-          .update({ must_change_password: false })
-          .eq('user_id', user.id);
+      // Atualizar flag must_change_password via função segura (SECURITY DEFINER)
+      const { data: updated, error: updateError } = await supabase.rpc('mark_password_changed' as any);
 
-        if (updateError) {
-          console.error('[TrocarSenha] Erro ao atualizar credentials:', updateError);
-          throw new Error('Senha atualizada mas erro ao finalizar. Entre em contato com o administrador.');
-        }
+      if (updateError) {
+        console.error('[TrocarSenha] Erro ao atualizar credentials:', updateError);
+        throw new Error('Senha atualizada mas erro ao finalizar. Entre em contato com o administrador.');
+      }
+
+      if (!updated) {
+        console.error('[TrocarSenha] Nenhum registro atualizado - credentials não encontrado');
+        throw new Error('Erro ao finalizar troca de senha. Tente novamente.');
       }
 
       console.log('[TrocarSenha] ✅ Senha alterada com sucesso');
