@@ -74,8 +74,13 @@ export const useCompanyAuth = (): CompanyAuthState => {
           return;
         }
 
-        // Se precisa trocar senha e não está na página de trocar senha, redirecionar
-        if (credData.must_change_password && !window.location.pathname.includes('/trocar-senha')) {
+        // Verificar se a senha acabou de ser alterada (evita race condition)
+        const justChanged = sessionStorage.getItem('password_just_changed');
+        if (justChanged === 'true') {
+          sessionStorage.removeItem('password_just_changed');
+          // Não redirecionar - senha acabou de ser trocada, aguardar DB sync
+        } else if (credData.must_change_password && !window.location.pathname.includes('/trocar-senha')) {
+          // Se precisa trocar senha e não está na página de trocar senha, redirecionar
           navigate('/empresa/trocar-senha');
           return;
         }
