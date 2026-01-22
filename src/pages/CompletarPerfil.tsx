@@ -629,6 +629,10 @@ const CompletarPerfil = () => {
           
           console.log('✅ Plan and employee record created via Edge Function:', planResult.plan_code);
           
+          // ✅ Limpar tokens salvos após sucesso (evita loop de redirect)
+          sessionStorage.removeItem('pending_invite_token');
+          localStorage.removeItem('pending_invite_token');
+          
           toast({
             title: "🎉 Bem-vindo!",
             description: "Seu plano empresarial foi ativado com sucesso!",
