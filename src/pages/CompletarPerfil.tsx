@@ -145,7 +145,7 @@ const CompletarPerfil = () => {
             empresa_id_externo
           )
         `)
-        .eq('invite_token', inviteToken)
+        .eq('token', inviteToken)
         .eq('status', 'pending')
         .single();
         
