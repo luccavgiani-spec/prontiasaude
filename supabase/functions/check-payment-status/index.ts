@@ -75,8 +75,9 @@ Deno.serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
       const orderIdToCheck = payment.metadata?.order_id || order_id;
+
+      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
       if (orderIdToCheck) {
         const { data: existingAppointment } = await supabaseAdmin
           .from('appointments')
@@ -89,7 +90,6 @@ Deno.serve(async (req) => {
           console.log('[check-payment-status] Retornando dados existentes em vez de criar duplicado');
           
           // ✅ CORREÇÃO: Garantir que pending_payment seja marcado como processado
-          // mesmo quando o appointment já existe (resolve problema de vendas não contabilizadas)
           try {
             const { error: updateError } = await supabaseAdmin
               .from('pending_payments')
@@ -123,7 +123,122 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log('[check-payment-status] 🎉 PIX aprovado! Criando appointment...');
+      // ✅ NOVO: Verificar se é SKU de PLANO (IND_* ou FAM_*)
+      const sku = schedulePayload.sku || '';
+      const isPlanPurchase = /^(IND_|FAM_)/.test(sku);
+
+      if (isPlanPurchase) {
+        console.log('[check-payment-status] 🎯 SKU de PLANO detectado:', sku);
+        
+        // Calcular expiração do plano (1 mês para mensal, 12 meses para anual)
+        const planExpiresAt = new Date();
+        if (sku.includes('_12M')) {
+          planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
+        } else {
+          planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+        }
+        
+        // Buscar patient_id pelo email
+        const patientEmail = schedulePayload.email?.toLowerCase()?.trim();
+        let patientId = null;
+        
+        if (patientEmail) {
+          const { data: patient } = await supabaseAdmin
+            .from('patients')
+            .select('id')
+            .eq('email', patientEmail)
+            .maybeSingle();
+          patientId = patient?.id || null;
+        }
+        
+        // Verificar se já existe um plano ativo
+        const { data: existingPlan } = await supabaseAdmin
+          .from('patient_plans')
+          .select('id')
+          .eq('email', patientEmail)
+          .eq('plan_code', sku)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (existingPlan) {
+          console.log('[check-payment-status] ⚠️ Plano já existe e está ativo, atualizando expiração');
+          
+          await supabaseAdmin
+            .from('patient_plans')
+            .update({
+              plan_expires_at: planExpiresAt.toISOString().split('T')[0],
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingPlan.id);
+        } else {
+          // Criar novo patient_plans
+          const { error: planError } = await supabaseAdmin
+            .from('patient_plans')
+            .insert({
+              email: patientEmail,
+              patient_id: patientId,
+              plan_code: sku,
+              plan_expires_at: planExpiresAt.toISOString().split('T')[0],
+              start_date: new Date().toISOString().split('T')[0],
+              status: 'active',
+              activated_at: new Date().toISOString(),
+              activated_by: 'check-payment-status',
+              payment_method: payment.payment_type_id || 'unknown'
+            });
+          
+          if (planError) {
+            console.error('[check-payment-status] ❌ Erro ao criar plano:', planError);
+          } else {
+            console.log('[check-payment-status] ✅ Plano criado com sucesso!');
+          }
+        }
+        
+        // Atualizar pending_payment como processado
+        if (orderIdToCheck) {
+          await supabaseAdmin
+            .from('pending_payments')
+            .update({ 
+              processed: true, 
+              processed_at: new Date().toISOString(), 
+              status: 'approved' 
+            })
+            .eq('order_id', orderIdToCheck);
+        }
+        
+        // Gravar métrica de venda para PLANO
+        await supabaseAdmin.from('metrics').insert({
+          metric_type: 'sale',
+          sku: sku,
+          metric_value: Math.round(payment.transaction_amount * 100),
+          platform: 'plan_activation',
+          metadata: { 
+            payment_id: payment.id, 
+            mp_status: payment.status,
+            order_id: orderIdToCheck,
+            source: 'check-payment-status',
+            is_plan: true
+          }
+        });
+        
+        console.log('[check-payment-status] ✅ Plano processado, redirecionando para área do paciente');
+        
+        return new Response(JSON.stringify({ 
+          success: true,
+          status: 'approved',
+          approved: true,
+          redirect_url: '/area-do-paciente',
+          is_plan: true,
+          plan_code: sku
+        }), { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        });
+      }
+
+      // ==========================================
+      // FLUXO NORMAL PARA SERVIÇOS (NÃO É PLANO)
+      // ==========================================
+      console.log('[check-payment-status] 🎉 PIX/Cartão aprovado para SERVIÇO! Criando appointment...');
 
       // Chamar schedule-redirect para criar appointment
       const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
@@ -153,32 +268,30 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Gravar métrica de venda (usando supabaseAdmin já declarado acima)
+      // Gravar métrica de venda para SERVIÇO
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
-        amount_cents: Math.round(payment.transaction_amount * 100),
-        plan_code: schedulePayload.sku || 'UNKNOWN',
+        sku: schedulePayload.sku || 'UNKNOWN',
+        metric_value: Math.round(payment.transaction_amount * 100),
         platform: scheduleData?.provider || 'unknown',
-        status: 'approved',
-        patient_email: payment.payer?.email || schedulePayload.email,
         metadata: { 
           payment_id: payment.id, 
           mp_status: payment.status,
-          order_id: payment.metadata?.order_id,
-          source: 'manual_check'
+          order_id: orderIdToCheck,
+          source: 'check-payment-status'
         }
       });
 
       // Marcar pending_payment como processado E status como approved
-      if (order_id || payment.metadata?.order_id) {
+      if (orderIdToCheck) {
         await supabaseAdmin
           .from('pending_payments')
           .update({ 
             processed: true, 
             processed_at: new Date().toISOString(),
-            status: 'approved' // ← CORREÇÃO: Atualizar status para aparecer na aba Vendas
+            status: 'approved'
           })
-          .eq('order_id', order_id || payment.metadata?.order_id);
+          .eq('order_id', orderIdToCheck);
       }
 
       console.log('[check-payment-status] ✅ Appointment criado:', scheduleData);
