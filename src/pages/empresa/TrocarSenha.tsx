@@ -86,8 +86,11 @@ export default function EmpresaTrocarSenha() {
       console.log('[TrocarSenha] ✅ Senha alterada com sucesso');
       toast.success('Senha alterada com sucesso! Redirecionando...');
       
+      // Marcar que a senha acabou de ser alterada para evitar race condition
+      sessionStorage.setItem('password_just_changed', 'true');
+      
       setTimeout(() => {
-        navigate('/empresa');
+        navigate('/empresa', { replace: true });
       }, 1500);
 
     } catch (error: any) {
@@ -139,9 +142,18 @@ export default function EmpresaTrocarSenha() {
                 onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                 required
               />
+              {formData.confirmPassword && formData.newPassword !== formData.confirmPassword && (
+                <p className="text-sm text-destructive mt-1">
+                  As senhas não coincidem
+                </p>
+              )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || (formData.confirmPassword !== '' && formData.newPassword !== formData.confirmPassword)}
+            >
               {loading ? 'Alterando...' : 'Alterar Senha'}
             </Button>
           </form>
