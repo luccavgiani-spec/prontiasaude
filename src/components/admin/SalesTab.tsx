@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { getServiceNameFromSKU } from "@/lib/sku-mapping";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -180,7 +181,7 @@ const SalesTab = () => {
           appointment_id: matchingApt?.appointment_id || `PP-${pp.order_id?.slice(0, 8) || 'N/A'}`,
           email: pp.patient_email || matchingApt?.email || '',
           service_code: pp.sku || matchingApt?.service_code || '',
-          service_name: pp.sku ? `Serviço ${pp.sku}` : (matchingApt?.service_name || 'Serviço'),
+          service_name: matchingApt?.service_name || getServiceNameFromSKU(pp.sku || '') || pp.sku || 'Serviço',
           start_at_local: matchingApt?.start_at_local || pp.created_at || new Date().toISOString(),
           duration_min: matchingApt?.duration_min || 30,
           status: 'approved',
