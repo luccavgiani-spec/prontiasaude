@@ -939,7 +939,26 @@ Deno.serve(async (req) => {
       return await redirectClickLife(payload, 'employee_with_plan', corsHeaders);
     }
 
-    // 4. Verificar plano ativo (payload direto)
+    // 3.5. ✅ Verificar plano ativo no banco de dados (backup do frontend)
+    const { data: patientPlan } = await supabase
+      .from('patient_plans')
+      .select('plan_code, plan_expires_at, status')
+      .eq('email', payload.email)
+      .eq('status', 'active')
+      .gte('plan_expires_at', new Date().toISOString().split('T')[0])
+      .maybeSingle();
+
+    if (patientPlan) {
+      console.log('[schedule-redirect] ✓ Plano ativo encontrado no banco:', {
+        email: payload.email,
+        plan_code: patientPlan.plan_code,
+        expires_at: patientPlan.plan_expires_at
+      });
+      payload.plano_ativo = true;
+      return await redirectClickLife(payload, 'active_plan_db', corsHeaders);
+    }
+
+    // 4. Verificar plano ativo (payload direto - fallback)
   if (payload.plano_ativo) {
     console.log('[schedule-redirect] ✓ Plano ativo detectado → ClickLife', {
       sku: payload.sku,
