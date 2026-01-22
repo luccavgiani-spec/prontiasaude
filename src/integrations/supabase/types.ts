@@ -278,8 +278,11 @@ export type Database = {
           cnpj: string
           company_id: string
           created_at: string | null
+          failed_login_attempts: number | null
           id: string
           is_temporary_password: boolean | null
+          last_failed_login_at: string | null
+          last_login_at: string | null
           must_change_password: boolean | null
           password_hash: string | null
           updated_at: string | null
@@ -289,8 +292,11 @@ export type Database = {
           cnpj: string
           company_id: string
           created_at?: string | null
+          failed_login_attempts?: number | null
           id?: string
           is_temporary_password?: boolean | null
+          last_failed_login_at?: string | null
+          last_login_at?: string | null
           must_change_password?: boolean | null
           password_hash?: string | null
           updated_at?: string | null
@@ -300,8 +306,11 @@ export type Database = {
           cnpj?: string
           company_id?: string
           created_at?: string | null
+          failed_login_attempts?: number | null
           id?: string
           is_temporary_password?: boolean | null
+          last_failed_login_at?: string | null
+          last_login_at?: string | null
           must_change_password?: boolean | null
           password_hash?: string | null
           updated_at?: string | null
