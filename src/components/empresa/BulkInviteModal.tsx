@@ -144,6 +144,12 @@ export default function BulkInviteModal({
     setStep('processing');
     setProgress(0);
     
+    // Refresh de sessão para garantir token válido durante processamento em lote
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError) {
+      console.error('[BulkInvite] Session refresh failed:', refreshError);
+    }
+    
     // Validar sessão antes de iniciar
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     

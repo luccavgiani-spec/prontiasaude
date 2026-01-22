@@ -489,8 +489,8 @@ Deno.serve(async (req) => {
         });
       }
       
-      // Validar que o email do convite corresponde ao usuário autenticado
-      if (invite.email !== user.email) {
+      // Validar que o email do convite corresponde ao usuário autenticado (case-insensitive)
+      if (invite.email?.toLowerCase() !== user.email?.toLowerCase()) {
         console.error('[activate-employee-plan] Email mismatch:', { invite_email: invite.email, user_email: user.email });
         return new Response(JSON.stringify({ 
           error: 'Este convite não é para o seu email',
