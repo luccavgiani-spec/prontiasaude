@@ -164,10 +164,94 @@ Deno.serve(async (req) => {
             mpPayment.metadata?.schedule_payload ||
             (payment.payment_data as any)?.schedulePayload;
 
-          if (schedulePayload && !dryRun) {
-            // Chamar schedule-redirect para criar appointment
-            // IMPORTANTE: Injetar order_id e payment_id no payload para que o appointment
-            // seja criado corretamente e apareça na aba de Vendas
+          // ✅ NOVO: Verificar se é SKU de PLANO
+          const sku = schedulePayload?.sku || payment.sku || '';
+          const isPlanPurchase = /^(IND_|FAM_)/.test(sku);
+
+          if (isPlanPurchase && !dryRun) {
+            // ==========================================
+            // FLUXO ESPECIAL PARA PLANOS
+            // ==========================================
+            console.log(`[reconcile-pending-payments] 🎯 SKU de PLANO detectado: ${sku}`);
+            
+            // Calcular expiração do plano
+            const planExpiresAt = new Date();
+            if (sku.includes('_12M')) {
+              planExpiresAt.setFullYear(planExpiresAt.getFullYear() + 1);
+            } else {
+              planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
+            }
+            
+            // Buscar patient_id pelo email
+            const patientEmail = (schedulePayload?.email || payment.patient_email)?.toLowerCase()?.trim();
+            let patientId = null;
+            
+            if (patientEmail) {
+              const { data: patient } = await supabase
+                .from('patients')
+                .select('id')
+                .eq('email', patientEmail)
+                .maybeSingle();
+              patientId = patient?.id || null;
+            }
+            
+            // Verificar se já existe plano ativo
+            const { data: existingPlan } = await supabase
+              .from('patient_plans')
+              .select('id')
+              .eq('email', patientEmail)
+              .eq('plan_code', sku)
+              .eq('status', 'active')
+              .maybeSingle();
+            
+            if (!existingPlan) {
+              // Criar novo patient_plans
+              const { error: planError } = await supabase
+                .from('patient_plans')
+                .insert({
+                  email: patientEmail,
+                  patient_id: patientId,
+                  plan_code: sku,
+                  plan_expires_at: planExpiresAt.toISOString().split('T')[0],
+                  start_date: new Date().toISOString().split('T')[0],
+                  status: 'active',
+                  activated_at: new Date().toISOString(),
+                  activated_by: 'reconcile-pending-payments',
+                  payment_method: mpPayment.payment_type_id || 'unknown'
+                });
+              
+              if (planError) {
+                console.error(`[reconcile-pending-payments] ❌ Erro ao criar plano:`, planError);
+                result.error = `Erro ao criar plano: ${planError.message}`;
+                summary.errors++;
+              } else {
+                console.log(`[reconcile-pending-payments] ✅ Plano criado com sucesso!`);
+                result.action = 'plan_created';
+                result.redirect_url = '/area-do-paciente';
+                result.success = true;
+                summary.approved_and_redirected++;
+              }
+            } else {
+              console.log(`[reconcile-pending-payments] ⚠️ Plano já existe`);
+              result.action = 'plan_already_exists';
+              result.success = true;
+              summary.approved_and_redirected++;
+            }
+            
+            // Atualizar pending_payments
+            await supabase
+              .from('pending_payments')
+              .update({
+                status: 'approved',
+                processed: true,
+                processed_at: new Date().toISOString()
+              })
+              .eq('id', payment.id);
+
+          } else if (schedulePayload && !dryRun && !isPlanPurchase) {
+            // ==========================================
+            // FLUXO NORMAL PARA SERVIÇOS
+            // ==========================================
             console.log(`[reconcile-pending-payments] Chamando schedule-redirect com order_id: ${payment.order_id}`);
             
             const enrichedPayload = {
@@ -213,7 +297,7 @@ Deno.serve(async (req) => {
               summary.errors++;
             }
           } else if (dryRun) {
-            result.action = 'would_create_appointment';
+            result.action = isPlanPurchase ? 'would_create_plan' : 'would_create_appointment';
             result.success = true;
             summary.approved_and_redirected++;
           } else {

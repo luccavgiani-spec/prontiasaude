@@ -138,53 +138,63 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      // 1. Buscar appointments COM order_id (vendas reais, não links manuais)
-      const { data: appointmentsData, error: aptError } = await supabase
-        .from("appointments")
-        .select("*")
-        .gte("created_at", SALES_START_DATE)
-        .not("order_id", "is", null)  // Filtra apenas vendas reais (com order_id)
-        .order("created_at", { ascending: false });
-
-      if (aptError) throw aptError;
-
-      // 2. Buscar pending_payments approved que não têm appointment correspondente
+      // ✅ NOVA LÓGICA: pending_payments.status = 'approved' é a fonte de verdade
+      // Buscar TODAS as pending_payments aprovadas (independente de ter appointment)
       const { data: pendingPaymentsData, error: ppError } = await supabase
         .from("pending_payments")
         .select("*")
         .eq("status", "approved")
-        .gte("created_at", SALES_START_DATE);
+        .gte("created_at", SALES_START_DATE)
+        .order("created_at", { ascending: false });
 
       if (ppError) {
         console.warn("Erro ao buscar pending_payments:", ppError);
+        throw ppError;
       }
 
-      // 3. Combinar: appointments + pending_payments sem appointment
-      const appointmentOrderIds = new Set(
-        appointmentsData?.map(a => a.order_id).filter(Boolean)
-      );
+      // Buscar appointments para enriquecer dados (redirect_url, provider, etc.)
+      const orderIds = (pendingPaymentsData || [])
+        .map(pp => pp.order_id)
+        .filter(Boolean);
       
-      const missingFromPending = (pendingPaymentsData || [])
-        .filter(pp => pp.order_id && !appointmentOrderIds.has(pp.order_id))
-        .map(pp => ({
-          id: pp.id,
-          appointment_id: `PP-${pp.order_id?.slice(0, 8)}`,
-          email: pp.patient_email || '',
-          service_code: pp.sku || '',
-          service_name: pp.sku ? `Serviço ${pp.sku}` : 'Serviço',
-          start_at_local: pp.created_at || new Date().toISOString(),
-          duration_min: 30,
+      let appointmentsMap: Record<string, any> = {};
+      
+      if (orderIds.length > 0) {
+        const { data: appointmentsData } = await supabase
+          .from("appointments")
+          .select("*")
+          .in("order_id", orderIds);
+        
+        appointmentsMap = (appointmentsData || []).reduce((acc, apt) => {
+          if (apt.order_id) acc[apt.order_id] = apt;
+          return acc;
+        }, {} as Record<string, any>);
+      }
+
+      // Transformar pending_payments em formato de "venda"
+      const sales = (pendingPaymentsData || []).map(pp => {
+        const matchingApt = pp.order_id ? appointmentsMap[pp.order_id] : null;
+        
+        return {
+          id: matchingApt?.id || pp.id,
+          appointment_id: matchingApt?.appointment_id || `PP-${pp.order_id?.slice(0, 8) || 'N/A'}`,
+          email: pp.patient_email || matchingApt?.email || '',
+          service_code: pp.sku || matchingApt?.service_code || '',
+          service_name: pp.sku ? `Serviço ${pp.sku}` : (matchingApt?.service_name || 'Serviço'),
+          start_at_local: matchingApt?.start_at_local || pp.created_at || new Date().toISOString(),
+          duration_min: matchingApt?.duration_min || 30,
           status: 'approved',
           order_id: pp.order_id,
-          provider: 'pending_payment',
-          redirect_url: null,
+          provider: matchingApt?.provider || (pp.sku?.startsWith('IND_') || pp.sku?.startsWith('FAM_') ? 'plano' : 'pending_payment'),
+          redirect_url: matchingApt?.redirect_url || null,
           created_at: pp.created_at || new Date().toISOString(),
-          updated_at: pp.updated_at || new Date().toISOString(),
-        })) as Appointment[];
+          updated_at: pp.updated_at || matchingApt?.updated_at || new Date().toISOString(),
+        } as Appointment;
+      });
 
-      console.log(`📊 Loaded ${appointmentsData?.length || 0} appointments + ${missingFromPending.length} from pending_payments`);
+      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (fonte: pending_payments approved)`);
       
-      setAppointments([...(appointmentsData || []), ...missingFromPending]);
+      setAppointments(sales);
     } catch (error) {
       console.error("Erro ao carregar vendas:", error);
       toast({
