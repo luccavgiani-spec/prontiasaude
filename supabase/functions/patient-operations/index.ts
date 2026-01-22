@@ -1139,14 +1139,6 @@ serve(async (req) => {
           );
         }
 
-        // Sincronizar email na tabela patients (se necessário)
-        if (userId) {
-          await supabase
-            .from('patients')
-            .update({ email: patient_email })
-            .eq('id', userId);
-        }
-
         // Registrar métrica de auditoria
         await supabase.from('metrics').insert({
           metric_type: 'manual_plan_activation',
