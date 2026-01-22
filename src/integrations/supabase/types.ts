@@ -320,45 +320,93 @@ export type Database = {
       company_employees: {
         Row: {
           activated_at: string | null
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
           company_id: string
+          complemento: string | null
           cpf: string | null
           created_at: string | null
+          datanascimento: string | null
           email: string
+          empresa_id_externo: number | null
+          estado: string | null
           first_name: string | null
+          fotobase64: string | null
+          has_active_plan: boolean | null
           id: string
           invited_at: string | null
           last_name: string | null
+          logradouro: string | null
+          nome: string | null
+          numero: string | null
           patient_id: string | null
+          plano_id_externo: number | null
+          sexo: string | null
           status: string | null
+          telefone: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           activated_at?: string | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
           company_id: string
+          complemento?: string | null
           cpf?: string | null
           created_at?: string | null
+          datanascimento?: string | null
           email: string
+          empresa_id_externo?: number | null
+          estado?: string | null
           first_name?: string | null
+          fotobase64?: string | null
+          has_active_plan?: boolean | null
           id?: string
           invited_at?: string | null
           last_name?: string | null
+          logradouro?: string | null
+          nome?: string | null
+          numero?: string | null
           patient_id?: string | null
+          plano_id_externo?: number | null
+          sexo?: string | null
           status?: string | null
+          telefone?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           activated_at?: string | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
           company_id?: string
+          complemento?: string | null
           cpf?: string | null
           created_at?: string | null
+          datanascimento?: string | null
           email?: string
+          empresa_id_externo?: number | null
+          estado?: string | null
           first_name?: string | null
+          fotobase64?: string | null
+          has_active_plan?: boolean | null
           id?: string
           invited_at?: string | null
           last_name?: string | null
+          logradouro?: string | null
+          nome?: string | null
+          numero?: string | null
           patient_id?: string | null
+          plano_id_externo?: number | null
+          sexo?: string | null
           status?: string | null
+          telefone?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {

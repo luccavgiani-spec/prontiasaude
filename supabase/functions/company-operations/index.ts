@@ -997,12 +997,12 @@ Deno.serve(async (req) => {
           cep: employeeData.cep.replace(/\D/g, ''),
           address_line: employeeData.logradouro,
           address_number: employeeData.numero,
-          address_complement: employeeData.complemento || null,
+          complement: employeeData.complemento || null,
+          neighborhood: employeeData.bairro || null,
           city: employeeData.cidade,
           state: employeeData.estado,
           source: 'empresa',
           profile_complete: true,
-          intake_complete: false,
           terms_accepted_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
