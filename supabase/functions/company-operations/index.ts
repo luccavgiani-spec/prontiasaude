@@ -747,6 +747,7 @@ Deno.serve(async (req) => {
         .insert({
           company_id: companyData.id,
           user_id: authData.user.id,
+          cnpj: company.cnpj.replace(/\D/g, ''),
           must_change_password: true,
         });
 
