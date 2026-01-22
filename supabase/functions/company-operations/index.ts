@@ -513,6 +513,16 @@ Deno.serve(async (req) => {
       planExpiryDate.setFullYear(planExpiryDate.getFullYear() + 100);
       
       try {
+        // ✅ CORREÇÃO: Buscar patient_id para preencher corretamente
+        const { data: patientData } = await supabaseClient
+          .from('patients')
+          .select('id')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        const patientId = patientData?.id || null;
+        console.log('[activate-employee-plan] Found patient_id:', patientId);
+        
         // Verificar se já existe plano empresarial ativo
         const { data: existingPlan } = await supabaseClient
           .from('patient_plans')
@@ -524,6 +534,15 @@ Deno.serve(async (req) => {
         
         if (existingPlan) {
           console.log('[activate-employee-plan] Plan already exists, skipping creation');
+          
+          // ✅ CORREÇÃO: Atualizar patient_id se estiver faltando no plano existente
+          if (patientId && !existingPlan.patient_id) {
+            await supabaseClient
+              .from('patient_plans')
+              .update({ patient_id: patientId })
+              .eq('id', existingPlan.id);
+            console.log('[activate-employee-plan] Updated existing plan with patient_id');
+          }
         } else {
           // Desativar outros planos ativos
           await supabaseClient
@@ -533,9 +552,11 @@ Deno.serve(async (req) => {
             .eq('status', 'active');
           
           // Criar novo plano empresarial (usando service_role_key, bypass RLS)
+          // ✅ CORREÇÃO: Incluir patient_id na criação
           const { error: planError } = await supabaseClient.from('patient_plans').insert({
             email: user.email,
             user_id: user.id,
+            patient_id: patientId,
             plan_code: companyPlanCode,
             plan_expires_at: planExpiryDate.toISOString(),
             status: 'active'
@@ -560,10 +581,12 @@ Deno.serve(async (req) => {
         if (employeeData) {
           console.log('[activate-employee-plan] Creating employee record...');
           
+          // ✅ CORREÇÃO: Incluir patient_id no registro de employee
           const { error: employeeError } = await supabaseClient
             .from('company_employees')
             .insert({
               user_id: user.id,
+              patient_id: patientId,
               company_id: invite.company_id,
               nome: employeeData.nome,
               cpf: employeeData.cpf,
