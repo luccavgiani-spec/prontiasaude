@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Check, Copy, QrCode, RefreshCw, Clock, CheckCircle2 } from 'lucide-react';
+import { Check, Copy, QrCode, RefreshCw, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { usePaymentRedirect } from '@/hooks/usePaymentRedirect';
@@ -116,6 +116,24 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
 
   return (
     <div className="space-y-6">
+      {/* ⚠️ AVISO IMPORTANTE - Não fechar aba */}
+      <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0">
+            <AlertTriangle className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <p className="font-bold text-amber-800 text-base">
+              NÃO FECHE ESTA ABA!
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              Após realizar o pagamento PIX, você será redirecionado automaticamente para o atendimento. 
+              Mantenha esta janela aberta.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* QR Code Image */}
       <div className="flex flex-col items-center justify-center bg-white p-6 rounded-xl border-2 border-primary/20">
         <div className="mb-4 text-center">
