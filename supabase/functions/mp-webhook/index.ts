@@ -691,35 +691,58 @@ Deno.serve(async (req) => {
       // ✅ CRIAR patient_plans COM user_id GARANTIDO
       console.log('[mp-webhook] 📝 Criando plano com user_id:', userId, 'email:', schedulePayload.email);
       
+      // ✅ CORREÇÃO: Buscar patient_id também
+      let patientId: string | null = null;
+      const { data: patientData } = await supabaseAdmin
+        .from('patients')
+        .select('id')
+        .eq('email', schedulePayload.email?.toLowerCase()?.trim())
+        .maybeSingle();
+      patientId = patientData?.id || null;
+      
       const { error: planError } = await supabaseAdmin
         .from('patient_plans')
         .insert({
           user_id: userId,
+          patient_id: patientId,
           email: schedulePayload.email,
           plan_code: schedulePayload.sku,
           plan_expires_at: planExpiresAt.toISOString(),
-          status: 'active'
+          status: 'active',
+          activated_at: new Date().toISOString(),
+          activated_by: 'mp-webhook'
         });
 
+      // ✅ CORREÇÃO: Se falhou ao criar plano, NÃO marcar como processado (deixar para reconciliação)
       if (planError) {
         console.error('[mp-webhook] ❌ Erro ao criar patient_plan:', planError);
-      } else {
-        console.log('[mp-webhook] ✅ Plano criado:', {
-          user_id: userId,
-          email: schedulePayload.email,
-          plan_code: schedulePayload.sku,
-          expires_at: planExpiresAt.toISOString()
+        console.error('[mp-webhook] ⚠️ NÃO marcando como processado - reconciliação automática corrigirá');
+        
+        // Retornar sucesso para MP não reenviar, mas NÃO marcar processed=true
+        return new Response(JSON.stringify({ 
+          success: true, 
+          payment_id: payment.id,
+          warning: 'Plan creation failed, will be processed by reconciliation'
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
+      
+      console.log('[mp-webhook] ✅ Plano criado:', {
+        user_id: userId,
+        patient_id: patientId,
+        email: schedulePayload.email,
+        plan_code: schedulePayload.sku,
+        expires_at: planExpiresAt.toISOString()
+      });
 
       // Gravar métrica de venda de plano
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
-        amount_cents: Math.round(payment.transaction_amount * 100),
-        plan_code: schedulePayload.sku,
+        sku: schedulePayload.sku,
+        metric_value: Math.round(payment.transaction_amount * 100),
         platform: 'mercadopago',
-        status: 'approved',
-        patient_email: schedulePayload.email,
         metadata: { 
           payment_id: payment.id, 
           mp_status: payment.status,
@@ -737,7 +760,7 @@ Deno.serve(async (req) => {
         schedulePayload
       );
 
-      // Marcar pending_payment como processado
+      // ✅ CORREÇÃO: Só marcar como processado APÓS confirmar criação do plano
       if (payment.metadata?.order_id) {
         await supabaseAdmin
           .from('pending_payments')
@@ -747,6 +770,7 @@ Deno.serve(async (req) => {
             status: 'approved'
           })
           .eq('order_id', payment.metadata.order_id);
+        console.log('[mp-webhook] ✅ pending_payment marcado como processed=true');
       }
 
       // ✅ Sincronizar ClubeBen (fire-and-forget) com AMBOS os parâmetros

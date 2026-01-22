@@ -160,16 +160,20 @@ Deno.serve(async (req) => {
           .eq('status', 'active')
           .maybeSingle();
         
+        let planCreatedSuccessfully = false;
+        
         if (existingPlan) {
           console.log('[check-payment-status] ⚠️ Plano já existe e está ativo, atualizando expiração');
           
-          await supabaseAdmin
+          const { error: updateError } = await supabaseAdmin
             .from('patient_plans')
             .update({
               plan_expires_at: planExpiresAt.toISOString().split('T')[0],
               updated_at: new Date().toISOString()
             })
             .eq('id', existingPlan.id);
+          
+          planCreatedSuccessfully = !updateError;
         } else {
           // Criar novo patient_plans
           const { error: planError } = await supabaseAdmin
@@ -188,51 +192,90 @@ Deno.serve(async (req) => {
           
           if (planError) {
             console.error('[check-payment-status] ❌ Erro ao criar plano:', planError);
+            planCreatedSuccessfully = false;
           } else {
             console.log('[check-payment-status] ✅ Plano criado com sucesso!');
+            planCreatedSuccessfully = true;
           }
         }
         
-        // Atualizar pending_payment como processado
-        if (orderIdToCheck) {
-          await supabaseAdmin
-            .from('pending_payments')
-            .update({ 
-              processed: true, 
-              processed_at: new Date().toISOString(), 
-              status: 'approved' 
-            })
-            .eq('order_id', orderIdToCheck);
-        }
-        
-        // Gravar métrica de venda para PLANO
-        await supabaseAdmin.from('metrics').insert({
-          metric_type: 'sale',
-          sku: sku,
-          metric_value: Math.round(payment.transaction_amount * 100),
-          platform: 'plan_activation',
-          metadata: { 
-            payment_id: payment.id, 
-            mp_status: payment.status,
-            order_id: orderIdToCheck,
-            source: 'check-payment-status',
-            is_plan: true
+        // ✅ CORREÇÃO: Verificar se o plano realmente foi criado antes de marcar como processado
+        if (planCreatedSuccessfully) {
+          // Verificar no banco se o plano existe (double-check)
+          const { data: verifyPlan } = await supabaseAdmin
+            .from('patient_plans')
+            .select('id')
+            .eq('email', patientEmail)
+            .eq('plan_code', sku)
+            .eq('status', 'active')
+            .maybeSingle();
+          
+          if (!verifyPlan) {
+            console.error('[check-payment-status] ❌ Verificação falhou: plano não encontrado após criação');
+            return new Response(JSON.stringify({ 
+              success: false,
+              status: payment.status,
+              approved: true,
+              error: 'Plan verification failed - please refresh and try again'
+            }), { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            });
           }
-        });
-        
-        console.log('[check-payment-status] ✅ Plano processado, redirecionando para área do paciente');
-        
-        return new Response(JSON.stringify({ 
-          success: true,
-          status: 'approved',
-          approved: true,
-          redirect_url: '/area-do-paciente',
-          is_plan: true,
-          plan_code: sku
-        }), { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        });
+          
+          // Atualizar pending_payment como processado
+          if (orderIdToCheck) {
+            await supabaseAdmin
+              .from('pending_payments')
+              .update({ 
+                processed: true, 
+                processed_at: new Date().toISOString(), 
+                status: 'approved' 
+              })
+              .eq('order_id', orderIdToCheck);
+          }
+          
+          // Gravar métrica de venda para PLANO
+          await supabaseAdmin.from('metrics').insert({
+            metric_type: 'sale',
+            sku: sku,
+            metric_value: Math.round(payment.transaction_amount * 100),
+            platform: 'plan_activation',
+            metadata: { 
+              payment_id: payment.id, 
+              mp_status: payment.status,
+              order_id: orderIdToCheck,
+              source: 'check-payment-status',
+              is_plan: true
+            }
+          });
+          
+          console.log('[check-payment-status] ✅ Plano processado, redirecionando para área do paciente');
+          
+          return new Response(JSON.stringify({ 
+            success: true,
+            status: 'approved',
+            approved: true,
+            redirect_url: '/area-do-paciente',
+            is_plan: true,
+            plan_code: sku
+          }), { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        } else {
+          // Plano não foi criado - retornar erro para frontend tentar novamente
+          console.error('[check-payment-status] ❌ Plano não foi criado, retornando erro');
+          return new Response(JSON.stringify({ 
+            success: false,
+            status: payment.status,
+            approved: true,
+            error: 'Plan creation failed - system will retry automatically'
+          }), { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          });
+        }
       }
 
       // ==========================================
