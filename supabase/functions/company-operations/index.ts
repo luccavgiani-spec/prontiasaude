@@ -193,9 +193,9 @@ Deno.serve(async (req) => {
       console.log('[invite-employee] Processing invite for:', email);
       
       // Verificar se já existe convite
-      const { data: existingInvite, error: inviteCheckError } = await supabaseClient
+      let { data: existingInvite, error: inviteCheckError } = await supabaseClient
         .from('pending_employee_invites')
-        .select('id, status, invite_token')
+        .select('id, status, token')
         .eq('company_id', company_id)
         .eq('email', email)
         .maybeSingle();
@@ -260,8 +260,9 @@ Deno.serve(async (req) => {
           .insert({
             company_id,
             email,
-            invite_token,
-            invited_by: user.id
+            token: invite_token,
+            status: 'pending',
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
           })
           .select()
           .single();
@@ -285,7 +286,7 @@ Deno.serve(async (req) => {
       console.log('[invite-employee] Invite created successfully, sending email...');
       
       // Enviar email
-      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite_token}`;
+      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite?.token || invite_token}`;
       
       try {
         const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
@@ -356,7 +357,7 @@ Deno.serve(async (req) => {
       }
       
       // Reenviar email
-      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite.invite_token}`;
+      const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite.token}`;
       const companyName = (invite.companies as any)?.razao_social || 'Empresa';
       
       try {
@@ -461,7 +462,7 @@ Deno.serve(async (req) => {
             empresa_id_externo
           )
         `)
-        .eq('invite_token', invite_token)
+        .eq('token', invite_token)
         .eq('status', 'pending')
         .maybeSingle();
       
