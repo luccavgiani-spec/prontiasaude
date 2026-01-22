@@ -662,40 +662,53 @@ Deno.serve(async (req) => {
       const email = `${company.cnpj.replace(/\D/g, '')}@empresa.prontia.com`;
       
       // Verificar se usuário com este email já existe
-      const { data: { users: existingUsers }, error: listError } = await supabaseClient.auth.admin.listUsers();
-      const existingUser = existingUsers?.find(u => u.email === email);
-
-      let authData;
-      if (existingUser) {
-        console.warn(`⚠️ [CREATE] User with email ${email} already exists (id: ${existingUser.id}), using existing user`);
-        authData = { user: existingUser };
-      } else {
-        const { data, error: authError } = await supabaseClient.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            cnpj: company.cnpj,
-            razao_social: company.razao_social,
-          }
-        });
-
-        if (authError) {
-          console.error('[CREATE] Failed to create auth user:', authError);
-          throw new Error(`Failed to create authentication user: ${authError.message}`);
-        }
-
-        authData = data;
-      }
+      // ✅ CORREÇÃO: Tentar criar diretamente e tratar erro email_exists (evita limite de 50 usuários)
+      let existingUser = null;
       
+      // Primeiro tenta criar o usuário
+      const { data: createData, error: createError } = await supabaseClient.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          cnpj: company.cnpj,
+          razao_social: company.razao_social,
+        }
+      });
+      
+      let authData;
+      let wasAuthUserCreated = false;
+      
+      if (createError) {
+        // Se o erro for email_exists, buscar o usuário existente
+        if (createError.message?.includes('email address has already been registered') || 
+            createError.code === 'email_exists') {
+          console.warn(`⚠️ [CREATE] User with email ${email} already exists, fetching existing user...`);
+          
+          // Buscar usuário existente usando getUserByEmail (se disponível) ou listUsers com filtro
+          const { data: { users: existingUsers } } = await supabaseClient.auth.admin.listUsers();
+          existingUser = existingUsers?.find(u => u.email === email);
+          
+          if (!existingUser) {
+            throw new Error(`User with email ${email} exists but could not be fetched. Please contact support.`);
+          }
+          
+          authData = { user: existingUser };
+        } else {
+          console.error('[CREATE] Failed to create auth user:', createError);
+          throw new Error(`Failed to create authentication user: ${createError.message}`);
+        }
+      } else {
+        authData = createData;
+        wasAuthUserCreated = true;
+      }
+
       const authUserId = authData.user?.id;
       if (!authUserId) {
         throw new Error('Failed to get user ID');
       }
 
       // Criar registro na tabela companies
-      // ✅ CORREÇÃO: Removido created_by/updated_by (colunas não existem no schema)
-      const wasAuthUserCreated = !existingUser;
       const { data: companyData, error: companyError } = await supabaseClient
         .from('companies')
         .insert({

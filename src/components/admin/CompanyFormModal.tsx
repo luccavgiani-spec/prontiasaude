@@ -198,8 +198,14 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
       }
     } catch (error: any) {
       console.error('Error saving company:', error);
-      if (error.message?.includes('duplicate key')) {
-        toast.error('CNPJ já cadastrado');
+      const errorMessage = error?.message || '';
+      
+      if (errorMessage.includes('duplicate key') || errorMessage.includes('CNPJ já cadastrado')) {
+        toast.error('CNPJ já cadastrado no sistema');
+      } else if (errorMessage.includes('email address has already been registered') || errorMessage.includes('email_exists')) {
+        toast.error('Este CNPJ já possui um cadastro pendente. Tente novamente ou entre em contato com o suporte.');
+      } else if (errorMessage.includes('could not be fetched')) {
+        toast.error('Erro ao recuperar dados. Por favor, tente novamente.');
       } else {
         toast.error(company ? 'Erro ao atualizar empresa' : 'Erro ao cadastrar empresa');
       }
