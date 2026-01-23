@@ -1281,24 +1281,36 @@ export function PaymentModal({
         }
       });
 
-      // Registrar uso do cupom
+      // Registrar uso do cupom com colunas corretas
       if (appliedCoupon) {
-        await supabase.from("coupon_uses").insert({
+        // Buscar user_id da sessão atual
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        
+        const { error: couponUseError } = await supabase.from("coupon_uses").insert({
           coupon_id: appliedCoupon.coupon_id,
           coupon_code: appliedCoupon.coupon_code,
           used_by_email: formData.email,
           used_by_name: formData.name,
-          owner_user_id: appliedCoupon.owner_user_id,
+          used_by_user_id: currentUser?.id || null,
+          owner_id: appliedCoupon.owner_user_id,
           owner_email: appliedCoupon.owner_email,
           owner_pix_key: appliedCoupon.owner_pix_key,
-          amount_original: appliedCoupon.amount_original,
-          amount_discounted: 0,
-          discount_percentage: 100,
+          original_amount: appliedCoupon.amount_original / 100,
+          discount_amount: appliedCoupon.amount_original / 100,
+          final_amount: 0,
+          discount_percent: 100,
           service_or_plan_name: serviceName,
-          service_or_plan_id: sku,
+          service_sku: sku,
           payment_id: `free_${Date.now()}`,
-          order_id: orderId
+          order_id: orderId,
+          status: 'approved'
         });
+        
+        if (couponUseError) {
+          console.error("[handleFreeOrder] Erro ao registrar uso do cupom:", couponUseError);
+        } else {
+          console.log("[handleFreeOrder] ✅ Uso do cupom registrado com sucesso");
+        }
       }
 
       // Track purchase event para Meta Ads + Google Ads (gratuito)
