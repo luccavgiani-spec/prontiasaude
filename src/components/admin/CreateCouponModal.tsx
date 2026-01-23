@@ -82,14 +82,28 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
 
         ownerId = patient.id;
       } else {
-        // Usar admin como owner
+        // Buscar patient.id correspondente ao admin logado
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           toast.error("Erro ao identificar usuário admin!");
           setIsLoading(false);
           return;
         }
-        ownerId = user.id;
+        
+        // Buscar patient.id do admin
+        const { data: adminPatient } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!adminPatient) {
+          // Se admin não tem registro em patients, criar cupom do sistema (sem owner)
+          // @ts-ignore - null é permitido para cupons do sistema
+          ownerId = null;
+        } else {
+          ownerId = adminPatient.id;
+        }
       }
 
       // 3. Inserir cupom

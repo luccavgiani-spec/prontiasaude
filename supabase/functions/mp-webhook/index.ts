@@ -1648,6 +1648,10 @@ Deno.serve(async (req) => {
             : schedulePayload.nome || 'Usuário';
 
           // Criar registro de uso do cupom
+          const amountOriginalCents = payment.metadata.amount_original || Math.round(payment.transaction_amount * 100);
+          const amountFinalCents = payment.metadata.amount_discounted || Math.round(payment.transaction_amount * 100);
+          const discountAmountCents = amountOriginalCents - amountFinalCents;
+          
           const { error: couponUseError } = await supabaseAdmin
             .from('coupon_uses')
             .insert({
@@ -1656,17 +1660,17 @@ Deno.serve(async (req) => {
               used_by_user_id: userId || null,
               used_by_name: buyerName,
               used_by_email: schedulePayload.email,
-              service_or_plan_id: schedulePayload.sku,
+              service_sku: schedulePayload.sku,
               service_or_plan_name: mapSkuToName(schedulePayload.sku),
-              owner_user_id: coupon.owner_user_id,
+              owner_id: coupon.owner_user_id,
               owner_email: payment.metadata.owner_email || '',
               owner_pix_key: coupon.pix_key,
               payment_id: String(payment.id),
               order_id: payment.metadata.order_id || null,
-              used_at: new Date().toISOString(),
-              amount_original: payment.metadata.amount_original || Math.round(payment.transaction_amount * 100),
-              amount_discounted: payment.metadata.amount_discounted || Math.round(payment.transaction_amount * 100),
-              discount_percentage: payment.metadata.discount_percentage || 0
+              original_amount: amountOriginalCents / 100,
+              discount_amount: discountAmountCents / 100,
+              final_amount: amountFinalCents / 100,
+              discount_percent: payment.metadata.discount_percentage || 0
             });
 
           if (couponUseError) {

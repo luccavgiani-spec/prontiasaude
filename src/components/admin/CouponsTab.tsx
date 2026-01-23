@@ -112,7 +112,7 @@ export function CouponsTab() {
         .from('coupon_uses')
         .select('*')
         .order('reviewed', { ascending: true })
-        .order('used_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
