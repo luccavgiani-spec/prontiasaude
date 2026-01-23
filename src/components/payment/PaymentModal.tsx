@@ -2146,7 +2146,8 @@ export function PaymentModal({
           coupon_code: couponCode,
           item_type: itemType,
           amount_original: amount, // em centavos
-          user_id: (await supabase.auth.getUser()).data.user?.id
+          user_id: (await supabase.auth.getUser()).data.user?.id,
+          sku: sku // SKU para validação de restrição por serviço
         }
       });
       

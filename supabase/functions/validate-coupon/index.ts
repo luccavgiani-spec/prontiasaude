@@ -20,6 +20,7 @@ const ValidateCouponSchema = z.object({
     .positive('Valor deve ser positivo')
     .max(10000000, 'Valor máximo excedido'), // 100k reais in centavos
   user_id: z.string().uuid('ID de usuário inválido').optional(),
+  sku: z.string().optional(), // SKU do serviço/plano para validação de restrição
 });
 
 interface ValidateCouponResponse {
@@ -75,9 +76,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { coupon_code, item_type, amount_original, user_id } = validationResult.data;
+    const { coupon_code, item_type, amount_original, user_id, sku } = validationResult.data;
 
-    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id });
+    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id, sku });
 
     // Buscar cupom no banco
     const { data: coupon, error: couponError } = await supabase
@@ -116,6 +117,21 @@ Deno.serve(async (req) => {
     
     if (isSystemCoupon) {
       console.log('[validate-coupon] System coupon detected - accepting any item type');
+    }
+
+    // Validar SKU se o cupom tiver restrição de serviços específicos
+    if (coupon.allowed_skus && coupon.allowed_skus.length > 0) {
+      if (!sku || !coupon.allowed_skus.includes(sku)) {
+        console.log('[validate-coupon] SKU não permitido:', { sku, allowed_skus: coupon.allowed_skus });
+        return new Response(
+          JSON.stringify({
+            is_valid: false,
+            error_message: 'Este cupom não é válido para este serviço',
+          } as ValidateCouponResponse),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log('[validate-coupon] SKU validado:', { sku, allowed_skus: coupon.allowed_skus });
     }
 
     // Opcional: impedir que o usuário use seu próprio cupom
