@@ -1129,6 +1129,7 @@ export type Database = {
       }
       user_coupons: {
         Row: {
+          allowed_skus: string[] | null
           code: string
           coupon_type: string | null
           created_at: string | null
@@ -1140,6 +1141,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          allowed_skus?: string[] | null
           code: string
           coupon_type?: string | null
           created_at?: string | null
@@ -1151,6 +1153,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          allowed_skus?: string[] | null
           code?: string
           coupon_type?: string | null
           created_at?: string | null
