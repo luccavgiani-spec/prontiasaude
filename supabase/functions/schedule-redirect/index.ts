@@ -72,6 +72,31 @@ const PSICOLOGO_SKUS = [
   'YME9025'  // Psicólogo 8 sessões
 ];
 
+// ✅ Mapeamento SKU → Nome da Especialidade para mensagens WhatsApp
+const SKU_TO_SPECIALIST_NAME: Record<string, string> = {
+  'BIR7668': 'Personal Trainer',
+  'VPN5132': 'Nutricionista',
+  'TQP5720': 'Cardiologista',
+  'HGG3503': 'Dermatologista',
+  'VHH8883': 'Endocrinologista',
+  'TSB0751': 'Gastroenterologista',
+  'CCP1566': 'Ginecologista',
+  'FKS5964': 'Oftalmologista',
+  'TVQ5046': 'Ortopedista',
+  'HMG9544': 'Pediatra',
+  'HME8366': 'Otorrinolaringologista',
+  'DYY8522': 'Médico da Família',
+  'QOP1101': 'Psiquiatra',
+  'LZF3879': 'Nutrólogo',
+  'YZD9932': 'Geriatra',
+  'UDH3250': 'Reumatologista',
+  'PKS9388': 'Neurologista',
+  'MYX5186': 'Infectologista',
+  'ZXW2165': 'Psicólogo',
+  'HXR8516': 'Psicólogo',
+  'YME9025': 'Psicólogo',
+};
+
 // ✅ Planos que incluem consultas com especialistas → plano_id 864 na ClickLife
 const PLANOS_COM_ESPECIALISTAS = [
   'IND_COM_ESP_1M',   // Individual Completo com Especialistas - 1 Mês
@@ -693,7 +718,12 @@ Deno.serve(async (req) => {
       
       console.log(`[schedule-redirect] ✓ ${motivo} → WhatsApp Suporte 0800`);
       
-      const whatsappUrl = 'https://wa.me/5511933359187?text=Olá!%20Gostaria%20de%20agendar%20uma%20consulta';
+      // ✅ CORREÇÃO: Usar nome da especialidade na mensagem do WhatsApp
+      const especialidadeNome = payload.especialidade || SKU_TO_SPECIALIST_NAME[payload.sku] || 'médico especialista';
+      const mensagemWhatsApp = `Olá! Acabei de comprar uma consulta de ${especialidadeNome} e gostaria de agendar.`;
+      const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagemWhatsApp)}`;
+      
+      console.log(`[schedule-redirect] Mensagem WhatsApp: "${mensagemWhatsApp}"`);
       
       // ✅ CORREÇÃO: Salvar appointment ANTES de retornar para permitir polling do frontend
       try {
