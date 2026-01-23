@@ -124,6 +124,10 @@ serve(async (req) => {
       : pendingPayment.email.split('@')[0];
 
     // 5. Criar registro em coupon_uses
+    const amountOriginal = pendingPayment.amount_original || 0;
+    const amountFinal = pendingPayment.amount || 0;
+    const discountAmount = amountOriginal - amountFinal;
+    
     const { error: couponUseError } = await supabaseAdmin
       .from('coupon_uses')
       .insert({
@@ -131,17 +135,18 @@ serve(async (req) => {
         coupon_code: pendingPayment.coupon_code,
         used_by_user_id: null,
         used_by_name: buyerName,
-        used_by_email: pendingPayment.email,
-        service_or_plan_id: pendingPayment.sku,
+        used_by_email: pendingPayment.patient_email,
+        service_sku: pendingPayment.sku,
         service_or_plan_name: pendingPayment.sku || 'Serviço',
-        owner_user_id: couponData?.owner_user_id || null,
+        owner_id: couponData?.owner_user_id || null,
         owner_email: ownerEmail,
         owner_pix_key: ownerPixKey,
         payment_id: payment_id,
         order_id: pendingPayment.order_id,
-        amount_original: pendingPayment.amount_original || 0,
-        amount_discounted: pendingPayment.amount_cents || 0,
-        discount_percentage: pendingPayment.discount_percentage || 0,
+        original_amount: amountOriginal,
+        discount_amount: discountAmount,
+        final_amount: amountFinal,
+        discount_percent: pendingPayment.discount_percent || 0,
       });
 
     if (couponUseError) {
