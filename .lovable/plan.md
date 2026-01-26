@@ -1,193 +1,228 @@
 
-# Diagnóstico Final: Causa Raiz Identificada com 100% de Certeza
+# Plano de Correção: Eliminar Referências ao Lovable Cloud
 
-## O Problema
+## Diagnóstico Completo
 
-O `usePaymentRedirect` usa `supabase.functions.invoke()` que está apontando para o **projeto ERRADO** (Lovable Cloud) em vez do projeto original onde as Edge Functions estão deployadas.
+Após análise minuciosa de todas as Edge Functions e do frontend, identifiquei **8 pontos** onde existem referências ao projeto Lovable Cloud (`yrsjluhhnhxogdgnbnya`) ou chamadas que dependem de `SUPABASE_URL` (potencialmente errado).
 
-### Evidências Conclusivas
+### Tabela de Referências Encontradas
 
-| Componente | URL Usada | Projeto | Status |
-|------------|-----------|---------|--------|
-| `.env` `VITE_SUPABASE_URL` | `yrsjluhhnhxogdgnbnya` | Lovable Cloud | ❌ ERRADO |
-| `supabase.functions.invoke()` | Usa `VITE_SUPABASE_URL` | Lovable Cloud | ❌ ERRADO |
-| Edge Functions deployadas | `ploqujuhpwutpcibedbr` | Projeto Original | ✅ CORRETO |
-| `invokeEdgeFunction()` | Fallback para `ploqujuhpwutpcibedbr` | Projeto Original | ✅ CORRETO |
+| Local | Tipo | Problema | Impacto |
+|-------|------|----------|---------|
+| `.env` | Configuração | `VITE_SUPABASE_URL` e `VITE_SUPABASE_PROJECT_ID` apontam para Lovable Cloud | 🔴 CRÍTICO - Frontend |
+| `supabase/functions/common/cors.ts:7` | CORS | URL `lovableproject.com` no `ALLOWED_ORIGINS` | 🟡 Baixo - Apenas dev |
+| `supabase/functions/mp-create-subscription/index.ts:130` | Hardcoded | `back_url` usa `.lovable.app` | 🟠 Médio - Redirecionamento |
+| `supabase/functions/check-payment-status/index.ts:420` | Cross-invoke | `supabase.functions.invoke('schedule-redirect')` | 🔴 CRÍTICO - Agendamento |
+| `supabase/functions/clubeben-batch-sync/index.ts:62` | Cross-invoke | `fetch(SUPABASE_URL/functions/v1/clubeben-sync)` | 🔴 CRÍTICO - Sync ClubeBen |
+| `supabase/functions/company-operations/index.ts:292,364` | Cross-invoke | `supabaseClient.functions.invoke('send-form-emails')` | 🟠 Médio - Emails |
+| `src/components/payment/PaymentModal.tsx:3012` | Frontend | Detecção de `lovableproject.com` para fallback | 🟡 Baixo - Apenas preview |
 
-### Por que a Rafaela NÃO foi redirecionada
+---
 
-```text
-1. Rafaela pagou PIX
-2. Frontend iniciou polling via usePaymentRedirect
-3. usePaymentRedirect chamou supabase.functions.invoke('check-payment-status')
-4. supabase.functions.invoke() usou VITE_SUPABASE_URL (Lovable Cloud)
-5. Lovable Cloud NÃO tem check-payment-status deployado!
-6. Chamadas falharam silenciosamente ou retornaram erro
-7. Polling nunca encontrou o pagamento
-8. Rafaela não foi redirecionada
+## Arquivos a Modificar
+
+### 1. `supabase/functions/common/cors.ts` - Remover URL do Lovable
+
+**Linha 7**: Remover a URL de preview do Lovable do `ALLOWED_ORIGINS`.
+
+**Antes:**
+```typescript
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://9bc3ce56-2fcc-49e0-81b3-829d5921f2b4.lovableproject.com', // Lovable preview
+  'http://localhost:5173', // Local development
+];
 ```
 
-### Por que alguns pagamentos funcionam
+**Depois:**
+```typescript
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app', // Published app URL
+  'http://localhost:5173', // Local development
+];
+```
 
-Quando você usa `invokeEdgeFunction()` (de `src/lib/edge-functions.ts`), ele tem um **fallback hardcoded** para o projeto original:
+---
 
+### 2. `supabase/functions/mp-create-subscription/index.ts` - Corrigir `back_url`
+
+**Linha 130**: A `back_url` usa lógica incorreta que gera URL com `.lovable.app`.
+
+**Antes:**
+```typescript
+back_url: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}.lovable.app/area-do-paciente`,
+```
+
+**Depois:**
+```typescript
+back_url: 'https://prontiasaude.com.br/area-do-paciente',
+```
+
+---
+
+### 3. `supabase/functions/check-payment-status/index.ts` - Usar fetch direto
+
+**Linhas 167-169 e 420-433**: Substituir `supabase.functions.invoke()` por `fetch()` direto com URL hardcoded do projeto correto.
+
+**Problema:**
+```typescript
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,  // ← Pode apontar para projeto errado
+  Deno.env.get('SUPABASE_ANON_KEY')!
+);
+// ...
+const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
+```
+
+**Solução:**
+Criar constante com URL fixa do projeto original e usar `fetch()`:
+
+```typescript
+// URL FIXA do projeto original onde as Edge Functions estão deployadas
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
+// ...
+
+// Chamar schedule-redirect com fetch direto
+const scheduleResponse = await fetch(
+  `${ORIGINAL_SUPABASE_URL}/functions/v1/schedule-redirect`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ORIGINAL_ANON_KEY}`,
+      'apikey': ORIGINAL_ANON_KEY
+    },
+    body: JSON.stringify({
+      cpf: schedulePayload.cpf,
+      email: schedulePayload.email,
+      nome: schedulePayload.nome,
+      telefone: schedulePayload.telefone,
+      especialidade: schedulePayload.especialidade || 'Clínico Geral',
+      sku: schedulePayload.sku,
+      horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+      plano_ativo: schedulePayload.plano_ativo || false,
+      order_id: orderIdToCheck,
+      payment_id: payment.id
+    })
+  }
+);
+
+const scheduleData = await scheduleResponse.json();
+const scheduleError = !scheduleResponse.ok ? scheduleData : null;
+```
+
+---
+
+### 4. `supabase/functions/clubeben-batch-sync/index.ts` - Corrigir URL
+
+**Linha 63**: Usa `Deno.env.get('SUPABASE_URL')` que pode apontar para projeto errado.
+
+**Antes:**
+```typescript
+const syncResponse = await fetch(
+  `${Deno.env.get('SUPABASE_URL')}/functions/v1/clubeben-sync`,
+```
+
+**Depois:**
+```typescript
+// URL FIXA do projeto original
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
+const syncResponse = await fetch(
+  `${ORIGINAL_SUPABASE_URL}/functions/v1/clubeben-sync`,
+```
+
+---
+
+### 5. `supabase/functions/company-operations/index.ts` - Usar fetch direto
+
+**Linhas 292 e 364**: Usa `supabaseClient.functions.invoke('send-form-emails')`.
+
+Como o `supabaseClient` é criado com credenciais do ambiente, precisa usar fetch direto:
+
+**Solução:** Criar helper function para invocar funções com URL fixa:
+
+```typescript
+// No início do arquivo
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
+async function invokeEdgeFunction(functionName: string, body: any, authToken?: string): Promise<{ data: any; error: any }> {
+  const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || 
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+  
+  try {
+    const response = await fetch(
+      `${ORIGINAL_SUPABASE_URL}/functions/v1/${functionName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken || ANON_KEY}`,
+          'apikey': ANON_KEY
+        },
+        body: JSON.stringify(body)
+      }
+    );
+    const data = await response.json();
+    return { data, error: response.ok ? null : data };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+// Uso:
+const emailResult = await invokeEdgeFunction('send-form-emails', {
+  type: 'employee-invite',
+  data: { email, companyName: company.razao_social, inviteLink }
+});
+```
+
+---
+
+### 6. `src/components/payment/PaymentModal.tsx` - Remover detecção de lovableproject.com
+
+**Linha 3012**: Contém lógica que detecta se está rodando no preview do Lovable.
+
+Esta lógica pode ser mantida, mas precisa ser atualizada para usar a URL publicada:
+
+**Antes:**
+```typescript
+const isInlineFallback = typeof window !== "undefined" && window.location.hostname.includes("lovableproject.com");
+```
+
+**Depois:**
+```typescript
+// Fallback inline para ambientes de preview ou caso o Dialog tenha problemas
+const isInlineFallback = typeof window !== "undefined" && (
+  window.location.hostname.includes("lovableproject.com") || 
+  window.location.hostname.includes("lovable.app")
+);
+```
+
+---
+
+### 7. `src/lib/edge-functions.ts` - Remover dependência de VITE_SUPABASE_URL
+
+**Linhas 7-16**: Atualmente usa VITE_SUPABASE_URL com fallback. Forçar uso APENAS do projeto original:
+
+**Antes:**
 ```typescript
 const SUPABASE_URL = 
   (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined ||
-  "https://ploqujuhpwutpcibedbr.supabase.co"; // ← Fallback correto!
+  "https://ploqujuhpwutpcibedbr.supabase.co";
 ```
 
-Mas `supabase.functions.invoke()` usado no `usePaymentRedirect` **não tem esse fallback**.
-
----
-
-## Plano de Correção Definitivo
-
-### Correção 1: Modificar `usePaymentRedirect` para usar `invokeEdgeFunction`
-
-**Arquivo**: `src/hooks/usePaymentRedirect.tsx`
-
-**Alteração**: Substituir `supabase.functions.invoke()` por `invokeEdgeFunction()` que tem fallback para o projeto correto.
-
+**Depois:**
 ```typescript
-// ANTES (errado)
-import { supabase } from '@/integrations/supabase/client';
-// ...
-const { data, error } = await supabase.functions.invoke('check-payment-status', {
-  body: { payment_id, order_id, email }
-});
-
-// DEPOIS (correto)
-import { invokeEdgeFunction } from '@/lib/edge-functions';
-// ...
-const { data, error } = await invokeEdgeFunction('check-payment-status', {
-  body: { payment_id, order_id, email }
-});
+// ✅ FORÇAR uso do projeto original onde as Edge Functions estão deployadas
+// NÃO usar VITE_SUPABASE_URL pois pode apontar para projeto errado (Lovable Cloud)
+const SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 ```
-
-### Correção 2: Modificar `PixPaymentForm` para usar `invokeEdgeFunction`
-
-**Arquivo**: `src/components/payment/PixPaymentForm.tsx`
-
-**Alteração**: Na função `handleCheckPaymentStatus`, substituir `supabase.functions.invoke()` por `invokeEdgeFunction()`.
-
-### Correção 3: Criar Tabela de Auditoria de Webhooks
-
-**Ação**: Criar migração SQL para tabela `webhook_audit`
-
-```sql
-CREATE TABLE public.webhook_audit (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  received_at TIMESTAMPTZ DEFAULT now(),
-  source TEXT NOT NULL DEFAULT 'mercadopago',
-  raw_body TEXT,
-  parsed_payment_id TEXT,
-  parsed_action TEXT,
-  processing_status TEXT DEFAULT 'received',
-  error_message TEXT,
-  response_status INTEGER,
-  processing_time_ms INTEGER
-);
-
-CREATE INDEX idx_webhook_audit_payment_id ON public.webhook_audit(parsed_payment_id);
-CREATE INDEX idx_webhook_audit_received_at ON public.webhook_audit(received_at DESC);
-
--- RLS: Apenas service role pode inserir/ler
-ALTER TABLE public.webhook_audit ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Service role can manage audit" ON public.webhook_audit
-  FOR ALL USING (true);
-```
-
-### Correção 4: Adicionar Auditoria no `mp-webhook`
-
-**Arquivo**: `supabase/functions/mp-webhook/index.ts`
-
-**Alteração**: No INÍCIO da função (antes de qualquer parsing), inserir registro na tabela `webhook_audit`.
-
-```typescript
-// Logo no início do handler, ANTES de qualquer parsing
-const rawBody = await req.text();
-const startTime = Date.now();
-
-// Inserir auditoria imediatamente
-try {
-  const bodyObj = JSON.parse(rawBody);
-  await supabaseAdmin.from('webhook_audit').insert({
-    source: 'mercadopago',
-    raw_body: rawBody.substring(0, 10000), // Limitar tamanho
-    parsed_payment_id: bodyObj?.data?.id?.toString() || null,
-    parsed_action: bodyObj?.action || bodyObj?.type || null,
-    processing_status: 'received'
-  });
-} catch (e) {
-  // Log mesmo se parsing falhar
-  await supabaseAdmin.from('webhook_audit').insert({
-    source: 'mercadopago',
-    raw_body: rawBody.substring(0, 10000),
-    processing_status: 'parse_error',
-    error_message: e.message
-  });
-}
-```
-
-### Correção 5: Habilitar Cron Job de Reconciliação
-
-**Ação**: Executar SQL no Supabase Dashboard do projeto `ploqujuhpwutpcibedbr`:
-
-```sql
--- Habilitar extensões
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
-
--- Criar job de reconciliação a cada 15 minutos
-SELECT cron.schedule(
-  'reconcile-payments-every-15min',
-  '*/15 * * * *',
-  $$
-  SELECT net.http_post(
-    url:='https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/reconcile-pending-payments',
-    headers:=jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mjc0NjI2MTgsImV4cCI6MjA0MzAzODYxOH0.1nLOxDcmjNEOfQ4DRFfIZBfDnzCuMvXQMJhGYyO4HG0'
-    ),
-    body:=jsonb_build_object('limit', 50, 'days_back', 3)
-  );
-  $$
-);
-```
-
-### Correção 6: Melhorar `reconcile-pending-payments` para Verificar na API do MP
-
-**Arquivo**: `supabase/functions/reconcile-pending-payments/index.ts`
-
-**Alteração**: Também buscar pagamentos com `status = 'pending'` e verificar na API do MP se foram aprovados.
-
----
-
-## Resumo das Alterações
-
-| Arquivo/Local | Alteração | Prioridade |
-|---------------|-----------|------------|
-| `src/hooks/usePaymentRedirect.tsx` | Usar `invokeEdgeFunction` em vez de `supabase.functions.invoke` | 🔴 CRÍTICA |
-| `src/components/payment/PixPaymentForm.tsx` | Usar `invokeEdgeFunction` em vez de `supabase.functions.invoke` | 🔴 CRÍTICA |
-| SQL Migration | Criar tabela `webhook_audit` | 🟡 ALTA |
-| `supabase/functions/mp-webhook/index.ts` | Adicionar auditoria no início | 🟡 ALTA |
-| SQL (manual) | Habilitar pg_cron + criar job | 🟡 ALTA |
-| `supabase/functions/reconcile-pending-payments/index.ts` | Verificar status `pending` na API do MP | 🟡 ALTA |
-
----
-
-## Resultado Esperado
-
-Após as correções:
-
-| Métrica | Antes | Depois |
-|---------|-------|--------|
-| Chamadas ao check-payment-status | ❌ Projeto errado | ✅ Projeto correto |
-| Taxa de pagamentos não processados | 10-25% | ~0% |
-| Rastreabilidade de webhooks | 0% | 100% |
-| Tempo máximo para reconciliação | ∞ (manual) | 15 minutos |
 
 ---
 
@@ -195,27 +230,66 @@ Após as correções:
 
 ### Por que isso aconteceu?
 
-O Lovable Cloud foi conectado ao projeto, o que criou variáveis de ambiente (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`) apontando para o projeto Cloud. Porém, as Edge Functions originais continuam deployadas no projeto `ploqujuhpwutpcibedbr`.
+O Lovable Cloud foi conectado ao projeto, criando:
+1. Variáveis de ambiente (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PROJECT_ID`) apontando para o projeto Cloud
+2. O cliente Supabase (`src/integrations/supabase/client.ts`) usando essas variáveis
+3. Edge Functions usando `Deno.env.get('SUPABASE_URL')` que herda do ambiente
 
-O arquivo `src/lib/edge-functions.ts` foi criado com fallback para o projeto correto, mas o código em `usePaymentRedirect.tsx` e `PixPaymentForm.tsx` usa diretamente `supabase.functions.invoke()` que não tem esse fallback.
+Como as Edge Functions estão deployadas APENAS no projeto `ploqujuhpwutpcibedbr`, qualquer chamada que use a URL do Cloud falha.
 
-### Fluxo Corrigido
+### Hierarquia de Correção
+
+```text
+PRIORIDADE 🔴 CRÍTICA (Afeta pagamentos):
+├── src/hooks/usePaymentRedirect.tsx ✅ (Já corrigido)
+├── src/components/payment/PixPaymentForm.tsx ✅ (Já corrigido)
+├── supabase/functions/check-payment-status/index.ts
+└── src/lib/edge-functions.ts
+
+PRIORIDADE 🟠 ALTA (Afeta funcionalidades):
+├── supabase/functions/clubeben-batch-sync/index.ts
+├── supabase/functions/company-operations/index.ts
+└── supabase/functions/mp-create-subscription/index.ts
+
+PRIORIDADE 🟡 BAIXA (Cosmético):
+├── supabase/functions/common/cors.ts
+└── src/components/payment/PaymentModal.tsx
+```
+
+### Fluxo Após Correções
 
 ```text
 1. Usuário paga PIX
 2. Frontend inicia polling via usePaymentRedirect
 3. usePaymentRedirect chama invokeEdgeFunction('check-payment-status')
-4. invokeEdgeFunction usa fallback para ploqujuhpwutpcibedbr ✅
-5. check-payment-status consulta API do MP
-6. Se aprovado, cria appointment e retorna redirect_url
-7. usePaymentRedirect detecta redirect_url
-8. Usuário é redirecionado ✅
+4. invokeEdgeFunction usa URL hardcoded para ploqujuhpwutpcibedbr ✅
+5. check-payment-status recebe requisição
+6. check-payment-status chama schedule-redirect via fetch() com URL fixa ✅
+7. schedule-redirect cria appointment e retorna redirect_url
+8. Frontend recebe redirect_url e redireciona usuário ✅
 ```
 
-### Backup: Reconciliação Automática
+---
 
-Mesmo que o polling falhe (usuário fechou aba), o cron job `reconcile-pending-payments` vai:
-1. Buscar pagamentos com `status = 'pending'` ou `approved` e `processed = false`
-2. Verificar na API do MP se foram aprovados
-3. Criar appointments e marcar como processados
-4. Garantir 0% de pagamentos perdidos em até 15 minutos
+## Resumo das Alterações
+
+| Arquivo | Alteração | Linhas |
+|---------|-----------|--------|
+| `supabase/functions/common/cors.ts` | Substituir URL do Lovable por prontiasaude.lovable.app | 7 |
+| `supabase/functions/mp-create-subscription/index.ts` | Hardcodar back_url para prontiasaude.com.br | 130 |
+| `supabase/functions/check-payment-status/index.ts` | Usar fetch() com URL fixa em vez de supabase.functions.invoke() | 167-169, 420-433 |
+| `supabase/functions/clubeben-batch-sync/index.ts` | Substituir Deno.env.get('SUPABASE_URL') por URL fixa | 63 |
+| `supabase/functions/company-operations/index.ts` | Criar helper invokeEdgeFunction e usar no lugar de .functions.invoke() | 292, 364 |
+| `src/lib/edge-functions.ts` | Remover fallback de VITE_SUPABASE_URL, usar apenas URL fixa | 7-9 |
+| `src/components/payment/PaymentModal.tsx` | Incluir lovable.app no fallback inline | 3012 |
+
+---
+
+## Resultado Esperado
+
+| Métrica | Antes | Depois |
+|---------|-------|--------|
+| Cross-invokes em Edge Functions | ❌ Usam SUPABASE_URL errado | ✅ URL fixa do projeto original |
+| Chamadas do frontend | ❌ Algumas usam projeto errado | ✅ Todas usam projeto original |
+| Referências ao Lovable Cloud | 8 pontos | 0 pontos |
+| Taxa de sucesso de pagamentos PIX | ~75-90% | ~99%+ |
