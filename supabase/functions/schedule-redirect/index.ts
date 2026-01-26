@@ -566,9 +566,13 @@ Deno.serve(async (req) => {
     console.log('[schedule-redirect] Plano Ativo:', payload.plano_ativo);
     console.log('[schedule-redirect] ========================================');
 
+    // ✅ URL FIXA do projeto original onde admin_settings está configurado
+    // NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado (Lovable Cloud)
+    const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+    
     // ✅ Inicializar cliente Supabase ANTES de qualquer uso
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
+      ORIGINAL_SUPABASE_URL,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     
@@ -1304,9 +1308,10 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const redirectUrl = data.url || REDIRECT_URL;
   console.log('[ClickLife] Redirect URL:', redirectUrl);
 
-  // ✅ Salvar appointment no banco
+  // ✅ Salvar appointment no banco - usando URL fixa do projeto original
+  const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
   const supabaseInstance = createClient(
-    Deno.env.get('SUPABASE_URL')!,
+    ORIGINAL_SUPABASE_URL,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
   await saveAppointment(payload, 'clicklife', redirectUrl, supabaseInstance);

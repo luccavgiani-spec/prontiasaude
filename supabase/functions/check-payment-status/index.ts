@@ -442,7 +442,9 @@ Deno.serve(async (req) => {
             horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
             plano_ativo: schedulePayload.plano_ativo || false,
             order_id: orderIdToCheck,
-            payment_id: payment.id
+            payment_id: payment.id,
+            birth_date: schedulePayload.birth_date,
+            sexo: schedulePayload.sexo
           })
         }
       );
