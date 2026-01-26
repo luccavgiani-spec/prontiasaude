@@ -1,5 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState, useRef } from 'react';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface UsePaymentRedirectOptions {
@@ -109,34 +108,9 @@ export function usePaymentRedirect({
           }
         }
 
-        // Estratégia 2: Buscar appointment direto (fallback)
-        let query = supabase
-          .from('appointments')
-          .select('redirect_url, created_at, order_id')
-          .not('redirect_url', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (orderId) {
-          query = query.eq('order_id', orderId);
-        } else if (email) {
-          query = query.eq('email', email);
-        }
-
-        const { data: appointmentData } = await query;
-
-        if (appointmentData?.[0]?.redirect_url) {
-          console.log('[usePaymentRedirect] ✅ Appointment found!', appointmentData[0].redirect_url);
-          hasFoundUrlRef.current = true;
-          if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          }
-          if (isMountedRef.current) {
-            setRedirectUrl(appointmentData[0].redirect_url);
-            setIsChecking(false);
-          }
-        }
+        // Estratégia 2 REMOVIDA: Query direta causava split-brain
+        // (buscava no Lovable Cloud ao invés de Produção)
+        // Agora confiamos apenas no check-payment-status via invokeEdgeFunction
       } catch (err) {
         console.error('[usePaymentRedirect] Exception:', err);
       }
