@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ✅ URL FIXA do projeto original para evitar split-brain
+// NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -46,8 +51,9 @@ Deno.serve(async (req) => {
       throw new Error('MP_ACCESS_TOKEN não configurado');
     }
 
+    // ✅ CORREÇÃO: Usar URL fixa do projeto original (evita split-brain)
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
+      ORIGINAL_SUPABASE_URL,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
@@ -395,13 +401,15 @@ Deno.serve(async (req) => {
               payment_id: payment.payment_id
             };
             
+            // ✅ CORREÇÃO: Usar URL fixa do projeto original (evita split-brain)
             const scheduleResponse = await fetch(
-              `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-redirect`,
+              `${ORIGINAL_SUPABASE_URL}/functions/v1/schedule-redirect`,
               {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+                  'Authorization': `Bearer ${ORIGINAL_ANON_KEY}`,
+                  'apikey': ORIGINAL_ANON_KEY
                 },
                 body: JSON.stringify(enrichedPayload)
               }
