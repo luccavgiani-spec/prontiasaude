@@ -51,9 +51,10 @@ Deno.serve(async (req) => {
       throw new Error('MP_ACCESS_TOKEN não configurado');
     }
 
-    // ✅ CORREÇÃO: Usar URL fixa do projeto original (evita split-brain)
+    // Usar variáveis de ambiente do projeto onde a função está rodando
+    // Isso garante que a função funciona tanto no projeto original quanto no Cloud
     const supabase = createClient(
-      ORIGINAL_SUPABASE_URL,
+      Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
