@@ -3,6 +3,11 @@ import { getWebhookCorsHeaders } from '../common/cors.ts';
 
 const corsHeaders = getWebhookCorsHeaders(); // Webhooks need wildcard CORS
 
+// ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
+// Isso evita o problema de split-brain onde o webhook roda em um projeto diferente
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
 // Helper function to map SKU to service name
 function mapSkuToName(sku: string): string {
   const SERVICE_NAMES: Record<string, string> = {
@@ -441,8 +446,9 @@ Deno.serve(async (req) => {
   let auditId: string | null = null;
 
   // Criar cliente Supabase para auditoria (no início, antes de qualquer parsing)
+  // ✅ CORRIGIDO: Usar URL fixa do projeto original para evitar split-brain
   const supabaseAudit = createClient(
-    Deno.env.get('SUPABASE_URL')!,
+    ORIGINAL_SUPABASE_URL,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
@@ -591,8 +597,9 @@ Deno.serve(async (req) => {
       
       // Gravar métrica de tentativa PIX pending para tracking
       if (payment.status === 'pending' && payment.payment_type_id === 'pix') {
+        // ✅ CORRIGIDO: Usar URL fixa do projeto original
         const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL')!,
+          ORIGINAL_SUPABASE_URL,
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
         );
         
@@ -651,8 +658,9 @@ Deno.serve(async (req) => {
       console.log('[mp-webhook] SKU:', schedulePayload.sku);
       console.log('[mp-webhook] Email:', schedulePayload.email);
 
+      // ✅ CORRIGIDO: Usar URL fixa do projeto original
       const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
+        ORIGINAL_SUPABASE_URL,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
@@ -1124,8 +1132,9 @@ Deno.serve(async (req) => {
       
       console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → Cadastrar ClickLife + WhatsApp`);
 
+      // ✅ CORRIGIDO: Usar URL fixa do projeto original
       const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
+        ORIGINAL_SUPABASE_URL,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
@@ -1423,14 +1432,12 @@ Deno.serve(async (req) => {
     }
 
     // Fluxo normal: Chamar schedule-redirect
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!
-    );
-
+    // ✅ CORRIGIDO: Usar URL fixa do projeto original para evitar split-brain
+    // NÃO usar mais supabase.functions.invoke, usar fetch direto
+    
     // ✅ ENRIQUECER schedulePayload com dados completos do paciente
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
+      ORIGINAL_SUPABASE_URL,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
@@ -1623,25 +1630,47 @@ Deno.serve(async (req) => {
     for (let attempt = 1; attempt <= maxScheduleRetries; attempt++) {
       console.log(`[mp-webhook] 🔄 Tentativa ${attempt}/${maxScheduleRetries} de agendar...`);
       
-      const result = await supabase.functions.invoke('schedule-redirect', {
-        body: {
-          cpf: schedulePayload.cpf,
-          email: schedulePayload.email,
-          nome: schedulePayload.nome,
-          telefone: schedulePayload.telefone,
-          sexo: schedulePayload.sexo,
-          birth_date: schedulePayload.birth_date, // ✅ NOVO: Enviar data de nascimento
-          especialidade: schedulePayload.especialidade || 'Clínico Geral',
-          sku: schedulePayload.sku,
-          horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
-          plano_ativo: schedulePayload.plano_ativo || false,
-          order_id: payment.metadata?.order_id,
-          payment_id: payment.id
-        }
-      });
+      // ✅ CORRIGIDO: Usar fetch direto para a URL fixa do projeto original
+      // Isso evita o split-brain onde supabase.functions.invoke ia para o projeto errado
+      try {
+        const scheduleResponse = await fetch(
+          `${ORIGINAL_SUPABASE_URL}/functions/v1/schedule-redirect`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${ORIGINAL_ANON_KEY}`,
+              'apikey': ORIGINAL_ANON_KEY
+            },
+            body: JSON.stringify({
+              cpf: schedulePayload.cpf,
+              email: schedulePayload.email,
+              nome: schedulePayload.nome,
+              telefone: schedulePayload.telefone,
+              sexo: schedulePayload.sexo,
+              birth_date: schedulePayload.birth_date,
+              especialidade: schedulePayload.especialidade || 'Clínico Geral',
+              sku: schedulePayload.sku,
+              horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+              plano_ativo: schedulePayload.plano_ativo || false,
+              order_id: payment.metadata?.order_id,
+              payment_id: payment.id
+            })
+          }
+        );
 
-      scheduleData = result.data;
-      scheduleError = result.error;
+        if (scheduleResponse.ok) {
+          scheduleData = await scheduleResponse.json();
+          scheduleError = null;
+        } else {
+          const errorText = await scheduleResponse.text();
+          scheduleError = { message: `HTTP ${scheduleResponse.status}: ${errorText}` };
+          scheduleData = null;
+        }
+      } catch (fetchError) {
+        scheduleError = { message: fetchError instanceof Error ? fetchError.message : 'Fetch error' };
+        scheduleData = null;
+      }
 
       // ✅ Sucesso direto: schedule-redirect retornou URL ou appointment_id
       if (!scheduleError && (scheduleData?.url || scheduleData?.appointment_id)) {
