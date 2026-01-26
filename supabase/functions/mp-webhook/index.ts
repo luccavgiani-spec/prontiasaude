@@ -600,6 +600,18 @@ Deno.serve(async (req) => {
         
         if (existingAppointment) {
           console.log('[mp-webhook] ⚠️ Appointment duplicado detectado! Order já processado:', orderId);
+          
+          // ✅ CORREÇÃO: Marcar como processado mesmo quando encontra duplicado
+          await supabaseAdmin
+            .from('pending_payments')
+            .update({ 
+              processed: true, 
+              processed_at: new Date().toISOString(),
+              status: 'approved'
+            })
+            .eq('order_id', orderId);
+          console.log('[mp-webhook] ✅ pending_payment marcado como processed=true (duplicação plano)');
+          
           return new Response(
             JSON.stringify({ ok: true, message: 'Order already processed', appointment_id: existingAppointment.appointment_id }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
@@ -832,21 +844,25 @@ Deno.serve(async (req) => {
           console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (plano):', clicklifeResult.error);
         }
         
-        // Registrar na tabela de auditoria
+        // Registrar na tabela de auditoria (usando schema correto)
         try {
           await supabaseAdmin.from('clicklife_registrations').insert({
-            patient_email: schedulePayload.email,
-            patient_cpf: patientDataForClickLife.cpf,
-            patient_name: nomeCompleto,
-            order_id: payment.metadata?.order_id,
-            payment_id: String(payment.id),
-            sku: schedulePayload.sku,
-            service_name: `Plano ${schedulePayload.sku}`,
-            clicklife_empresa_id: 9083,
-            clicklife_plano_id: clickLifePlanoId,
-            success: clicklifeResult.success,
+            cpf: patientDataForClickLife.cpf,
+            patient_id: patientId || null,
+            status: clicklifeResult.success ? 'success' : 'failed',
             error_message: clicklifeResult.error || null,
-            response_data: clicklifeResult
+            registration_data: {
+              patient_email: schedulePayload.email,
+              patient_name: nomeCompleto,
+              order_id: payment.metadata?.order_id,
+              payment_id: String(payment.id),
+              sku: schedulePayload.sku,
+              service_name: `Plano ${schedulePayload.sku}`,
+              clicklife_empresa_id: 9083,
+              clicklife_plano_id: clickLifePlanoId,
+              success: clicklifeResult.success,
+              response: clicklifeResult
+            }
           });
           console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo (plano)');
         } catch (auditError) {
@@ -1111,23 +1127,35 @@ Deno.serve(async (req) => {
           patientData.birth_date
         );
         
-        // ✅ REGISTRAR NA TABELA DE AUDITORIA
+        // ✅ REGISTRAR NA TABELA DE AUDITORIA (usando schema correto)
         const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
         try {
+          // Buscar patient_id pelo email
+          let auditPatientId = null;
+          const { data: auditPatient } = await supabaseAdmin
+            .from('patients')
+            .select('id')
+            .eq('email', patientData.email || schedulePayload.email)
+            .maybeSingle();
+          auditPatientId = auditPatient?.id || null;
+          
           await supabaseAdmin.from('clicklife_registrations').insert({
-            patient_email: patientData.email || schedulePayload.email,
-            patient_cpf: patientData.cpf,
-            patient_name: nomeCompleto,
-            appointment_id: null, // será preenchido depois
-            order_id: payment.metadata?.order_id,
-            payment_id: String(payment.id),
-            sku: schedulePayload.sku,
-            service_name: serviceName,
-            clicklife_empresa_id: 9083,
-            clicklife_plano_id: 864,
-            success: clicklifeResult.success,
+            cpf: patientData.cpf,
+            patient_id: auditPatientId,
+            status: clicklifeResult.success ? 'success' : 'failed',
             error_message: clicklifeResult.error || null,
-            response_data: clicklifeResult
+            registration_data: {
+              patient_email: patientData.email || schedulePayload.email,
+              patient_name: nomeCompleto,
+              order_id: payment.metadata?.order_id,
+              payment_id: String(payment.id),
+              sku: schedulePayload.sku,
+              service_name: serviceName,
+              clicklife_empresa_id: 9083,
+              clicklife_plano_id: 864,
+              success: clicklifeResult.success,
+              response: clicklifeResult
+            }
           });
           console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo');
         } catch (auditError) {
@@ -1176,21 +1204,26 @@ Deno.serve(async (req) => {
           console.warn('[mp-webhook] ⚠️ Falha no cadastro Communicare:', communicareResult.error);
         }
       } else {
-        // Registrar falha quando não há dados do paciente
+        // Registrar falha quando não há dados do paciente (usando schema correto)
         try {
           await supabaseAdmin.from('clicklife_registrations').insert({
-            patient_email: schedulePayload.email,
-            patient_cpf: null,
-            patient_name: schedulePayload.nome || 'Desconhecido',
-            order_id: payment.metadata?.order_id,
-            payment_id: String(payment.id),
-            sku: schedulePayload.sku,
-            service_name: SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku,
-            clicklife_empresa_id: 9083,
-            clicklife_plano_id: 864,
-            success: false,
+            cpf: schedulePayload.cpf?.replace(/\D/g, '') || 'UNKNOWN',
+            patient_id: null,
+            status: 'failed',
             error_message: 'Patient data not available - patientData is null',
-            response_data: { schedulePayload, payerInfo: payment.payer }
+            registration_data: {
+              patient_email: schedulePayload.email,
+              patient_name: schedulePayload.nome || 'Desconhecido',
+              order_id: payment.metadata?.order_id,
+              payment_id: String(payment.id),
+              sku: schedulePayload.sku,
+              service_name: SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku,
+              clicklife_empresa_id: 9083,
+              clicklife_plano_id: 864,
+              success: false,
+              schedulePayload: schedulePayload,
+              payerInfo: payment.payer
+            }
           });
         } catch (auditError) {
           console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
@@ -1208,6 +1241,18 @@ Deno.serve(async (req) => {
         
         if (existingAppointment) {
           console.log('[mp-webhook] ⚠️ Appointment duplicado detectado (especialista)! Order já processado:', orderId);
+          
+          // ✅ CORREÇÃO: Marcar como processado mesmo quando encontra duplicado
+          await supabaseAdmin
+            .from('pending_payments')
+            .update({ 
+              processed: true, 
+              processed_at: new Date().toISOString(),
+              status: 'approved'
+            })
+            .eq('order_id', orderId);
+          console.log('[mp-webhook] ✅ pending_payment marcado como processed=true (duplicação especialista)');
+          
           return new Response(
             JSON.stringify({ 
               ok: true, 
@@ -1416,21 +1461,34 @@ Deno.serve(async (req) => {
         patientData.birth_date
       );
       
-      // Registrar na tabela de auditoria
+      // Registrar na tabela de auditoria (usando schema correto)
       try {
+        // Buscar patient_id pelo email
+        let universalPatientId = null;
+        const { data: universalPatient } = await supabaseAdmin
+          .from('patients')
+          .select('id')
+          .eq('email', patientData.email || schedulePayload.email)
+          .maybeSingle();
+        universalPatientId = universalPatient?.id || null;
+        
         await supabaseAdmin.from('clicklife_registrations').insert({
-          patient_email: patientData.email || schedulePayload.email,
-          patient_cpf: patientData.cpf,
-          patient_name: nomeCompleto,
-          order_id: payment.metadata?.order_id,
-          payment_id: String(payment.id),
-          sku: schedulePayload.sku,
-          service_name: mapSkuToName(schedulePayload.sku),
-          clicklife_empresa_id: 9083,
-          clicklife_plano_id: 864,
-          success: clicklifeResult.success,
+          cpf: patientData.cpf,
+          patient_id: universalPatientId,
+          status: clicklifeResult.success ? 'success' : 'failed',
           error_message: clicklifeResult.error || null,
-          response_data: clicklifeResult
+          registration_data: {
+            patient_email: patientData.email || schedulePayload.email,
+            patient_name: nomeCompleto,
+            order_id: payment.metadata?.order_id,
+            payment_id: String(payment.id),
+            sku: schedulePayload.sku,
+            service_name: mapSkuToName(schedulePayload.sku),
+            clicklife_empresa_id: 9083,
+            clicklife_plano_id: 864,
+            success: clicklifeResult.success,
+            response: clicklifeResult
+          }
         });
         console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo (universal)');
       } catch (auditError) {
