@@ -1,130 +1,210 @@
 
-# Plano de Correção: Split-Brain nas Edge Functions
+# Plano de Correção: Hierarquia de Roteamento e Reprocessamento
 
-## Resumo Executivo
+## 1. SQL Corrigido para Reprocessar Pagamento do Túlio
 
-Após análise detalhada do código, identifiquei que **duas edge functions ainda usam `Deno.env.get('SUPABASE_URL')`** em vez da URL fixa do projeto original, o que causa o problema de "split-brain" onde as funções podem tentar se conectar ao projeto Lovable Cloud errado.
+Execute este SQL no **Supabase de Produção** (Dashboard → SQL Editor):
 
-## Problemas Identificados
+```sql
+-- 1. Apagar appointment errado (foi para Communicare em vez de ClickLife)
+DELETE FROM appointments 
+WHERE order_id = 'order_1769468646487';
 
-### 1. `check-payment-status/index.ts` (Parcialmente Corrigido)
+-- 2. Atualizar status do pagamento para "approved" e marcar como não processado
+-- NOTA: Removido "updated_at" pois a tabela não tem esta coluna editável diretamente
+UPDATE pending_payments
+SET 
+    status = 'approved',
+    processed = false
+WHERE payment_id = '143631692958'
+  AND order_id = 'order_1769468646487';
 
-**Linhas 172-180** - Os clientes Supabase internos usam URL dinâmica:
-```typescript
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,  // ❌ ERRADO
-  Deno.env.get('SUPABASE_ANON_KEY')!
-);
-
-const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL')!,  // ❌ ERRADO
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-);
+-- 3. Verificar resultado
+SELECT id, order_id, payment_id, status, processed 
+FROM pending_payments 
+WHERE payment_id = '143631692958';
 ```
 
-### 2. `reconcile-pending-payments/index.ts` (Não Corrigido)
+Após executar, chame a edge function `reconcile-pending-payments` para reprocessar.
 
-**Linhas 49-52** - Cliente Supabase principal:
-```typescript
-const supabase = createClient(
-  Deno.env.get('SUPABASE_URL')!,  // ❌ ERRADO
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-);
+---
+
+## 2. Correção da Hierarquia de Roteamento
+
+A hierarquia atual está **parcialmente correta**, mas precisa de ajustes para garantir que os overrides funcionem na ordem certa.
+
+### Hierarquia Solicitada (Nova)
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. PLANO ATIVO? → ClickLife (sempre, ignora tudo)               │
+├─────────────────────────────────────────────────────────────────┤
+│ 2. OVERRIDE ATIVO? → Seguir override                            │
+│    • force_clicklife = true → ClickLife                         │
+│    • force_clicklife_pronto_atendimento = true (ITC6534) → CL   │
+│    • force_communicare_clinico = true (ITC6534) → Communicare   │
+├─────────────────────────────────────────────────────────────────┤
+│ 3. HORÁRIO (7h-19h BRT, dias úteis)                             │
+│    • Horário comercial → continua                               │
+│    • Fora do comercial/fim de semana → ClickLife                │
+├─────────────────────────────────────────────────────────────────┤
+│ 4. ESPECIALIDADE aceita pela Communicare?                       │
+│    • Sim → Communicare                                          │
+│    • Não → ClickLife                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ 5. EXCEÇÕES (WhatsApp, Laudos, etc.)                            │
+│    • Laudos Psicológicos → WhatsApp                             │
+│    • Especialistas → WhatsApp Suporte                           │
+│    • Psicólogos sem plano → Agenda Online                       │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-**Linhas 398-399** - Chamada para schedule-redirect:
+### Problema Atual no Código
+
+O código atual tem a seguinte ordem (incorreta):
+1. Override ClickLife PA (linha 570) ← **ANTES de verificar plano**
+2. Exceções de SKUs (laudos, whatsapp, psicólogos)
+3. Override Emergência (linha 939)
+4. Plano ativo employee (linha 952)
+5. Plano ativo DB (linha 967)
+6. Plano ativo payload (linha 979)
+7. Override Communicare (linha 999)
+8. Horário/Dia
+9. Especialidades
+
+### Correção Necessária
+
+Reorganizar as verificações para seguir a hierarquia correta:
+
 ```typescript
-const scheduleResponse = await fetch(
-  `${Deno.env.get('SUPABASE_URL')}/functions/v1/schedule-redirect`,  // ❌ ERRADO
+// ============ NOVA HIERARQUIA (linhas 540+) ============
+
+// ====== EXCEÇÕES IMUTÁVEIS (SEMPRE processadas primeiro) ======
+
+// LAUDOS PSICOLÓGICOS → SEMPRE WhatsApp (independente de tudo)
+if (payload.sku === 'OVM9892') { ... }
+
+// SKUs que vão para WhatsApp (apenas SEM plano)
+if (WHATSAPP_REDIRECT_SKUS[payload.sku] && !payload.plano_ativo) { ... }
+
+// Psicólogos SEM plano → Agenda Online
+if (isPsicologoSemPlano) { ... }
+
+// Especialistas ou Psicólogos COM plano → WhatsApp Suporte
+if (isEspecialista || isPsicologoComPlano) { ... }
+
+// ====== HIERARQUIA 1: PLANO ATIVO ======
+
+// 1.1 Funcionário empresa com plano
+if (employeeData?.has_active_plan) { → ClickLife }
+
+// 1.2 Plano ativo no banco
+if (patientPlan) { → ClickLife }
+
+// 1.3 Plano ativo no payload
+if (payload.plano_ativo) { → ClickLife }
+
+// ====== A PARTIR DAQUI: SEM PLANO ATIVO ======
+
+// ====== HIERARQUIA 2: OVERRIDES ADMIN ======
+
+// 2.1 Override EMERGÊNCIA (força TUDO para ClickLife)
+if (force_clicklife === true) { → ClickLife }
+
+// 2.2 Override ClickLife para Pronto Atendimento
+if (force_clicklife_pronto_atendimento === true && sku === 'ITC6534') { → ClickLife }
+
+// 2.3 Override Communicare para Clínico Geral
+if (force_communicare_clinico === true && sku === 'ITC6534') { → Communicare }
+
+// ====== HIERARQUIA 3: HORÁRIO ======
+
+// Fim de semana → ClickLife
+if (isWeekend) { → ClickLife }
+
+// Horário noturno (19h-7h BRT) → ClickLife
+if (isNighttime) { → ClickLife }
+
+// ====== HIERARQUIA 4: ESPECIALIDADES ======
+
+// Especialidade não aceita pela Communicare → ClickLife
+if (!communicareNormalized.includes(especialidadeNormalized)) { → ClickLife }
+
+// ====== FALLBACK: Communicare ======
+return → Communicare
 ```
 
-## Correções Necessárias
+---
 
-### Correção 1: `check-payment-status/index.ts`
+## 3. Alterações no Arquivo
 
-Alterar linhas 172-180 para usar a URL fixa já definida no topo do arquivo:
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/schedule-redirect/index.ts` | Reorganizar hierarquia de verificações conforme ordem correta |
+
+### Mudanças Específicas
+
+1. **Mover verificação de plano ativo para ANTES das exceções de SKU** (linhas 609-735 precisam vir DEPOIS da verificação de plano)
+
+2. **Consolidar todos os overrides em um único bloco** (após verificação de plano)
+
+3. **Adicionar logging de diagnóstico** para entender porque o override não funcionou:
 
 ```typescript
-const supabase = createClient(
-  ORIGINAL_SUPABASE_URL,
-  ORIGINAL_ANON_KEY
-);
+const { data: overrideSettings, error: overrideError } = await supabase
+  .from('admin_settings')
+  .select('value')
+  .eq('key', 'force_clicklife_pronto_atendimento')
+  .maybeSingle();
 
-const supabaseAdmin = createClient(
-  ORIGINAL_SUPABASE_URL,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-);
+console.log('[schedule-redirect] 🔍 Override ClickLife PA:', {
+  value: overrideSettings?.value,
+  valueType: typeof overrideSettings?.value,
+  error: overrideError?.message || null,
+  sku: payload.sku,
+  match: (overrideSettings?.value === true || overrideSettings?.value === 'true') && payload.sku === 'ITC6534'
+});
 ```
 
-### Correção 2: `reconcile-pending-payments/index.ts`
+---
 
-**Passo 1** - Adicionar constantes fixas no topo (após linha 2):
-```typescript
-// URL FIXA do projeto original para evitar split-brain
-const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+## 4. Causa Raiz do Bug Atual
+
+Analisando os logs e o código:
+
+1. **O override `force_clicklife_pronto_atendimento = true`** está configurado corretamente no banco (desde 17:00:34 UTC)
+
+2. **`force_communicare_clinico = false`** também está correto
+
+3. **PORÉM** o log mostrou "Override Communicare ativo" que é da linha 1000
+
+4. **Possíveis causas:**
+   - A query do override ClickLife PA (linha 564-568) está retornando `null` 
+   - O `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` pode não estar configurado
+   - A verificação (linha 570) está passando mas não executando o `return`
+
+5. **A mais provável:** O código nunca chegou à linha 570 porque há um `return` anterior (nas exceções de SKU que começam na linha 609)
+
+**O bug está na ordem:** A exceção para SKUs de WhatsApp/especialistas (linhas 609-735) está sendo processada **ANTES** da verificação de override, e alguma dessas condições está sendo atingida incorretamente.
+
+---
+
+## Seção Técnica: Diagrama de Fluxo Atual vs. Proposto
+
+### Fluxo Atual (Problemático)
+
+```text
+Request → Override PA → Exceções SKU → Override Emergência → Plano Ativo → Override Comm → Horário → Especialidade
+                ↓              ↓
+         (não funciona)   (pode retornar antes de verificar overrides)
 ```
 
-**Passo 2** - Alterar linha 49-52:
-```typescript
-const supabase = createClient(
-  ORIGINAL_SUPABASE_URL,
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-);
+### Fluxo Proposto (Correto)
+
+```text
+Request → Exceções FIXAS (Laudos, WhatsApp) → PLANO ATIVO? → Overrides Admin → Horário → Especialidade
+                                                    ↓
+                                          (se sim, ClickLife direto)
 ```
 
-**Passo 3** - Alterar linhas 398-408:
-```typescript
-const scheduleResponse = await fetch(
-  `${ORIGINAL_SUPABASE_URL}/functions/v1/schedule-redirect`,
-  {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${ORIGINAL_ANON_KEY}`,
-      'apikey': ORIGINAL_ANON_KEY
-    },
-    body: JSON.stringify(enrichedPayload)
-  }
-);
-```
-
-## Vendas Órfãs para Reprocessar
-
-Após a correção, será necessário reprocessar 5 vendas que ficaram sem appointment:
-
-| Paciente | Email | SKU | Data |
-|----------|-------|-----|------|
-| Beth | bethaguiar1@hotmail.com | ITC6534 | 26/01 21:09 |
-| Samuel | samuellopodeamaral@gmail.com | QOP1101 | 26/01 21:09 |
-| Lidiane | decastroandradelidiane@gmail.com | ITC6534 | 26/01 20:50 |
-| Ronielly | roniellycostapereira@gmail.com | ITC6534 | 26/01 20:40 |
-| Thiara | thiaraferreiraasilva300@gmail.com | ITC6534 | 26/01 20:17 |
-
-## Fluxo de Implementação
-
-1. **Aplicar correções** nos dois arquivos
-2. **Deploy automático** via Lovable (agora conectado ao Supabase correto)
-3. **Executar reconciliação** para as vendas órfãs
-4. **Verificar logs** do `schedule-redirect` para confirmar que o override ClickLife está funcionando
-
-## Seção Técnica
-
-### Arquivos a Modificar
-
-| Arquivo | Linhas | Alteração |
-|---------|--------|-----------|
-| `supabase/functions/check-payment-status/index.ts` | 172-180 | Substituir `Deno.env.get('SUPABASE_URL')` por `ORIGINAL_SUPABASE_URL` |
-| `supabase/functions/reconcile-pending-payments/index.ts` | 2-3 | Adicionar constantes `ORIGINAL_SUPABASE_URL` e `ORIGINAL_ANON_KEY` |
-| `supabase/functions/reconcile-pending-payments/index.ts` | 49-52 | Usar `ORIGINAL_SUPABASE_URL` no createClient |
-| `supabase/functions/reconcile-pending-payments/index.ts` | 398-408 | Substituir URL dinâmica por `ORIGINAL_SUPABASE_URL` e headers corretos |
-
-### Impacto
-
-- **Baixo risco**: Apenas altera URLs de conexão
-- **Resolve**: Split-brain que causava falhas no processamento
-- **Benefício**: Todas as funções apontarão consistentemente para o projeto correto
-
-### Nota sobre Deploy
-
-Com a conexão ao Lovable Cloud desabilitada e apenas o Supabase conectado, as edge functions serão deployadas automaticamente para o projeto `ploqujuhpwutpcibedbr` quando você aprovar este plano.
+A diferença crítica é que **plano ativo deve ser verificado ANTES dos overrides** para garantir que usuários pagos sempre vão para ClickLife.
