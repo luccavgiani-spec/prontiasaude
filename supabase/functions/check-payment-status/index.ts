@@ -5,6 +5,105 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ✅ Helper para determinar planoId correto baseado no SKU do plano
+function getClickLifePlanIdFromSku(sku: string): number {
+  // Planos com especialistas → 864
+  if (sku.includes('COM_ESP')) return 864;
+  // Planos empresariais → 864
+  if (sku.startsWith('EMPRESA_')) return 864;
+  // Planos sem especialistas → 863
+  if (sku.includes('SEM_ESP')) return 863;
+  // Default para serviços avulsos → 864
+  return 864;
+}
+
+// ✅ Função para registrar paciente na ClickLife (mesma lógica do mp-webhook)
+async function registerClickLifePatient(
+  cpf: string,
+  nome: string,
+  email: string,
+  telefone: string,
+  planoId: number,
+  sexo: string,
+  dataNascimento?: string
+): Promise<{ success: boolean; error?: string; clicklife_patient_id?: string }> {
+  try {
+    const CLICKLIFE_API_BASE = Deno.env.get('CLICKLIFE_API_BASE');
+    const CLICKLIFE_AUTH_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+    const CLICKLIFE_PATIENT_DEFAULT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+
+    if (!CLICKLIFE_API_BASE || !CLICKLIFE_AUTH_TOKEN) {
+      console.warn('[registerClickLifePatient] ClickLife não configurado');
+      return { success: false, error: 'ClickLife não configurado' };
+    }
+
+    // Formatar CPF (apenas números)
+    const cpfNumeros = cpf.replace(/\D/g, '');
+
+    // Formatar telefone (apenas números, sem 55)
+    let telefoneFormatado = telefone.replace(/\D/g, '');
+    if (telefoneFormatado.startsWith('55')) {
+      telefoneFormatado = telefoneFormatado.substring(2);
+    }
+
+    // Formatar data de nascimento
+    let dataNascFormatada = '';
+    if (dataNascimento) {
+      const d = new Date(dataNascimento);
+      dataNascFormatada = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    const payload = {
+      cpf: cpfNumeros,
+      nome: nome,
+      email: email,
+      telefone: telefoneFormatado,
+      senha: CLICKLIFE_PATIENT_DEFAULT_PASSWORD || 'Prontia@2025',
+      sexo: sexo === 'M' ? 'M' : 'F',
+      dataNascimento: dataNascFormatada || '1990-01-01',
+      empresaId: 15, // Prontia
+      planoId: planoId,
+    };
+
+    console.log('[registerClickLifePatient] Registrando na ClickLife:', { cpf: cpfNumeros, nome, email, planoId });
+
+    const response = await fetch(`${CLICKLIFE_API_BASE}/pacientes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CLICKLIFE_AUTH_TOKEN}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    console.log('[registerClickLifePatient] Response:', response.status, responseText);
+
+    if (response.ok || response.status === 201) {
+      try {
+        const data = JSON.parse(responseText);
+        return { 
+          success: true, 
+          clicklife_patient_id: data.id?.toString() || data.pacienteId?.toString() 
+        };
+      } catch {
+        return { success: true };
+      }
+    }
+
+    // Se retornou 409, paciente já existe (não é erro)
+    if (response.status === 409) {
+      console.log('[registerClickLifePatient] Paciente já existe na ClickLife (409)');
+      return { success: true };
+    }
+
+    return { success: false, error: `Status ${response.status}: ${responseText}` };
+  } catch (error) {
+    console.error('[registerClickLifePatient] Erro:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -221,6 +320,40 @@ Deno.serve(async (req) => {
               status: 200, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             });
+          }
+          
+          // ✅ CADASTRAR NA CLICKLIFE AO CRIAR PLANO (redundância com mp-webhook)
+          const { data: patientData } = await supabaseAdmin
+            .from('patients')
+            .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
+            .eq('email', patientEmail)
+            .maybeSingle();
+          
+          if (patientData?.cpf) {
+            const clickLifePlanoId = getClickLifePlanIdFromSku(sku);
+            console.log('[check-payment-status] 🏥 Cadastrando na ClickLife com planoId:', clickLifePlanoId);
+            
+            const clicklifeResult = await registerClickLifePatient(
+              patientData.cpf,
+              `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim(),
+              patientEmail,
+              patientData.phone_e164 || '',
+              clickLifePlanoId,
+              patientData.gender || 'F',
+              patientData.birth_date
+            );
+            
+            if (clicklifeResult.success) {
+              console.log('[check-payment-status] ✅ Paciente cadastrado na ClickLife');
+              await supabaseAdmin
+                .from('patients')
+                .update({ clicklife_registered_at: new Date().toISOString() })
+                .eq('email', patientEmail);
+            } else {
+              console.warn('[check-payment-status] ⚠️ Falha no cadastro ClickLife:', clicklifeResult.error);
+            }
+          } else {
+            console.warn('[check-payment-status] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
           }
           
           // Atualizar pending_payment como processado

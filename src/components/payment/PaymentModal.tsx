@@ -167,6 +167,65 @@ export function PaymentModal({
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
 
+  // ✅ FUNÇÃO: Verificar se o plano foi criado no backend após pagamento
+  const verifyPlanCreation = async (
+    paymentId: string,
+    orderId: string,
+    email: string,
+    planSku: string,
+    maxRetries = 5
+  ): Promise<boolean> => {
+    console.log("[verifyPlanCreation] 🔍 Iniciando verificação de plano:", { paymentId, orderId, email, planSku });
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      console.log(`[verifyPlanCreation] Tentativa ${attempt + 1}/${maxRetries}...`);
+      
+      // 1. Forçar processamento via check-payment-status
+      try {
+        const { data: checkResult, error: checkError } = await supabase.functions.invoke('check-payment-status', {
+          body: { payment_id: paymentId, order_id: orderId, email }
+        });
+        
+        if (checkError) {
+          console.warn('[verifyPlanCreation] Erro no check-payment-status:', checkError);
+        } else if (checkResult?.is_plan && checkResult?.success) {
+          console.log('[verifyPlanCreation] ✅ Plano confirmado pelo check-payment-status');
+          return true;
+        }
+      } catch (e) {
+        console.warn('[verifyPlanCreation] Exceção no check-payment-status:', e);
+      }
+      
+      // 2. Verificar diretamente no banco
+      try {
+        const { data: plan, error: planError } = await supabase
+          .from('patient_plans')
+          .select('id, plan_code')
+          .eq('email', email.toLowerCase())
+          .eq('plan_code', planSku)
+          .eq('status', 'active')
+          .maybeSingle();
+        
+        if (planError) {
+          console.warn('[verifyPlanCreation] Erro ao buscar plano no banco:', planError);
+        } else if (plan) {
+          console.log('[verifyPlanCreation] ✅ Plano encontrado no banco:', plan);
+          return true;
+        }
+      } catch (e) {
+        console.warn('[verifyPlanCreation] Exceção ao buscar plano:', e);
+      }
+      
+      // 3. Aguardar antes de tentar novamente (2 segundos)
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+    
+    console.error('[verifyPlanCreation] ❌ Plano não encontrado após', maxRetries, 'tentativas');
+    return false;
+  };
+
   // Função de validação de data de validade do cartão
   const validateCardExpiry = (cardData: any): { valid: boolean; error?: string } => {
     if (!cardData.expiration_month || !cardData.expiration_year) {
@@ -1595,17 +1654,37 @@ export function PaymentModal({
 
         toast.dismiss();
 
-        // ✅ Detectar se é PLANO e redirecionar diretamente
+        // ✅ Detectar se é PLANO e verificar criação no backend antes de confirmar
         const isPlan = sku.match(/^(IND_|FAM_)/) || sku === 'FAMILY';
 
         if (isPlan) {
-          console.log("[Card Payment] 🎯 PLANO detectado - Redirecionando para área do paciente");
-          toast.success("✅ Plano ativado!", {
-            description: "Redirecionando para área do paciente...",
+          console.log("[Card Payment] 🎯 PLANO detectado - Verificando criação no backend...");
+          toast.info("⏳ Ativando seu plano...", {
+            description: "Aguarde enquanto confirmamos seu plano.",
+            duration: 10000,
           });
+
+          // Verificar se o plano foi criado no backend
+          const planConfirmed = await verifyPlanCreation(data.payment_id, orderId, formData.email, sku);
+
+          if (planConfirmed) {
+            console.log("[Card Payment] ✅ Plano confirmado no backend");
+            toast.dismiss();
+            toast.success("✅ Plano ativado com sucesso!", {
+              description: "Redirecionando para sua área...",
+            });
+          } else {
+            console.warn("[Card Payment] ⚠️ Plano não confirmado, mas pagamento foi aprovado");
+            toast.dismiss();
+            toast.warning("⏳ Seu pagamento foi aprovado!", {
+              description: "O plano será ativado em alguns minutos. Você receberá um email de confirmação.",
+              duration: 8000,
+            });
+          }
+
           setTimeout(() => {
             window.location.href = "/area-do-paciente";
-          }, 1500);
+          }, 2000);
           return; // Não chamar schedule-redirect para planos
         }
 
