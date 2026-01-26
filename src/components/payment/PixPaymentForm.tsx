@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Check, Copy, QrCode, RefreshCw, Clock, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { usePaymentRedirect } from '@/hooks/usePaymentRedirect';
 
 interface PixPaymentFormProps {
@@ -78,7 +78,12 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
     try {
       console.log('[PixPaymentForm] Verificando status do pagamento:', { paymentId, orderId, email });
       
-      const { data, error } = await supabase.functions.invoke('check-payment-status', {
+      // ✅ CORREÇÃO: Usar invokeEdgeFunction para garantir chamada ao projeto correto (ploqujuhpwutpcibedbr)
+      const { data, error } = await invokeEdgeFunction<{
+        approved?: boolean;
+        redirect_url?: string;
+        status?: string;
+      }>('check-payment-status', {
         body: { 
           payment_id: paymentId,
           order_id: orderId,
