@@ -1334,9 +1334,13 @@ Deno.serve(async (req) => {
       console.error('[mp-webhook] ❌ Falha ao obter dados do paciente');
     }
 
-    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
-    // Executar antes do schedule-redirect para garantir que o paciente esteja cadastrado
-    if (patientData && patientData.cpf) {
+    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - APENAS SERVIÇOS (NÃO PLANOS)
+    // Planos são ativados na ClickLife apenas quando o paciente agendar via schedule-redirect
+    // Esta verificação é uma SEGURANÇA EXTRA caso o fluxo mude no futuro
+    const isPlanSku = schedulePayload.sku?.startsWith('IND_') || 
+                      schedulePayload.sku?.startsWith('FAM_');
+    
+    if (!isPlanSku && patientData && patientData.cpf) {
       console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
       
       const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
