@@ -52,16 +52,20 @@ Deno.serve(async (req) => {
     );
 
     // 1. Buscar pending_payments não processados
+    // ✅ MELHORIA: Também buscar status='pending' para verificar se já foram aprovados no MP
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - daysBack);
 
     console.log('[reconcile-pending-payments] Buscando pagamentos desde:', cutoffDate.toISOString());
 
-    // Buscar pagamentos pendentes que não foram processados
+    // Buscar pagamentos que:
+    // - status = 'pending' (podem ter sido aprovados no MP mas não processados)
+    // - OU status = 'approved' E processed = false (aprovados mas falharam no processamento)
     const { data: pendingPayments, error: fetchError } = await supabase
       .from('pending_payments')
       .select('*')
       .or('status.eq.pending,and(status.eq.approved,processed.eq.false)')
+      .eq('processed', false) // Garantir que são não processados
       .gte('created_at', cutoffDate.toISOString())
       .not('payment_id', 'is', null)
       .order('created_at', { ascending: true })
@@ -131,9 +135,9 @@ Deno.serve(async (req) => {
       };
 
       try {
-        console.log(`[reconcile-pending-payments] Processando payment_id: ${payment.payment_id}`);
+        console.log(`[reconcile-pending-payments] Processando payment_id: ${payment.payment_id}, status local: ${payment.status}`);
 
-        // Consultar status no Mercado Pago
+        // Consultar status ATUAL no Mercado Pago
         const mpResponse = await fetch(
           `https://api.mercadopago.com/v1/payments/${payment.payment_id}`,
           {
@@ -154,7 +158,16 @@ Deno.serve(async (req) => {
         const mpPayment = await mpResponse.json();
         result.mp_status = mpPayment.status;
 
-        console.log(`[reconcile-pending-payments] Status MP: ${mpPayment.status}`);
+        console.log(`[reconcile-pending-payments] Status MP: ${mpPayment.status} (status local: ${payment.status})`);
+
+        // ✅ MELHORIA: Se status local é 'pending' mas MP mostra 'approved', atualizar status local
+        if (payment.status === 'pending' && mpPayment.status === 'approved') {
+          console.log(`[reconcile-pending-payments] 🔄 Atualizando status local de 'pending' para 'approved'`);
+          await supabase
+            .from('pending_payments')
+            .update({ status: 'approved' })
+            .eq('id', payment.id);
+        }
 
         // Processar conforme status
         if (mpPayment.status === 'approved') {
