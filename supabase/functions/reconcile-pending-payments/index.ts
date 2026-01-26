@@ -185,14 +185,16 @@ Deno.serve(async (req) => {
             // Buscar patient_id pelo email
             const patientEmail = (schedulePayload?.email || payment.patient_email)?.toLowerCase()?.trim();
             let patientId = null;
+            let patientData = null;
             
             if (patientEmail) {
               const { data: patient } = await supabase
                 .from('patients')
-                .select('id')
+                .select('id, first_name, last_name, cpf, phone_e164, gender, birth_date')
                 .eq('email', patientEmail)
                 .maybeSingle();
               patientId = patient?.id || null;
+              patientData = patient;
             }
             
             // Verificar se já existe plano ativo
@@ -230,6 +232,126 @@ Deno.serve(async (req) => {
                 result.redirect_url = '/area-do-paciente';
                 result.success = true;
                 summary.approved_and_redirected++;
+                
+                // ✅ CADASTRAR NA CLICKLIFE (igual ao mp-webhook)
+                if (patientData?.cpf) {
+                  console.log(`[reconcile-pending-payments] 🏥 Cadastrando paciente na ClickLife...`);
+                  
+                  const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE');
+                  const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+                  const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+                  
+                  if (CLICKLIFE_API && INTEGRATOR_TOKEN && PATIENT_PASSWORD) {
+                    // Determinar planoId correto baseado no SKU
+                    const clickLifePlanoId = sku.includes('COM_ESP') ? 864 : 
+                                             sku.includes('SEM_ESP') ? 863 : 
+                                             sku.startsWith('EMPRESA_') ? 864 : 864;
+                    
+                    const nomeCompleto = `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+                    
+                    // Formatar telefone
+                    let telefoneLimpo = (patientData.phone_e164 || '').replace(/\D/g, '');
+                    if (telefoneLimpo.startsWith('55')) {
+                      telefoneLimpo = telefoneLimpo.substring(2);
+                    }
+                    
+                    // Formatar data de nascimento (YYYY-MM-DD → DD-MM-YYYY)
+                    let birthDateFormatted = '01-01-1990';
+                    if (patientData.birth_date && patientData.birth_date !== '1990-01-01') {
+                      const parts = patientData.birth_date.split('-');
+                      if (parts.length === 3) {
+                        birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                      }
+                    }
+                    
+                    const registerPayload = {
+                      nome: nomeCompleto || 'Paciente',
+                      cpf: patientData.cpf.replace(/\D/g, ''),
+                      email: patientEmail,
+                      senha: PATIENT_PASSWORD,
+                      datanascimento: birthDateFormatted,
+                      sexo: patientData.gender || 'F',
+                      telefone: telefoneLimpo,
+                      logradouro: 'Rua Exemplo',
+                      numero: '123',
+                      bairro: 'Centro',
+                      cep: '01000000',
+                      cidade: 'São Paulo',
+                      estado: 'SP',
+                      empresaid: 9083,
+                      planoid: clickLifePlanoId
+                    };
+                    
+                    try {
+                      // Cadastrar
+                      const registerRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'authtoken': INTEGRATOR_TOKEN
+                        },
+                        body: JSON.stringify(registerPayload)
+                      });
+                      
+                      const registerData = await registerRes.json();
+                      
+                      // Ativar
+                      if (registerRes.ok || registerData.mensagem?.toLowerCase().includes('já cadastrado')) {
+                        const activatePayload = {
+                          authtoken: INTEGRATOR_TOKEN,
+                          cpf: patientData.cpf.replace(/\D/g, ''),
+                          empresaid: 9083,
+                          planoid: clickLifePlanoId,
+                          proposito: 'Ativar'
+                        };
+                        
+                        const activateRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'authtoken': INTEGRATOR_TOKEN
+                          },
+                          body: JSON.stringify(activatePayload)
+                        });
+                        
+                        const activateData = await activateRes.json();
+                        
+                        if (activateRes.ok) {
+                          console.log(`[reconcile-pending-payments] ✅ Paciente cadastrado/ativado na ClickLife`);
+                          
+                          await supabase
+                            .from('patients')
+                            .update({ clicklife_registered_at: new Date().toISOString() })
+                            .eq('id', patientId);
+                          
+                          // Registrar auditoria
+                          await supabase.from('clicklife_registrations').insert({
+                            cpf: patientData.cpf,
+                            patient_id: patientId,
+                            status: 'success',
+                            error_message: null,
+                            registration_data: {
+                              patient_email: patientEmail,
+                              patient_name: nomeCompleto,
+                              order_id: payment.order_id,
+                              payment_id: payment.payment_id,
+                              sku: sku,
+                              service_name: `Plano ${sku}`,
+                              clicklife_empresa_id: 9083,
+                              clicklife_plano_id: clickLifePlanoId,
+                              success: true,
+                              source: 'reconcile-pending-payments'
+                            }
+                          });
+                        } else {
+                          console.warn(`[reconcile-pending-payments] ⚠️ Erro na ativação ClickLife:`, activateData);
+                        }
+                      }
+                    } catch (clicklifeErr) {
+                      console.error(`[reconcile-pending-payments] ❌ Erro ClickLife:`, clicklifeErr);
+                    }
+                  }
+                }
               }
             } else {
               console.log(`[reconcile-pending-payments] ⚠️ Plano já existe`);
