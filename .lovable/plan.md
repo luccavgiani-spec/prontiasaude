@@ -1,134 +1,132 @@
 
+# Plano de Correção: Override ClickLife e Data de Nascimento
 
-# Plano: Botão Copiar Código PIX logo abaixo do QR Code
+## Diagnóstico Confirmado
 
-## Objetivo
-Adicionar um botão compacto de "Copiar Código PIX" diretamente abaixo do QR Code, dentro do mesmo container branco, sem aumentar o tamanho do modal e mantendo o design atual simplificado.
+### Problema 1: Override ClickLife não funcionou
+**Causa**: A edge function `schedule-redirect` usa `Deno.env.get('SUPABASE_URL')` que aponta para o projeto Lovable Cloud (yrsjluhhnhxogdgnbnya), onde a tabela `admin_settings` não tem `force_clicklife_pronto_atendimento = true`.
 
-## Alteração
-
-**Arquivo**: `src/components/payment/PixPaymentForm.tsx`
-
-### Layout Atual (linhas 142-159)
+**Evidência nos logs**:
 ```
-┌─────────────────────────────────┐
-│        [Ícone QrCode]           │
-│       Pague com PIX             │
-│  Escaneie o QR Code ou copie... │
-│  ┌───────────────────────────┐  │
-│  │       [QR CODE]           │  │
-│  │                           │  │
-│  └───────────────────────────┘  │
-└─────────────────────────────────┘
-         ↓ (scroll)
-┌─────────────────────────────────┐
-│ Código PIX Copia e Cola         │
-│ ┌─────────────────────────────┐ │
-│ │ 00020126580014br...         │ │
-│ └─────────────────────────────┘ │
-└─────────────────────────────────┘
-
-[ Copiar Código PIX ] ← Botão separado
+reason: "commercial_hours"  ← Prova que o override NÃO foi acionado
 ```
 
-### Layout Proposto
-```
-┌─────────────────────────────────┐
-│        [Ícone QrCode]           │
-│       Pague com PIX             │
-│  Escaneie o QR Code ou copie... │
-│  ┌───────────────────────────┐  │
-│  │       [QR CODE]           │  │
-│  │                           │  │
-│  └───────────────────────────┘  │
-│                                 │
-│  [ Copy ] Copiar Código PIX     │  ← Botão DENTRO do container
-└─────────────────────────────────┘
+### Problema 2: Data de nascimento usou fallback (01/01/1990)
+**Causa**: O `check-payment-status` não está passando `birth_date` e `sexo` para o `schedule-redirect`, mesmo tendo esses dados no `schedulePayload`.
+
+**Evidência**:
+```typescript
+// check-payment-status linha 435-446 - FALTA birth_date e sexo no body
+body: JSON.stringify({
+  cpf, email, nome, telefone, especialidade, sku, horario_iso, plano_ativo, order_id, payment_id
+  // ❌ birth_date ausente
+  // ❌ sexo ausente
+})
 ```
 
-## Mudanças no Código
+---
 
-### 1. Mover o botão para DENTRO do container do QR Code
+## Correções Necessárias
 
-Adicionar o botão imediatamente após a `<img>` do QR Code, ainda dentro do `<div className="flex flex-col items-center...">`.
+### Correção 1: Forçar URL fixa no `schedule-redirect`
 
-**Código a inserir** (após linha 158, antes do fechamento do container):
+**Arquivo**: `supabase/functions/schedule-redirect/index.ts`
 
-```tsx
-{/* Botão Copiar - Compacto, logo abaixo do QR Code */}
-<Button
-  type="button"
-  onClick={handleCopyCode}
-  variant="outline"
-  className="mt-4 px-6"
-  size="sm"
->
-  {copied ? (
-    <>
-      <Check className="mr-2 h-4 w-4 text-green-600" />
-      Copiado!
-    </>
-  ) : (
-    <>
-      <Copy className="mr-2 h-4 w-4" />
-      Copiar Código PIX
-    </>
-  )}
-</Button>
+**Alteração nas linhas 569-573**:
+
+```typescript
+// ANTES (PROBLEMÁTICO):
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
+
+// DEPOIS (CORRIGIDO):
+// ✅ URL FIXA do projeto original onde admin_settings está configurado
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const supabase = createClient(
+  ORIGINAL_SUPABASE_URL,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 ```
 
-### 2. Remover seção redundante
-
-Remover ou ocultar:
-- **Linhas 161-169**: A seção "Código PIX Copia e Cola" com a caixa de texto mostrando o código longo
-- **Linhas 171-190**: O botão "Copiar Código PIX" que agora foi movido para dentro do container
-
-Isso simplifica ainda mais a interface, já que o código PIX completo não precisa ser exibido em texto (geralmente é muito longo e não traz valor visual).
-
-## Resultado Visual Esperado
-
-```
-┌───────────────────────────────────────┐
-│  ⚠️ NÃO FECHE ESTA ABA!               │
-│  Após realizar o pagamento PIX...     │
-└───────────────────────────────────────┘
-
-┌───────────────────────────────────────┐
-│            [Ícone PIX]                │
-│         Pague com PIX                 │
-│   Escaneie o QR Code ou copie...      │
-│                                       │
-│    ┌─────────────────────────┐        │
-│    │                         │        │
-│    │       [QR CODE]         │        │
-│    │                         │        │
-│    └─────────────────────────┘        │
-│                                       │
-│       [ Copiar Código PIX ]           │
-└───────────────────────────────────────┘
-
-┌───────────────────────────────────────┐
-│  🔵 Aguardando pagamento...           │
-│  Verificando status automaticamente   │
-└───────────────────────────────────────┘
+**Também corrigir linhas 1308-1311** (dentro de `redirectClickLife`):
+```typescript
+const supabaseInstance = createClient(
+  ORIGINAL_SUPABASE_URL,
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+);
 ```
 
-## Benefícios
+---
+
+### Correção 2: Adicionar `birth_date` e `sexo` no `check-payment-status`
+
+**Arquivo**: `supabase/functions/check-payment-status/index.ts`
+
+**Alteração nas linhas 435-446**:
+
+```typescript
+// ANTES:
+body: JSON.stringify({
+  cpf: schedulePayload.cpf,
+  email: schedulePayload.email,
+  nome: schedulePayload.nome,
+  telefone: schedulePayload.telefone,
+  especialidade: schedulePayload.especialidade || 'Clínico Geral',
+  sku: schedulePayload.sku,
+  horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+  plano_ativo: schedulePayload.plano_ativo || false,
+  order_id: orderIdToCheck,
+  payment_id: payment.id
+})
+
+// DEPOIS:
+body: JSON.stringify({
+  cpf: schedulePayload.cpf,
+  email: schedulePayload.email,
+  nome: schedulePayload.nome,
+  telefone: schedulePayload.telefone,
+  especialidade: schedulePayload.especialidade || 'Clínico Geral',
+  sku: schedulePayload.sku,
+  horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+  plano_ativo: schedulePayload.plano_ativo || false,
+  order_id: orderIdToCheck,
+  payment_id: payment.id,
+  birth_date: schedulePayload.birth_date,  // ✅ NOVO
+  sexo: schedulePayload.sexo               // ✅ NOVO
+})
+```
+
+---
+
+## Seção Tecnica: Outras instâncias de createClient no schedule-redirect
+
+Preciso corrigir TODAS as instâncias onde `createClient` usa `SUPABASE_URL`:
+
+| Linha | Contexto | Status |
+|-------|----------|--------|
+| 570 | Inicio da função | Corrigir |
+| 1308 | Dentro de redirectClickLife | Corrigir |
+| Outras | saveAppointment usa supabase passado como parametro | OK (recebe da linha 570) |
+
+---
+
+## Resultado Esperado
 
 | Aspecto | Antes | Depois |
 |---------|-------|--------|
-| Altura do modal | Maior (código + botão separados) | Menor (botão integrado) |
-| Ação de copiar | Requer scroll em mobile | Visível imediatamente |
-| Código PIX em texto | Exibido (poluição visual) | Oculto (apenas copia) |
-| UX mobile | Ruim | Excelente |
+| Override ClickLife | Não funciona (busca em banco errado) | Funciona (URL fixa) |
+| Data de nascimento | Fallback 01/01/1990 | Data real do paciente |
+| Gênero | Pode usar fallback | Valor real do frontend |
 
-## Seção Técnica
+---
 
-**Arquivo modificado**: `src/components/payment/PixPaymentForm.tsx`
+## Arquivos a Modificar
 
-**Alterações**:
-1. Linhas 152-159: Adicionar botão compacto após a tag `<img>`
-2. Linhas 161-190: Remover seção do código em texto e botão duplicado
+1. `supabase/functions/schedule-redirect/index.ts`
+   - Linhas 569-573: Usar ORIGINAL_SUPABASE_URL constante
+   - Linhas 1308-1311: Usar mesma constante
 
-**Componentes utilizados**: `Button` (já importado), ícones `Copy` e `Check` (já importados)
-
+2. `supabase/functions/check-payment-status/index.ts`
+   - Linhas 435-446: Adicionar birth_date e sexo no body
