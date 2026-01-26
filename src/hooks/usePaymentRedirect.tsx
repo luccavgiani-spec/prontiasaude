@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface UsePaymentRedirectOptions {
   orderId?: string;
@@ -74,8 +75,13 @@ export function usePaymentRedirect({
         });
 
         // Estratégia 1: check-payment-status (cria appointment se aprovado)
+        // ✅ CORREÇÃO: Usar invokeEdgeFunction para garantir chamada ao projeto correto (ploqujuhpwutpcibedbr)
         if (paymentId || orderId) {
-          const { data, error } = await supabase.functions.invoke('check-payment-status', {
+          const { data, error } = await invokeEdgeFunction<{
+            approved?: boolean;
+            redirect_url?: string;
+            status?: string;
+          }>('check-payment-status', {
             body: { 
               payment_id: paymentId,
               order_id: orderId,
