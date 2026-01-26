@@ -51,11 +51,11 @@ Deno.serve(async (req) => {
       throw new Error('MP_ACCESS_TOKEN não configurado');
     }
 
-    // Usar variáveis de ambiente do projeto onde a função está rodando
-    // Isso garante que a função funciona tanto no projeto original quanto no Cloud
+    // ✅ CORREÇÃO: Usar URL e KEY fixa do projeto original para evitar split-brain
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      ORIGINAL_SUPABASE_URL,
+      ORIGINAL_SERVICE_ROLE_KEY
     );
 
     // 1. Buscar pending_payments não processados

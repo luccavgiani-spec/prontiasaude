@@ -190,9 +190,12 @@ Deno.serve(async (req) => {
     }
 
     // Buscar dados do paciente no Supabase
+    // ✅ CORREÇÃO: Usar URL e KEY fixa do projeto original
+    const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      ORIGINAL_SUPABASE_URL,
+      ORIGINAL_SERVICE_ROLE_KEY
     );
 
     let query = supabaseAdmin
