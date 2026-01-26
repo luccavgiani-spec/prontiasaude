@@ -434,8 +434,59 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+  let rawBody = '';
+  let parsedPaymentId: string | null = null;
+  let parsedAction: string | null = null;
+  let auditId: string | null = null;
+
+  // Criar cliente Supabase para auditoria (no início, antes de qualquer parsing)
+  const supabaseAudit = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
   try {
-    const body = await req.json();
+    // ✅ AUDITORIA: Ler body como texto primeiro para registrar ANTES de qualquer parsing
+    rawBody = await req.text();
+    
+    // Tentar parsear para extrair IDs
+    let body: any = {};
+    try {
+      body = JSON.parse(rawBody);
+      parsedPaymentId = body?.data?.id?.toString() || null;
+      parsedAction = body?.action || body?.type || null;
+    } catch (parseErr) {
+      // Registrar erro de parsing na auditoria
+      console.error('[mp-webhook] ❌ Erro ao parsear body:', parseErr);
+      
+      const { data: auditData } = await supabaseAudit.from('webhook_audit').insert({
+        source: 'mercadopago',
+        raw_body: rawBody.substring(0, 10000),
+        processing_status: 'parse_error',
+        error_message: parseErr instanceof Error ? parseErr.message : 'Parse error',
+        processing_time_ms: Date.now() - startTime
+      }).select('id').single();
+      
+      auditId = auditData?.id;
+      
+      return new Response(JSON.stringify({ success: false, error: 'Invalid JSON' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // ✅ AUDITORIA: Registrar webhook recebido IMEDIATAMENTE (antes de qualquer lógica)
+    const { data: auditData } = await supabaseAudit.from('webhook_audit').insert({
+      source: 'mercadopago',
+      raw_body: rawBody.substring(0, 10000),
+      parsed_payment_id: parsedPaymentId,
+      parsed_action: parsedAction,
+      processing_status: 'received'
+    }).select('id').single();
+    
+    auditId = auditData?.id;
+    console.log('[mp-webhook] 📋 Auditoria registrada:', auditId);
     
     console.log('[mp-webhook] ========================================');
     console.log('[mp-webhook] 📥 WEBHOOK RECEBIDO:', new Date().toISOString());
@@ -450,6 +501,15 @@ Deno.serve(async (req) => {
 
     if (!validActions.includes(action)) {
       console.log('[mp-webhook] Ignorando action não relacionada a pagamentos:', body.action);
+      
+      // Atualizar auditoria
+      if (auditId) {
+        await supabaseAudit.from('webhook_audit').update({
+          processing_status: 'ignored',
+          processing_time_ms: Date.now() - startTime
+        }).eq('id', auditId);
+      }
+      
       return new Response(JSON.stringify({ success: true, message: 'Action ignored' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -461,6 +521,16 @@ Deno.serve(async (req) => {
     const paymentId = body.data?.id;
     if (!paymentId) {
       console.error('[mp-webhook] Payment ID não encontrado');
+      
+      // Atualizar auditoria
+      if (auditId) {
+        await supabaseAudit.from('webhook_audit').update({
+          processing_status: 'error',
+          error_message: 'Payment ID não encontrado',
+          processing_time_ms: Date.now() - startTime
+        }).eq('id', auditId);
+      }
+      
       return new Response(JSON.stringify({ success: true, message: 'No payment ID' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -1830,6 +1900,15 @@ Deno.serve(async (req) => {
     console.log('[mp-webhook] Appointment ID:', scheduleData?.appointment_id || 'N/A');
     console.log('[mp-webhook] ========================================');
 
+    // ✅ AUDITORIA: Atualizar status para "completed"
+    if (auditId) {
+      await supabaseAudit.from('webhook_audit').update({
+        processing_status: 'completed',
+        response_status: 200,
+        processing_time_ms: Date.now() - startTime
+      }).eq('id', auditId);
+    }
+
     // Sempre retornar 200 OK para MP não retentar
     return new Response(JSON.stringify({ success: true, payment_id: paymentId }), {
       status: 200,
@@ -1838,6 +1917,17 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[mp-webhook] Error:', error);
+    
+    // ✅ AUDITORIA: Registrar erro
+    if (auditId) {
+      await supabaseAudit.from('webhook_audit').update({
+        processing_status: 'error',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        response_status: 200,
+        processing_time_ms: Date.now() - startTime
+      }).eq('id', auditId);
+    }
+    
     // Sempre retornar 200 para MP não retentar
     return new Response(JSON.stringify({ success: true, error: 'Internal error' }), {
       status: 200,
