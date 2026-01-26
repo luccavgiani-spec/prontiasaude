@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
+// ✅ URL FIXA do projeto original onde as Edge Functions estão deployadas
+// NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado (Lovable Cloud)
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -58,14 +63,15 @@ Deno.serve(async (req) => {
         console.log(`[ClubeBen Batch Sync] Syncing patient ${patient.id} with plan ${activePlan.plan_code}`);
         
         try {
-          // Disparar clubeben-sync individual
+          // Disparar clubeben-sync individual - usando URL fixa do projeto original
           const syncResponse = await fetch(
-            `${Deno.env.get('SUPABASE_URL')}/functions/v1/clubeben-sync`,
+            `${ORIGINAL_SUPABASE_URL}/functions/v1/clubeben-sync`,
             {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                'apikey': ORIGINAL_ANON_KEY
               },
               body: JSON.stringify({
                 user_id: patient.id,

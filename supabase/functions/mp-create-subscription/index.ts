@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
         transaction_amount: transactionAmount,
         currency_id: 'BRL'
       },
-      back_url: `${Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '')}.lovable.app/area-do-paciente`,
+      back_url: 'https://prontiasaude.com.br/area-do-paciente',
       status: 'authorized' // Iniciar como autorizada (cobrança imediata)
     };
 

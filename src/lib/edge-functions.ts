@@ -1,21 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
- * Base URL das Edge Functions do projeto Supabase original (ploqujuhpwutpcibedbr)
- * Usa VITE_SUPABASE_URL do build ou fallback para URL hardcoded do projeto original
+ * ✅ URL FIXA do projeto Supabase original (ploqujuhpwutpcibedbr)
+ * IMPORTANTE: NÃO usar VITE_SUPABASE_URL pois pode apontar para projeto errado (Lovable Cloud)
+ * As Edge Functions estão deployadas APENAS neste projeto.
  */
-const SUPABASE_URL = 
-  (import.meta as any).env?.VITE_SUPABASE_URL as string | undefined ||
-  "https://ploqujuhpwutpcibedbr.supabase.co";
+const SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 /**
- * Chave pública do Supabase (anon key do projeto original)
+ * ✅ Chave pública (anon key) do projeto original - hardcoded para segurança
  */
-const SUPABASE_ANON_KEY = 
-  (import.meta as any).env?.VITE_SUPABASE_ANON_KEY as string | undefined ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I";
 
-const EDGE_FUNCTIONS_URL = `${SUPABASE_URL.replace(/\/$/, "")}/functions/v1`;
+const EDGE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
 type InvokeOptions = {
   body?: any;

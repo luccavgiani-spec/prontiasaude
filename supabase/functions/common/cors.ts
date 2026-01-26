@@ -4,7 +4,7 @@
 const ALLOWED_ORIGINS = [
   'https://prontiasaude.com.br',
   'https://www.prontiasaude.com.br',
-  'https://9bc3ce56-2fcc-49e0-81b3-829d5921f2b4.lovableproject.com', // Lovable preview
+  'https://prontiasaude.lovable.app', // Published app URL
   'http://localhost:5173', // Local development
 ];
 

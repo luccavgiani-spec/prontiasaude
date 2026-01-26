@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// ✅ URL FIXA do projeto original onde as Edge Functions estão deployadas
+// NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado (Lovable Cloud)
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -416,21 +421,34 @@ Deno.serve(async (req) => {
       // ==========================================
       console.log('[check-payment-status] 🎉 PIX/Cartão aprovado para SERVIÇO! Criando appointment...');
 
-      // Chamar schedule-redirect para criar appointment
-      const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke('schedule-redirect', {
-        body: {
-          cpf: schedulePayload.cpf,
-          email: schedulePayload.email,
-          nome: schedulePayload.nome,
-          telefone: schedulePayload.telefone,
-          especialidade: schedulePayload.especialidade || 'Clínico Geral',
-          sku: schedulePayload.sku,
-          horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
-          plano_ativo: schedulePayload.plano_ativo || false,
-          order_id: orderIdToCheck,
-          payment_id: payment.id
+      // ✅ CORREÇÃO: Chamar schedule-redirect via fetch direto com URL fixa do projeto original
+      // NÃO usar supabase.functions.invoke() pois usa SUPABASE_URL que pode apontar para projeto errado
+      const scheduleResponse = await fetch(
+        `${ORIGINAL_SUPABASE_URL}/functions/v1/schedule-redirect`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${ORIGINAL_ANON_KEY}`,
+            'apikey': ORIGINAL_ANON_KEY
+          },
+          body: JSON.stringify({
+            cpf: schedulePayload.cpf,
+            email: schedulePayload.email,
+            nome: schedulePayload.nome,
+            telefone: schedulePayload.telefone,
+            especialidade: schedulePayload.especialidade || 'Clínico Geral',
+            sku: schedulePayload.sku,
+            horario_iso: schedulePayload.horario_iso || new Date().toISOString(),
+            plano_ativo: schedulePayload.plano_ativo || false,
+            order_id: orderIdToCheck,
+            payment_id: payment.id
+          })
         }
-      });
+      );
+
+      const scheduleData = scheduleResponse.ok ? await scheduleResponse.json() : null;
+      const scheduleError = !scheduleResponse.ok ? { message: `HTTP ${scheduleResponse.status}` } : null;
 
       if (scheduleError) {
         console.error('[check-payment-status] Erro ao criar appointment:', scheduleError);
