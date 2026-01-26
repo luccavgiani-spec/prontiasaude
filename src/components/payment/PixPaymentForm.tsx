@@ -156,38 +156,28 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
             className="w-64 h-64 mx-auto"
           />
         </div>
-      </div>
 
-      {/* PIX Code */}
-      <div className="space-y-2">
-        <label className="block text-sm font-medium">Código PIX Copia e Cola</label>
-        <div className="flex gap-2">
-          <div className="flex-1 p-3 bg-muted rounded-lg border text-sm font-mono break-all max-h-20 overflow-y-auto">
-            {qrCode}
-          </div>
-        </div>
+        {/* Botão Copiar - Compacto, logo abaixo do QR Code */}
+        <Button
+          type="button"
+          onClick={handleCopyCode}
+          variant="outline"
+          className="mt-4 px-6"
+          size="sm"
+        >
+          {copied ? (
+            <>
+              <Check className="mr-2 h-4 w-4 text-green-600" />
+              Copiado!
+            </>
+          ) : (
+            <>
+              <Copy className="mr-2 h-4 w-4" />
+              Copiar Código PIX
+            </>
+          )}
+        </Button>
       </div>
-
-      {/* Copy Button */}
-      <Button
-        type="button"
-        onClick={handleCopyCode}
-        variant="outline"
-        className="w-full"
-        size="lg"
-      >
-        {copied ? (
-          <>
-            <Check className="mr-2 h-4 w-4 text-green-600" />
-            Copiado!
-          </>
-        ) : (
-          <>
-            <Copy className="mr-2 h-4 w-4" />
-            Copiar Código PIX
-          </>
-        )}
-      </Button>
 
       {/* Status com Progress Bar */}
       <div className="space-y-4">
