@@ -2,6 +2,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 import { getCorsHeaders } from '../common/cors.ts';
 import { validateCPF, cleanCPF } from '../common/cpf-validator.ts';
 
+// ✅ URL FIXA do projeto original onde as Edge Functions estão deployadas
+// NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado (Lovable Cloud)
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+const ORIGINAL_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I';
+
+/**
+ * ✅ Helper para invocar Edge Functions com URL fixa do projeto original
+ * Evita problemas quando SUPABASE_URL aponta para projeto errado (Lovable Cloud)
+ */
+async function invokeEdgeFunction(functionName: string, body: any, authToken?: string): Promise<{ data: any; error: any }> {
+  try {
+    const response = await fetch(
+      `${ORIGINAL_SUPABASE_URL}/functions/v1/${functionName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken || ORIGINAL_ANON_KEY}`,
+          'apikey': ORIGINAL_ANON_KEY
+        },
+        body: JSON.stringify(body)
+      }
+    );
+    const data = await response.json().catch(() => null);
+    return { data, error: response.ok ? null : data };
+  } catch (error) {
+    console.error(`[invokeEdgeFunction] Error calling ${functionName}:`, error);
+    return { data: null, error };
+  }
+}
+
 interface CompanyData {
   razao_social: string;
   cnpj: string;
@@ -288,15 +319,14 @@ Deno.serve(async (req) => {
       // Enviar email
       const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite?.token || invite_token}`;
       
+      // ✅ Enviar email usando helper com URL fixa (evita problema do Lovable Cloud)
       try {
-        const emailResult = await supabaseClient.functions.invoke('send-form-emails', {
-          body: {
-            type: 'employee-invite',
-            data: {
-              email,
-              companyName: company.razao_social,
-              inviteLink: inviteLink
-            }
+        const emailResult = await invokeEdgeFunction('send-form-emails', {
+          type: 'employee-invite',
+          data: {
+            email,
+            companyName: company.razao_social,
+            inviteLink: inviteLink
           }
         });
         
@@ -360,15 +390,14 @@ Deno.serve(async (req) => {
       const inviteLink = `https://prontiasaude.com.br/completar-perfil?token=${invite.token}`;
       const companyName = (invite.companies as any)?.razao_social || 'Empresa';
       
+      // ✅ Reenviar email usando helper com URL fixa (evita problema do Lovable Cloud)
       try {
-        await supabaseClient.functions.invoke('send-form-emails', {
-          body: {
-            type: 'employee-invite',
-            data: {
-              email: invite.email,
-              empresa: companyName,
-              invite_link: inviteLink
-            }
+        await invokeEdgeFunction('send-form-emails', {
+          type: 'employee-invite',
+          data: {
+            email: invite.email,
+            empresa: companyName,
+            invite_link: inviteLink
           }
         });
         

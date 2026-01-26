@@ -3009,7 +3009,11 @@ export function PaymentModal({
     </>
   );
 
-  const isInlineFallback = typeof window !== "undefined" && window.location.hostname.includes("lovableproject.com");
+  // Fallback inline para ambientes de preview ou caso o Dialog tenha problemas
+  const isInlineFallback = typeof window !== "undefined" && (
+    window.location.hostname.includes("lovableproject.com") || 
+    window.location.hostname.includes("lovable.app")
+  );
 
   if (!open) return null;
 
