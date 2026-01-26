@@ -169,13 +169,14 @@ Deno.serve(async (req) => {
       
       console.log('[check-payment-status] 📋 schedulePayload encontrado:', JSON.stringify(schedulePayload));
 
+      // ✅ CORREÇÃO: Usar URL fixa do projeto original (evita split-brain)
       const supabase = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_ANON_KEY')!
+        ORIGINAL_SUPABASE_URL,
+        ORIGINAL_ANON_KEY
       );
 
       const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
+        ORIGINAL_SUPABASE_URL,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
