@@ -791,6 +791,71 @@ Deno.serve(async (req) => {
 
       console.log('[mp-webhook] ✅ Plano processado com sucesso');
       
+      // ✅ CADASTRAR NA CLICKLIFE AO COMPRAR PLANO
+      // Buscar dados completos do paciente para cadastro ClickLife
+      const { data: patientDataForClickLife } = await supabaseAdmin
+        .from('patients')
+        .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
+        .eq('email', schedulePayload.email?.toLowerCase()?.trim())
+        .maybeSingle();
+      
+      if (patientDataForClickLife?.cpf) {
+        console.log('[mp-webhook] 🏥 Cadastrando paciente na ClickLife (compra de plano)...');
+        
+        // Determinar planoId correto baseado no SKU
+        // COM_ESP → 864 (com especialistas)
+        // SEM_ESP → 863 (sem especialistas)
+        // EMPRESA_ → 864 (empresariais têm especialistas)
+        const clickLifePlanoId = schedulePayload.sku.includes('COM_ESP') ? 864 : 
+                                  schedulePayload.sku.includes('SEM_ESP') ? 863 : 
+                                  schedulePayload.sku.startsWith('EMPRESA_') ? 864 : 864;
+        
+        const nomeCompleto = `${patientDataForClickLife.first_name || ''} ${patientDataForClickLife.last_name || ''}`.trim();
+        
+        const clicklifeResult = await registerClickLifePatientSimple(
+          patientDataForClickLife.cpf,
+          nomeCompleto || schedulePayload.nome || 'Paciente',
+          schedulePayload.email,
+          patientDataForClickLife.phone_e164 || schedulePayload.telefone || '',
+          clickLifePlanoId,
+          patientDataForClickLife.gender || 'F',
+          patientDataForClickLife.birth_date
+        );
+        
+        if (clicklifeResult.success) {
+          console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife (plano) com planoId:', clickLifePlanoId);
+          await supabaseAdmin
+            .from('patients')
+            .update({ clicklife_registered_at: new Date().toISOString() })
+            .eq('email', schedulePayload.email?.toLowerCase()?.trim());
+        } else {
+          console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (plano):', clicklifeResult.error);
+        }
+        
+        // Registrar na tabela de auditoria
+        try {
+          await supabaseAdmin.from('clicklife_registrations').insert({
+            patient_email: schedulePayload.email,
+            patient_cpf: patientDataForClickLife.cpf,
+            patient_name: nomeCompleto,
+            order_id: payment.metadata?.order_id,
+            payment_id: String(payment.id),
+            sku: schedulePayload.sku,
+            service_name: `Plano ${schedulePayload.sku}`,
+            clicklife_empresa_id: 9083,
+            clicklife_plano_id: clickLifePlanoId,
+            success: clicklifeResult.success,
+            error_message: clicklifeResult.error || null,
+            response_data: clicklifeResult
+          });
+          console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo (plano)');
+        } catch (auditError) {
+          console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
+        }
+      } else {
+        console.warn('[mp-webhook] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
+      }
+      
       // ✅ Criar appointment para permitir polling do PaymentModal (PIX)
       if (payment.metadata?.order_id) {
         const appointmentId = `PLN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1334,13 +1399,9 @@ Deno.serve(async (req) => {
       console.error('[mp-webhook] ❌ Falha ao obter dados do paciente');
     }
 
-    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - APENAS SERVIÇOS (NÃO PLANOS)
-    // Planos são ativados na ClickLife apenas quando o paciente agendar via schedule-redirect
-    // Esta verificação é uma SEGURANÇA EXTRA caso o fluxo mude no futuro
-    const isPlanSku = schedulePayload.sku?.startsWith('IND_') || 
-                      schedulePayload.sku?.startsWith('FAM_');
-    
-    if (!isPlanSku && patientData && patientData.cpf) {
+    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
+    // Executar para garantir que o paciente esteja cadastrado
+    if (patientData && patientData.cpf) {
       console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
       
       const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;

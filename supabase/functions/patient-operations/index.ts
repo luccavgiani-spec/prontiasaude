@@ -1161,6 +1161,46 @@ serve(async (req) => {
           activated_by: user.email
         });
 
+        // ✅ CADASTRAR NA CLICKLIFE AO ATIVAR PLANO MANUALMENTE
+        console.log('[activate_plan_manual] 🏥 Cadastrando paciente na ClickLife...');
+
+        // Buscar dados completos do paciente para cadastro ClickLife
+        const { data: patientFull } = await supabase
+          .from('patients')
+          .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
+          .eq('email', patient_email.toLowerCase().trim())
+          .maybeSingle();
+
+        if (patientFull?.cpf) {
+          // Determinar planoId baseado no plan_code
+          // COM_ESP → 864 (com especialistas)
+          // SEM_ESP → 863 (sem especialistas)
+          // EMPRESA_ → 864 (empresariais têm especialistas)
+          const clickLifePlanoId = plan_code.includes('COM_ESP') ? 864 : 
+                                    plan_code.includes('SEM_ESP') ? 863 : 
+                                    plan_code.startsWith('EMPRESA_') ? 864 : 864;
+          
+          // Chamar edge function de ativação ClickLife
+          try {
+            const { data: clicklifeResult, error: clicklifeError } = await supabase.functions.invoke('activate-clicklife-manual', {
+              body: { 
+                email: patient_email,
+                plan_id: clickLifePlanoId
+              }
+            });
+            
+            if (clicklifeError) {
+              console.warn('[activate_plan_manual] ⚠️ Falha no cadastro ClickLife:', clicklifeError);
+            } else {
+              console.log('[activate_plan_manual] ✅ Paciente cadastrado na ClickLife com planoId:', clickLifePlanoId);
+            }
+          } catch (clicklifeErr) {
+            console.warn('[activate_plan_manual] ⚠️ Erro ao invocar activate-clicklife-manual:', clicklifeErr);
+          }
+        } else {
+          console.warn('[activate_plan_manual] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
+        }
+
         // TODO: Enviar email (opcional)
         if (send_email) {
           console.log('[activate_plan_manual] Email notification queued for:', patient_email);
