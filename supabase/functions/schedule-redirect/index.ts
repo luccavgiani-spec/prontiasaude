@@ -498,41 +498,21 @@ async function saveAppointment(
       status: 'confirmed',
       provider: provider,
       redirect_url: redirectUrl,
-      meeting_url: redirectUrl,
+      // meeting_url removido - coluna não existe no projeto original
       order_id: payload.order_id
     };
     
-    // UPSERT para evitar duplicação por race condition
+    // INSERT simples (projeto original não tem unique constraint em order_id)
+    // Verificação de duplicação já foi feita no início da função
     const { data: insertedData, error } = await supabase
       .from('appointments')
-      .upsert(appointmentData, { 
-        onConflict: 'order_id',
-        ignoreDuplicates: true 
-      })
+      .insert(appointmentData)
       .select()
       .maybeSingle();
     
     if (error) {
       console.error('[saveAppointment] ❌ ERRO ao salvar appointment:', error);
       throw error;
-    }
-    
-    // Se já existia (race condition evitada), buscar o appointment existente
-    if (!insertedData && payload.order_id) {
-      const { data: existing } = await supabase
-        .from('appointments')
-        .select('appointment_id, redirect_url')
-        .eq('order_id', payload.order_id)
-        .maybeSingle();
-      
-      if (existing) {
-        console.log('[saveAppointment] ✅ Usando appointment existente (race condition evitada)');
-        return { 
-          appointment_id: existing.appointment_id, 
-          redirect_url: existing.redirect_url || redirectUrl,
-          existing: true 
-        };
-      }
     }
     
     console.log('[saveAppointment] ✅ APPOINTMENT SALVO COM SUCESSO!');
@@ -570,10 +550,14 @@ Deno.serve(async (req) => {
     // NÃO usar Deno.env.get('SUPABASE_URL') pois pode apontar para projeto errado (Lovable Cloud)
     const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
     
+    // ✅ CORREÇÃO: Usar Service Role Key do projeto ORIGINAL (não do Lovable Cloud)
+    // A key do Lovable Cloud (SUPABASE_SERVICE_ROLE_KEY) não funciona no projeto original
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
     // ✅ Inicializar cliente Supabase ANTES de qualquer uso
     const supabase = createClient(
       ORIGINAL_SUPABASE_URL,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      ORIGINAL_SERVICE_ROLE_KEY
     );
     
     // ✅ OVERRIDE ADMIN: Forçar ClickLife para Pronto Atendimento
@@ -1167,10 +1151,12 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
         const errorText = await activationRes.text();
         console.error('[ClickLife] Ativação direta falhou:', activationRes.status, errorText);
         
-        // ✅ ETAPA 5: Registrar métrica de erro
+        // ✅ ETAPA 5: Registrar métrica de erro (usar key do projeto original)
+        const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+        const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
         const supabase = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          ORIGINAL_SUPABASE_URL,
+          ORIGINAL_SERVICE_ROLE_KEY
         );
         
         await supabase.from('metrics').insert({
@@ -1308,11 +1294,12 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const redirectUrl = data.url || REDIRECT_URL;
   console.log('[ClickLife] Redirect URL:', redirectUrl);
 
-  // ✅ Salvar appointment no banco - usando URL fixa do projeto original
+  // ✅ Salvar appointment no banco - usando URL e KEY fixa do projeto original
   const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+  const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const supabaseInstance = createClient(
     ORIGINAL_SUPABASE_URL,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    ORIGINAL_SERVICE_ROLE_KEY
   );
   await saveAppointment(payload, 'clicklife', redirectUrl, supabaseInstance);
 

@@ -169,15 +169,17 @@ Deno.serve(async (req) => {
       
       console.log('[check-payment-status] 📋 schedulePayload encontrado:', JSON.stringify(schedulePayload));
 
-      // ✅ CORREÇÃO: Usar URL fixa do projeto original (evita split-brain)
+      // ✅ CORREÇÃO: Usar URL e KEY fixa do projeto original (evita split-brain)
+      const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      
       const supabase = createClient(
         ORIGINAL_SUPABASE_URL,
-        ORIGINAL_ANON_KEY
+        ORIGINAL_SERVICE_ROLE_KEY
       );
 
       const supabaseAdmin = createClient(
         ORIGINAL_SUPABASE_URL,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        ORIGINAL_SERVICE_ROLE_KEY
       );
 
       const orderIdToCheck = payment.metadata?.order_id || order_id;

@@ -446,10 +446,11 @@ Deno.serve(async (req) => {
   let auditId: string | null = null;
 
   // Criar cliente Supabase para auditoria (no início, antes de qualquer parsing)
-  // ✅ CORRIGIDO: Usar URL fixa do projeto original para evitar split-brain
+  // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original para evitar split-brain
+  const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabaseAudit = createClient(
     ORIGINAL_SUPABASE_URL,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    ORIGINAL_SERVICE_ROLE_KEY
   );
 
   try {
@@ -597,10 +598,11 @@ Deno.serve(async (req) => {
       
       // Gravar métrica de tentativa PIX pending para tracking
       if (payment.status === 'pending' && payment.payment_type_id === 'pix') {
-        // ✅ CORRIGIDO: Usar URL fixa do projeto original
+        // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original
+        const ORIGINAL_SRK = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const supabaseAdmin = createClient(
           ORIGINAL_SUPABASE_URL,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+          ORIGINAL_SRK
         );
         
         await supabaseAdmin.from('metrics').insert({
@@ -1132,10 +1134,11 @@ Deno.serve(async (req) => {
       
       console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → Cadastrar ClickLife + WhatsApp`);
 
-      // ✅ CORRIGIDO: Usar URL fixa do projeto original
+      // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original
+      const ORIGINAL_SRK = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabaseAdmin = createClient(
         ORIGINAL_SUPABASE_URL,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        ORIGINAL_SRK
       );
 
       // ✅ BUSCAR/CRIAR dados completos do paciente
@@ -1436,9 +1439,10 @@ Deno.serve(async (req) => {
     // NÃO usar mais supabase.functions.invoke, usar fetch direto
     
     // ✅ ENRIQUECER schedulePayload com dados completos do paciente
+    const ORIGINAL_SRK = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(
       ORIGINAL_SUPABASE_URL,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      ORIGINAL_SRK
     );
 
     let patientData = (await supabaseAdmin
