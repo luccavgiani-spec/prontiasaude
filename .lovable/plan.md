@@ -1,115 +1,169 @@
 
-## Análise: Cadastro Automático de Pacientes na ClickLife Durante Compra de Planos
+## Correção: Cadastro na ClickLife ao Comprar ou Ativar Planos
 
 ### Problema Identificado
 
-Quando um paciente **compra um plano** (SKU iniciando com `IND_` ou `FAM_`), ele está sendo **automaticamente cadastrado e ativado na ClickLife** com o plano ID **864** (consultas avulsas). Isso é comportamento indesejado porque:
+1. **Alteração anterior INCORRETA**: Eu adicionei um guard que **impedia** o cadastro na ClickLife para planos, mas na verdade:
+   - Quando um usuário **compra um plano** → DEVE cadastrar na ClickLife com o planoId correto
+   - Quando o admin **ativa manualmente via Painel** → DEVE cadastrar na ClickLife com o planoId correto
 
-1. **Planos não devem pré-cadastrar na ClickLife** - O cadastro na ClickLife só deve ocorrer quando o paciente **usar** o plano para agendar uma consulta
-2. **Uso do planoId incorreto** - Está usando `864` (consultas avulsas) em vez do plano correspondente ao que foi comprado
+2. **Estado atual**: 
+   - O fluxo de compra de plano no `mp-webhook` **termina com return** (linha 821) e **não cadastra na ClickLife**
+   - A ativação manual via `activate_plan_manual` em `patient-operations` também **não cadastra na ClickLife**
+   - A minha alteração anterior apenas adicionou um guard redundante (que agora está errado)
 
 ---
 
-### Causa Raiz
+### Correção Necessária
 
-O arquivo `supabase/functions/mp-webhook/index.ts` contém um bloco de **"CADASTRO UNIVERSAL NA CLICKLIFE"** (linhas 1337-1386) que é executado para **TODAS** as compras aprovadas, incluindo planos:
+#### 1. Reverter a alteração anterior no `mp-webhook`
+- Remover o guard `!isPlanSku` que adicionei
+- Restaurar o comportamento original
 
+#### 2. Adicionar cadastro ClickLife no fluxo de compra de plano
+- **Arquivo**: `supabase/functions/mp-webhook/index.ts`
+- **Localização**: Dentro do bloco `if (isPlanPurchase)` (linhas 579-829), **antes do return**
+- **Lógica**: 
+  - Determinar o `planoId` correto baseado no SKU do plano:
+    - `IND_COM_ESP_*` ou `FAM_COM_ESP_*` → planoId **864** (com especialistas)
+    - `IND_SEM_ESP_*` ou `FAM_SEM_ESP_*` → planoId **863** (sem especialistas)
+  - Chamar a função de cadastro na ClickLife com o planoId correto
+
+#### 3. Adicionar cadastro ClickLife na ativação manual de plano
+- **Arquivo**: `supabase/functions/patient-operations/index.ts`
+- **Localização**: Operação `activate_plan_manual` (linha ~1155), **após criar o plano**
+- **Lógica**: Mesma lógica de mapeamento de planoId
+
+---
+
+### Mapeamento de PlanoId ClickLife
+
+| Tipo de Plano | SKUs | ClickLife PlanoId |
+|---------------|------|-------------------|
+| **Com Especialistas** | `IND_COM_ESP_*`, `FAM_COM_ESP_*` | **864** |
+| **Sem Especialistas** | `IND_SEM_ESP_*`, `FAM_SEM_ESP_*` | **863** |
+| **Empresarial** | `EMPRESA_*` | **864** |
+| **Serviço Avulso** | Outros SKUs | **864** (padrão atual) |
+
+---
+
+### Alterações Técnicas
+
+#### Arquivo 1: `supabase/functions/mp-webhook/index.ts`
+
+**A. Reverter guard na linha ~1337-1343:**
+```diff
+-    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - APENAS SERVIÇOS (NÃO PLANOS)
+-    // Planos são ativados na ClickLife apenas quando o paciente agendar via schedule-redirect
+-    // Esta verificação é uma SEGURANÇA EXTRA caso o fluxo mude no futuro
+-    const isPlanSku = schedulePayload.sku?.startsWith('IND_') || 
+-                      schedulePayload.sku?.startsWith('FAM_');
+-    
+-    if (!isPlanSku && patientData && patientData.cpf) {
++    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
++    // Executar para garantir que o paciente esteja cadastrado
++    if (patientData && patientData.cpf) {
+```
+
+**B. Adicionar cadastro ClickLife no fluxo de plano (antes do return ~linha 792-819):**
+
+Adicionar função helper para determinar planoId:
 ```typescript
-// ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
-if (patientData && patientData.cpf) {
-  console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
+// Helper para determinar planoId correto baseado no SKU do plano
+function getClickLifePlanIdFromSku(sku: string): number {
+  // Planos com especialistas → 864
+  if (sku.includes('COM_ESP')) return 864;
+  // Planos empresariais → 864
+  if (sku.startsWith('EMPRESA_')) return 864;
+  // Planos sem especialistas → 863
+  if (sku.includes('SEM_ESP')) return 863;
+  // Default para serviços avulsos → 864
+  return 864;
+}
+```
+
+Adicionar cadastro antes do return no fluxo de plano (~linha 792):
+```typescript
+// ✅ CADASTRAR NA CLICKLIFE AO COMPRAR PLANO
+if (patientData?.cpf) {
+  console.log('[mp-webhook] 🏥 Cadastrando paciente na ClickLife (compra de plano)...');
+  
+  const planoId = getClickLifePlanIdFromSku(schedulePayload.sku);
+  const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
   
   const clicklifeResult = await registerClickLifePatientSimple(
     patientData.cpf,
     nomeCompleto,
-    patientData.email,
-    patientData.phone_e164,
-    864, // ❌ PROBLEMA: Usando plano fixo para TUDO
-    patientData.gender,
+    patientData.email || schedulePayload.email,
+    patientData.phone_e164 || '',
+    planoId,
+    patientData.gender || 'F',
     patientData.birth_date
   );
+  
+  if (clicklifeResult.success) {
+    console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife (plano) com planoId:', planoId);
+    await supabaseAdmin
+      .from('patients')
+      .update({ clicklife_registered_at: new Date().toISOString() })
+      .eq('email', patientData.email || schedulePayload.email);
+  } else {
+    console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (plano):', clicklifeResult.error);
+  }
 }
 ```
 
-Este código **NÃO verifica** se é uma compra de plano (`isPlanPurchase`) antes de executar. O fluxo de plano tem um `return` antes (linha 821-830), mas este bloco de código está **fora** desse fluxo condicional.
+#### Arquivo 2: `supabase/functions/patient-operations/index.ts`
 
----
-
-### Fluxo Atual (Incorreto)
-
-```text
-Compra Plano (IND_COM_ESP_1M)
-         ↓
-   isPlanPurchase = true
-         ↓
-  ┌──────────────────────────────┐
-  │ Cria patient_plans           │
-  │ Sincroniza ClubeBen          │
-  │ Cria appointment para poll   │
-  │ return (linha 821)           │  ← Deveria parar aqui
-  └──────────────────────────────┘
-         ↓
-  ⚠️ MAS o código continua... (BUG)
-         ↓
-  ┌──────────────────────────────┐
-  │ CADASTRO UNIVERSAL CLICKLIFE │  ← ❌ NÃO DEVERIA EXECUTAR
-  │ registerClickLifePatientSimple(864)
-  └──────────────────────────────┘
-```
-
-**NOTA**: Na verdade, analisando mais de perto, o bloco de plano **termina com return** (linha 821-829), então o cadastro universal na ClickLife **NÃO deve estar executando para planos**.
-
-Verificando novamente os logs:
-- `activate-clicklife-manual` foi chamado às **14:36:52**
-- `patient-operations/activate_plan_manual` foi às **14:37:19**
-
-Isso indica que o cadastro foi feito **antes** da ativação do plano, sugerindo uma **ação manual do admin** ou outra automação no frontend.
-
----
-
-### Investigação Adicional
-
-Verificando o componente `UserRegistrationsTab.tsx`, encontrei a função `handlePlatformActivation` que chama `activate-clicklife-manual`:
+Adicionar cadastro ClickLife na operação `activate_plan_manual` (~linha 1155, após registrar métrica):
 
 ```typescript
-const { data, error } = await supabase.functions.invoke(functionName, {
-  body: { email: platformActivationUser.email }
-});
-```
+// ✅ CADASTRAR NA CLICKLIFE AO ATIVAR PLANO MANUALMENTE
+console.log('[activate_plan_manual] 🏥 Cadastrando paciente na ClickLife...');
 
-**Hipótese confirmada**: O admin provavelmente clicou em "Ativar ClickLife" manualmente na interface antes de ativar o plano.
+// Buscar dados completos do paciente para cadastro ClickLife
+const { data: patientFull } = await supabase
+  .from('patients')
+  .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
+  .eq('email', patient_email)
+  .single();
 
----
-
-### Cenário Reportado vs Realidade
-
-| Cenário | Origem | Correção Necessária |
-|---------|--------|---------------------|
-| Admin ativa ClickLife manualmente | Ação do admin | Educação/UX |
-| mp-webhook cadastra automaticamente | Código | **SIM** |
-
-O código de "CADASTRO UNIVERSAL" está na seção **fora** do fluxo de planos. Se o código fosse chamado para planos, o `return` na linha 829 deveria impedir. Porém, para **garantir** que não haja cadastro automático na ClickLife durante compra de planos, precisamos adicionar uma verificação explícita.
-
----
-
-### Correção Proposta
-
-**Arquivo**: `supabase/functions/mp-webhook/index.ts`
-
-Adicionar verificação para **NÃO** executar o cadastro universal na ClickLife se for uma compra de plano:
-
-```typescript
-// ✅ CADASTRO UNIVERSAL NA CLICKLIFE - APENAS SERVIÇOS AVULSOS
-// IMPORTANTE: Planos NÃO devem pré-cadastrar na ClickLife (linha 575 já retorna antes)
-// Esta verificação é uma SEGURANÇA EXTRA caso o fluxo mude no futuro
-const isPlanPurchaseSku = schedulePayload.sku?.startsWith('IND_') || 
-                          schedulePayload.sku?.startsWith('FAM_');
-
-if (!isPlanPurchaseSku && patientData && patientData.cpf) {
-  console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
-  // ... resto do código
+if (patientFull?.cpf) {
+  // Determinar planoId baseado no plan_code
+  const planoId = plan_code.includes('COM_ESP') ? 864 : 
+                  plan_code.includes('SEM_ESP') ? 863 : 
+                  plan_code.startsWith('EMPRESA_') ? 864 : 864;
+  
+  // Chamar edge function de ativação ClickLife
+  const { data: clicklifeResult, error: clicklifeError } = await supabase.functions.invoke('activate-clicklife-manual', {
+    body: { 
+      email: patient_email,
+      plan_id: planoId
+    }
+  });
+  
+  if (clicklifeError) {
+    console.warn('[activate_plan_manual] ⚠️ Falha no cadastro ClickLife:', clicklifeError);
+  } else {
+    console.log('[activate_plan_manual] ✅ Paciente cadastrado na ClickLife com planoId:', planoId);
+  }
+} else {
+  console.warn('[activate_plan_manual] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
 }
 ```
+
+---
+
+### Fluxo Após Correção
+
+| Cenário | Cadastro ClickLife | PlanoId |
+|---------|-------------------|---------|
+| Compra plano IND_COM_ESP_1M | ✅ Automático | 864 |
+| Compra plano IND_SEM_ESP_1M | ✅ Automático | 863 |
+| Compra plano FAM_COM_ESP_3M | ✅ Automático | 864 |
+| Admin ativa plano manualmente | ✅ Automático | Baseado no plan_code |
+| Compra Pronto Atendimento | ✅ Automático (já funcionava) | 864 |
+| Compra Especialista avulso | ✅ Automático (já funcionava) | 864 |
 
 ---
 
@@ -117,38 +171,13 @@ if (!isPlanPurchaseSku && patientData && patientData.cpf) {
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/mp-webhook/index.ts` | Adicionar guard `!isPlanPurchaseSku` antes do cadastro universal ClickLife |
+| `supabase/functions/mp-webhook/index.ts` | 1) Reverter guard 2) Adicionar cadastro ClickLife no fluxo de plano |
+| `supabase/functions/patient-operations/index.ts` | Adicionar cadastro ClickLife na operação `activate_plan_manual` |
 
 ---
 
-### Comportamento Após Correção
+### Deploy
 
-| Tipo de Compra | Cadastro ClickLife |
-|----------------|-------------------|
-| Plano (IND_*, FAM_*) | ❌ NÃO - Será feito apenas quando agendar via schedule-redirect |
-| Pronto Atendimento | ✅ SIM - Cadastro imediato |
-| Especialista sem plano | ✅ SIM - Cadastro imediato |
-| Psicólogo sem plano | ❌ NÃO - Vai para Agendar.cc |
-
----
-
-### Seção Técnica
-
-**Localização exata no código**:
-- Linhas 1337-1419 do arquivo `supabase/functions/mp-webhook/index.ts`
-
-**Mudança**:
-```diff
--    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - TODAS AS COMPRAS
--    // Executar antes do schedule-redirect para garantir que o paciente esteja cadastrado
--    if (patientData && patientData.cpf) {
-+    // ✅ CADASTRO UNIVERSAL NA CLICKLIFE - APENAS SERVIÇOS (NÃO PLANOS)
-+    // Planos são ativados na ClickLife apenas quando o paciente agendar via schedule-redirect
-+    const isPlanSku = schedulePayload.sku?.startsWith('IND_') || 
-+                      schedulePayload.sku?.startsWith('FAM_');
-+    
-+    if (!isPlanSku && patientData && patientData.cpf) {
-       console.log('[mp-webhook] 🏥 Cadastro universal na ClickLife...');
-```
-
-Esta alteração garante que pacientes comprando planos **não serão automaticamente cadastrados na ClickLife** durante a compra. O cadastro será feito **apenas** quando eles tentarem agendar uma consulta, momento em que o `schedule-redirect` verificará o plano ativo e fará o cadastro correto com o planoId apropriado.
+Após as alterações, será necessário fazer deploy das edge functions:
+- `mp-webhook`
+- `patient-operations`
