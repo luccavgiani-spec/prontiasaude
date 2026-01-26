@@ -1187,6 +1187,45 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_audit: {
+        Row: {
+          error_message: string | null
+          id: string
+          parsed_action: string | null
+          parsed_payment_id: string | null
+          processing_status: string | null
+          processing_time_ms: number | null
+          raw_body: string | null
+          received_at: string | null
+          response_status: number | null
+          source: string
+        }
+        Insert: {
+          error_message?: string | null
+          id?: string
+          parsed_action?: string | null
+          parsed_payment_id?: string | null
+          processing_status?: string | null
+          processing_time_ms?: number | null
+          raw_body?: string | null
+          received_at?: string | null
+          response_status?: number | null
+          source?: string
+        }
+        Update: {
+          error_message?: string | null
+          id?: string
+          parsed_action?: string | null
+          parsed_payment_id?: string | null
+          processing_status?: string | null
+          processing_time_ms?: number | null
+          raw_body?: string | null
+          received_at?: string | null
+          response_status?: number | null
+          source?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
