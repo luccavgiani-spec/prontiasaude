@@ -175,11 +175,13 @@ const SalesTab = () => {
       // Transformar pending_payments em formato de "venda"
       const sales = (pendingPaymentsData || []).map(pp => {
         const matchingApt = pp.order_id ? appointmentsMap[pp.order_id] : null;
+        // Fallback: PostgREST pode retornar 'email' (cache antigo) ou 'patient_email' (schema atual)
+        const email = pp.patient_email || (pp as any).email || matchingApt?.email || '';
         
         return {
           id: matchingApt?.id || pp.id,
           appointment_id: matchingApt?.appointment_id || `PP-${pp.order_id?.slice(0, 8) || 'N/A'}`,
-          email: pp.patient_email || matchingApt?.email || '',
+          email,
           service_code: pp.sku || matchingApt?.service_code || '',
           service_name: matchingApt?.service_name || getServiceNameFromSKU(pp.sku || '') || pp.sku || 'Serviço',
           start_at_local: matchingApt?.start_at_local || pp.created_at || new Date().toISOString(),
