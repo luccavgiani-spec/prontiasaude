@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { getServiceNameFromSKU } from "@/lib/sku-mapping";
+import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -141,7 +142,8 @@ const SalesTab = () => {
     try {
       // ✅ NOVA LÓGICA: pending_payments.status = 'approved' é a fonte de verdade
       // Buscar TODAS as pending_payments aprovadas (independente de ter appointment)
-      const { data: pendingPaymentsData, error: ppError } = await supabase
+      // ✅ CORREÇÃO: Usar supabaseProduction para ler dados reais de produção
+      const { data: pendingPaymentsData, error: ppError } = await supabaseProduction
         .from("pending_payments")
         .select("*")
         .eq("status", "approved")
@@ -154,6 +156,7 @@ const SalesTab = () => {
       }
 
       // Buscar appointments para enriquecer dados (redirect_url, provider, etc.)
+      // ✅ CORREÇÃO: Usar supabaseProduction para ler dados reais de produção
       const orderIds = (pendingPaymentsData || [])
         .map(pp => pp.order_id)
         .filter(Boolean);
@@ -161,7 +164,7 @@ const SalesTab = () => {
       let appointmentsMap: Record<string, any> = {};
       
       if (orderIds.length > 0) {
-        const { data: appointmentsData } = await supabase
+        const { data: appointmentsData } = await supabaseProduction
           .from("appointments")
           .select("*")
           .in("order_id", orderIds);
