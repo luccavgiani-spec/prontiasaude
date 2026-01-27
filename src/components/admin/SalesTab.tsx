@@ -140,63 +140,36 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      // ✅ Usar cliente de Produção diretamente (RLS permite SELECT público)
-      const { data: pendingPaymentsData, error: ppError } = await supabaseProduction
-        .from("pending_payments")
+      // ✅ Buscar diretamente da tabela appointments (fonte correta com 522+ registros)
+      const { data: appointmentsData, error } = await supabaseProduction
+        .from("appointments")
         .select("*")
-        .eq("status", "approved")
         .gte("created_at", SALES_START_DATE)
         .order("created_at", { ascending: false });
 
-      if (ppError) {
-        console.warn("Erro ao buscar pending_payments:", ppError);
-        throw ppError;
+      if (error) {
+        console.warn("Erro ao buscar appointments:", error);
+        throw error;
       }
 
-      // Buscar appointments para enriquecer dados (redirect_url, provider, etc.)
-      const orderIds = (pendingPaymentsData || [])
-        .map(pp => pp.order_id)
-        .filter(Boolean);
-      
-      let appointmentsMap: Record<string, any> = {};
-      
-      if (orderIds.length > 0) {
-        const { data: appointmentsData } = await supabaseProduction
-          .from("appointments")
-          .select("*")
-          .in("order_id", orderIds);
-        
-        appointmentsMap = (appointmentsData || []).reduce((acc, apt) => {
-          if (apt.order_id) acc[apt.order_id] = apt;
-          return acc;
-        }, {} as Record<string, any>);
-      }
+      // Transformar appointments para formato de "venda"
+      const sales = (appointmentsData || []).map(apt => ({
+        id: apt.id,
+        appointment_id: apt.appointment_id || `APT-${apt.id.slice(0, 8)}`,
+        email: apt.email || '',
+        service_code: apt.service_code || '',
+        service_name: apt.service_name || getServiceNameFromSKU(apt.service_code || ''),
+        start_at_local: apt.start_at_local || apt.created_at,
+        duration_min: apt.duration_min || 30,
+        status: apt.status || 'scheduled',
+        order_id: apt.order_id,
+        provider: apt.provider || 'N/A',
+        redirect_url: apt.redirect_url || apt.meeting_url,
+        created_at: apt.created_at,
+        updated_at: apt.updated_at,
+      } as Appointment));
 
-      // Transformar pending_payments em formato de "venda"
-      const sales = (pendingPaymentsData || []).map(pp => {
-        const matchingApt = pp.order_id ? appointmentsMap[pp.order_id] : null;
-        // Fallback: PostgREST pode retornar 'email' (cache antigo) ou 'patient_email' (schema atual)
-        const email = pp.patient_email || (pp as any).email || matchingApt?.email || '';
-        
-        return {
-          id: matchingApt?.id || pp.id,
-          appointment_id: matchingApt?.appointment_id || `PP-${pp.order_id?.slice(0, 8) || 'N/A'}`,
-          email,
-          service_code: pp.sku || matchingApt?.service_code || '',
-          service_name: matchingApt?.service_name || getServiceNameFromSKU(pp.sku || '') || pp.sku || 'Serviço',
-          start_at_local: matchingApt?.start_at_local || pp.created_at || new Date().toISOString(),
-          duration_min: matchingApt?.duration_min || 30,
-          status: 'approved',
-          order_id: pp.order_id,
-          provider: matchingApt?.provider || (pp.sku?.startsWith('IND_') || pp.sku?.startsWith('FAM_') ? 'plano' : 'pending_payment'),
-          redirect_url: matchingApt?.redirect_url || null,
-          created_at: pp.created_at || new Date().toISOString(),
-          updated_at: pp.updated_at || matchingApt?.updated_at || new Date().toISOString(),
-        } as Appointment;
-      });
-
-      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (fonte: pending_payments approved)`);
-      
+      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (fonte: appointments)`);
       setAppointments(sales);
     } catch (error) {
       console.error("Erro ao carregar vendas:", error);
