@@ -1,260 +1,257 @@
 
-# Plano de Correção: Vendas de Planos Não Registradas e Recorrência Inexistente
+# Plano de Correção: Duplicação de Cobrança e Appointments da Angela Bandeira
 
 ## Diagnóstico do Problema
 
-Após análise detalhada do código, identifiquei **dois problemas críticos** que explicam por que as vendas de planos não estão funcionando:
+### Causa Raiz: Race Condition entre Webhook e Polling
+
+A duplicação de appointment (e potencialmente cobrança dupla) ocorreu porque existem **dois processos paralelos** tentando criar o appointment para o mesmo pagamento:
+
+```text
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                      RACE CONDITION - FLUXO ATUAL                             │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  T=0s    Usuário paga via Cartão/PIX                                          │
+│            │                                                                  │
+│            ├── Frontend inicia pollPaymentStatus (a cada 8s)                  │
+│            │                                                                  │
+│  T=3s     Mercado Pago envia webhook para mp-webhook                          │
+│            │                                                                  │
+│  T=8s     Polling chama check-payment-status                                  │
+│            │                                                                  │
+│            │  ┌─────────────────────────────────────────────────────────────┐ │
+│            │  │ JANELA DE RACE CONDITION (~500ms a 3s)                      │ │
+│            │  │                                                             │ │
+│            │  │  mp-webhook verifica: "Existe appointment com order_id X?"  │ │
+│            │  │  → Não existe                                               │ │
+│            │  │  → Chama schedule-redirect                                  │ │
+│            │  │                                                             │ │
+│            │  │  check-payment-status verifica: "Existe appointment?"       │ │
+│            │  │  → Não existe (ainda não foi criado pelo webhook)           │ │
+│            │  │  → Chama schedule-redirect TAMBÉM                           │ │
+│            │  │                                                             │ │
+│            │  │  RESULTADO: 2 appointments criados para o mesmo order_id!   │ │
+│            │  └─────────────────────────────────────────────────────────────┘ │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Por que a verificação de duplicação existente não funciona?
+
+O código atual verifica se já existe appointment com o `order_id` ANTES de criar:
+
+```typescript
+// schedule-redirect/index.ts linha 418-433
+if (payload.order_id) {
+  const { data: existingAppointment } = await supabase
+    .from('appointments')
+    .select('appointment_id, redirect_url')
+    .eq('order_id', payload.order_id)
+    .maybeSingle();
+  
+  if (existingAppointment) {
+    return { existing: true }; // Retorna existente
+  }
+}
+// Se não existe, CRIA NOVO...
+```
+
+**Problema:** Esta verificação é feita em nível de aplicação, não no banco de dados. Se dois processos executam a verificação quase simultaneamente (antes do INSERT ser commitado), ambos veem "não existe" e ambos criam.
+
+### Evidência no Código
+
+| Arquivo | Verificação de Duplicação | Problema |
+|---------|---------------------------|----------|
+| `schedule-redirect/index.ts` linhas 418-434 | SELECT antes de INSERT | Não é atômica |
+| `check-payment-status/index.ts` linhas 187-230 | SELECT antes de chamar schedule-redirect | Não é atômica |
+| `mp-webhook/index.ts` linhas 853-878 | SELECT antes de chamar schedule-redirect | Não é atômica |
 
 ---
 
-### Problema 1: Webhook Configurado Incorretamente para Assinaturas
+## Solução: Unique Constraint + INSERT ON CONFLICT
 
-A imagem que você enviou mostra a configuração do webhook do Mercado Pago:
+### Etapa 1: Adicionar Unique Constraint na Tabela `appointments`
 
-| Configuração | Status |
-|--------------|--------|
-| URL de produção | `https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/mp-webhook` |
-| Pagamentos | ✅ Ativo |
-| Planos e assinaturas | ✅ Ativo |
+**Arquivo:** Migration SQL (via ferramenta de migração)
 
-**O problema:** Os eventos de "Planos e assinaturas" (tipo `subscription_preapproval`) estão sendo enviados para o webhook `mp-webhook`, mas esse webhook **não processa eventos de subscription** - ele ignora qualquer action que não seja `payment.updated`, `payment.created`, `updated` ou `created`.
+A tabela `appointments` precisa de um índice único no campo `order_id` para garantir que apenas um appointment exista por pagamento.
 
-O webhook correto para assinaturas é `mp-subscription-webhook`, mas:
-1. Não está listado no `config.toml` com `verify_jwt = false`
-2. O Mercado Pago está enviando para `mp-webhook` ao invés de `mp-subscription-webhook`
+```sql
+-- Criar índice único para order_id (apenas se não nulo)
+CREATE UNIQUE INDEX IF NOT EXISTS appointments_order_id_unique_idx 
+ON appointments (order_id) 
+WHERE order_id IS NOT NULL;
+```
 
 ---
 
-### Problema 2: Assinaturas Recorrentes Nunca São Criadas no Mercado Pago
+### Etapa 2: Modificar `schedule-redirect` para usar INSERT ON CONFLICT
 
-O frontend (`PaymentModal.tsx`) envia o campo `auto_recurring` para o backend quando `recurring=true`:
+**Arquivo:** `supabase/functions/schedule-redirect/index.ts`
 
-```javascript
-if (recurring && frequency && frequencyType) {
-  paymentRequest.auto_recurring = {
-    frequency,
-    frequency_type: frequencyType,
-    transaction_amount: amount,
-    currency_id: "BRL",
+Substituir o padrão "SELECT → INSERT" por um INSERT atômico com tratamento de conflito:
+
+```typescript
+// ANTES (vulnerável a race condition):
+if (payload.order_id) {
+  const { data: existingAppointment } = await supabase
+    .from('appointments')
+    .select('appointment_id, redirect_url')
+    .eq('order_id', payload.order_id)
+    .maybeSingle();
+  
+  if (existingAppointment) {
+    return { existing: true };
+  }
+}
+// INSERT normal...
+
+// DEPOIS (atômico e seguro):
+const { data, error } = await supabase
+  .from('appointments')
+  .upsert(appointmentData, {
+    onConflict: 'order_id',
+    ignoreDuplicates: false // Retorna o registro existente
+  })
+  .select()
+  .maybeSingle();
+```
+
+**Alternativa mais robusta:** Usar INSERT e capturar erro de unique violation:
+
+```typescript
+const { data, error } = await supabase
+  .from('appointments')
+  .insert(appointmentData)
+  .select()
+  .maybeSingle();
+
+// Se erro de duplicação, buscar o existente
+if (error?.code === '23505') { // unique_violation
+  console.log('[saveAppointment] ⚠️ Duplicado detectado via constraint');
+  const { data: existing } = await supabase
+    .from('appointments')
+    .select('appointment_id, redirect_url')
+    .eq('order_id', payload.order_id)
+    .single();
+  
+  return { 
+    appointment_id: existing.appointment_id, 
+    redirect_url: existing.redirect_url,
+    existing: true 
   };
 }
 ```
 
-**Porém**, o backend (`mp-create-payment`) **ignora completamente** este campo! Ele apenas cria um pagamento único normal, sem usar a API de Subscriptions do Mercado Pago.
-
-Para criar uma assinatura recorrente, o backend deveria:
-1. Usar a API `/preapproval` do Mercado Pago (não `/payments`)
-2. Criar um registro na tabela `patient_subscriptions`
-3. Vincular a subscription ao `patient_plans`
-
-A função `mp-create-subscription` existe e faz isso corretamente, mas **nunca é chamada pelo frontend**.
-
 ---
 
-### Problema 3: Frontend Não Usa mp-create-subscription
+### Etapa 3: Adicionar Unique Constraint para Métricas (Opcional)
 
-O frontend sempre chama `mp-create-payment`, mesmo para planos recorrentes. A busca no código confirma que `mp-create-subscription` nunca é invocado:
+**Arquivo:** Migration SQL
 
-```text
-No matches found for pattern 'mp-create-subscription' in src/
+Para evitar métricas duplicadas de venda:
+
+```sql
+-- Índice único para evitar métricas de venda duplicadas por order_id
+CREATE UNIQUE INDEX IF NOT EXISTS metrics_sale_order_id_unique_idx 
+ON metrics (metric_type, (metadata->>'order_id')) 
+WHERE metric_type = 'sale' AND metadata->>'order_id' IS NOT NULL;
 ```
 
 ---
 
-## Resumo dos Problemas
+### Etapa 4: Proteção Extra no `check-payment-status`
 
-```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          FLUXO ATUAL (QUEBRADO)                          │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  1. Usuário compra plano mensal                                          │
-│                    ↓                                                     │
-│  2. Frontend chama mp-create-payment (NÃO mp-create-subscription)        │
-│                    ↓                                                     │
-│  3. Backend cria PAGAMENTO ÚNICO (ignora auto_recurring)                 │
-│                    ↓                                                     │
-│  4. MP envia webhook para mp-webhook                                     │
-│                    ↓                                                     │
-│  5. mp-webhook processa como pagamento normal                            │
-│                    ↓                                                     │
-│  6. Plano é ativado (até aqui funciona)                                  │
-│                    ↓                                                     │
-│  7. Dia 27/02: NADA ACONTECE (não há subscription no MP!)                │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
-```
+**Arquivo:** `supabase/functions/check-payment-status/index.ts`
 
----
-
-## Plano de Correção
-
-### Etapa 1: Adicionar verify_jwt=false para mp-subscription-webhook
-
-**Arquivo:** `supabase/config.toml`
-
-Adicionar:
-```toml
-[functions.mp-subscription-webhook]
-verify_jwt = false
-```
-
-Isso permite que o Mercado Pago envie webhooks de subscription sem autenticação JWT.
-
----
-
-### Etapa 2: Modificar mp-webhook para Redirecionar Eventos de Subscription
-
-**Arquivo:** `supabase/functions/mp-webhook/index.ts`
-
-Quando receber um evento do tipo `subscription_preapproval` ou similar, chamar internamente o `mp-subscription-webhook`:
+Antes de chamar `schedule-redirect`, verificar novamente se appointment já existe (proteção em camadas):
 
 ```typescript
-// Detectar eventos de subscription e redirecionar
-const subscriptionEvents = ['subscription_preapproval', 'subscription_authorized_payment'];
-if (subscriptionEvents.includes(body.type)) {
-  console.log('[mp-webhook] 🔄 Redirecionando para mp-subscription-webhook:', body.type);
-  // Processar com lógica de subscription
+// Antes de chamar schedule-redirect, verificar uma última vez
+const { data: existingApt } = await supabaseAdmin
+  .from('appointments')
+  .select('appointment_id, redirect_url')
+  .eq('order_id', orderIdToCheck)
+  .maybeSingle();
+
+if (existingApt) {
+  console.log('[check-payment-status] ✅ Appointment já existe, retornando...');
+  return new Response(JSON.stringify({ 
+    success: true,
+    approved: true,
+    redirect_url: existingApt.redirect_url,
+    existing: true
+  }), { status: 200, headers: corsHeaders });
 }
-```
-
----
-
-### Etapa 3: Modificar Frontend para Usar mp-create-subscription para Planos
-
-**Arquivo:** `src/components/payment/PaymentModal.tsx`
-
-Na função `handleCardSubmit`, verificar se é um plano com `recurring=true` e chamar a edge function correta:
-
-```typescript
-// Detectar se é plano recorrente
-const isPlanRecurring = recurring && sku.match(/^(IND_|FAM_)/);
-
-if (isPlanRecurring) {
-  // Chamar mp-create-subscription
-  const { data, error } = await invokeEdgeFunction("mp-create-subscription", {
-    body: subscriptionRequest,
-  });
-} else {
-  // Chamar mp-create-payment (fluxo normal)
-  const { data, error } = await invokeEdgeFunction("mp-create-payment", {
-    body: paymentRequest,
-  });
-}
-```
-
----
-
-### Etapa 4: Adicionar verify_jwt=false para mp-create-subscription
-
-**Arquivo:** `supabase/config.toml`
-
-```toml
-[functions.mp-create-subscription]
-verify_jwt = false
-```
-
----
-
-### Etapa 5: Corrigir URL do mp-subscription-webhook no Mercado Pago
-
-No dashboard do Mercado Pago, adicionar um segundo webhook:
-- **URL:** `https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/mp-subscription-webhook`
-- **Eventos:** Apenas "Planos e assinaturas"
-
-Ou manter a URL única e processar ambos os tipos no `mp-webhook`.
-
----
-
-### Etapa 6: Corrigir mp-create-subscription para Usar URLs Fixas
-
-**Arquivo:** `supabase/functions/mp-create-subscription/index.ts`
-
-Atualmente usa `Deno.env.get('SUPABASE_URL')` que pode apontar para Lovable Cloud. Corrigir para:
-
-```typescript
-const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') 
-  ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-const supabaseAdmin = createClient(
-  ORIGINAL_SUPABASE_URL,
-  ORIGINAL_SERVICE_ROLE_KEY
-);
 ```
 
 ---
 
 ## Arquivos a Serem Modificados
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/config.toml` | Adicionar `verify_jwt = false` para `mp-subscription-webhook` e `mp-create-subscription` |
-| `src/components/payment/PaymentModal.tsx` | Chamar `mp-create-subscription` quando for plano recorrente |
-| `supabase/functions/mp-create-subscription/index.ts` | Usar URLs fixas do projeto de produção |
-| `supabase/functions/mp-subscription-webhook/index.ts` | Usar URLs fixas do projeto de produção |
-| `supabase/functions/mp-webhook/index.ts` | Adicionar tratamento para eventos de subscription (ou redirecionar) |
+| Arquivo | Alteração | Criticidade |
+|---------|-----------|-------------|
+| Migration SQL | Adicionar `UNIQUE INDEX` em `appointments.order_id` | Alta |
+| `supabase/functions/schedule-redirect/index.ts` | Usar INSERT com tratamento de `23505` unique_violation | Alta |
+| `supabase/functions/check-payment-status/index.ts` | Adicionar verificação extra antes de schedule-redirect | Média |
+| `supabase/functions/mp-webhook/index.ts` | Confiar no tratamento do schedule-redirect (já delega) | Baixa |
 
 ---
 
 ## Fluxo Corrigido
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────┐
-│                        FLUXO CORRIGIDO (ESPERADO)                        │
-├──────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│  1. Usuário compra plano mensal                                          │
-│                    ↓                                                     │
-│  2. Frontend detecta recurring=true e SKU de plano                       │
-│                    ↓                                                     │
-│  3. Frontend chama mp-create-subscription                                │
-│                    ↓                                                     │
-│  4. Backend cria SUBSCRIPTION no MP (API /preapproval)                   │
-│                    ↓                                                     │
-│  5. MP cobra cartão imediatamente + agenda cobranças futuras             │
-│                    ↓                                                     │
-│  6. MP envia webhook subscription_preapproval                            │
-│                    ↓                                                     │
-│  7. mp-subscription-webhook processa e cria patient_subscriptions        │
-│                    ↓                                                     │
-│  8. Plano é ativado e vinculado à subscription                           │
-│                    ↓                                                     │
-│  9. Dia 27/02: MP cobra automaticamente e envia webhook                  │
-│                    ↓                                                     │
-│  10. mp-subscription-webhook renova o plano automaticamente              │
-│                                                                          │
-└──────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                         FLUXO CORRIGIDO (COM CONSTRAINT)                      │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  T=0s    Usuário paga via Cartão/PIX                                          │
+│            │                                                                  │
+│  T=3s     mp-webhook chama schedule-redirect                                  │
+│            │                                                                  │
+│            └── INSERT appointment (order_id = 'X') → SUCESSO                  │
+│                                                                               │
+│  T=8s     check-payment-status chama schedule-redirect                        │
+│            │                                                                  │
+│            └── INSERT appointment (order_id = 'X')                            │
+│                  │                                                            │
+│                  └── ERRO 23505 (unique_violation)                            │
+│                        │                                                      │
+│                        └── SELECT existente → RETORNA appointment original    │
+│                                                                               │
+│  RESULTADO: Apenas 1 appointment, 1 métrica, 1 cobrança                       │
+│                                                                               │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Observações Importantes
+## Ação Imediata: Corrigir Dados da Angela Bandeira
 
-1. **Não altero nenhum arquivo que não seja explicitamente necessário** para esta correção
-2. O fluxo de consultas avulsas (serviços) continua usando `mp-create-payment` normalmente
-3. O PIX não suporta recorrência automática no Mercado Pago - para PIX, o plano seria de pagamento único
+Após a correção ser implementada, será necessário:
+
+1. **Identificar os appointments duplicados** no banco de produção
+2. **Remover o appointment duplicado** (manter apenas o primeiro criado)
+3. **Verificar se houve cobrança dupla** no Mercado Pago
+4. **Estornar se necessário** o pagamento duplicado
 
 ---
 
 ## Seção Técnica
 
-### Tabelas Envolvidas
+### PostgreSQL Error Codes
 
-- `patient_subscriptions`: Armazena vínculo entre paciente e subscription do MP
-- `patient_plans`: Armazena plano ativo do paciente (já existe)
-- `pending_payments`: Registro de pagamentos para reconciliação
+| Código | Nome | Significado |
+|--------|------|-------------|
+| `23505` | unique_violation | Tentativa de inserir valor que viola constraint única |
 
-### APIs do Mercado Pago
+### Memórias Relevantes
 
-- **Pagamentos únicos:** `POST /v1/payments`
-- **Assinaturas recorrentes:** `POST /preapproval`
-- **Consultar assinatura:** `GET /preapproval/{id}`
+- `memory/database/appointments-insertion-constraints`: Confirma que o projeto original usa `.insert()` e não tem unique constraint
+- `memory/technical/payment-duplicate-processing-guard`: Menciona guards de duplicação, mas focados em `pending_payments`, não appointments
 
-### Webhooks Esperados
+### Tabelas Afetadas
 
-| Tipo | Action | Descrição |
-|------|--------|-----------|
-| `subscription_preapproval` | `created` | Assinatura criada |
-| `subscription_preapproval` | `updated` | Status alterado |
-| `subscription_authorized_payment` | `payment` | Cobrança mensal aprovada |
+- `appointments`: Adicionar índice único em `order_id`
+- `metrics`: Opcionalmente adicionar índice único para evitar métricas duplicadas
