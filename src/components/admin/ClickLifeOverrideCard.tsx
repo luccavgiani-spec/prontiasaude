@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabaseProduction } from '@/lib/supabase-production';
+import { supabaseProduction, getProductionClientWithAuth } from '@/lib/supabase-production';
 import { toast } from 'sonner';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -17,7 +17,10 @@ export default function ClickLifeOverrideCard() {
 
   const loadStatus = async () => {
     try {
-      const { data, error } = await supabaseProduction
+      // Propagar sessão antes de fazer query
+      const client = await getProductionClientWithAuth();
+      
+      const { data, error } = await client
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_clicklife_pronto_atendimento')
@@ -46,8 +49,11 @@ export default function ClickLifeOverrideCard() {
     console.log('[ClickLifeOverride] Toggling to:', newValue);
     
     try {
+      // Propagar sessão antes de fazer upsert
+      const client = await getProductionClientWithAuth();
+      
       // Usar upsert com valor booleano puro
-      const { error } = await supabaseProduction
+      const { error } = await client
         .from('admin_settings')
         .upsert(
           { 
@@ -64,7 +70,7 @@ export default function ClickLifeOverrideCard() {
       }
 
       // Verificar se foi salvo corretamente
-      const { data: verifyData, error: verifyError } = await supabaseProduction
+      const { data: verifyData, error: verifyError } = await client
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_clicklife_pronto_atendimento')
