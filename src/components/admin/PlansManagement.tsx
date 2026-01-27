@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
 import { 
   Search, XCircle, CheckCircle, ChevronDown, ChevronUp, 
@@ -141,8 +142,8 @@ const PlansManagement = () => {
   const loadAllPlans = async () => {
     setIsLoadingPlans(true);
     try {
-      // Query patient_plans with joined patient data
-      const { data: plans, error } = await supabase
+      // Ler de Produção (RLS permite SELECT público)
+      const { data: plans, error } = await supabaseProduction
         .from('patient_plans')
         .select('*')
         .eq('status', 'active')
@@ -151,7 +152,7 @@ const PlansManagement = () => {
       if (error) throw error;
 
       // Fetch all titular_plan_ids from pending_family_invites to identify titulars
-      const { data: titularInvites } = await supabase
+      const { data: titularInvites } = await supabaseProduction
         .from('pending_family_invites')
         .select('titular_plan_id');
       
@@ -167,7 +168,7 @@ const PlansManagement = () => {
         
         // Try to get patient by patient_id first (correct field from patient_plans)
         if (plan.patient_id) {
-          const { data } = await supabase
+          const { data } = await supabaseProduction
             .from('patients')
             .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
             .eq('id', plan.patient_id)
@@ -177,7 +178,7 @@ const PlansManagement = () => {
         
         // Fallback: try by user_id (patients.user_id = plan.user_id)
         if (!patientData && plan.user_id) {
-          const { data } = await supabase
+          const { data } = await supabaseProduction
             .from('patients')
             .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
             .eq('user_id', plan.user_id)
@@ -187,7 +188,7 @@ const PlansManagement = () => {
         
         // Last fallback: try by email
         if (!patientData && plan.email) {
-          const { data } = await supabase
+          const { data } = await supabaseProduction
             .from('patients')
             .select('first_name, last_name, cpf, phone_e164, address_line, address_number, city, state, cep')
             .eq('email', plan.email)
@@ -238,7 +239,7 @@ const PlansManagement = () => {
 
     setIsSearching(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseProduction
         .from('patient_plans')
         .select('*')
         .ilike('email', `%${searchEmail.trim()}%`)
@@ -272,7 +273,7 @@ const PlansManagement = () => {
     setLoadingDependentes(prev => new Set(prev).add(planId));
     
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseProduction
         .from('pending_family_invites')
         .select('id, email, status, created_at')
         .eq('titular_plan_id', planId);
@@ -286,7 +287,7 @@ const PlansManagement = () => {
         let firstName, lastName;
         
         if (invite.status === 'completed') {
-          const { data: patient } = await supabase
+          const { data: patient } = await supabaseProduction
             .from('patients')
             .select('first_name, last_name')
             .eq('email', invite.email)

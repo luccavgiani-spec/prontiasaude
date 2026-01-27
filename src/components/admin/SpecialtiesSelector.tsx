@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, X } from 'lucide-react';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ALL_SPECIALTIES, normalizeSpecialty } from '@/lib/specialties-config';
@@ -20,10 +21,11 @@ export default function SpecialtiesSelector({
   }, []);
   const loadSpecialties = async () => {
     try {
+      // Ler diretamente da Produção (RLS permite SELECT público)
       const {
         data,
         error
-      } = await supabase.from('admin_settings').select('value').eq('key', 'communicare_specialties').maybeSingle();
+      } = await supabaseProduction.from('admin_settings').select('value').eq('key', 'communicare_specialties').maybeSingle();
       if (error) throw error;
       if (data?.value) {
         const valueStr = typeof data.value === 'string' ? data.value : JSON.stringify(data.value);
@@ -39,14 +41,17 @@ export default function SpecialtiesSelector({
   };
   const saveSpecialties = async (newSelected: string[]) => {
     try {
-      const {
-        error
-      } = await supabase.from('admin_settings').upsert({
-        key: 'communicare_specialties',
-        value: JSON.stringify(newSelected),
-        updated_at: new Date().toISOString()
+      // Usar Edge Function para escrever na Produção
+      const { data, error } = await supabase.functions.invoke('admin-settings-update', {
+        body: {
+          key: 'communicare_specialties',
+          value: JSON.stringify(newSelected)
+        }
       });
+
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Unknown error');
+      
       toast.success('Especialidades atualizadas');
     } catch (error) {
       console.error('Error saving specialties:', error);

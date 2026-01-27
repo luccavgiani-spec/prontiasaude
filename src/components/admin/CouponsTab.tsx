@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
 import { Copy, Loader2, Plus, Power, PowerOff, Trash2, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -108,7 +109,8 @@ export function CouponsTab() {
 
   const loadCouponUses = async () => {
     try {
-      const { data, error } = await supabase
+      // Ler de Produção
+      const { data, error } = await supabaseProduction
         .from('coupon_uses')
         .select('*')
         .order('reviewed', { ascending: true })
@@ -128,7 +130,8 @@ export function CouponsTab() {
   const loadActiveCoupons = async () => {
     setIsLoadingActive(true);
     try {
-      const { data, error } = await supabase
+      // Ler de Produção
+      const { data, error } = await supabaseProduction
         .from('user_coupons')
         .select(`
           id,
@@ -147,7 +150,7 @@ export function CouponsTab() {
       // Enriquecer com dados do owner
       const enrichedCoupons = await Promise.all(
         (data || []).map(async (coupon) => {
-          const { data: patient } = await supabase
+          const { data: patient } = await supabaseProduction
             .from('patients')
             .select('email, first_name, last_name')
             .eq('id', coupon.owner_user_id)
@@ -174,7 +177,8 @@ export function CouponsTab() {
 
   const loadPendingCoupons = async () => {
     try {
-      const { data, error } = await supabase
+      // Ler de Produção
+      const { data, error } = await supabaseProduction
         .from('pending_payments')
         .select('*')
         .not('coupon_code', 'is', null)
