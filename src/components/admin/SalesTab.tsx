@@ -182,17 +182,25 @@ const SalesTab = () => {
         throw error;
       }
 
-      // 🛡️ Filtrar: remover emails de teste e internos
+      // 🛡️ Filtrar: remover emails de teste, internos e links manuais
       const filteredData = (appointmentsData || []).filter(apt => {
         const email = (apt.email || '').toLowerCase();
+        
+        // Excluir appointments manuais (sem order_id = gerados pela aba Pacientes)
+        if (!apt.order_id || apt.order_id.trim() === '') {
+          return false;
+        }
+        
         // Excluir emails da lista de exclusão
         if (EXCLUDED_EMAILS.some(excluded => email === excluded.toLowerCase())) {
           return false;
         }
+        
         // Excluir emails de padrão de teste
         if (isTestEmail(email)) {
           return false;
         }
+        
         return true;
       });
 
