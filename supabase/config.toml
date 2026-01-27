@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.reconcile-pending-payments]
 verify_jwt = false
+
+[functions.mp-create-payment]
+verify_jwt = false
