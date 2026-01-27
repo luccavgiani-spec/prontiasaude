@@ -502,15 +502,41 @@ async function saveAppointment(
       order_id: payload.order_id
     };
     
-    // INSERT simples (projeto original não tem unique constraint em order_id)
-    // Verificação de duplicação já foi feita no início da função
+    // ✅ CORREÇÃO RACE CONDITION: Tentar INSERT e capturar erro de unique violation
+    // Se outra requisição já criou o appointment, retornamos o existente em vez de falhar
     const { data: insertedData, error } = await supabase
       .from('appointments')
       .insert(appointmentData)
       .select()
       .maybeSingle();
     
+    // ✅ Tratar erro de unique violation (código 23505)
     if (error) {
+      // Se for erro de duplicação (race condition), buscar o existente
+      if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('unique constraint')) {
+        console.log('[saveAppointment] ⚠️ Duplicado detectado via constraint 23505');
+        console.log('[saveAppointment] Order ID duplicado:', payload.order_id);
+        
+        // Buscar o appointment que já foi criado pela outra requisição
+        const { data: existing } = await supabase
+          .from('appointments')
+          .select('appointment_id, redirect_url')
+          .eq('order_id', payload.order_id)
+          .maybeSingle();
+        
+        if (existing) {
+          console.log('[saveAppointment] ✅ Retornando appointment existente:', existing.appointment_id);
+          return { 
+            appointment_id: existing.appointment_id, 
+            redirect_url: existing.redirect_url || redirectUrl,
+            existing: true 
+          };
+        }
+        
+        // Se não encontrou (improvável), lançar erro original
+        console.error('[saveAppointment] ❌ Erro 23505 mas appointment não encontrado');
+      }
+      
       console.error('[saveAppointment] ❌ ERRO ao salvar appointment:', error);
       throw error;
     }
@@ -522,6 +548,29 @@ async function saveAppointment(
     
     return { appointment_id: appointmentId, redirect_url: redirectUrl, existing: false };
   } catch (error) {
+    // ✅ Também tratar exceção de unique violation que pode vir como exceção
+    const errorStr = String(error);
+    if (errorStr.includes('23505') || errorStr.includes('duplicate key') || errorStr.includes('unique constraint')) {
+      console.log('[saveAppointment] ⚠️ Exceção de duplicação capturada, buscando existente...');
+      
+      if (payload.order_id) {
+        const { data: existing } = await supabase
+          .from('appointments')
+          .select('appointment_id, redirect_url')
+          .eq('order_id', payload.order_id)
+          .maybeSingle();
+        
+        if (existing) {
+          console.log('[saveAppointment] ✅ Retornando appointment existente após exceção:', existing.appointment_id);
+          return { 
+            appointment_id: existing.appointment_id, 
+            redirect_url: existing.redirect_url || redirectUrl,
+            existing: true 
+          };
+        }
+      }
+    }
+    
     console.error('[saveAppointment] ❌ EXCEÇÃO ao salvar appointment:', error);
     throw error;
   }
