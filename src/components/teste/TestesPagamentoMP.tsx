@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, XCircle, Clock, Play, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 interface TestResult {
   name: string;
@@ -64,7 +64,7 @@ const TestesPagamentoMP = () => {
 
       console.log('[Teste 1] Enviando payload:', testPayload);
       
-      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+      const { data, error } = await invokeEdgeFunction('mp-create-payment', {
         body: testPayload
       });
 
@@ -135,7 +135,7 @@ const TestesPagamentoMP = () => {
 
       console.log('[Teste 2] Enviando payload:', testPayload);
       
-      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+      const { data, error } = await invokeEdgeFunction('mp-create-payment', {
         body: testPayload
       });
 
@@ -205,7 +205,7 @@ const TestesPagamentoMP = () => {
 
       console.log('[Teste 3] Enviando payload:', testPayload);
       
-      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+      const { data, error } = await invokeEdgeFunction('mp-create-payment', {
         body: testPayload
       });
 
@@ -271,7 +271,7 @@ const TestesPagamentoMP = () => {
 
       console.log('[Teste 4] Enviando payload inválido:', testPayload);
       
-      const { data, error } = await supabase.functions.invoke('mp-create-payment', {
+      const { data, error } = await invokeEdgeFunction('mp-create-payment', {
         body: testPayload
       });
 

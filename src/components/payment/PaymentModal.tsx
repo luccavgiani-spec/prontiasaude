@@ -1606,7 +1606,8 @@ export function PaymentModal({
 
       console.log("[handleCardSubmit] Invoking mp-create-payment with:", paymentRequest);
 
-      const { data, error } = await supabase.functions.invoke("mp-create-payment", {
+      // ✅ Usar invokeEdgeFunction para chamar o projeto Supabase de produção (não Lovable Cloud)
+      const { data, error } = await invokeEdgeFunction("mp-create-payment", {
         body: paymentRequest,
       });
 
@@ -2017,7 +2018,8 @@ export function PaymentModal({
 
       console.log("[handlePixSubmit] Payment request:", paymentRequest);
 
-      const { data, error } = await supabase.functions.invoke("mp-create-payment", {
+      // ✅ Usar invokeEdgeFunction para chamar o projeto Supabase de produção (não Lovable Cloud)
+      const { data, error } = await invokeEdgeFunction("mp-create-payment", {
         body: paymentRequest,
       });
 
