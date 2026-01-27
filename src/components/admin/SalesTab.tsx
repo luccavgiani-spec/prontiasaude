@@ -138,6 +138,36 @@ const SalesTab = () => {
     return months;
   }, []);
 
+  // 🚫 Emails de teste/internos a serem excluídos da visualização
+  const EXCLUDED_EMAILS = [
+    // Emails de teste automatizado
+    'clicklife_k1+1761750564393@prontiasaude.com.br',
+    'clicklife_k2+1761750550811@prontiasaude.com.br',
+    'clicklife_k3+1761750553642@prontiasaude.com.br',
+    'clicklife_k4+1762535293548@prontiasaude.com.br',
+    'clicklife_k5+1761750587938@prontiasaude.com.br',
+    'communicare_c1+1761748246194@prontiasaude.com.br',
+    'communicare_c2+1761748248164@prontiasaude.com.br',
+    'communicare_c3+1761748249539@prontiasaude.com.br',
+    // Emails de equipe interna/testes manuais
+    'luccavgiani@gmail.com',
+    'luccavicchiattigiani@gmail.com',
+    'sandra.toledo@atccontabil.com.br',
+    'marcia.xavier@prontia.com.br',
+    'hugo.victor.qa1@prontia.com.br',
+    'nathalia.souza@prontia.com.br',
+  ];
+
+  // 🔍 Padrões de email de teste a serem excluídos
+  const isTestEmail = (email: string): boolean => {
+    const lowerEmail = email.toLowerCase();
+    return (
+      lowerEmail.includes('clicklife_k') ||
+      lowerEmail.includes('communicare_c') ||
+      (lowerEmail.endsWith('@prontiasaude.com.br') && lowerEmail.includes('+'))
+    );
+  };
+
   const loadAppointments = async () => {
     try {
       // ✅ Buscar diretamente da tabela appointments (fonte correta com 522+ registros)
@@ -152,8 +182,34 @@ const SalesTab = () => {
         throw error;
       }
 
+      // 🛡️ Filtrar: remover emails de teste e internos
+      const filteredData = (appointmentsData || []).filter(apt => {
+        const email = (apt.email || '').toLowerCase();
+        // Excluir emails da lista de exclusão
+        if (EXCLUDED_EMAILS.some(excluded => email === excluded.toLowerCase())) {
+          return false;
+        }
+        // Excluir emails de padrão de teste
+        if (isTestEmail(email)) {
+          return false;
+        }
+        return true;
+      });
+
+      // 🔄 Remover duplicados: manter apenas o mais recente por order_id (ou email+service_code se order_id não existir)
+      const seen = new Map<string, boolean>();
+      const uniqueData = filteredData.filter(apt => {
+        // Chave única: order_id se existir, senão combinação email+service_code+data
+        const key = apt.order_id || `${apt.email}_${apt.service_code}_${apt.created_at?.slice(0, 10)}`;
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.set(key, true);
+        return true;
+      });
+
       // Transformar appointments para formato de "venda"
-      const sales = (appointmentsData || []).map(apt => ({
+      const sales = uniqueData.map(apt => ({
         id: apt.id,
         appointment_id: apt.appointment_id || `APT-${apt.id.slice(0, 8)}`,
         email: apt.email || '',
@@ -169,7 +225,7 @@ const SalesTab = () => {
         updated_at: apt.updated_at,
       } as Appointment));
 
-      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (fonte: appointments)`);
+      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (filtradas de ${appointmentsData?.length || 0} total)`);
       setAppointments(sales);
     } catch (error) {
       console.error("Erro ao carregar vendas:", error);
