@@ -192,30 +192,71 @@ Deno.serve(async (req) => {
     // Buscar dados do paciente no Supabase
     // ✅ CORREÇÃO: Usar URL e KEY fixa do projeto original
     const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY');
+    const FALLBACK_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    console.log('[activate-clicklife-manual] 🔍 Buscando paciente no projeto de produção');
+    console.log('[activate-clicklife-manual] URL:', ORIGINAL_SUPABASE_URL);
+    console.log('[activate-clicklife-manual] Has ORIGINAL key:', !!ORIGINAL_SERVICE_ROLE_KEY);
+    console.log('[activate-clicklife-manual] Has FALLBACK key:', !!FALLBACK_SERVICE_KEY);
+    console.log('[activate-clicklife-manual] ORIGINAL key prefix:', ORIGINAL_SERVICE_ROLE_KEY?.substring(0, 30) + '...');
+    
+    const serviceKey = ORIGINAL_SERVICE_ROLE_KEY || FALLBACK_SERVICE_KEY;
+    if (!serviceKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Service role key not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     const supabaseAdmin = createClient(
       ORIGINAL_SUPABASE_URL,
-      ORIGINAL_SERVICE_ROLE_KEY
+      serviceKey
     );
 
-    let query = supabaseAdmin
-      .from('patients')
-      .select('id, email, first_name, last_name, cpf, phone_e164, gender, birth_date');
-
-    if (email) {
-      query = query.eq('email', email);
-    } else if (cpf) {
-      query = query.eq('cpf', cpf.replace(/\D/g, ''));
+    // Buscar paciente por CPF primeiro (mais preciso)
+    const cleanCpf = cpf?.replace(/\D/g, '');
+    
+    let patient = null;
+    let patientError = null;
+    
+    // Tentar buscar por CPF primeiro
+    if (cleanCpf) {
+      console.log('[activate-clicklife-manual] 🔍 Buscando por CPF:', cleanCpf.substring(0, 3) + '***');
+      const result = await supabaseAdmin
+        .from('patients')
+        .select('id, email, first_name, last_name, cpf, phone_e164, gender, birth_date')
+        .eq('cpf', cleanCpf)
+        .maybeSingle();
+      patient = result.data;
+      patientError = result.error;
+      console.log('[activate-clicklife-manual] Resultado CPF:', { found: !!patient, error: patientError?.message });
+    }
+    
+    // Se não encontrou por CPF, tentar por email
+    if (!patient && email) {
+      console.log('[activate-clicklife-manual] 🔍 Buscando por email:', email);
+      const result = await supabaseAdmin
+        .from('patients')
+        .select('id, email, first_name, last_name, cpf, phone_e164, gender, birth_date')
+        .ilike('email', email)
+        .maybeSingle();
+      patient = result.data;
+      patientError = result.error;
+      console.log('[activate-clicklife-manual] Resultado email:', { found: !!patient, error: patientError?.message });
     }
 
-    const { data: patient, error: patientError } = await query.maybeSingle();
-
     if (patientError || !patient) {
-      console.error('[activate-clicklife-manual] ❌ Paciente não encontrado:', patientError);
+      console.error('[activate-clicklife-manual] ❌ Paciente não encontrado:', patientError?.message || 'No match');
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Paciente não encontrado no banco de dados' 
+          error: 'Paciente não encontrado no banco de dados',
+          debug: {
+            searched_cpf: cleanCpf?.substring(0, 3) + '***',
+            searched_email: email,
+            error: patientError?.message
+          }
         }),
         { 
           status: 404, 
