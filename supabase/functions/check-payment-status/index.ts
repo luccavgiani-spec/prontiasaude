@@ -424,6 +424,43 @@ Deno.serve(async (req) => {
       // ==========================================
       console.log('[check-payment-status] 🎉 PIX/Cartão aprovado para SERVIÇO! Criando appointment...');
 
+      // ✅ GUARD EXTRA: Verificar novamente se appointment já existe antes de chamar schedule-redirect
+      // Isso evita race condition caso o webhook tenha criado entre a verificação inicial e aqui
+      if (orderIdToCheck) {
+        const { data: lastCheckApt } = await supabaseAdmin
+          .from('appointments')
+          .select('appointment_id, redirect_url, provider')
+          .eq('order_id', orderIdToCheck)
+          .maybeSingle();
+        
+        if (lastCheckApt) {
+          console.log('[check-payment-status] ⚠️ Guard extra detectou appointment já existente');
+          console.log('[check-payment-status] Retornando dados existentes:', lastCheckApt.appointment_id);
+          
+          // Garantir que pending_payment seja marcado como processado
+          await supabaseAdmin
+            .from('pending_payments')
+            .update({ 
+              processed: true, 
+              processed_at: new Date().toISOString(),
+              status: 'approved'
+            })
+            .eq('order_id', orderIdToCheck);
+          
+          return new Response(JSON.stringify({ 
+            success: true,
+            status: payment.status,
+            approved: true,
+            redirect_url: lastCheckApt.redirect_url,
+            appointment_id: lastCheckApt.appointment_id,
+            existing: true
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
       // ✅ CORREÇÃO: Chamar schedule-redirect via fetch direto com URL fixa do projeto original
       // NÃO usar supabase.functions.invoke() pois usa SUPABASE_URL que pode apontar para projeto errado
       const scheduleResponse = await fetch(
@@ -467,19 +504,29 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Gravar métrica de venda para SERVIÇO
-      await supabaseAdmin.from('metrics').insert({
-        metric_type: 'sale',
-        sku: schedulePayload.sku || 'UNKNOWN',
-        metric_value: Math.round(payment.transaction_amount * 100),
-        platform: scheduleData?.provider || 'unknown',
-        metadata: { 
-          payment_id: payment.id, 
-          mp_status: payment.status,
-          order_id: orderIdToCheck,
-          source: 'check-payment-status'
+      // ✅ Se schedule-redirect retornou existing: true, não gravar métrica duplicada
+      if (scheduleData?.existing) {
+        console.log('[check-payment-status] ✅ Schedule-redirect retornou appointment existente, pulando métrica');
+      } else {
+        // Gravar métrica de venda para SERVIÇO (apenas se appointment foi recém-criado)
+        try {
+          await supabaseAdmin.from('metrics').insert({
+            metric_type: 'sale',
+            sku: schedulePayload.sku || 'UNKNOWN',
+            metric_value: Math.round(payment.transaction_amount * 100),
+            platform: scheduleData?.provider || 'unknown',
+            metadata: { 
+              payment_id: payment.id, 
+              mp_status: payment.status,
+              order_id: orderIdToCheck,
+              source: 'check-payment-status'
+            }
+          });
+        } catch (metricError) {
+          // Se falhar por duplicação, apenas logar e continuar
+          console.warn('[check-payment-status] ⚠️ Erro ao gravar métrica (pode ser duplicada):', metricError);
         }
-      });
+      }
 
       // Marcar pending_payment como processado E status como approved
       if (orderIdToCheck) {
