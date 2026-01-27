@@ -1579,8 +1579,11 @@ export function PaymentModal({
         device_id: deviceId || "mp_sdk_auto",
       };
 
-      // Adicionar auto_recurring se for assinatura
-      if (recurring && frequency && frequencyType) {
+      // ✅ DETECTAR SE É PLANO RECORRENTE (SKUs IND_* ou FAM_*)
+      const isPlanRecurring = recurring && (sku.startsWith('IND_') || sku.startsWith('FAM_'));
+
+      // Adicionar auto_recurring se for assinatura (para pagamentos normais)
+      if (recurring && frequency && frequencyType && !isPlanRecurring) {
         paymentRequest.auto_recurring = {
           frequency,
           frequency_type: frequencyType,
@@ -1596,6 +1599,7 @@ export function PaymentModal({
         amount,
         recurring,
         frequency,
+        isPlanRecurring,
         formData: { name: formData.name, email: formData.email, cpf: formData.cpf },
         cardData: {
           token: cardFormData.token,
@@ -1604,12 +1608,48 @@ export function PaymentModal({
         },
       });
 
-      console.log("[handleCardSubmit] Invoking mp-create-payment with:", paymentRequest);
+      let data: any;
+      let error: any;
 
-      // ✅ Usar invokeEdgeFunction para chamar o projeto Supabase de produção (não Lovable Cloud)
-      const { data, error } = await invokeEdgeFunction("mp-create-payment", {
-        body: paymentRequest,
-      });
+      // ✅ FLUXO DIFERENCIADO: Planos recorrentes usam mp-create-subscription
+      if (isPlanRecurring) {
+        console.log("[handleCardSubmit] 🔄 PLANO RECORRENTE - Chamando mp-create-subscription");
+        
+        const subscriptionRequest = {
+          payer_email: formData.email,
+          payer_cpf: formData.cpf.replace(/\D/g, ""),
+          payer_name: formData.name,
+          payer_phone: formData.phone,
+          card_token: cardFormData.token,
+          payment_method_id: cardFormData.payment_method_id,
+          plan_sku: sku,
+          plan_name: serviceName,
+          amount_cents: appliedCoupon ? appliedCoupon.amount_discounted : amount,
+          frequency: frequency || 1,
+          frequency_type: frequencyType || "months",
+          order_id: orderId,
+          device_id: deviceId || undefined,
+        };
+
+        console.log("[handleCardSubmit] Subscription request:", subscriptionRequest);
+
+        const result = await invokeEdgeFunction("mp-create-subscription", {
+          body: subscriptionRequest,
+        });
+        
+        data = result.data;
+        error = result.error;
+      } else {
+        // ✅ FLUXO NORMAL: Serviços avulsos usam mp-create-payment
+        console.log("[handleCardSubmit] Invoking mp-create-payment with:", paymentRequest);
+
+        const result = await invokeEdgeFunction("mp-create-payment", {
+          body: paymentRequest,
+        });
+        
+        data = result.data;
+        error = result.error;
+      }
 
       // --- PATCH DE TRATAMENTO ROBUSTO ---
       if (error || !data) {
@@ -1639,8 +1679,11 @@ export function PaymentModal({
 
       console.log("[handleCardSubmit] Payment creation response:", data);
 
-      if (data.status === "approved") {
-        setPaymentId(data.payment_id);
+      // ✅ CORREÇÃO: mp-create-subscription retorna "authorized", não "approved"
+      const isSubscriptionApproved = data.status === "approved" || data.status === "authorized";
+      
+      if (isSubscriptionApproved) {
+        setPaymentId(data.payment_id || data.subscription_id || data.mp_subscription_id);
         setPaymentStatus("approved");
 
         // 🎯 Track Purchase event para Meta Ads + Google Ads (Cartão)

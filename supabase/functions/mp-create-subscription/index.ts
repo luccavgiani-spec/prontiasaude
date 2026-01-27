@@ -6,6 +6,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
 const corsHeaders = getCorsHeaders();
 
+// ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
+// Isso evita o problema de split-brain onde a função roda em um projeto diferente
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
 interface SubscriptionRequest {
   payer_email: string;
   payer_cpf: string;
@@ -86,9 +90,11 @@ Deno.serve(async (req) => {
       throw new Error('Campos obrigatórios ausentes: payer_email, card_token, plan_sku');
     }
 
+    // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original para evitar split-brain
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      ORIGINAL_SUPABASE_URL,
+      ORIGINAL_SERVICE_ROLE_KEY
     );
 
     // Buscar preço do plano no banco para validação
