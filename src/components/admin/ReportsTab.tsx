@@ -215,20 +215,24 @@ export default function ReportsTab() {
 
       // Buscar dados em paralelo de TODAS as fontes de vendas (PRODUÇÃO)
       const [appointmentsResult, pendingPaymentsResult, plansResult, patientsResult, activePlansResult] = await Promise.all([
-      // Appointments - consultas avulsas (com email para filtrar testes)
-      supabaseProduction.from('appointments').select('id, service_code, provider, created_at, status, order_id, email').gte('created_at', startISO).lte('created_at', endISO),
-      // Pending payments aprovados (com email para filtrar testes)
-      supabaseProduction.from('pending_payments').select('id, sku, created_at, status, order_id, amount, patient_email').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
-      // Patient plans para contagem de planos (com email para filtrar testes)
-      supabaseProduction.from('patient_plans').select('id, plan_code, created_at, status, activated_by, email').gte('created_at', startISO).lte('created_at', endISO),
+      // Appointments - consultas avulsas (usar * para evitar erros de cache PostgREST)
+      supabaseProduction.from('appointments').select('*').gte('created_at', startISO).lte('created_at', endISO),
+      // Pending payments aprovados (usar * para compatibilidade com cache)
+      supabaseProduction.from('pending_payments').select('*').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
+      // Patient plans para contagem de planos (usar * para evitar erros de coluna inexistente)
+      supabaseProduction.from('patient_plans').select('*').gte('created_at', startISO).lte('created_at', endISO),
       // Pacientes novos
       supabaseProduction.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
       // Planos ativos
       supabaseProduction.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr)]);
 
-      // Filtrar emails de teste de todas as fontes de vendas
+      // Filtrar emails de teste de todas as fontes de vendas (fallback para nomes de colunas antigos/novos)
       const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));
-      const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => !isTestEmail(pp.patient_email));
+      const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => {
+        // Fallback: PostgREST pode retornar 'email' (cache antigo) ou 'patient_email' (schema atual)
+        const email = pp.patient_email || (pp as any).email;
+        return !isTestEmail(email);
+      });
       const plans = (plansResult.data || []).filter(plan => !isTestEmail(plan.email));
       const patients = patientsResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
@@ -267,19 +271,22 @@ export default function ReportsTab() {
         const key = pp.order_id || `pp-${pp.id}`;
         if (!salesMap.has(key)) {
           const sku = pp.sku || '';
+          // Fallback: PostgREST pode retornar 'amount_cents' (cache antigo) ou 'amount' (schema atual)
+          const amount = pp.amount ?? (pp as any).amount_cents;
           salesMap.set(key, {
             id: pp.id,
             sku,
             created_at: pp.created_at || new Date().toISOString(),
             order_id: pp.order_id,
             source: 'pending_payment',
-            price: pp.amount ? Number(pp.amount) : SKU_PRICES[sku] || 0
+            price: amount ? Number(amount) : SKU_PRICES[sku] || 0
           });
         }
       });
 
       // Adicionar planos pagos (não empresariais e não manuais)
-      const paidPlans = plans.filter(p => !p.plan_code?.startsWith('EMP_') && p.activated_by !== 'admin_manual');
+      // Fallback: 'activated_by' pode não existir no cache antigo
+      const paidPlans = plans.filter(p => !p.plan_code?.startsWith('EMP_') && (p.activated_by || (p as any).activated_by) !== 'admin_manual');
       paidPlans.forEach(plan => {
         const key = `plan-${plan.id}`;
         if (!salesMap.has(key)) {
