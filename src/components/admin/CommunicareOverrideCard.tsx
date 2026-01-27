@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabaseProduction, getProductionClientWithAuth } from '@/lib/supabase-production';
+import { supabaseProduction } from '@/lib/supabase-production';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -17,10 +18,8 @@ export default function CommunicareOverrideCard() {
 
   const loadStatus = async () => {
     try {
-      // Propagar sessão antes de fazer query
-      const client = await getProductionClientWithAuth();
-      
-      const { data, error } = await client
+      // Ler diretamente da Produção (anon key com RLS permissivo)
+      const { data, error } = await supabaseProduction
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_communicare_clinico')
@@ -49,41 +48,26 @@ export default function CommunicareOverrideCard() {
     console.log('[CommunicareOverride] Toggling to:', newValue);
     
     try {
-      // Propagar sessão antes de fazer upsert
-      const client = await getProductionClientWithAuth();
-      
-      // Usar upsert com valor booleano puro
-      const { error } = await client
-        .from('admin_settings')
-        .upsert(
-          { 
-            key: 'force_communicare_clinico', 
-            value: newValue,
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'key' }
-        );
+      // Usar Edge Function para escrever na Produção
+      const { data, error } = await supabase.functions.invoke('admin-settings-update', {
+        body: { 
+          key: 'force_communicare_clinico', 
+          value: newValue 
+        }
+      });
 
       if (error) {
-        console.error('[CommunicareOverride] Upsert error:', error);
+        console.error('[CommunicareOverride] Edge function error:', error);
         throw error;
       }
 
-      // Verificar se foi salvo corretamente
-      const { data: verifyData, error: verifyError } = await client
-        .from('admin_settings')
-        .select('value')
-        .eq('key', 'force_communicare_clinico')
-        .single();
-
-      if (verifyError) {
-        console.error('[CommunicareOverride] Verify error:', verifyError);
-        throw verifyError;
+      if (!data?.success) {
+        throw new Error(data?.error || 'Unknown error');
       }
 
-      console.log('[CommunicareOverride] Verified saved value:', verifyData?.value);
+      console.log('[CommunicareOverride] Saved successfully:', data);
       
-      const savedValue = verifyData?.value === true || verifyData?.value === 'true';
+      const savedValue = data.value === true || data.value === 'true';
       setIsActive(savedValue);
 
       toast.success(

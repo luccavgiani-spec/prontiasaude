@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { getServiceNameFromSKU } from "@/lib/sku-mapping";
-import { supabaseProduction, getProductionClientWithAuth } from "@/lib/supabase-production";
+import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -140,13 +140,8 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      // ✅ Propagar sessão antes de fazer queries
-      const client = await getProductionClientWithAuth();
-      
-      // ✅ NOVA LÓGICA: pending_payments.status = 'approved' é a fonte de verdade
-      // Buscar TODAS as pending_payments aprovadas (independente de ter appointment)
-      // ✅ CORREÇÃO: Usar cliente de Produção com sessão propagada
-      const { data: pendingPaymentsData, error: ppError } = await client
+      // ✅ Usar cliente de Produção diretamente (RLS permite SELECT público)
+      const { data: pendingPaymentsData, error: ppError } = await supabaseProduction
         .from("pending_payments")
         .select("*")
         .eq("status", "approved")
@@ -159,7 +154,6 @@ const SalesTab = () => {
       }
 
       // Buscar appointments para enriquecer dados (redirect_url, provider, etc.)
-      // ✅ CORREÇÃO: Usar supabaseProduction para ler dados reais de produção
       const orderIds = (pendingPaymentsData || [])
         .map(pp => pp.order_id)
         .filter(Boolean);
@@ -167,7 +161,7 @@ const SalesTab = () => {
       let appointmentsMap: Record<string, any> = {};
       
       if (orderIds.length > 0) {
-        const { data: appointmentsData } = await client
+        const { data: appointmentsData } = await supabaseProduction
           .from("appointments")
           .select("*")
           .in("order_id", orderIds);

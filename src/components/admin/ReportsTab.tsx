@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getProductionClientWithAuth } from '@/lib/supabase-production';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
 import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -204,9 +204,7 @@ export default function ReportsTab() {
   const loadMetrics = async () => {
     setLoading(true);
     try {
-      // Usar cliente de Produção com sessão propagada
-      const client = await getProductionClientWithAuth();
-      
+      // Usar cliente de Produção diretamente (RLS permite SELECT público)
       const {
         startDate,
         endDate
@@ -218,15 +216,15 @@ export default function ReportsTab() {
       // Buscar dados em paralelo de TODAS as fontes de vendas (PRODUÇÃO)
       const [appointmentsResult, pendingPaymentsResult, plansResult, patientsResult, activePlansResult] = await Promise.all([
       // Appointments - consultas avulsas (com email para filtrar testes)
-      client.from('appointments').select('id, service_code, provider, created_at, status, order_id, email').gte('created_at', startISO).lte('created_at', endISO),
+      supabaseProduction.from('appointments').select('id, service_code, provider, created_at, status, order_id, email').gte('created_at', startISO).lte('created_at', endISO),
       // Pending payments aprovados (com email para filtrar testes)
-      client.from('pending_payments').select('id, sku, created_at, status, order_id, amount, patient_email').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
+      supabaseProduction.from('pending_payments').select('id, sku, created_at, status, order_id, amount, patient_email').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
       // Patient plans para contagem de planos (com email para filtrar testes)
-      client.from('patient_plans').select('id, plan_code, created_at, status, activated_by, email').gte('created_at', startISO).lte('created_at', endISO),
+      supabaseProduction.from('patient_plans').select('id, plan_code, created_at, status, activated_by, email').gte('created_at', startISO).lte('created_at', endISO),
       // Pacientes novos
-      client.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
+      supabaseProduction.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
       // Planos ativos
-      client.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr)]);
+      supabaseProduction.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr)]);
 
       // Filtrar emails de teste de todas as fontes de vendas
       const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));

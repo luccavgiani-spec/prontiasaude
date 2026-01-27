@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Edit, Key, Power, PowerOff, Mail } from 'lucide-react';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatCNPJ } from '@/lib/validations';
@@ -36,7 +37,8 @@ export default function CompanyManagement() {
     try {
       setLoading(true);
       
-      let query = supabase
+      // Ler de Produção (RLS permite SELECT público)
+      let query = supabaseProduction
         .from('companies')
         .select('id, razao_social, cnpj, cep, n_funcionarios, status, created_at')
         .order('created_at', { ascending: false });
@@ -124,7 +126,8 @@ export default function CompanyManagement() {
     }
 
     try {
-      const { error } = await supabase
+      // Usa Cloud para escrita via Edge Function invocada
+      const { error } = await supabaseProduction
         .from('companies')
         .update({ status: newStatus })
         .eq('id', company.id);
