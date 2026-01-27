@@ -642,6 +642,7 @@ export type Database = {
           created_at: string | null
           email: string | null
           id: string
+          is_recurring: boolean | null
           mp_payer_id: string | null
           mp_subscription_id: string | null
           next_payment_date: string | null
@@ -651,6 +652,7 @@ export type Database = {
           plan_expires_at: string | null
           start_date: string | null
           status: string | null
+          subscription_id: string | null
           subscription_status: string | null
           updated_at: string | null
           user_id: string | null
@@ -663,6 +665,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          is_recurring?: boolean | null
           mp_payer_id?: string | null
           mp_subscription_id?: string | null
           next_payment_date?: string | null
@@ -672,6 +675,7 @@ export type Database = {
           plan_expires_at?: string | null
           start_date?: string | null
           status?: string | null
+          subscription_id?: string | null
           subscription_status?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -684,6 +688,7 @@ export type Database = {
           created_at?: string | null
           email?: string | null
           id?: string
+          is_recurring?: boolean | null
           mp_payer_id?: string | null
           mp_subscription_id?: string | null
           next_payment_date?: string | null
@@ -693,6 +698,7 @@ export type Database = {
           plan_expires_at?: string | null
           start_date?: string | null
           status?: string | null
+          subscription_id?: string | null
           subscription_status?: string | null
           updated_at?: string | null
           user_id?: string | null
@@ -705,7 +711,62 @@ export type Database = {
             referencedRelation: "patients"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "patient_plans_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "patient_subscriptions"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      patient_subscriptions: {
+        Row: {
+          amount_cents: number
+          created_at: string | null
+          email: string | null
+          frequency: number | null
+          frequency_type: string | null
+          id: string
+          last_payment_date: string | null
+          mp_status: string | null
+          mp_subscription_id: string
+          next_payment_date: string | null
+          plan_code: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string | null
+          email?: string | null
+          frequency?: number | null
+          frequency_type?: string | null
+          id?: string
+          last_payment_date?: string | null
+          mp_status?: string | null
+          mp_subscription_id: string
+          next_payment_date?: string | null
+          plan_code: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string | null
+          email?: string | null
+          frequency?: number | null
+          frequency_type?: string | null
+          id?: string
+          last_payment_date?: string | null
+          mp_status?: string | null
+          mp_subscription_id?: string
+          next_payment_date?: string | null
+          plan_code?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       patients: {
         Row: {
