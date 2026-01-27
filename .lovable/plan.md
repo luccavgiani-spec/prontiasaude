@@ -1,71 +1,94 @@
 
-
-# Plano de Correção: PIX e Cartão - Usar invokeEdgeFunction (Produção)
+# Plano de Correção: Adicionar `verify_jwt = false` para `mp-create-payment`
 
 ## Problema Identificado
 
-O código atual usa `supabase.functions.invoke()` que aponta para o Lovable Cloud, onde as edge functions de pagamento **não existem**. As funções `mp-create-payment` estão deployadas apenas no projeto Supabase de produção (`ploqujuhpwutpcibedbr`).
+O arquivo `supabase/config.toml` **NÃO contém** a configuração `verify_jwt = false` para a função `mp-create-payment`.
 
-## Correções Necessárias
-
-### Arquivo: `src/components/payment/PaymentModal.tsx`
-
-O import do `invokeEdgeFunction` já existe na linha 12, então só precisamos trocar as chamadas.
+### Por que isso causa o erro:
+1. O frontend está no projeto **Lovable Cloud** (`yrsjluhhnhxogdgnbnya`)
+2. Quando a Valentina faz login, ela recebe um JWT assinado pelo Lovable Cloud
+3. O `invokeEdgeFunction` envia esse JWT para o projeto de **produção** (`ploqujuhpwutpcibedbr`)
+4. O Supabase de produção **rejeita o JWT** porque foi assinado com uma chave diferente
+5. A requisição é bloqueada com HTTP 401 **antes** do código executar
+6. Por isso **não há logs** - o código nunca chega a rodar
 
 ---
 
-### Correção 1: Pagamento com Cartão (Linha 1609)
+## Correção Necessária
 
-**Antes:**
-```typescript
-const { data, error } = await supabase.functions.invoke("mp-create-payment", {
-  body: paymentRequest,
-});
-```
+### Arquivo: `supabase/config.toml`
 
-**Depois:**
-```typescript
-// ✅ Usar invokeEdgeFunction para chamar o projeto Supabase de produção (não Lovable Cloud)
-const { data, error } = await invokeEdgeFunction("mp-create-payment", {
-  body: paymentRequest,
-});
+Adicionar a configuração para desabilitar verificação de JWT na função de pagamento:
+
+```toml
+[functions.mp-create-payment]
+verify_jwt = false
 ```
 
 ---
 
-### Correção 2: Pagamento com PIX (Linha 2020)
+## Código Atualizado
 
-**Antes:**
-```typescript
-const { data, error } = await supabase.functions.invoke("mp-create-payment", {
-  body: paymentRequest,
-});
-```
+```toml
+project_id = "ploqujuhpwutpcibedbr"
 
-**Depois:**
-```typescript
-// ✅ Usar invokeEdgeFunction para chamar o projeto Supabase de produção (não Lovable Cloud)
-const { data, error } = await invokeEdgeFunction("mp-create-payment", {
-  body: paymentRequest,
-});
+[functions.create-admin-user]
+verify_jwt = false
+
+[functions.import-users]
+verify_jwt = false
+
+[functions.reset-admin-password]
+verify_jwt = false
+
+[functions.patient-data-report]
+verify_jwt = false
+
+[functions.activate-communicare-manual]
+verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.validate-reset-token]
+verify_jwt = false
+
+[functions.complete-password-reset]
+verify_jwt = false
+
+[functions.reconcile-pending-payments]
+verify_jwt = false
+
+[functions.mp-create-payment]
+verify_jwt = false
 ```
 
 ---
 
-## Impacto da Correção
+## Segurança
+
+Mesmo com `verify_jwt = false`, a edge function `mp-create-payment`:
+- Ainda recebe e pode validar o JWT manualmente se necessário
+- Valida os dados do pagador (email, CPF, etc.)
+- Usa o `MP_ACCESS_TOKEN` server-side (nunca exposto)
+- Registra toda a transação no banco de dados para auditoria
+
+---
+
+## Impacto Esperado
 
 | Antes | Depois |
 |-------|--------|
-| Chamadas para Lovable Cloud (sem edge functions) | Chamadas para Supabase Produção (com edge functions) |
+| HTTP 401 Unauthorized (silencioso) | Requisição aceita e processada |
+| Sem logs na edge function | Logs visíveis para debug |
 | PIX não gera código | PIX funciona normalmente |
 | Cartão falha silenciosamente | Cartão processa no Mercado Pago |
-| Logs não aparecem no dashboard | Logs visíveis em `mp-create-payment` |
 
 ---
 
 ## Verificação Pós-Correção
 
-1. Testar geração de PIX com a paciente Valentina
-2. Testar pagamento com cartão
-3. Confirmar logs no projeto Supabase de produção
-
+1. Publicar o site novamente
+2. Testar geração de PIX com a paciente Valentina
+3. Verificar se os logs aparecem em `mp-create-payment` no projeto de produção
