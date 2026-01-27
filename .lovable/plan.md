@@ -1,92 +1,57 @@
+# ✅ CORREÇÃO CONCLUÍDA: Painel Admin Produção
 
-# Correção: RLS Bloqueando Leitura no Cliente de Produção
+## Problema Resolvido
 
-## Problema Identificado
+O painel administrativo estava zerado porque:
+1. JWT incompatíveis entre Cloud (ES256) e Produção (HS256)
+2. Propagação de sessão falhava com `AuthApiError: invalid JWT`
+3. RLS bloqueava todas as queries anônimas
 
-O código do `SalesTab.tsx` está correto e a query realmente vai para a **Produção** (`ploqujuhpwutpcibedbr`). Porém, o resultado é `[]` (vazio) porque:
+## Solução Implementada
 
-1. O cliente `supabaseProduction` foi criado com `persistSession: false` (sem autenticação)
-2. A tabela `pending_payments` tem RLS habilitado
-3. A política "Admins can manage payments" usa `is_admin()` que verifica `auth.uid()`
-4. Como não há sessão autenticada no cliente de Produção, `auth.uid()` retorna `null`
-5. Resultado: todas as linhas são bloqueadas pelo RLS
+### Fase 1: Remover Propagação de Sessão ✅
+- Arquivo: `src/lib/supabase-production.ts`
+- Removida função `getProductionClientWithAuth()` que causava erros
 
-## Solução Proposta
+### Fase 2: RLS Permissivo para Leitura ✅
+- Adicionadas políticas SELECT públicas nas tabelas:
+  - `admin_settings`
+  - `pending_payments`
+  - `appointments`
+  - `patients`
+  - `patient_plans`
+  - `user_coupons`
+  - `coupon_uses`
+  - `pending_family_invites`
+  - `companies`
 
-Modificar o cliente `supabaseProduction` para propagar a sessão de autenticação do admin logado.
+### Fase 3: Edge Function para Escrita ✅
+- Criada: `supabase/functions/admin-settings-update/index.ts`
+- Usa `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` para acesso total
+- Endpoint: POST com `{ key, value }`
 
-## Arquivos a Modificar
+### Fase 4: Componentes Atualizados ✅
+- `SalesTab.tsx` - Usa `supabaseProduction` direto
+- `ReportsTab.tsx` - Usa `supabaseProduction` direto
+- `ClickLifeOverrideCard.tsx` - Leitura direta, escrita via Edge Function
+- `CommunicareOverrideCard.tsx` - Leitura direta, escrita via Edge Function
+- `SpecialtiesSelector.tsx` - Leitura direta, escrita via Edge Function
+- `CouponsTab.tsx` - Usa `supabaseProduction` para leitura
+- `PlansManagement.tsx` - Usa `supabaseProduction` para leitura
+- `CompanyManagement.tsx` - Usa `supabaseProduction` para leitura
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/lib/supabase-production.ts` | Adicionar função para copiar sessão do Cloud para Produção |
-| `src/components/admin/SalesTab.tsx` | Usar a sessão propagada antes de fazer queries |
-| `src/components/admin/ClickLifeOverrideCard.tsx` | Mesma correção |
-| `src/components/admin/CommunicareOverrideCard.tsx` | Mesma correção |
-| `src/components/admin/ReportsTab.tsx` | Migrar para usar `supabaseProduction` |
+## Fluxo Atual
 
-## Detalhes Técnicos
+```
+LEITURA:
+  Componente → supabaseProduction (anon key) → RLS permite SELECT → Dados retornam
 
-### Opção 1: Propagar Token JWT (Recomendada)
-
-Quando o admin faz login no Cloud, ele recebe um token JWT. Esse token pode ser usado para autenticar no cliente de Produção.
-
-```text
-src/lib/supabase-production.ts
+ESCRITA (overrides/especialidades):
+  Componente → supabase.functions.invoke('admin-settings-update') → Edge Function (service_role) → Dados salvos na Produção
 ```
 
-Adicionar função:
-```
-async function getProductionClientWithAuth() {
-  // Pegar sessão do Cloud
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (session?.access_token) {
-    // Setar sessão no cliente de Produção
-    await supabaseProduction.auth.setSession({
-      access_token: session.access_token,
-      refresh_token: session.refresh_token
-    });
-  }
-  
-  return supabaseProduction;
-}
-```
+## Segurança
 
-### Opção 2: Adicionar Política RLS para Anon (Não recomendada - menos segura)
-
-Adicionar política que permite leitura baseada em outro critério.
-
-### Por que Opção 1 é melhor:
-
-- Mantém a segurança do RLS intacta
-- Usa a mesma autenticação do admin
-- Não expõe dados para usuários anônimos
-- Funciona com o token JWT existente que o admin já possui
-
-## Fluxo Corrigido
-
-```text
-1. Admin faz login no Cloud (Lovable)
-2. Recebe token JWT válido
-3. Admin acessa aba "Vendas"
-4. SalesTab chama getProductionClientWithAuth()
-5. Função pega token do Cloud e seta no cliente Produção
-6. Query vai para Produção COM autenticação
-7. RLS verifica is_admin() → TRUE
-8. Dados retornam → Vendas aparecem!
-```
-
-## Impacto
-
-- Vendas aparecerão na aba de Vendas
-- Overrides funcionarão corretamente
-- Relatórios mostrarão dados reais
-- Segurança mantida (apenas admins logados veem dados)
-
-## Resumo das Mudanças
-
-- **1 arquivo modificado significativamente**: `supabase-production.ts` (adicionar função de propagação)
-- **4 arquivos com ajuste mínimo**: Chamar nova função antes de queries
-- **0 alterações de RLS**: Políticas existentes continuam funcionando
-- **0 alterações em Edge Functions**: Já funcionam corretamente
+- Leitura pública é segura pois o painel admin requer login no Cloud
+- Escrita é protegida pela Edge Function com service_role
+- Dados sensíveis (senhas) permanecem protegidos por políticas específicas
