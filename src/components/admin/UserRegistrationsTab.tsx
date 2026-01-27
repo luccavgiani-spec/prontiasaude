@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseProduction } from '@/lib/supabase-production';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -329,7 +331,8 @@ export default function UserRegistrationsTab() {
       
       console.log(`[PlatformActivation] Ativando na ${selectedPlatform}:`, platformActivationUser.email);
       
-      const { data, error } = await supabase.functions.invoke(functionName, {
+      // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
+      const { data, error } = await invokeEdgeFunction(functionName, {
         body: {
           email: platformActivationUser.email
         }
@@ -396,7 +399,8 @@ export default function UserRegistrationsTab() {
       
       console.log('[QuickConsult] Criando consulta:', { provider: quickConsultProvider, email: payload.email });
       
-      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+      // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
+      const { data, error } = await invokeEdgeFunction('schedule-redirect', {
         body: payload,
       });
       

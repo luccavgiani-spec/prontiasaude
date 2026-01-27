@@ -8,6 +8,8 @@ import { Loader2, CheckCircle2, AlertCircle, CreditCard } from "lucide-react";
 import { validateCPF } from "@/lib/cpf-validator";
 import { validatePhoneE164 } from "@/lib/validations";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getAppointments } from "@/lib/appointments";
 import { toast } from "sonner";
 import { PixPaymentForm } from "./PixPaymentForm";
@@ -180,9 +182,10 @@ export function PaymentModal({
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       console.log(`[verifyPlanCreation] Tentativa ${attempt + 1}/${maxRetries}...`);
       
-      // 1. Forçar processamento via check-payment-status
+      // 1. Forçar processamento via check-payment-status (usando produção)
       try {
-        const { data: checkResult, error: checkError } = await supabase.functions.invoke('check-payment-status', {
+        // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
+        const { data: checkResult, error: checkError } = await invokeEdgeFunction('check-payment-status', {
           body: { payment_id: paymentId, order_id: orderId, email }
         });
         
@@ -196,9 +199,10 @@ export function PaymentModal({
         console.warn('[verifyPlanCreation] Exceção no check-payment-status:', e);
       }
       
-      // 2. Verificar diretamente no banco
+      // 2. Verificar diretamente no banco (usando produção)
       try {
-        const { data: plan, error: planError } = await supabase
+        // ✅ CORREÇÃO: Usar supabaseProduction para ler dados reais
+        const { data: plan, error: planError } = await supabaseProduction
           .from('patient_plans')
           .select('id, plan_code')
           .eq('email', email.toLowerCase())
@@ -1111,7 +1115,8 @@ export function PaymentModal({
         if (attempts % 3 === 0 && paymentId) {
           console.log(`[pollPaymentStatus] 🔄 Tentativa ${attempts}: Executando check-payment-status como fallback...`);
           try {
-            const { data: checkData, error: checkError } = await supabase.functions.invoke('check-payment-status', {
+            // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
+            const { data: checkData, error: checkError } = await invokeEdgeFunction('check-payment-status', {
               body: { 
                 payment_id: paymentId, 
                 order_id: orderId, 

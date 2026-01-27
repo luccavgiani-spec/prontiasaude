@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { supabase } from '@/integrations/supabase/client';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { toast } from 'sonner';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -17,7 +17,7 @@ export default function CommunicareOverrideCard() {
 
   const loadStatus = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseProduction
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_communicare_clinico')
@@ -47,7 +47,7 @@ export default function CommunicareOverrideCard() {
     
     try {
       // Usar upsert com valor booleano puro
-      const { error } = await supabase
+      const { error } = await supabaseProduction
         .from('admin_settings')
         .upsert(
           { 
@@ -64,7 +64,7 @@ export default function CommunicareOverrideCard() {
       }
 
       // Verificar se foi salvo corretamente
-      const { data: verifyData, error: verifyError } = await supabase
+      const { data: verifyData, error: verifyError } = await supabaseProduction
         .from('admin_settings')
         .select('value')
         .eq('key', 'force_communicare_clinico')
