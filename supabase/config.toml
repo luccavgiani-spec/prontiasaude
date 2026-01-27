@@ -29,3 +29,9 @@ verify_jwt = false
 
 [functions.mp-create-payment]
 verify_jwt = false
+
+[functions.mp-create-subscription]
+verify_jwt = false
+
+[functions.mp-subscription-webhook]
+verify_jwt = false
