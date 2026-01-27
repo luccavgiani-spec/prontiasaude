@@ -1,57 +1,136 @@
-# ✅ CORREÇÃO CONCLUÍDA: Painel Admin Produção
 
-## Problema Resolvido
 
-O painel administrativo estava zerado porque:
-1. JWT incompatíveis entre Cloud (ES256) e Produção (HS256)
-2. Propagação de sessão falhava com `AuthApiError: invalid JWT`
-3. RLS bloqueava todas as queries anônimas
+# Plano de Correção: Painel Admin - Vendas e Relatórios
 
-## Solução Implementada
+## Diagnóstico Confirmado
 
-### Fase 1: Remover Propagação de Sessão ✅
-- Arquivo: `src/lib/supabase-production.ts`
-- Removida função `getProductionClientWithAuth()` que causava erros
+Após análise detalhada dos logs de rede, banco de dados e código, identifiquei **2 problemas paralelos**:
 
-### Fase 2: RLS Permissivo para Leitura ✅
-- Adicionadas políticas SELECT públicas nas tabelas:
-  - `admin_settings`
-  - `pending_payments`
-  - `appointments`
-  - `patients`
-  - `patient_plans`
-  - `user_coupons`
-  - `coupon_uses`
-  - `pending_family_invites`
-  - `companies`
+### Problema 1: Cache do PostgREST Desatualizado
 
-### Fase 3: Edge Function para Escrita ✅
-- Criada: `supabase/functions/admin-settings-update/index.ts`
-- Usa `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` para acesso total
-- Endpoint: POST com `{ key, value }`
+O PostgREST do Supabase está cacheando o schema antigo da tabela `pending_payments`:
 
-### Fase 4: Componentes Atualizados ✅
-- `SalesTab.tsx` - Usa `supabaseProduction` direto
-- `ReportsTab.tsx` - Usa `supabaseProduction` direto
-- `ClickLifeOverrideCard.tsx` - Leitura direta, escrita via Edge Function
-- `CommunicareOverrideCard.tsx` - Leitura direta, escrita via Edge Function
-- `SpecialtiesSelector.tsx` - Leitura direta, escrita via Edge Function
-- `CouponsTab.tsx` - Usa `supabaseProduction` para leitura
-- `PlansManagement.tsx` - Usa `supabaseProduction` para leitura
-- `CompanyManagement.tsx` - Usa `supabaseProduction` para leitura
+| Coluna no Banco (Real) | PostgREST Retorna (Cache) |
+|------------------------|---------------------------|
+| `patient_email` | `email` |
+| `amount` | `amount_cents` |
 
-## Fluxo Atual
+**Evidência**: Query com `select=*` retorna Status 200 com colunas antigas, mas query com `select=amount` retorna erro 400 "column does not exist".
 
+### Problema 2: Código Usando Colunas Inexistentes
+
+O `ReportsTab.tsx` está fazendo queries com colunas que o PostgREST não reconhece:
+
+| Query no Código | Problema |
+|-----------------|----------|
+| `select('...amount, patient_email')` | PostgREST conhece `amount_cents` e `email` |
+| `select('...activated_by, email')` | Erro: `column patient_plans.activated_by does not exist` |
+
+---
+
+## Solução em 2 Etapas
+
+### Etapa 1: Forçar Reload do Schema (Produção)
+
+Execute estes comandos no **Dashboard Supabase de Produção > SQL Editor**:
+
+```sql
+-- Passo 1: Aguardar transações pendentes
+SELECT pg_sleep(2);
+
+-- Passo 2: Re-grant para invalidar cache
+GRANT SELECT ON public.pending_payments TO anon;
+GRANT SELECT ON public.patient_plans TO anon;
+GRANT SELECT ON public.appointments TO anon;
+GRANT SELECT ON public.patients TO anon;
+
+-- Passo 3: Forçar reload
+NOTIFY pgrst, 'reload schema';
+
+-- Passo 4: Aguardar propagação
+SELECT pg_sleep(3);
 ```
-LEITURA:
-  Componente → supabaseProduction (anon key) → RLS permite SELECT → Dados retornam
 
-ESCRITA (overrides/especialidades):
-  Componente → supabase.functions.invoke('admin-settings-update') → Edge Function (service_role) → Dados salvos na Produção
+### Etapa 2: Adaptar Código para Nomes de Colunas do PostgREST
+
+Enquanto o cache não atualiza (ou como solução permanente), ajustar o código para usar os nomes que o PostgREST reconhece:
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/admin/ReportsTab.tsx` | Linha 221: Usar `select=*` ao invés de colunas específicas |
+| `src/components/admin/ReportsTab.tsx` | Linha 223: Remover `activated_by` da query |
+
+**Código corrigido:**
+
+```typescript
+// Linha 220-223 (antes)
+supabaseProduction.from('pending_payments')
+  .select('id, sku, created_at, status, order_id, amount, patient_email')
+  
+supabaseProduction.from('patient_plans')
+  .select('id, plan_code, created_at, status, activated_by, email')
+
+// Linha 220-223 (depois)
+supabaseProduction.from('pending_payments')
+  .select('*')  // Usar * para pegar todas as colunas disponíveis
+  
+supabaseProduction.from('patient_plans')
+  .select('id, plan_code, created_at, status, email')  // Remover activated_by
 ```
 
-## Segurança
+Também precisamos adaptar a lógica que usa as colunas para aceitar ambos os nomes:
 
-- Leitura pública é segura pois o painel admin requer login no Cloud
-- Escrita é protegida pela Edge Function com service_role
-- Dados sensíveis (senhas) permanecem protegidos por políticas específicas
+```typescript
+// Na transformação de dados
+const email = pp.patient_email || pp.email;
+const amount = pp.amount || pp.amount_cents;
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Operação | Descrição |
+|---------|----------|-----------|
+| `src/components/admin/ReportsTab.tsx` | Modificar | Corrigir queries e nomes de colunas |
+| `src/components/admin/SalesTab.tsx` | Verificar | Já usa `select=*`, mas adaptar nomes de colunas |
+
+---
+
+## Por Que Isso Resolve
+
+1. **`select=*`** evita o erro "column does not exist" porque deixa o PostgREST decidir quais colunas retornar
+2. **Fallback de nomes** (`pp.patient_email || pp.email`) garante compatibilidade com cache antigo ou novo
+3. **Re-grant + NOTIFY** força o PostgREST a revalidar o schema
+
+---
+
+## Fluxo Técnico
+
+```text
+ANTES (quebrado):
+Frontend → Query com 'amount' → PostgREST (cache: 'amount_cents') → Erro 400
+
+DEPOIS (funcionando):
+Frontend → Query com '*' → PostgREST retorna 'amount_cents' 
+                         → Código usa fallback (amount || amount_cents)
+                         → Dados exibidos corretamente
+```
+
+---
+
+## Ordem de Implementação
+
+1. Você executa os comandos SQL na Produção (Etapa 1)
+2. Eu modifico `ReportsTab.tsx` e `SalesTab.tsx` para usar fallbacks (Etapa 2)
+3. Testamos se as 248 vendas aparecem corretamente
+
+---
+
+## Resumo Técnico
+
+- **Problema**: PostgREST cacheou schema antigo com colunas renomeadas
+- **Causa raiz**: Migrações de rename de colunas não propagaram para o cache da API REST
+- **Solução**: Adaptar código para ser resiliente a ambos os nomes de colunas + forçar reload do schema
+- **Impacto**: 248 vendas voltarão a aparecer no painel admin
+
