@@ -8,9 +8,17 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173', // Local development
 ];
 
+// Preview URLs têm formato dinâmico: id-preview--{project-id}.lovable.app
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
+
 export function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
   const origin = requestOrigin || '';
-  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : '';
+  
+  // Permitir origens da lista fixa OU previews do Lovable
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : '';
   
   return {
     'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0], // Default to primary domain
