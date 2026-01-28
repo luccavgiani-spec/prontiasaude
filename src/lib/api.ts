@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from './edge-functions';
 
 // Tipos para as respostas da API
 export interface UpsertPatientRequest {
@@ -50,7 +51,7 @@ export async function upsertPatient(data: UpsertPatientRequest): Promise<{ succe
     console.log('Registering patient via Edge Function:', data);
     
     // Call the patient-operations edge function that handles both Supabase and GAS
-    const { data: result, error } = await supabase.functions.invoke('patient-operations', {
+    const { data: result, error } = await invokeEdgeFunction('patient-operations', {
       body: {
         operation: 'upsert_patient',
         name: data.name,
@@ -80,7 +81,7 @@ export async function buscarResumosPaciente(email: string): Promise<PatientSumma
   try {
     console.log('Fetching patient summary via Supabase Edge Function:', email);
     
-    const { data: result, error } = await supabase.functions.invoke('appointment-manager', {
+    const { data: result, error } = await invokeEdgeFunction('appointments-manager', {
       body: {
         operation: 'get_appointments'
       }

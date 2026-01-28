@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, User, MapPin, Phone, Calendar, Home, LogOut, Eye, EyeOff, Lock } from "lucide-react";
@@ -602,7 +603,7 @@ const CompletarPerfil = () => {
         try {
           console.log('[CompletarPerfil] Calling activate-employee-plan Edge Function...');
           
-          const { data: planResult, error: planError } = await supabase.functions.invoke('company-operations', {
+          const { data: planResult, error: planError } = await invokeEdgeFunction('company-operations', {
             body: {
               operation: 'activate-employee-plan',
               invite_token: inviteData.token, // ✅ Usar .token (nome real da coluna no banco)
@@ -651,7 +652,7 @@ const CompletarPerfil = () => {
         try {
           console.log('[CompletarPerfil] Activating family member plan...');
           
-          const { data: familyResult, error: familyError } = await supabase.functions.invoke('patient-operations', {
+          const { data: familyResult, error: familyError } = await invokeEdgeFunction('patient-operations', {
             body: {
               operation: 'activate-family-member',
               invite_token: inviteData.invite_token,

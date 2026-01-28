@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { 
   RefreshCw, 
@@ -75,7 +75,7 @@ export function SubscriptionManager({ subscription, onUpdate }: SubscriptionMana
   const handlePause = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mp-pause-subscription", {
+      const { data, error } = await invokeEdgeFunction("mp-pause-subscription", {
         body: { subscription_id: subscription.id }
       });
 
@@ -96,7 +96,7 @@ export function SubscriptionManager({ subscription, onUpdate }: SubscriptionMana
   const handleCancel = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mp-cancel-subscription", {
+      const { data, error } = await invokeEdgeFunction("mp-cancel-subscription", {
         body: { subscription_id: subscription.id }
       });
 
