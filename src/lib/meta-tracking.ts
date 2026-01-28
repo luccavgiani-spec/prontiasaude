@@ -432,7 +432,8 @@ function markPurchaseAsTracked(transactionId: string): void {
 export function trackPurchase(data: {
   value: number;
   order_id: string;
-  email?: string; // ✅ NOVO - Para Enhanced Conversions
+  sku?: string;            // ✅ NOVO: SKU do produto para montar items
+  email?: string;          // ✅ Para Enhanced Conversions
   contents?: Array<{
     id: string;
     quantity: number;
@@ -447,6 +448,23 @@ export function trackPurchase(data: {
     return;
   }
 
+  // ✅ CORREÇÃO CRÍTICA: Montar items - NUNCA vazio (Google ignora eventos sem items)
+  const items = (data.contents && data.contents.length > 0)
+    ? data.contents.map(item => ({
+        item_id: item.id,
+        item_name: data.content_name || item.id,
+        price: item.item_price || data.value,
+        quantity: item.quantity
+      }))
+    : [{
+        item_id: data.sku || 'consulta',
+        item_name: data.content_name || 'Consulta Prontia',
+        price: data.value,
+        quantity: 1
+      }];
+
+  console.log('[trackPurchase] 📦 Items montados para GA4:', items);
+
   // Use native fbq if available (Meta Pixel) - ✅ SEM dados sensíveis de saúde (policy Meta)
   if (typeof window !== 'undefined' && (window as any).fbq) {
     (window as any).fbq('track', 'Purchase', {
@@ -456,7 +474,7 @@ export function trackPurchase(data: {
     });
   }
 
-  // ✅ ENHANCED CONVERSIONS: Configurar dados do usuário ANTES do evento
+  // ✅ PASSO 1: ENHANCED CONVERSIONS - Configurar user_data ANTES do evento
   if (typeof window !== 'undefined' && (window as any).gtag && data.email) {
     (window as any).gtag("set", "user_data", {
       email: data.email.toLowerCase().trim() // Normalizado conforme padrão Google
@@ -464,8 +482,9 @@ export function trackPurchase(data: {
     console.log('[Google Ads] 👤 user_data configurado para Enhanced Conversions');
   }
 
-  // ✅ PASSO 1: Popular dataLayer no formato Enhanced Ecommerce GA4
+  // ✅ PASSO 2: Popular dataLayer no formato Enhanced Ecommerce GA4
   // Isso preenche as variáveis ecommerce.* que a tag "Purchase Prontia" do GTM precisa
+  // CRÍTICO: {{ecommerce.value}} e {{ecommerce.transaction_id}} são lidos daqui
   if (typeof window !== 'undefined') {
     (window as any).dataLayer = (window as any).dataLayer || [];
     (window as any).dataLayer.push({ ecommerce: null }); // Limpar ecommerce anterior
@@ -475,42 +494,34 @@ export function trackPurchase(data: {
         transaction_id: data.order_id,
         value: data.value,
         currency: 'BRL',
-        items: data.contents?.map(item => ({
-          item_id: item.id,
-          item_name: data.content_name || item.id,
-          price: item.item_price || data.value,
-          quantity: item.quantity
-        })) || []
+        items: items // ✅ NUNCA vazio
       }
     });
     console.log('[GTM dataLayer] ✅ Enhanced Ecommerce purchase enviado:', {
       transaction_id: data.order_id,
       value: data.value,
-      currency: 'BRL'
+      currency: 'BRL',
+      items_count: items.length
     });
   }
 
-  // ✅ PASSO 2: Eventos gtag() para envio direto (redundância)
+  // ✅ PASSO 3: Eventos gtag() para envio direto (redundância)
   if (typeof window !== 'undefined' && (window as any).gtag) {
-    // 2a. Evento purchase para GA4
+    // 3a. Evento purchase para GA4
     (window as any).gtag("event", "purchase", {
       transaction_id: data.order_id,
       value: data.value,
       currency: "BRL",
-      items: data.contents?.map(item => ({
-        item_id: item.id,
-        item_name: data.content_name || item.id,
-        price: item.item_price || data.value,
-        quantity: item.quantity
-      })) || []
+      items: items // ✅ NUNCA vazio
     });
     console.log('[Google Ads] ✅ Evento purchase enviado:', {
       transaction_id: data.order_id,
       value: data.value,
-      currency: 'BRL'
+      currency: 'BRL',
+      items: items
     });
 
-    // 2b. ✅ Conversão Google Ads "Consulta Realizada"
+    // 3b. ✅ Conversão Google Ads "Consulta Realizada"
     (window as any).gtag("event", "conversion", {
       send_to: 'AW-17744564489/-L0OCPGgnMMbEImioo1C',
       value: data.value,

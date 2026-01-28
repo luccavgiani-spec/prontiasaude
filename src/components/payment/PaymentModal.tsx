@@ -1136,6 +1136,7 @@ export function PaymentModal({
               trackPurchase({
                 value: amount / 100,
                 order_id: orderId,
+                sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
                 email: formData.email,
                 content_name: serviceName,
                 contents: [{
@@ -1144,7 +1145,7 @@ export function PaymentModal({
                   item_price: amount / 100
                 }]
               });
-              console.log("[Meta Tracking] 💰 Purchase event disparado (PIX fallback):", { value: amount / 100, order_id: orderId });
+              console.log("[Meta Tracking] 💰 Purchase event disparado (PIX fallback):", { value: amount / 100, order_id: orderId, sku });
               
               toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
               setTimeout(() => {
@@ -1196,6 +1197,7 @@ export function PaymentModal({
             trackPurchase({
               value: amount / 100,
               order_id: orderId,
+              sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
               email: formData.email, // ✅ Enhanced Conversions
               content_name: serviceName,
               contents: [{
@@ -1204,7 +1206,7 @@ export function PaymentModal({
                 item_price: amount / 100
               }]
             });
-            console.log("[Meta Tracking] 💰 Purchase event disparado (PIX):", { value: amount / 100, order_id: orderId });
+            console.log("[Meta Tracking] 💰 Purchase event disparado (PIX):", { value: amount / 100, order_id: orderId, sku });
 
             toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
 
@@ -1381,6 +1383,7 @@ export function PaymentModal({
       trackPurchase({
         value: 0,
         order_id: orderId,
+        sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
         email: formData.email, // ✅ Enhanced Conversions
         content_name: serviceName,
         contents: [{
@@ -1691,6 +1694,7 @@ export function PaymentModal({
         trackPurchase({
           value: dbUnitPrice,
           order_id: orderId,
+          sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
           email: formData.email, // ✅ Enhanced Conversions
           content_name: serviceName,
           contents: [{
@@ -1699,7 +1703,7 @@ export function PaymentModal({
             item_price: dbUnitPrice
           }]
         });
-        console.log("[Meta Tracking] 💰 Purchase event disparado (Cartão):", { value: dbUnitPrice, order_id: orderId });
+        console.log("[Meta Tracking] 💰 Purchase event disparado (Cartão):", { value: dbUnitPrice, order_id: orderId, sku });
 
         toast.dismiss();
 
