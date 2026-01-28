@@ -488,6 +488,7 @@ const SalesTab = () => {
   };
 
   // ✅ Buscar pagamentos não processados por email
+  // CORREÇÃO: Usar campos compatíveis com ambos schemas (Cloud e Produção)
   const searchPendingPayments = async () => {
     if (!reprocessEmail.trim()) {
       toast({
@@ -500,16 +501,20 @@ const SalesTab = () => {
     
     setLoadingPendingPayments(true);
     try {
-      const { data, error } = await supabaseProduction
-        .from("pending_payments")
-        .select("*")
-        .ilike("patient_email", `%${reprocessEmail.trim()}%`)
-        .order("created_at", { ascending: false })
-        .limit(20);
+      // ✅ Buscar usando invokeEdgeFunction para garantir acesso ao banco de produção
+      // Isso evita problemas de schema entre Cloud e Produção
+      const { data: responseData, error: fetchError } = await invokeEdgeFunction('appointments-manager', {
+        body: {
+          operation: 'search_pending_payments',
+          email: reprocessEmail.trim()
+        }
+      });
       
-      if (error) throw error;
+      if (fetchError) throw fetchError;
       
-      setPendingPayments((data || []).map(p => ({
+      const payments = responseData?.payments || [];
+      
+      setPendingPayments(payments.map((p: any) => ({
         id: p.id,
         order_id: p.order_id || '',
         payment_id: p.payment_id || '',
@@ -522,10 +527,15 @@ const SalesTab = () => {
         amount: p.amount || 0,
       })));
       
-      if ((data || []).length === 0) {
+      if (payments.length === 0) {
         toast({
           title: "Nenhum pagamento encontrado",
           description: `Não encontramos pagamentos para "${reprocessEmail}".`,
+        });
+      } else {
+        toast({
+          title: `${payments.length} pagamento(s) encontrado(s)`,
+          description: `Mostrando pagamentos de "${reprocessEmail}".`,
         });
       }
     } catch (error: any) {
