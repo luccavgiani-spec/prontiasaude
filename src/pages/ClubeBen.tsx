@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Link, useNavigate } from "react-router-dom";
@@ -5,8 +6,8 @@ import { PlanosSection } from "@/components/home/PlanosSection";
 import { PartnersLogoGallery } from "@/components/home/PartnersLogoGallery";
 import { Check, Pill, Stethoscope, Dumbbell, Apple, MapPin, ArrowRight, Gift, Store } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -62,7 +63,7 @@ const ClubeBen = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('clubeben-auth-bridge', {
+      } = await invokeEdgeFunction('clubeben-auth-bridge', {
         body: {
           user_id: session.user.id
         }
@@ -124,7 +125,7 @@ const ClubeBen = () => {
     try {
       const {
         error
-      } = await supabase.functions.invoke('send-form-emails', {
+      } = await invokeEdgeFunction('send-form-emails', {
         body: {
           type: 'clubeben-parceiro',
           data: parceiroForm

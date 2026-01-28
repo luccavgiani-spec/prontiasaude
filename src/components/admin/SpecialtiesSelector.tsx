@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, X } from 'lucide-react';
 import { supabaseProduction } from '@/lib/supabase-production';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { ALL_SPECIALTIES, normalizeSpecialty } from '@/lib/specialties-config';
 interface SpecialtiesSelectorProps {
@@ -42,7 +42,7 @@ export default function SpecialtiesSelector({
   const saveSpecialties = async (newSelected: string[]) => {
     try {
       // Usar Edge Function para escrever na Produção
-      const { data, error } = await supabase.functions.invoke('admin-settings-update', {
+      const { data, error } = await invokeEdgeFunction('admin-settings-update', {
         body: {
           key: 'communicare_specialties',
           value: JSON.stringify(newSelected)

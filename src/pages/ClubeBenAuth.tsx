@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
@@ -29,8 +30,8 @@ const ClubeBenAuth = () => {
         return;
       }
 
-      // Usuário logado: gerar JWT via edge function
-      const { data, error } = await supabase.functions.invoke('clubeben-auth-bridge', {
+      // Usuário logado: gerar JWT via edge function na produção
+      const { data, error } = await invokeEdgeFunction('clubeben-auth-bridge', {
         body: { 
           user_id: session.user.id,
         }

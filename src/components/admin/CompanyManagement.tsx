@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Edit, Key, Power, PowerOff, Mail } from 'lucide-react';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { formatCNPJ } from '@/lib/validations';
 import CompanyFormModal from './CompanyFormModal';
@@ -68,8 +69,8 @@ export default function CompanyManagement() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
-      const response = await supabase.functions.invoke('company-operations/' + companyId + '/reset-password', {
-        method: 'POST',
+      const response = await invokeEdgeFunction('company-operations', {
+        body: { operation: 'reset-password', company_id: companyId }
       });
 
       if (response.error) throw response.error;
@@ -90,7 +91,7 @@ export default function CompanyManagement() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('company-operations', {
+      const { data, error } = await invokeEdgeFunction('company-operations', {
         body: { 
           operation: 'fix-email',
           company_id: companyId 

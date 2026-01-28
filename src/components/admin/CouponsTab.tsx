@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Copy, Loader2, Plus, Power, PowerOff, Trash2, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -204,7 +205,7 @@ export function CouponsTab() {
     try {
       console.log(`Verificando pagamento ${paymentId}...`);
       
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         'process-pending-coupon',
         { body: { payment_id: paymentId } }
       );
@@ -246,7 +247,7 @@ export function CouponsTab() {
     try {
       console.log(`Verificando ${pendingCoupons.length} cupons pendentes em lote...`);
       
-      const { data, error } = await supabase.functions.invoke(
+      const { data, error } = await invokeEdgeFunction(
         'process-all-pending-coupons'
       );
       

@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { getServiceNameFromSKU } from '@/lib/sku-mapping';
 import { PlayCircle, CheckCircle, XCircle, ChevronDown, Clock, AlertCircle, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -153,7 +154,7 @@ const TestesRoteamento: React.FC = () => {
       console.log('[QA Test] Executando teste manual');
       console.log('[QA Test] Request:', testData);
 
-      const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+      const { data, error } = await invokeEdgeFunction('schedule-redirect', {
         body: testData
       });
 
@@ -272,7 +273,7 @@ const TestesRoteamento: React.FC = () => {
       try {
         console.log(`[Communicare Suite] Executando ${subcase.id}: ${subcase.nome}`);
         
-        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        const { data, error } = await invokeEdgeFunction('schedule-redirect', {
           body: payload
         });
         
@@ -483,7 +484,7 @@ const TestesRoteamento: React.FC = () => {
           console.log(`[ClickLife Suite] Executando ${subcase.id}: ${subcase.nome}`);
           console.log('[ClickLife Suite] Chamando função clicklife-token-test...');
           
-          const { data, error } = await supabase.functions.invoke('clicklife-token-test', {
+          const { data, error } = await invokeEdgeFunction('clicklife-token-test', {
             body: {}
           });
           
@@ -572,7 +573,7 @@ const TestesRoteamento: React.FC = () => {
       try {
         console.log(`[ClickLife Suite] Executando ${subcase.id}: ${subcase.nome}`);
         
-        const { data, error } = await supabase.functions.invoke('schedule-redirect', {
+        const { data, error } = await invokeEdgeFunction('schedule-redirect', {
           body: payload
         });
         

@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import LogoLoop from "@/components/bits/LogoLoop";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { trackLead } from "@/lib/meta-tracking";
 import { Shield, Users, Clock, Heart, TrendingUp, FileText, Building2, CheckCircle } from "lucide-react";
 const Empresas = () => {
@@ -31,7 +31,7 @@ const Empresas = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('send-form-emails', {
+      } = await invokeEdgeFunction('send-form-emails', {
         body: {
           type: 'empresa',
           ...formData
