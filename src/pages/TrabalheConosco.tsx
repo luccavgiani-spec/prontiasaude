@@ -8,7 +8,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { Briefcase, Upload, ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 
 const TrabalheConosco = () => {
   const [formData, setFormData] = useState({
@@ -46,7 +46,7 @@ const TrabalheConosco = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.functions.invoke('send-form-emails', {
+      const { error } = await invokeEdgeFunction('send-form-emails', {
         body: {
           type: 'trabalhe-conosco',
           data: formData,

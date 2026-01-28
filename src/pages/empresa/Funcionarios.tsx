@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
 import { validateCPF } from '@/lib/cpf-validator';
@@ -155,7 +156,7 @@ export default function EmpresaFuncionarios() {
     setLoading(true);
     
     try {
-      const { data, error } = await supabase.functions.invoke('company-operations', {
+      const { data, error } = await invokeEdgeFunction('company-operations', {
         body: {
           operation: 'invite-employee',
           company_id: company?.id,
@@ -285,7 +286,7 @@ export default function EmpresaFuncionarios() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No session');
 
-      const response = await supabase.functions.invoke('company-operations', {
+      const response = await invokeEdgeFunction('company-operations', {
         body: {
           operation: 'create-employee',
           ...formData,

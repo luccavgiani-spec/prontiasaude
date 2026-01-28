@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from './patient-plan';
 
 export interface AppointmentData {
@@ -53,8 +53,8 @@ export async function createAppointment(data: CreateAppointmentRequest): Promise
   error?: string; 
 }> {
   try {
-    // First create in Supabase
-    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
+    // First create in Supabase (produção)
+    const { data: result, error } = await invokeEdgeFunction('appointments-manager', {
       body: {
         operation: 'create_appointment',
         ...data
@@ -86,7 +86,7 @@ export async function updateAppointment(appointment_id: string, data: Partial<Cr
   error?: string; 
 }> {
   try {
-    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
+    const { data: result, error } = await invokeEdgeFunction('appointments-manager', {
       body: {
         operation: 'update_appointment',
         appointment_id,
@@ -117,7 +117,7 @@ export async function getAppointments(email: string): Promise<{
   try {
     console.log('Fetching appointments for:', email);
     
-    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
+    const { data: result, error } = await invokeEdgeFunction('appointments-manager', {
       body: {
         operation: 'get_appointments',
         email
@@ -154,7 +154,7 @@ export async function getAppointment(appointment_id: string): Promise<{
   error?: string; 
 }> {
   try {
-    const { data: result, error } = await supabase.functions.invoke('appointments-manager', {
+    const { data: result, error } = await invokeEdgeFunction('appointments-manager', {
       body: {
         operation: 'get_appointment',
         appointment_id

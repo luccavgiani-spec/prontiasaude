@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
 
 /** Garante que exista uma linha em public.patients para o usuário atual */
@@ -135,7 +136,7 @@ export async function upsertPatientBasic(payload: {
       hasActivePlan
     });
 
-    await supabase.functions.invoke('patient-operations', {
+    await invokeEdgeFunction('patient-operations', {
       body: {
         operation: 'complete_profile',
         user_id: userId,

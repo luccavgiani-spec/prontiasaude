@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import CircularGallery from "@/components/bits/CircularGallery";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { trackLead } from "@/lib/meta-tracking";
 import { Heart, Globe, Handshake, Users } from "lucide-react";
 const EmpresasDoBem = () => {
@@ -27,7 +27,7 @@ const EmpresasDoBem = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('send-form-emails', {
+      } = await invokeEdgeFunction('send-form-emails', {
         body: {
           type: 'ong',
           ...formData

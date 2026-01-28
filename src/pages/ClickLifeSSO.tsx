@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 
 export default function ClickLifeSSO() {
   const [searchParams] = useSearchParams();
@@ -26,10 +26,12 @@ export default function ClickLifeSSO() {
           setTimeout(() => reject(new Error('Timeout ao validar token (10s)')), 10000)
         );
 
-        const { data, error: invokeError } = await Promise.race([
-          supabase.functions.invoke('validate-sso-token', { body: { token } }),
+        const result = await Promise.race([
+          invokeEdgeFunction('validate-sso-token', { body: { token } }),
           timeoutPromise
         ]) as any;
+        
+        const { data, error: invokeError } = result;
 
         if (invokeError || !data?.ok) {
           throw new Error(data?.error || 'Token inválido');

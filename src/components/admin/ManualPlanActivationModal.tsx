@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CalendarClock } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { CATALOGO_SERVICOS, PLANOS } from "@/lib/constants";
 
@@ -69,7 +69,7 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('patient-operations', {
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'activate_plan_manual',
           patient_email: user.email,

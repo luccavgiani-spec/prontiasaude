@@ -8,7 +8,7 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 import { AlertTriangle, ArrowLeft, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 
 const DisqueDenuncia = () => {
   const [formData, setFormData] = useState({
@@ -40,7 +40,7 @@ const DisqueDenuncia = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.functions.invoke('send-form-emails', {
+      const { error } = await invokeEdgeFunction('send-form-emails', {
         body: {
           type: 'disque-denuncia',
           data: formData,

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { validateCNPJWithChecksum, formatCNPJ, validateCEP } from '@/lib/validations';
 import { generateTemporaryPassword } from '@/lib/password-generator';
@@ -166,7 +167,7 @@ export default function CompanyFormModal({ company, onClose, onCompanyCreated, o
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error('No session');
 
-        const response = await supabase.functions.invoke('company-operations', {
+        const response = await invokeEdgeFunction('company-operations', {
           body: {
             operation: 'create',
             company: {
