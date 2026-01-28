@@ -688,8 +688,8 @@ const TestesRoteamento: React.FC = () => {
         }
       };
       
-      // Chamar via supabase.functions.invoke para evitar CORS
-      const { data, error } = await supabase.functions.invoke('mp-webhook', {
+      // Chamar via invokeEdgeFunction para garantir que vai para produção
+      const { data, error } = await invokeEdgeFunction('mp-webhook', {
         body: mockPayload
       });
       

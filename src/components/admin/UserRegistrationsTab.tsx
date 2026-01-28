@@ -294,7 +294,7 @@ export default function UserRegistrationsTab() {
     }
 
     try {
-      const { error } = await supabase.functions.invoke('user-management', {
+      const { error } = await invokeEdgeFunction('user-management', {
         body: {
           operation: 'delete_user',
           user_id: userId

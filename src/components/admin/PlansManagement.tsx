@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { 
   Search, XCircle, CheckCircle, ChevronDown, ChevronUp, 
   RefreshCw, Edit2, Trash2, Users, Calendar, MapPin, 
@@ -360,7 +361,7 @@ const PlansManagement = () => {
         return;
       }
 
-      const response = await supabase.functions.invoke('patient-operations', {
+      const response = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'change_plan',
           plan_id: selectedPlan.id,
@@ -409,7 +410,7 @@ const PlansManagement = () => {
         return;
       }
 
-      const response = await supabase.functions.invoke('patient-operations', {
+      const response = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'disable_plan',
           email: selectedPlan.email

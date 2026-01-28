@@ -1312,7 +1312,7 @@ export function PaymentModal({
       const schedulePayload = buildSchedulePayload();
 
       // Chamar schedule-redirect diretamente (sem Mercado Pago)
-      const { data: scheduleResult, error: scheduleError } = await supabase.functions.invoke(
+      const { data: scheduleResult, error: scheduleError } = await invokeEdgeFunction(
         "schedule-redirect",
         {
           body: {
@@ -1743,7 +1743,7 @@ export function PaymentModal({
         });
 
         // Chamar schedule-redirect imediatamente após pagamento aprovado
-        const { data: scheduleData, error: scheduleError } = await supabase.functions.invoke("schedule-redirect", {
+        const { data: scheduleData, error: scheduleError } = await invokeEdgeFunction("schedule-redirect", {
           body: {
             ...schedulePayload,
             order_id: orderId,  // ✅ CRÍTICO: Permite verificação de duplicação no backend
@@ -2270,7 +2270,7 @@ export function PaymentModal({
       const itemType = sku.startsWith('IND_') || sku.startsWith('FAM_') ? 'PLAN' : 'SERVICE';
       
       // Chamar edge function validate-coupon
-      const { data, error } = await supabase.functions.invoke('validate-coupon', {
+      const { data, error } = await invokeEdgeFunction('validate-coupon', {
         body: {
           coupon_code: couponCode,
           item_type: itemType,

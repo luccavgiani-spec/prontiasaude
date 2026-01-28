@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { Users, UserPlus, Mail, Loader2, RefreshCw, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import {
@@ -120,7 +121,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
 
     setIsSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('patient-operations', {
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'invite-familiar',
           plan_id: planId,
@@ -153,7 +154,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const handleResendInvite = async (inviteId: string) => {
     setLoadingAction(inviteId);
     try {
-      const { data, error } = await supabase.functions.invoke('patient-operations', {
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'resend-family-invite',
           invite_id: inviteId

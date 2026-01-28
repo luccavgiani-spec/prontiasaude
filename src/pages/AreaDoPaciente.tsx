@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
 import { User, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall, Stethoscope, Pill } from "lucide-react";
@@ -130,7 +131,7 @@ const AreaDoPaciente = () => {
         const {
           data: syncData,
           error: syncError
-        } = await supabase.functions.invoke('clubeben-sync', {
+        } = await invokeEdgeFunction('clubeben-sync', {
           body: {
             user_id: currentUser?.id,
             user_email: currentUser?.email,
@@ -154,7 +155,7 @@ const AreaDoPaciente = () => {
       const {
         data,
         error
-      } = await supabase.functions.invoke('clubeben-auth-bridge', {
+      } = await invokeEdgeFunction('clubeben-auth-bridge', {
         body: {
           user_id: currentUser?.id
         }

@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Upload, AlertCircle, CheckCircle2, XCircle, Loader2, FileText, Users } from 'lucide-react';
 
@@ -304,7 +305,7 @@ export function ImportUsersModal({ open, onOpenChange, onSuccess }: ImportUsersM
       for (let i = 0; i < usersToImport.length; i += batchSize) {
         const batch = usersToImport.slice(i, i + batchSize);
         
-        const { data, error } = await supabase.functions.invoke('import-users', {
+        const { data, error } = await invokeEdgeFunction('import-users', {
           body: { users: batch },
           headers: {
             Authorization: `Bearer ${session.access_token}`

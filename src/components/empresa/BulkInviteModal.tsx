@@ -8,6 +8,7 @@ import { Upload, Download, CheckCircle, XCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { validateEmail } from '@/lib/validations';
 import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 
 interface BulkInviteResult {
@@ -183,7 +184,7 @@ export default function BulkInviteModal({
             setTimeout(() => reject(new Error('⏱️ Timeout: Servidor não respondeu em 30s')), 30000)
           );
           
-          const invokePromise = supabase.functions.invoke('company-operations', {
+          const invokePromise = invokeEdgeFunction('company-operations', {
             body: {
               operation: 'invite-employee',
               company_id: companyId,

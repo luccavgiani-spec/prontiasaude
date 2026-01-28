@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabaseProduction } from '@/lib/supabase-production';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { AlertCircle, Loader2 } from 'lucide-react';
 
@@ -49,7 +49,7 @@ export default function CommunicareOverrideCard() {
     
     try {
       // Usar Edge Function para escrever na Produção
-      const { data, error } = await supabase.functions.invoke('admin-settings-update', {
+      const { data, error } = await invokeEdgeFunction('admin-settings-update', {
         body: { 
           key: 'force_communicare_clinico', 
           value: newValue 
