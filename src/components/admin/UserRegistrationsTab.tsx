@@ -419,14 +419,16 @@ export default function UserRegistrationsTab() {
       if (error) throw error;
       
       if (data?.ok && data?.url) {
-        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}!`);
-        
-        // Copiar URL para clipboard
+        // ✅ CORREÇÃO: Gerar link copiável ao invés de redirecionar
         await navigator.clipboard.writeText(data.url);
-        toast.info('Link da consulta copiado para a área de transferência!');
-        
-        // Abrir em nova aba
-        window.open(data.url, '_blank');
+        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado para a área de transferência.`);
+        toast.info(`Link: ${data.url.length > 60 ? data.url.substring(0, 60) + '...' : data.url}`, {
+          duration: 10000,
+          action: {
+            label: 'Copiar',
+            onClick: () => navigator.clipboard.writeText(data.url)
+          }
+        });
       } else {
         // ✅ Melhor mensagem de erro com debug_hint
         const errorMsg = data?.error || 'Erro desconhecido';

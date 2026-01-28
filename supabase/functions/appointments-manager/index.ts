@@ -280,6 +280,39 @@ Deno.serve(async (req) => {
       );
     }
 
+    // ✅ Operação: Buscar pagamentos pendentes por email (para reprocessamento)
+    if (body.operation === 'search_pending_payments') {
+      const { email } = body;
+
+      if (!email) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Email is required' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data, error } = await supabase
+        .from('pending_payments')
+        .select('id, order_id, payment_id, patient_email, patient_name, sku, status, processed, created_at, amount')
+        .ilike('patient_email', `%${email}%`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('[appointments-manager] Error searching pending payments:', error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[appointments-manager] Found ${data?.length || 0} pending payments for ${email}`);
+      return new Response(
+        JSON.stringify({ success: true, payments: data || [] }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: 'Invalid operation' }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
