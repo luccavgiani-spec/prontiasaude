@@ -431,12 +431,22 @@ export default function UserRegistrationsTab() {
         
         // NÃO fechar o modal - deixar aberto para mostrar o link
       } else {
-        // ✅ Melhor mensagem de erro com debug_hint
+        // ✅ Melhor mensagem de erro com debug_hint e request_id
         const errorMsg = data?.error || 'Erro desconhecido';
         const debugHint = data?.debug_hint || '';
         const errorCode = data?.error_code || '';
+        const requestId = data?.request_id || '';
+        const responsePreview = data?.response_preview || '';
+        const details = data?.details || {};
         
-        console.error('[QuickConsult] Erro:', { error: errorMsg, debug_hint: debugHint, error_code: errorCode, request_id: data?.request_id });
+        console.error('[QuickConsult] Erro estruturado:', { 
+          error: errorMsg, 
+          debug_hint: debugHint, 
+          error_code: errorCode, 
+          request_id: requestId,
+          response_preview: responsePreview,
+          details: details
+        });
         
         let userMessage = errorMsg;
         if (errorCode === 'EMPTY_BODY') {
@@ -445,6 +455,11 @@ export default function UserRegistrationsTab() {
           userMessage = `Campos obrigatórios faltando: ${errorMsg}`;
         } else if (debugHint) {
           userMessage = `${errorMsg} (${debugHint})`;
+        }
+        
+        // ✅ Mostrar request_id para facilitar debug nos logs
+        if (requestId) {
+          userMessage += ` [ID: ${requestId.substring(0, 8)}]`;
         }
         
         toast.error(userMessage);
