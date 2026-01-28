@@ -408,6 +408,7 @@ export default function UserRegistrationsTab() {
         sexo: quickConsultUser.patient?.gender || 'F',
         birth_date: quickConsultUser.patient?.birth_date,
         force_provider: quickConsultProvider,
+        skip_registration: true, // ✅ Pular cadastro/ativação, ir direto para criação de atendimento
       };
       
       console.log('[QuickConsult] Criando consulta:', { provider: quickConsultProvider, email: payload.email });

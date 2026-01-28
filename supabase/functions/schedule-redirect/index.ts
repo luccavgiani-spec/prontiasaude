@@ -216,6 +216,7 @@ interface SchedulePayload {
   order_id?: string;
   payment_id?: string;
   force_provider?: 'clicklife' | 'communicare'; // ✅ NOVO: Forçar provedor (admin)
+  skip_registration?: boolean; // ✅ NOVO: Pular cadastro/ativação, ir direto para atendimento (admin)
 }
 
 // Função loginClickLifePatient removida - ClickLife não suporta login via API
@@ -1311,104 +1312,62 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
 
   console.log('[ClickLife] Sexo enviado para cadastro:', sexoFinal);
 
-  // 1. CADASTRAR PACIENTE
-  const registration = await registerClickLifePatient(
-    payload.cpf,
-    payload.nome,
-    payload.email,
-    payload.telefone,
-    planoId,
-    sexoFinal,
-    payload.birth_date // ✅ NOVO: Passar data de nascimento
-  );
+  // 1. CADASTRAR PACIENTE (ou pular se skip_registration)
+  if (payload.skip_registration) {
+    console.log('[ClickLife] ⏭️ skip_registration=true, pulando cadastro/ativação - indo direto para criação de atendimento');
+  } else {
+    const registration = await registerClickLifePatient(
+      payload.cpf,
+      payload.nome,
+      payload.email,
+      payload.telefone,
+      planoId,
+      sexoFinal,
+      payload.birth_date // ✅ NOVO: Passar data de nascimento
+    );
 
-  // ✅ ETAPA 2: Se falhar, tentar apenas ativar sem re-cadastrar
-  if (!registration.success) {
-    console.warn('[ClickLife] Cadastro falhou, tentando apenas ativar:', registration.error);
-    
-    // Tentar ativação direta (assume que usuário já existe)
-    const cpfClean = payload.cpf.replace(/\D/g, '');
-    const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
-    
-    const activationPayload = {
-      authtoken: INTEGRATOR_TOKEN,
-      cpf: cpfClean,
-      empresaid: 9083,
-      planoid: planoId,
-      proposito: "Ativar"
-    };
-    
-    try {
-      const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'authtoken': INTEGRATOR_TOKEN
-        },
-        body: JSON.stringify(activationPayload)
-      });
+    // ✅ ETAPA 2: Se falhar, tentar apenas ativar sem re-cadastrar
+    if (!registration.success) {
+      console.warn('[ClickLife] Cadastro falhou, tentando apenas ativar:', registration.error);
       
-      if (!activationRes.ok) {
-        const errorText = await activationRes.text();
-        console.error('[ClickLife] Ativação direta falhou:', activationRes.status, errorText);
-        
-        // ✅ ETAPA 5: Registrar métrica de erro (usar key do projeto original)
-        const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-        const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-        const supabase = createClient(
-          ORIGINAL_SUPABASE_URL,
-          ORIGINAL_SERVICE_ROLE_KEY
-        );
-        
-        await supabase.from('metrics').insert({
-          metric_type: 'registration_failure',
-          patient_email: payload.email,
-          status: 'error',
-          platform: 'clicklife',
-          metadata: {
-            error: registration.error,
-            cpf_masked: payload.cpf.substring(0, 3) + '***',
-            timestamp: new Date().toISOString(),
-            http_status: activationRes.status,
-            response_body: errorText.substring(0, 500)
-          }
+      // Tentar ativação direta (assume que usuário já existe)
+      const cpfClean = payload.cpf.replace(/\D/g, '');
+      const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
+      
+      const activationPayload = {
+        authtoken: INTEGRATOR_TOKEN,
+        cpf: cpfClean,
+        empresaid: 9083,
+        planoid: planoId,
+        proposito: "Ativar"
+      };
+      
+      try {
+        const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'authtoken': INTEGRATOR_TOKEN
+          },
+          body: JSON.stringify(activationPayload)
         });
         
-        return new Response(
-          JSON.stringify({
-            ok: false,
-            provider: 'clicklife',
-            error: `Erro ao ativar usuário existente: ${registration.error}`,
-            details: {
-              reason: 'Não foi possível cadastrar nem ativar o paciente',
-              endpoint: '/usuarios/usuarios e /usuarios/ativacao'
-            }
-          }),
-          { 
-            status: 500,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        );
-      }
-      
-      console.log('[ClickLife] ✓ Usuário ativado diretamente (fallback)');
-    } catch (error) {
-      console.error('[ClickLife] Exceção na ativação direta:', error);
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          provider: 'clicklife',
-          error: 'Erro ao processar ativação do usuário'
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        if (!activationRes.ok) {
+          const errorText = await activationRes.text();
+          console.warn('[ClickLife] ⚠️ Ativação também falhou (paciente pode já estar ativo):', activationRes.status, errorText.substring(0, 200));
+          // ✅ NÃO RETORNAR ERRO - continuar para criar atendimento (paciente já ativo é OK)
+          console.log('[ClickLife] Prosseguindo mesmo com erro de ativação - paciente pode já estar ativo');
+        } else {
+          console.log('[ClickLife] ✓ Usuário ativado diretamente (fallback)');
         }
-      );
+      } catch (error) {
+        console.warn('[ClickLife] Exceção na ativação direta (continuando mesmo assim):', error);
+        // ✅ NÃO RETORNAR ERRO - continuar para criar atendimento
+      }
     }
   }
 
-  console.log('[ClickLife] ✓ Paciente cadastrado, prosseguindo com criação de atendimento');
+  console.log('[ClickLife] ✓ Prosseguindo com criação de atendimento');
 
   // 2. OBTER TOKEN DO INTEGRADOR
   const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
@@ -1790,16 +1749,63 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any, cors
     console.log('[Communicare] JWT (primeiros 30 chars):', jwt.substring(0, 30));
   }
 
-  // 2. CRIAR PACIENTE (se não existir) usando API_TOKEN
-  const patientResult = await createCommunicarePatient(payload, API_TOKEN);
-
-  if (!patientResult.success || !patientResult.patientId) {
-    console.error('[Communicare] ⚠️ Erro crítico: paciente não criado ou ID não obtido');
+  // 2. CRIAR PACIENTE (se não existir) ou buscar existente
+  let patientId: number | undefined;
+  
+  if (payload.skip_registration) {
+    console.log('[Communicare] ⏭️ skip_registration=true, pulando criação de paciente');
+  } else {
+    const patientResult = await createCommunicarePatient(payload, API_TOKEN);
+    
+    if (patientResult.success && patientResult.patientId) {
+      patientId = patientResult.patientId;
+      console.log('[Communicare] ✓ Paciente criado/encontrado via API:', patientId);
+    } else {
+      console.warn('[Communicare] Criação de paciente falhou:', patientResult.error);
+    }
+  }
+  
+  // ✅ Se não tem patientId ainda, buscar por CPF (paciente já existe)
+  if (!patientId) {
+    console.log('[Communicare] Buscando paciente existente por CPF...');
+    const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
+                          'https://api-patients-production.communicare.com.br';
+    const cpfClean = payload.cpf.replace(/\D/g, '');
+    
+    try {
+      const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+        method: 'GET',
+        headers: { 'api_token': API_TOKEN }
+      });
+      
+      if (getRes.ok) {
+        const getDataText = await getRes.text();
+        try {
+          const getData = JSON.parse(getDataText);
+          patientId = Array.isArray(getData) ? getData[0]?.id : getData?.id;
+          
+          if (patientId) {
+            console.log('[Communicare] ✓ Paciente existente encontrado por CPF:', patientId);
+          }
+        } catch (parseErr) {
+          console.warn('[Communicare] Resposta de busca não é JSON válido:', getDataText.substring(0, 200));
+        }
+      } else {
+        console.warn('[Communicare] Busca por CPF falhou:', getRes.status);
+      }
+    } catch (fetchError) {
+      console.warn('[Communicare] Erro ao buscar paciente por CPF:', fetchError);
+    }
+  }
+  
+  // ✅ Se AINDA não tem patientId, aí sim retorna erro
+  if (!patientId) {
+    console.error('[Communicare] ❌ Paciente não encontrado nem criado');
     return new Response(
       JSON.stringify({
         ok: false,
         provider: 'communicare',
-        error: patientResult.error || 'Não foi possível obter o ID do paciente'
+        error: 'Paciente não encontrado na Communicare. Verifique se o CPF está correto ou cadastre o paciente primeiro.'
       }),
       { 
         status: 500,
@@ -1807,8 +1813,6 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any, cors
       }
     );
   }
-
-  const patientId = patientResult.patientId;
   console.log('[Communicare] ✓ Usando patientId:', patientId);
 
   // 3. ENFILEIRAR PACIENTE
