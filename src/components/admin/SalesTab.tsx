@@ -2,14 +2,16 @@ import { useEffect, useState, useMemo } from "react";
 import { getServiceNameFromSKU } from "@/lib/sku-mapping";
 import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ExternalLink, Copy, Search, Download, DollarSign, Calendar, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { ExternalLink, Copy, Search, Download, DollarSign, Calendar, TrendingUp, BarChart3, ArrowUpRight, ArrowDownRight, RefreshCw, AlertCircle, Loader2 } from "lucide-react";
 import { format, startOfDay, startOfWeek, isAfter, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, getDaysInMonth, isSameMonth, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
@@ -103,6 +105,20 @@ const safeFormatDate = (dateString: string | null | undefined, formatStr: string
   }
 };
 
+// Interface para pagamentos pendentes
+interface PendingPayment {
+  id: string;
+  order_id: string;
+  payment_id: string;
+  patient_email: string;
+  patient_name: string;
+  sku: string;
+  status: string;
+  processed: boolean;
+  created_at: string;
+  amount: number;
+}
+
 const SalesTab = () => {
   const { toast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -111,6 +127,13 @@ const SalesTab = () => {
   const [filterService, setFilterService] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterProvider, setFilterProvider] = useState("all");
+  
+  // ✅ Estado para reprocessamento de pagamentos
+  const [reprocessModalOpen, setReprocessModalOpen] = useState(false);
+  const [reprocessEmail, setReprocessEmail] = useState("");
+  const [pendingPayments, setPendingPayments] = useState<PendingPayment[]>([]);
+  const [loadingPendingPayments, setLoadingPendingPayments] = useState(false);
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   
   // 📅 Estado para seleção de mês no card de desempenho
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -464,6 +487,135 @@ const SalesTab = () => {
     );
   };
 
+  // ✅ Buscar pagamentos não processados por email
+  const searchPendingPayments = async () => {
+    if (!reprocessEmail.trim()) {
+      toast({
+        title: "Email necessário",
+        description: "Digite o email para buscar pagamentos pendentes.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setLoadingPendingPayments(true);
+    try {
+      const { data, error } = await supabaseProduction
+        .from("pending_payments")
+        .select("*")
+        .ilike("patient_email", `%${reprocessEmail.trim()}%`)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      
+      if (error) throw error;
+      
+      setPendingPayments((data || []).map(p => ({
+        id: p.id,
+        order_id: p.order_id || '',
+        payment_id: p.payment_id || '',
+        patient_email: p.patient_email || '',
+        patient_name: p.patient_name || '',
+        sku: p.sku || '',
+        status: p.status || 'unknown',
+        processed: p.processed || false,
+        created_at: p.created_at || '',
+        amount: p.amount || 0,
+      })));
+      
+      if ((data || []).length === 0) {
+        toast({
+          title: "Nenhum pagamento encontrado",
+          description: `Não encontramos pagamentos para "${reprocessEmail}".`,
+        });
+      }
+    } catch (error: any) {
+      console.error("Erro ao buscar pagamentos:", error);
+      toast({
+        title: "Erro ao buscar",
+        description: error.message || "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPendingPayments(false);
+    }
+  };
+
+  // ✅ Reprocessar um pagamento específico
+  const reprocessPayment = async (payment: PendingPayment) => {
+    if (!payment.payment_id && !payment.order_id) {
+      toast({
+        title: "Dados insuficientes",
+        description: "Este pagamento não possui payment_id nem order_id.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setReprocessingId(payment.id);
+    try {
+      console.log('[Reprocess] Reprocessando pagamento:', { 
+        payment_id: payment.payment_id, 
+        order_id: payment.order_id,
+        email: payment.patient_email 
+      });
+      
+      const { data, error } = await invokeEdgeFunction('check-payment-status', {
+        body: {
+          payment_id: payment.payment_id,
+          order_id: payment.order_id,
+          email: payment.patient_email,
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.approved && data?.redirect_url) {
+        toast({
+          title: "✅ Pagamento reprocessado!",
+          description: data.existing 
+            ? "Appointment já existia - link recuperado." 
+            : "Novo appointment criado com sucesso.",
+        });
+        
+        // Copiar URL para clipboard
+        await navigator.clipboard.writeText(data.redirect_url);
+        toast({
+          title: "Link copiado!",
+          description: "O link de redirecionamento foi copiado.",
+        });
+        
+        // Atualizar lista
+        searchPendingPayments();
+        loadAppointments();
+      } else if (data?.approved === false) {
+        toast({
+          title: "⏳ Pagamento ainda pendente",
+          description: `Status no Mercado Pago: ${data.status || 'pending'}`,
+        });
+      } else if (data?.error) {
+        toast({
+          title: "⚠️ Erro ao reprocessar",
+          description: `${data.error} ${data.debug_hint ? `(${data.debug_hint})` : ''}`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Resposta inesperada",
+          description: "Verifique os logs para mais detalhes.",
+        });
+      }
+    } catch (error: any) {
+      console.error("Erro ao reprocessar:", error);
+      toast({
+        title: "Erro ao reprocessar",
+        description: error.message || "Erro de conexão",
+        variant: "destructive",
+      });
+    } finally {
+      setReprocessingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -768,7 +920,11 @@ const SalesTab = () => {
             </Select>
           </div>
 
-          <div className="flex justify-end mt-4">
+          <div className="flex justify-end gap-2 mt-4">
+            <Button onClick={() => setReprocessModalOpen(true)} variant="outline" size="sm">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reprocessar Pagamento
+            </Button>
             <Button onClick={exportCSV} variant="outline" size="sm">
               <Download className="mr-2 h-4 w-4" />
               Exportar CSV
@@ -856,6 +1012,124 @@ const SalesTab = () => {
           </div>
         </CardContent>
       </Card>
+      {/* Modal de Reprocessamento */}
+      <Dialog open={reprocessModalOpen} onOpenChange={setReprocessModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Reprocessar Pagamentos
+            </DialogTitle>
+            <DialogDescription>
+              Busque pagamentos aprovados que não foram processados corretamente.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Busca por email */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="Digite o email do paciente..."
+                value={reprocessEmail}
+                onChange={(e) => setReprocessEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && searchPendingPayments()}
+              />
+              <Button onClick={searchPendingPayments} disabled={loadingPendingPayments}>
+                {loadingPendingPayments ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+            
+            {/* Lista de pagamentos encontrados */}
+            {pendingPayments.length > 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Processado</TableHead>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Ação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingPayments.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="text-xs">{payment.patient_email}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {payment.sku || 'N/A'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={payment.status === 'approved' ? 'default' : 'secondary'}>
+                            {payment.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {payment.processed ? (
+                            <Badge variant="outline" className="text-green-600 border-green-600">✓ Sim</Badge>
+                          ) : (
+                            <Badge variant="destructive">✗ Não</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {safeFormatDate(payment.created_at, "dd/MM/yyyy")}
+                        </TableCell>
+                        <TableCell>
+                          {payment.status === 'approved' && !payment.processed ? (
+                            <Button 
+                              size="sm" 
+                              onClick={() => reprocessPayment(payment)}
+                              disabled={reprocessingId === payment.id}
+                            >
+                              {reprocessingId === payment.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <RefreshCw className="h-3 w-3 mr-1" />
+                                  Reprocessar
+                                </>
+                              )}
+                            </Button>
+                          ) : payment.processed ? (
+                            <span className="text-xs text-muted-foreground">Já processado</span>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Aguardando aprovação</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+            
+            {pendingPayments.length === 0 && reprocessEmail && !loadingPendingPayments && (
+              <div className="text-center py-8 text-muted-foreground">
+                <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Nenhum pagamento encontrado para este email.</p>
+                <p className="text-xs mt-1">Tente outro email ou verifique a ortografia.</p>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setReprocessModalOpen(false);
+              setPendingPayments([]);
+              setReprocessEmail("");
+            }}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

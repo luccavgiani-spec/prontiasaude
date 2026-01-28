@@ -35,3 +35,19 @@ verify_jwt = false
 
 [functions.mp-subscription-webhook]
 verify_jwt = false
+
+# ✅ Funções críticas para fluxo de pagamento/agendamento
+[functions.schedule-redirect]
+verify_jwt = false
+
+[functions.check-payment-status]
+verify_jwt = false
+
+[functions.mp-webhook]
+verify_jwt = false
+
+[functions.activate-clicklife-manual]
+verify_jwt = false
+
+[functions.validate-coupon]
+verify_jwt = false

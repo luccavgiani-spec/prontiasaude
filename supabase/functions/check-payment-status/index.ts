@@ -110,15 +110,66 @@ async function registerClickLifePatient(
 }
 
 Deno.serve(async (req) => {
+  const requestId = `CPS-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { payment_id, email, order_id } = await req.json();
+    // ✅ PARSING SEGURO DO BODY (evita 500 "Unexpected end of JSON")
+    const rawBody = await req.text();
+    
+    if (!rawBody || rawBody.trim() === '') {
+      console.error(`[check-payment-status] ❌ Body vazio! Request ID: ${requestId}`);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Payload ausente',
+        error_code: 'EMPTY_BODY',
+        debug_hint: 'O corpo da requisição chegou vazio',
+        request_id: requestId
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    let body: { payment_id?: string; email?: string; order_id?: string };
+    try {
+      body = JSON.parse(rawBody);
+    } catch (parseErr) {
+      console.error(`[check-payment-status] ❌ JSON inválido! Request ID: ${requestId}`);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'JSON inválido',
+        error_code: 'INVALID_JSON',
+        debug_hint: `Erro ao fazer parse: ${parseErr}`,
+        request_id: requestId
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const { payment_id, email, order_id } = body;
+    
+    // ✅ Validar que temos ao menos payment_id ou order_id
+    if (!payment_id && !order_id) {
+      console.error(`[check-payment-status] ❌ Nenhum identificador fornecido! Request ID: ${requestId}`);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'Necessário payment_id ou order_id',
+        error_code: 'MISSING_IDENTIFIER',
+        request_id: requestId
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
     
     console.log('[check-payment-status] ==============================');
+    console.log(`[check-payment-status] Request ID: ${requestId}`);
     console.log('[check-payment-status] 🔍 Verificando pagamento:', { payment_id, order_id, email });
 
     const MP_ACCESS_TOKEN = Deno.env.get('MP_ACCESS_TOKEN');
@@ -126,9 +177,41 @@ Deno.serve(async (req) => {
       throw new Error('MP_ACCESS_TOKEN não configurado');
     }
 
+    // Se não temos payment_id, tentar buscar pelo order_id primeiro
+    let actualPaymentId = payment_id;
+    if (!actualPaymentId && order_id) {
+      console.log('[check-payment-status] Buscando payment_id pelo order_id...');
+      const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabaseTemp = createClient(ORIGINAL_SUPABASE_URL, ORIGINAL_SERVICE_ROLE_KEY);
+      
+      const { data: pendingPayment } = await supabaseTemp
+        .from('pending_payments')
+        .select('payment_id')
+        .eq('order_id', order_id)
+        .maybeSingle();
+      
+      if (pendingPayment?.payment_id) {
+        actualPaymentId = pendingPayment.payment_id;
+        console.log('[check-payment-status] ✅ payment_id encontrado:', actualPaymentId);
+      }
+    }
+    
+    if (!actualPaymentId) {
+      console.error(`[check-payment-status] ❌ payment_id não encontrado para order_id: ${order_id}`);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: 'payment_id não encontrado',
+        error_code: 'PAYMENT_NOT_FOUND',
+        request_id: requestId
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Consultar API do Mercado Pago
     const response = await fetch(
-      `https://api.mercadopago.com/v1/payments/${payment_id}`,
+      `https://api.mercadopago.com/v1/payments/${actualPaymentId}`,
       { headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` } }
     );
 
@@ -136,7 +219,9 @@ Deno.serve(async (req) => {
       console.error('[check-payment-status] Erro ao buscar payment:', response.status);
       return new Response(JSON.stringify({ 
         success: false, 
-        error: 'Payment não encontrado' 
+        error: 'Payment não encontrado no Mercado Pago',
+        error_code: 'MP_FETCH_FAILED',
+        request_id: requestId
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -565,10 +650,12 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('[check-payment-status] Error:', error);
+    console.error(`[check-payment-status] ❌ Error (Request ID: ${requestId}):`, error);
     return new Response(JSON.stringify({ 
       success: false, 
-      error: error.message 
+      error: error.message,
+      error_code: 'INTERNAL_ERROR',
+      request_id: requestId
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

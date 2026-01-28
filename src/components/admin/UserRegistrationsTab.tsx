@@ -382,6 +382,18 @@ export default function UserRegistrationsTab() {
   const handleQuickConsult = async () => {
     if (!quickConsultUser) return;
     
+    // ✅ Validação prévia de campos obrigatórios (evita enviar payload inválido)
+    const missingFields: string[] = [];
+    if (!quickConsultUser.patient?.cpf) missingFields.push('CPF');
+    if (!quickConsultUser.email) missingFields.push('Email');
+    if (!quickConsultUser.patient?.first_name && !quickConsultUser.patient?.last_name) missingFields.push('Nome');
+    if (!quickConsultUser.patient?.phone_e164) missingFields.push('Telefone');
+    
+    if (missingFields.length > 0) {
+      toast.error(`Dados obrigatórios faltando: ${missingFields.join(', ')}. Edite o paciente primeiro.`);
+      return;
+    }
+    
     setQuickConsultLoading(true);
     
     try {
@@ -416,11 +428,27 @@ export default function UserRegistrationsTab() {
         // Abrir em nova aba
         window.open(data.url, '_blank');
       } else {
-        toast.error(data?.error || 'Erro ao criar consulta');
+        // ✅ Melhor mensagem de erro com debug_hint
+        const errorMsg = data?.error || 'Erro desconhecido';
+        const debugHint = data?.debug_hint || '';
+        const errorCode = data?.error_code || '';
+        
+        console.error('[QuickConsult] Erro:', { error: errorMsg, debug_hint: debugHint, error_code: errorCode, request_id: data?.request_id });
+        
+        let userMessage = errorMsg;
+        if (errorCode === 'EMPTY_BODY') {
+          userMessage = 'Erro de comunicação: payload não chegou ao servidor. Tente novamente.';
+        } else if (errorCode === 'MISSING_FIELDS') {
+          userMessage = `Campos obrigatórios faltando: ${errorMsg}`;
+        } else if (debugHint) {
+          userMessage = `${errorMsg} (${debugHint})`;
+        }
+        
+        toast.error(userMessage);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar consulta:', error);
-      toast.error('Erro ao criar consulta rápida');
+      toast.error(`Erro ao criar consulta rápida: ${error?.message || 'Erro de conexão'}`);
     } finally {
       setQuickConsultLoading(false);
       setQuickConsultUser(null);

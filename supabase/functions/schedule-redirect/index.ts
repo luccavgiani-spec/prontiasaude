@@ -577,17 +577,92 @@ async function saveAppointment(
 }
 
 Deno.serve(async (req) => {
+  const requestId = `REQ-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   const corsHeaders = getCorsHeaders(req.headers.get('origin'));
+  
+  // 📝 Log inicial com headers para diagnóstico
+  console.log(`[schedule-redirect] ======== ${requestId} ========`);
+  console.log('[schedule-redirect] Method:', req.method);
+  console.log('[schedule-redirect] Origin:', req.headers.get('origin') || 'N/A');
+  console.log('[schedule-redirect] Content-Type:', req.headers.get('content-type') || 'N/A');
+  console.log('[schedule-redirect] Content-Length:', req.headers.get('content-length') || 'N/A');
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const payload: SchedulePayload = await req.json();
+    // ✅ PASSO 1: Parsing SEGURO do body (evita 500 "Unexpected end of JSON")
+    const rawBody = await req.text();
+    
+    if (!rawBody || rawBody.trim() === '') {
+      console.error(`[schedule-redirect] ❌ Body vazio! Request ID: ${requestId}`);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'Payload ausente',
+          error_code: 'EMPTY_BODY',
+          debug_hint: 'O corpo da requisição chegou vazio. Verifique se o frontend está enviando o JSON corretamente.',
+          request_id: requestId
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    let payload: SchedulePayload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (parseErr) {
+      console.error(`[schedule-redirect] ❌ JSON inválido! Request ID: ${requestId}`);
+      console.error('[schedule-redirect] Raw body (primeiros 500 chars):', rawBody.substring(0, 500));
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'JSON inválido',
+          error_code: 'INVALID_JSON',
+          debug_hint: `Erro ao fazer parse do JSON: ${parseErr}`,
+          request_id: requestId
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    // ✅ PASSO 2: Validação de campos obrigatórios
+    const missingFields: string[] = [];
+    if (!payload.cpf) missingFields.push('cpf');
+    if (!payload.email) missingFields.push('email');
+    if (!payload.nome) missingFields.push('nome');
+    if (!payload.telefone) missingFields.push('telefone');
+    if (!payload.sku) missingFields.push('sku');
+    
+    if (missingFields.length > 0) {
+      console.error(`[schedule-redirect] ❌ Campos obrigatórios ausentes: ${missingFields.join(', ')}`);
+      console.error(`[schedule-redirect] Request ID: ${requestId}`);
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: `Campos obrigatórios ausentes: ${missingFields.join(', ')}`,
+          error_code: 'MISSING_FIELDS',
+          debug_hint: `Os seguintes campos são obrigatórios: ${missingFields.join(', ')}`,
+          request_id: requestId,
+          received_fields: Object.keys(payload)
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
     
     console.log('[schedule-redirect] ========================================');
     console.log('[schedule-redirect] 🚀 INICIANDO AGENDAMENTO:', new Date().toISOString());
+    console.log('[schedule-redirect] Request ID:', requestId);
     console.log('[schedule-redirect] SKU:', payload.sku);
     console.log('[schedule-redirect] Email:', payload.email);
     console.log('[schedule-redirect] Order ID:', payload.order_id || 'N/A');
