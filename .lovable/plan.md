@@ -1,172 +1,231 @@
 
-# Correção: Modal de Consulta Rápida + Exibição de Link
+# Correção: Criar Consulta Instantânea para TODOS os Pacientes
 
-## Problemas Identificados
+## Diagnóstico dos Problemas
 
-### 1. Modal fecha automaticamente (linha 456)
-O código atual fecha o modal **antes de mostrar o link** para o usuário:
+### Problema 1: Carolina não gera consulta (ClickLife)
+**Causa raiz** (linhas 1326-1391 de `schedule-redirect/index.ts`):
+
+Quando `registerClickLifePatient` falha (paciente já existe com dados diferentes), o código tenta uma "ativação direta". Se a ativação também falha (paciente já ativo), **retorna erro 500 ao invés de continuar para criar o atendimento**.
+
 ```typescript
-finally {
-  setQuickConsultLoading(false);
-  setQuickConsultUser(null); // ❌ Fecha o modal imediatamente
+// Linha 1351-1391 - Comportamento atual
+if (!activationRes.ok) {
+  // ❌ RETORNA ERRO - deveria continuar para criar atendimento
+  return new Response(JSON.stringify({ ok: false, ... }), { status: 500 });
 }
 ```
 
-**Resultado**: O link é copiado para clipboard e mostrado em um toast, mas o usuário não consegue ver/copiar de forma confiável.
+**Carolina já está cadastrada E ativa na ClickLife** → ambas as etapas falham → erro 500
 
-### 2. Não existe estado para armazenar o link gerado
-O componente não tem um estado para guardar a URL após a criação bem-sucedida.
+### Problema 2: Communicare não funciona quando forçado
+**Causa raiz** (linhas 1796-1808):
 
-### 3. Dados da Carolina estão completos
-Verifiquei no banco e os dados da Carolina estão perfeitos:
-| Campo | Valor |
-|-------|-------|
-| CPF | 04021896040 |
-| Nome | Carolina De Lima Bombardelli |
-| Telefone | +5546999240242 |
-| Nascimento | 1999-08-23 |
-| Sexo | F |
+Se `createCommunicarePatient` não retornar um `patientId` (mesmo quando paciente já existe mas a API não retorna ID), **o código retorna erro 500**.
 
-A consulta dela **foi criada com sucesso** (vi no network request com redirect_url). O problema é que o modal fechou antes de mostrar o link.
+```typescript
+// Linha 1796-1808 - Comportamento atual
+if (!patientResult.success || !patientResult.patientId) {
+  // ❌ RETORNA ERRO - deveria tentar buscar paciente existente
+  return new Response(JSON.stringify({ ok: false, ... }), { status: 500 });
+}
+```
+
+### Problema 3: Override não está sendo ignorado pelo force_provider
+O `force_provider` já está na posição correta (linha 714), MAS os erros nas funções de redirect impedem que a consulta seja criada.
 
 ---
 
-## Arquivo que será modificado
+## Solução: Flag `skip_registration`
 
-`src/components/admin/UserRegistrationsTab.tsx`
-
-**Motivo**: Adicionar estado para mostrar o link gerado no modal após criar consulta.
-
-**Escopo exato**:
-- Adicionar novo estado `generatedConsultUrl`
-- Modificar `handleQuickConsult` para não fechar modal em caso de sucesso
-- Modificar o modal para exibir o link com botão de copiar
+Adicionar um flag `skip_registration: true` no payload quando vem do painel admin. Este flag instrui as funções de redirect a:
+1. **Ignorar erros de cadastro** (paciente já existe)
+2. **Ignorar erros de ativação** (paciente já ativo)
+3. **Ir direto para criação do atendimento**
 
 ---
 
-## Correção Técnica
+## Arquivos que serão modificados
 
-### 1. Adicionar estado para URL gerada (linha ~92)
+1. `src/components/admin/UserRegistrationsTab.tsx` - Adicionar flag ao payload
+2. `supabase/functions/schedule-redirect/index.ts` - Respeitar flag e continuar mesmo com erros
+
+---
+
+## Correções Técnicas
+
+### 1. Frontend: Adicionar `skip_registration` ao payload (UserRegistrationsTab.tsx)
+
+**Localização**: função `handleQuickConsult`, linha ~401
+
 ```typescript
-// Após a linha 92 (quickConsultLoading)
-const [generatedConsultUrl, setGeneratedConsultUrl] = useState<string | null>(null);
+const payload = {
+  cpf: quickConsultUser.patient?.cpf || '',
+  email: quickConsultUser.email,
+  nome: `${quickConsultUser.patient?.first_name || ''} ${quickConsultUser.patient?.last_name || ''}`.trim(),
+  telefone: quickConsultUser.patient?.phone_e164 || '',
+  sku: 'ITC6534',
+  plano_ativo: !!quickConsultUser.activePlan,
+  sexo: quickConsultUser.patient?.gender || 'F',
+  birth_date: quickConsultUser.patient?.birth_date,
+  force_provider: quickConsultProvider,
+  skip_registration: true, // ✅ NOVO: Pular cadastro, ir direto para atendimento
+};
 ```
 
-### 2. Modificar handleQuickConsult (linhas 421-457)
+### 2. Edge Function: Respeitar flag em redirectClickLife (linhas 1315-1410)
+
+**Modificar a função para permitir "fallback graceful"**:
+
 ```typescript
-if (data?.ok && data?.url) {
-  // ✅ NOVO: Salvar URL no estado para mostrar no modal
-  setGeneratedConsultUrl(data.url);
-  setQuickConsultLoading(false);
+async function redirectClickLife(payload: SchedulePayload, reason: string, corsHeaders: Record<string, string>) {
+  // ... código existente até linha 1314 ...
+
+  // 1. CADASTRAR PACIENTE (ou pular se skip_registration)
+  let registrationSuccess = true;
   
-  // Copiar automaticamente
-  await navigator.clipboard.writeText(data.url);
-  toast.success(`Consulta criada! Link copiado para a área de transferência.`);
-  
-  // ❌ NÃO fechar o modal - deixar aberto para mostrar o link
-  // setQuickConsultUser(null);
-} else {
-  // ... código de erro existente ...
-  setQuickConsultLoading(false);
-  setQuickConsultUser(null); // Fechar modal em caso de erro
-  setGeneratedConsultUrl(null);
-}
-```
+  if (!payload.skip_registration) {
+    const registration = await registerClickLifePatient(
+      payload.cpf, payload.nome, payload.email, payload.telefone,
+      planoId, sexoFinal, payload.birth_date
+    );
 
-### 3. Modificar finally block (linha 454-457)
-```typescript
-finally {
-  setQuickConsultLoading(false);
-  // ❌ Remover: setQuickConsultUser(null);
-  // O modal será fechado manualmente pelo usuário ou ao criar novo
-}
-```
-
-### 4. Atualizar o modal para mostrar link gerado (após linha 891)
-```typescript
-{/* Mostrar link gerado */}
-{generatedConsultUrl && (
-  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-    <p className="text-sm font-medium text-green-800 mb-2">✅ Consulta criada com sucesso!</p>
-    <div className="flex items-center gap-2">
-      <Input 
-        value={generatedConsultUrl} 
-        readOnly 
-        className="flex-1 text-xs font-mono"
-      />
-      <Button 
-        size="sm" 
-        variant="outline"
-        onClick={() => {
-          navigator.clipboard.writeText(generatedConsultUrl);
-          toast.success('Link copiado!');
-        }}
-      >
-        <Copy className="h-4 w-4" />
-      </Button>
-    </div>
-    <p className="text-xs text-green-600 mt-2">
-      Envie este link para o paciente iniciar a consulta.
-    </p>
-  </div>
-)}
-```
-
-### 5. Resetar URL ao fechar modal
-```typescript
-<Dialog 
-  open={!!quickConsultUser} 
-  onOpenChange={(open) => {
-    if (!open) {
-      setQuickConsultUser(null);
-      setGeneratedConsultUrl(null); // ✅ Limpar URL ao fechar
+    if (!registration.success) {
+      console.warn('[ClickLife] Cadastro falhou, tentando ativação direta:', registration.error);
+      
+      // Tentar ativação direta
+      const cpfClean = payload.cpf.replace(/\D/g, '');
+      const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
+      
+      const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'authtoken': INTEGRATOR_TOKEN },
+        body: JSON.stringify({
+          authtoken: INTEGRATOR_TOKEN,
+          cpf: cpfClean,
+          empresaid: 9083,
+          planoid: planoId,
+          proposito: "Ativar"
+        })
+      });
+      
+      if (!activationRes.ok) {
+        const errorText = await activationRes.text();
+        console.warn('[ClickLife] ⚠️ Ativação também falhou (paciente pode já estar ativo):', errorText.substring(0, 200));
+        // ✅ NÃO RETORNAR ERRO - continuar para criar atendimento
+        registrationSuccess = false;
+      }
     }
-  }}
->
+  } else {
+    console.log('[ClickLife] ⏭️ skip_registration=true, pulando cadastro/ativação');
+  }
+
+  // ✅ SEMPRE continuar para criar atendimento (mesmo se registro/ativação falhou)
+  console.log('[ClickLife] Prosseguindo com criação de atendimento (registrationSuccess:', registrationSuccess, ')');
+
+  // 2. CRIAR AGENDAMENTO (resto do código existente a partir da linha 1413)
+  // ...
+}
 ```
 
-### 6. Adicionar import do ícone Copy (linha ~14)
+### 3. Edge Function: Respeitar flag em redirectCommunicare (linhas 1793-1810)
+
+**Modificar para buscar paciente existente mesmo quando criar falha**:
+
 ```typescript
-import { ..., Copy } from 'lucide-react';
+// 2. CRIAR PACIENTE (se não existir) ou buscar existente
+let patientId: number | undefined;
+
+if (!payload.skip_registration) {
+  const patientResult = await createCommunicarePatient(payload, API_TOKEN);
+  
+  if (patientResult.success && patientResult.patientId) {
+    patientId = patientResult.patientId;
+  }
+}
+
+// ✅ Se não tem patientId ainda, buscar por CPF
+if (!patientId) {
+  console.log('[Communicare] Buscando paciente existente por CPF...');
+  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
+                        'https://api-patients-production.communicare.com.br';
+  const cpfClean = payload.cpf.replace(/\D/g, '');
+  
+  const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+    method: 'GET',
+    headers: { 'api_token': API_TOKEN }
+  });
+  
+  if (getRes.ok) {
+    const getData = await getRes.json();
+    patientId = Array.isArray(getData) ? getData[0]?.id : getData.id;
+    
+    if (patientId) {
+      console.log('[Communicare] ✓ Paciente existente encontrado:', patientId);
+    }
+  }
+}
+
+// ✅ Se AINDA não tem patientId, aí sim retorna erro
+if (!patientId) {
+  console.error('[Communicare] ❌ Paciente não encontrado nem criado');
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      provider: 'communicare',
+      error: 'Paciente não encontrado na Communicare. Verifique se o CPF está correto.'
+    }),
+    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+
+// Continuar com enfileiramento...
 ```
 
 ---
 
 ## Fluxo Esperado Após Correção
 
-1. Admin clica em "Criar Consulta" no modal
-2. Consulta é criada (ClickLife ou Communicare)
-3. **Modal permanece aberto** com:
-   - Mensagem de sucesso
-   - Input com URL completa
-   - Botão "Copiar" ao lado
-4. Admin copia o link manualmente se precisar
-5. Admin fecha o modal quando terminar
+### Cenário 1: Carolina (já cadastrada na ClickLife)
+1. Admin abre modal, seleciona "ClickLife"
+2. Clica "Criar Consulta"
+3. Payload inclui `skip_registration: true`
+4. Edge function **pula** cadastro e ativação
+5. Vai direto para `/atendimentos/atendimentos`
+6. ✅ Retorna link da consulta
+
+### Cenário 2: Carolina com Communicare forçada
+1. Admin abre modal, seleciona "Communicare"
+2. Clica "Criar Consulta"
+3. Payload inclui `force_provider: 'communicare'` e `skip_registration: true`
+4. Edge function respeita `force_provider` (linha 719)
+5. Busca patientId existente por CPF
+6. Enfileira na Communicare
+7. ✅ Retorna link da consulta
+
+### Cenário 3: Novo paciente (sem cadastro prévio)
+1. Admin clica "Criar Consulta"
+2. Payload inclui `skip_registration: true`
+3. Edge function **tenta criar atendimento direto**
+4. Se falhar (paciente não existe), retorna erro específico
+5. Admin sabe que precisa completar cadastro primeiro
+
+---
+
+## Resumo das Mudanças
+
+| Arquivo | Linha | Mudança |
+|---------|-------|---------|
+| `UserRegistrationsTab.tsx` | ~410 | Adicionar `skip_registration: true` ao payload |
+| `schedule-redirect/index.ts` | ~1315-1410 | Não retornar erro 500 quando registro/ativação falha, continuar para criar atendimento |
+| `schedule-redirect/index.ts` | ~1793-1810 | Buscar paciente existente por CPF se criar falhar |
 
 ---
 
 ## Critérios de Aceite
 
-1. **Modal não fecha automaticamente** após criar consulta
-2. **Link é exibido visualmente** em um input dentro do modal
-3. **Botão de copiar funciona** e mostra toast de confirmação
-4. **Funciona para ClickLife e Communicare**
-5. **Carolina consegue ter consulta criada e link copiado**
-
----
-
-## Detalhes Técnicos
-
-### Por que o erro 500 acontecia?
-A correção de safe parsing que implementamos na edge function já deve prevenir crashes quando as APIs externas retornam HTML. O erro agora é capturado e retornado de forma estruturada.
-
-### Por que sempre vai para ClickLife?
-O `quickConsultProvider` inicia com valor `'clicklife'` por padrão, mas o usuário pode alterar no RadioGroup do modal. Isso não é um bug.
-
-### Por que não funciona para alguns pacientes?
-Possíveis causas:
-- Dados incompletos (CPF, telefone, nascimento)
-- CPF inválido (checksum incorreto)
-- API externa retornando erro
-
-O modal agora mostrará a mensagem de erro específica quando ocorrer.
+1. ✅ Carolina consegue ter consulta criada na ClickLife
+2. ✅ Carolina consegue ter consulta criada na Communicare (quando selecionado)
+3. ✅ Admin consegue forçar provider mesmo com override ativo
+4. ✅ Link é exibido no modal para copiar
+5. ✅ Pacientes novos (sem cadastro) recebem erro claro
