@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { getPatientPlan } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
@@ -90,6 +90,7 @@ export default function UserRegistrationsTab() {
   const [quickConsultUser, setQuickConsultUser] = useState<User | null>(null);
   const [quickConsultProvider, setQuickConsultProvider] = useState<'clicklife' | 'communicare'>('clicklife');
   const [quickConsultLoading, setQuickConsultLoading] = useState(false);
+  const [generatedConsultUrl, setGeneratedConsultUrl] = useState<string | null>(null);
   
   // Platform activation modal state
   const [platformActivationUser, setPlatformActivationUser] = useState<User | null>(null);
@@ -419,16 +420,15 @@ export default function UserRegistrationsTab() {
       if (error) throw error;
       
       if (data?.ok && data?.url) {
-        // ✅ CORREÇÃO: Gerar link copiável ao invés de redirecionar
+        // ✅ Salvar URL no estado para mostrar no modal
+        setGeneratedConsultUrl(data.url);
+        setQuickConsultLoading(false);
+        
+        // Copiar automaticamente
         await navigator.clipboard.writeText(data.url);
-        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado para a área de transferência.`);
-        toast.info(`Link: ${data.url.length > 60 ? data.url.substring(0, 60) + '...' : data.url}`, {
-          duration: 10000,
-          action: {
-            label: 'Copiar',
-            onClick: () => navigator.clipboard.writeText(data.url)
-          }
-        });
+        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
+        
+        // NÃO fechar o modal - deixar aberto para mostrar o link
       } else {
         // ✅ Melhor mensagem de erro com debug_hint
         const errorMsg = data?.error || 'Erro desconhecido';
@@ -447,13 +447,16 @@ export default function UserRegistrationsTab() {
         }
         
         toast.error(userMessage);
+        setQuickConsultLoading(false);
+        setQuickConsultUser(null);
+        setGeneratedConsultUrl(null);
       }
     } catch (error: any) {
       console.error('Erro ao criar consulta:', error);
       toast.error(`Erro ao criar consulta rápida: ${error?.message || 'Erro de conexão'}`);
-    } finally {
       setQuickConsultLoading(false);
       setQuickConsultUser(null);
+      setGeneratedConsultUrl(null);
     }
   };
 
@@ -847,7 +850,12 @@ export default function UserRegistrationsTab() {
       )}
 
       {/* Modal de Consulta Rápida */}
-      <Dialog open={!!quickConsultUser} onOpenChange={() => setQuickConsultUser(null)}>
+      <Dialog open={!!quickConsultUser} onOpenChange={(open) => {
+        if (!open) {
+          setQuickConsultUser(null);
+          setGeneratedConsultUrl(null);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -889,29 +897,61 @@ export default function UserRegistrationsTab() {
                 </div>
               </RadioGroup>
             </div>
+            
+            {/* Mostrar link gerado */}
+            {generatedConsultUrl && (
+              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">✅ Consulta criada com sucesso!</p>
+                <div className="flex items-center gap-2">
+                  <Input 
+                    value={generatedConsultUrl} 
+                    readOnly 
+                    className="flex-1 text-xs font-mono"
+                  />
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedConsultUrl);
+                      toast.success('Link copiado!');
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                  Envie este link para o paciente iniciar a consulta.
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setQuickConsultUser(null)}>
-              Cancelar
+            <Button variant="outline" onClick={() => {
+              setQuickConsultUser(null);
+              setGeneratedConsultUrl(null);
+            }}>
+              {generatedConsultUrl ? 'Fechar' : 'Cancelar'}
             </Button>
-            <Button 
-              onClick={handleQuickConsult} 
-              disabled={quickConsultLoading}
-              className="bg-purple-600 hover:bg-purple-700"
-            >
-              {quickConsultLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Criando...
-                </>
-              ) : (
-                <>
-                  <HeartPulse className="h-4 w-4 mr-2" />
-                  Criar Consulta
-                </>
-              )}
-            </Button>
+            {!generatedConsultUrl && (
+              <Button 
+                onClick={handleQuickConsult} 
+                disabled={quickConsultLoading}
+                className="bg-purple-600 hover:bg-purple-700"
+              >
+                {quickConsultLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Criando...
+                  </>
+                ) : (
+                  <>
+                    <HeartPulse className="h-4 w-4 mr-2" />
+                    Criar Consulta
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
