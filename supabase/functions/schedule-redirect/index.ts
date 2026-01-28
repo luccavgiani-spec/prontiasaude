@@ -357,7 +357,20 @@ async function registerClickLifePatient(
       return { success: false, error: `Falha na ativação: HTTP ${activationRes.status}` };
     }
     
-    const activationData = await activationRes.json();
+    // ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML
+    const activationText = await activationRes.text();
+    let activationData;
+    try {
+      activationData = JSON.parse(activationText);
+    } catch (parseError) {
+      console.error('[ClickLife] ❌ Resposta de ativação não é JSON válido:', activationText.substring(0, 500));
+      return { 
+        success: false, 
+        error: 'ClickLife retornou resposta inválida na ativação',
+        debug_hint: 'API retornou HTML ao invés de JSON',
+        response_preview: activationText.substring(0, 200)
+      };
+    }
     console.log('[ClickLife] ✓ Usuário ativado com sucesso:', activationData);
     
     // ✅ PASSO 3: Fazer login para obter token do usuário
@@ -382,7 +395,20 @@ async function registerClickLifePatient(
       return { success: false, error: `Falha no login: HTTP ${loginRes.status}` };
     }
     
-    const loginData = await loginRes.json();
+    // ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML
+    const loginText = await loginRes.text();
+    let loginData;
+    try {
+      loginData = JSON.parse(loginText);
+    } catch (parseError) {
+      console.error('[ClickLife] ❌ Resposta de login não é JSON válido:', loginText.substring(0, 500));
+      return { 
+        success: false, 
+        error: 'ClickLife retornou resposta inválida no login',
+        debug_hint: 'API retornou HTML ao invés de JSON',
+        response_preview: loginText.substring(0, 200)
+      };
+    }
     const userToken = loginData.authtoken || loginData.token;
     
     if (!userToken) {
@@ -1462,7 +1488,24 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     );
   }
   
-  const data = await response.json();
+  // ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML ao invés de JSON
+  const responseText = await response.text();
+  let data;
+  try {
+    data = JSON.parse(responseText);
+  } catch (parseError) {
+    console.error('[ClickLife] ❌ Resposta de scheduling não é JSON válido:', responseText.substring(0, 500));
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        provider: 'clicklife',
+        error: 'ClickLife retornou resposta inválida',
+        debug_hint: 'API retornou HTML ao invés de JSON. Possível erro no backend da ClickLife.',
+        response_preview: responseText.substring(0, 200)
+      }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
   console.log('[ClickLife] Response:', data);
 
   // ✅ Usar URL retornada pela API (com token JWT de login automático)
@@ -1720,7 +1763,24 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any, cors
       );
     }
 
-    const ssoData = await ssoResponse.json();
+    // ✅ SAFE PARSING: Evitar crash se Communicare retornar HTML ao invés de JSON
+    const ssoText = await ssoResponse.text();
+    let ssoData;
+    try {
+      ssoData = JSON.parse(ssoText);
+    } catch (parseError) {
+      console.error('[Communicare] ❌ Resposta SSO não é JSON válido:', ssoText.substring(0, 500));
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          provider: 'communicare',
+          error: 'Communicare SSO retornou resposta inválida',
+          debug_hint: 'API retornou HTML ao invés de JSON. Possível erro no backend da Communicare.',
+          response_preview: ssoText.substring(0, 200)
+        }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     jwt = ssoData.token;
     console.log('[Communicare] ✓ JWT gerado com sucesso');
     console.log('[Communicare] JWT (primeiros 30 chars):', jwt.substring(0, 30));
