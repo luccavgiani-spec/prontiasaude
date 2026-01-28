@@ -1,4 +1,4 @@
-// [schedule-redirect] VERSION: 2026-01-28T-v2-force-provider-priority
+// [schedule-redirect] VERSION: 2026-01-28T-v3-communicare-auto-register
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCorsHeaders } from '../common/cors.ts';
 
@@ -1766,62 +1766,101 @@ async function redirectCommunicare(payload: SchedulePayload, supabase: any, cors
   }
 
   // 2. CRIAR PACIENTE (se não existir) ou buscar existente
+  // ✅ CORRIGIDO: Primeiro buscar por CPF, depois criar se não existir (mesmo com skip_registration)
   let patientId: number | undefined;
   
-  if (payload.skip_registration) {
-    console.log('[Communicare] ⏭️ skip_registration=true, pulando criação de paciente');
-  } else {
+  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
+                        'https://api-patients-production.communicare.com.br';
+  const cpfClean = payload.cpf.replace(/\D/g, '');
+  
+  // ✅ PASSO 1: Sempre tentar buscar paciente existente por CPF primeiro
+  console.log('[Communicare] 🔍 Buscando paciente existente por CPF:', cpfClean.substring(0, 3) + '***');
+  
+  try {
+    const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+      method: 'GET',
+      headers: { 'api_token': API_TOKEN }
+    });
+    
+    if (getRes.ok) {
+      const getDataText = await getRes.text();
+      try {
+        const getData = JSON.parse(getDataText);
+        patientId = Array.isArray(getData) ? getData[0]?.id : getData?.id;
+        
+        if (patientId) {
+          console.log('[Communicare] ✓ Paciente encontrado por CPF:', patientId);
+        } else {
+          console.log('[Communicare] Paciente não encontrado na busca por CPF (resposta vazia)');
+        }
+      } catch (parseErr) {
+        console.warn('[Communicare] Resposta de busca não é JSON válido:', getDataText.substring(0, 200));
+      }
+    } else {
+      console.warn('[Communicare] Busca por CPF retornou status:', getRes.status);
+    }
+  } catch (fetchError) {
+    console.warn('[Communicare] Erro ao buscar paciente por CPF:', fetchError);
+  }
+  
+  // ✅ PASSO 2: Se não encontrou, criar automaticamente (MESMO com skip_registration=true)
+  // A Communicare REQUER um patientId para enfileirar, diferente da ClickLife
+  if (!patientId) {
+    if (payload.skip_registration) {
+      console.log('[Communicare] ⚠️ skip_registration=true, mas paciente não existe. Criando automaticamente...');
+    } else {
+      console.log('[Communicare] Paciente não encontrado, criando...');
+    }
+    
     const patientResult = await createCommunicarePatient(payload, API_TOKEN);
     
     if (patientResult.success && patientResult.patientId) {
       patientId = patientResult.patientId;
-      console.log('[Communicare] ✓ Paciente criado/encontrado via API:', patientId);
+      console.log('[Communicare] ✓ Paciente criado via API:', patientId);
     } else {
       console.warn('[Communicare] Criação de paciente falhou:', patientResult.error);
-    }
-  }
-  
-  // ✅ Se não tem patientId ainda, buscar por CPF (paciente já existe)
-  if (!patientId) {
-    console.log('[Communicare] Buscando paciente existente por CPF...');
-    const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
-                          'https://api-patients-production.communicare.com.br';
-    const cpfClean = payload.cpf.replace(/\D/g, '');
-    
-    try {
-      const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
-        method: 'GET',
-        headers: { 'api_token': API_TOKEN }
-      });
       
-      if (getRes.ok) {
-        const getDataText = await getRes.text();
-        try {
-          const getData = JSON.parse(getDataText);
-          patientId = Array.isArray(getData) ? getData[0]?.id : getData?.id;
-          
-          if (patientId) {
-            console.log('[Communicare] ✓ Paciente existente encontrado por CPF:', patientId);
+      // ✅ PASSO 2b: Retry - buscar novamente por CPF (pode ter sido criado por outro processo)
+      console.log('[Communicare] 🔄 Tentando buscar novamente por CPF após falha de criação...');
+      
+      try {
+        const retryRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+          method: 'GET',
+          headers: { 'api_token': API_TOKEN }
+        });
+        
+        if (retryRes.ok) {
+          const retryDataText = await retryRes.text();
+          try {
+            const retryData = JSON.parse(retryDataText);
+            patientId = Array.isArray(retryData) ? retryData[0]?.id : retryData?.id;
+            
+            if (patientId) {
+              console.log('[Communicare] ✓ Paciente encontrado no retry:', patientId);
+            }
+          } catch (parseErr) {
+            console.warn('[Communicare] Resposta do retry não é JSON válido');
           }
-        } catch (parseErr) {
-          console.warn('[Communicare] Resposta de busca não é JSON válido:', getDataText.substring(0, 200));
         }
-      } else {
-        console.warn('[Communicare] Busca por CPF falhou:', getRes.status);
+      } catch (retryError) {
+        console.warn('[Communicare] Erro no retry:', retryError);
       }
-    } catch (fetchError) {
-      console.warn('[Communicare] Erro ao buscar paciente por CPF:', fetchError);
     }
   }
   
-  // ✅ Se AINDA não tem patientId, aí sim retorna erro
+  // ✅ PASSO 3: Se AINDA não tem patientId, retornar erro estruturado
   if (!patientId) {
-    console.error('[Communicare] ❌ Paciente não encontrado nem criado');
+    console.error('[Communicare] ❌ Não foi possível criar nem encontrar paciente');
     return new Response(
       JSON.stringify({
         ok: false,
         provider: 'communicare',
-        error: 'Paciente não encontrado na Communicare. Verifique se o CPF está correto ou cadastre o paciente primeiro.'
+        error: 'Não foi possível cadastrar paciente na Communicare. Verifique os dados (nome, CPF, telefone, email) e tente novamente.',
+        details: { 
+          cpf: cpfClean.substring(0, 3) + '***', 
+          reason: 'create_patient_failed',
+          hint: 'Verifique se o telefone está no formato +5511999999999 e se todos os campos obrigatórios estão preenchidos.'
+        }
       }),
       { 
         status: 500,
