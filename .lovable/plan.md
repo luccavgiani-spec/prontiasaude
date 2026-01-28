@@ -1,114 +1,244 @@
 
-Contexto do erro (o que os logs provam)
-- O erro recorrente é: `SyntaxError: Unexpected token '<' ... is not valid JSON` dentro de `registerClickLifePatient`.
-- Isso acontece quando a API da ClickLife retorna HTML (geralmente uma página de erro) e o código tenta fazer `response.json()` (ou um parse sem “safe parsing”), causando crash e resultando em HTTP 500 genérico.
-- O stack trace indica que a versão atualmente em execução do `schedule-redirect` (no backend de produção) ainda tem um ponto que faz parse direto como JSON nesse trecho do fluxo de cadastro.
+# Plano: Corrigir Geração de Consulta na Communicare para o Painel Administrativo
 
-Objetivo do ajuste (requisitos que você reforçou)
-1) “Criar consulta” no Admin precisa conseguir gerar consulta mesmo se o paciente já estiver cadastrado/ativo na ClickLife. Ou seja: cadastro/ativação não podem bloquear a etapa de criação do atendimento.
-2) “Criar consulta” deve sobrepor qualquer override global (sem mexer no botão de override). Ou seja: escolha manual do provedor no modal precisa ter prioridade máxima.
+## Diagnóstico do Problema
 
-Arquivos que serão modificados
-1) `supabase/functions/schedule-redirect/index.ts`
-   - Motivo: corrigir crash de parse JSON (HTML vindo da ClickLife) e tornar cadastro/ativação “best-effort”, nunca bloqueando a criação do atendimento.
-2) `src/components/admin/UserRegistrationsTab.tsx`
-   - Motivo: garantir que o payload do “Criar consulta” sempre envie `force_provider` + `skip_registration` (e opcionalmente exibir melhor o erro retornado estruturado, caso ainda haja falha na criação do atendimento).
-Confirmação: Estas alterações estão explicitamente solicitadas? SIM (você pediu tolerância a paciente já ativo + prioridade do “Criar consulta” sobre overrides).
+### O Que Acontece Hoje
 
-Plano de implementação (passo a passo)
+O fluxo atual quando o Admin tenta gerar consulta via Communicare com `skip_registration=true`:
 
-Fase A — Corrigir o 500 (crash) e tornar ClickLife tolerante a HTML
-A1) Implementar um helper interno de “safe parsing” para qualquer resposta HTTP externa (ClickLife/Communicare) dentro de `schedule-redirect/index.ts`:
-- Sempre ler `await res.text()`
-- Tentar `JSON.parse(text)` dentro de try/catch
-- Se falhar, retornar `{ ok: false, nonJson: true, preview: text.slice(0, N), contentType, status }`
-Resultado: nunca mais teremos crash por “Unexpected token '<'…”.
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ handleQuickConsult (UserRegistrationsTab.tsx)                               │
+│   → payload.skip_registration = true                                        │
+│   → payload.force_provider = 'communicare'                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ redirectCommunicare (schedule-redirect)                                     │
+│                                                                             │
+│   1. skip_registration=true → PULA criação de paciente                      │
+│   2. Busca paciente existente por CPF                                       │
+│   3. Carolina não tem cadastro na Communicare → patientId = undefined       │
+│   4. ❌ ERRO: "Paciente não encontrado na Communicare"                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-A2) Aplicar esse helper especificamente no fluxo do `registerClickLifePatient`:
-- No endpoint de cadastro (`/usuarios/usuarios`), parar de usar `res.json()` (se existir) e substituir por `res.text()` + safe parse.
-- No endpoint de ativação (`/usuarios/ativacao`), idem.
-- Se vier HTML, registrar log estruturado:
-  - status code
-  - content-type
-  - preview do body (primeiros 200–500 chars)
-  - request_id do schedule-redirect
-E retornar um objeto de erro “não fatal” (ver A3).
+### Causa Raiz
 
-A3) Tornar “cadastro/ativação” best-effort quando o objetivo final é criar atendimento:
-- Ajustar a lógica para:
-  - Se o cadastro falhar por “já cadastrado / duplicate key / já existe”, tratar como “ok” (soft success).
-  - Se a ativação falhar por “já ativo” ou vier HTML/erro, não retornar 500: apenas logar warning e seguir.
-- Importante: o bloqueio real deve acontecer somente se a criação do atendimento (`/atendimentos/atendimentos`) falhar.
+O `skip_registration=true` foi projetado para pular o cadastro porque presume que o paciente já existe. Porém, diferente da ClickLife (onde o token do integrador permite criar atendimento sem cadastro prévio), a Communicare **requer** um `patientId` válido para enfileirar o paciente.
 
-Fase B — Garantir que “Criar consulta” sobreponha overrides e plano ativo
-B1) Garantir prioridade máxima do `force_provider` no handler principal
-- Confirmar (e, se necessário, mover) o bloco:
-  - `if (payload.force_provider) { ... redirectClickLife/redirectCommunicare ... }`
-- Esse bloco deve ocorrer antes de:
-  - regra “plano ativo => ClickLife”
-  - overrides em admin_settings
-  - regras de horário/especialidade
-Resultado: seleção manual do modal sempre vence.
+**Carolina não está cadastrada na Communicare**, então:
+- A busca por CPF retorna vazio
+- O sistema falha ao tentar enfileirar
 
-B2) Garantir que `skip_registration: true` realmente pule cadastro/ativação para o caminho ClickLife
-- Confirmar (e, se necessário, corrigir) que no `redirectClickLife` existe:
-  - `if (payload.skip_registration) { ... } else { await registerClickLifePatient(...) }`
-- Quando `skip_registration` estiver true:
-  - nunca chamar `registerClickLifePatient`
-  - ir direto para a criação do atendimento usando token do integrador (que é exatamente o que você quer: “basta chamar a parte que gera a consulta”).
+### Solução
 
-B3) Communicare com `skip_registration`
-- Manter a lógica: quando `skip_registration=true`, não tentar criar paciente; tentar buscar paciente existente por CPF e seguir.
-- Se não encontrar patientId, retornar erro estruturado (não genérico) para o frontend.
+Para o caso do Admin que quer gerar consulta manualmente, quando o paciente não existe na Communicare, devemos:
 
-Fase C — Garantir que o Admin está enviando os flags corretos (e melhorar diagnóstico)
-C1) Verificar em `UserRegistrationsTab.tsx` que o payload do “Criar consulta” contém sempre:
-- `force_provider: quickConsultProvider` (clicklife/communicare conforme seleção do modal)
-- `skip_registration: true`
-- `plano_ativo` pode continuar sendo enviado, mas não deve importar quando `force_provider` está presente.
+1. **Detectar que o paciente não existe** (após busca por CPF falhar)
+2. **Cadastrar o paciente automaticamente** (mesmo com `skip_registration=true`)
+3. **Continuar o fluxo normalmente** com o `patientId` obtido
 
-C2) (Recomendado) Melhorar feedback no modal para não ficar “erro genérico”
-- Quando a função retornar `{ ok: false, error, details, request_id, response_preview }`, exibir isso no modal (pelo menos `error` + `request_id`).
-- Isso reduz retrabalho e acelera triagem caso a falha seja no endpoint de criação de atendimento, token expirado, etc.
+Ou seja: `skip_registration` deve significar "não falhar por erro de cadastro" e não "nunca tentar cadastrar".
 
-Fase D — Validação (para fechar o loop das 4 tentativas falhando)
-D1) Adicionar um “marcador de versão” nos logs do `schedule-redirect`
-- Ex: `console.log("[schedule-redirect] VERSION: 2026-01-28T... / commit-like-tag")`
-Objetivo: você confirmar no log que o backend está rodando o código novo.
+---
 
-D2) Testes manuais (end-to-end) no Admin (/admin/dashboard)
-Executar 4 testes (e comparar logs por request_id):
-1) Carolina + ClickLife + skip_registration=true
-   - Esperado: pular cadastro/ativação e criar atendimento.
-2) Carolina + Communicare (force_provider=communicare)
-   - Esperado: ignorar override e plano ativo, gerar link/fluxo Communicare.
-3) Outro paciente com plano ativo + Communicare forçado
-   - Esperado: também gerar.
-4) Paciente novo sem cadastro real em nenhum provedor
-   - Esperado: ClickLife deve tentar criar atendimento; se falhar, retornar erro estruturado (sem crash), com preview do HTML se houver.
+## Arquivos que Serão Modificados
 
-D3) Critério de aceite atualizado
-- Não pode existir mais o crash “Unexpected token '<' … not valid JSON”.
-- O botão “Criar consulta” deve conseguir:
-  - gerar ClickLife mesmo com paciente já ativo
-  - gerar Communicare mesmo com override ClickLife ativo e/ou plano ativo
+| Arquivo | Motivo |
+|---------|--------|
+| `supabase/functions/schedule-redirect/index.ts` | Ajustar lógica de `redirectCommunicare` para cadastrar automaticamente quando paciente não encontrado |
 
-Riscos/observações (importantes para não mascarar problemas reais)
-- Mesmo com tolerância de cadastro/ativação, a criação do atendimento ClickLife pode falhar por:
-  - token do integrador expirado (retorna 401/403)
-  - instabilidade do backend da ClickLife (HTML 500)
-Nesse caso, a correção garante que:
-  - não haverá crash
-  - o erro retornará estruturado e visível (sem “genérico”)
-- Para Communicare, o risco é o endpoint de busca por CPF não retornar formato esperado; por isso o parsing precisa ser resiliente e com logs de preview.
+**Confirmação:** Estas alterações estão explicitamente solicitadas? **SIM** (você pediu para corrigir o problema específico da Communicare).
 
-O que eu preciso de você (para executar com segurança)
-- Confirmação de que os logs que você colou são realmente do `schedule-redirect` do ambiente de produção (parece ser, pelo path do runtime).
-- Se possível, em uma próxima rodada após aplicar as mudanças, você colar 1 log completo (com request_id) de:
-  - 1 tentativa ClickLife
-  - 1 tentativa Communicare
-para validar que o `force_provider` e `skip_registration` estão sendo respeitados.
+---
 
-Implementação respeita seus requisitos
-- “Mesmo já cadastrado/ativo”: cadastro/ativação vira “best-effort” e nunca impede criar atendimento.
-- “Criar consulta deve subscrever override sem mexer no botão”: `force_provider` no payload será prioridade máxima no roteamento.
+## Plano de Implementação
+
+### Fase A - Modificar a Lógica de `redirectCommunicare`
+
+#### A1. Ajustar o fluxo para auto-cadastrar quando paciente não existe
+
+**Lógica Atual (linhas 1771-1815):**
+```javascript
+if (payload.skip_registration) {
+  console.log('[Communicare] ⏭️ skip_registration=true, pulando criação de paciente');
+} else {
+  const patientResult = await createCommunicarePatient(payload, API_TOKEN);
+  // ... obtém patientId
+}
+
+// Se não tem patientId, busca por CPF
+if (!patientId) {
+  // busca por CPF...
+}
+
+// Se AINDA não tem patientId, retorna erro
+if (!patientId) {
+  return Response({ error: 'Paciente não encontrado...' });
+}
+```
+
+**Lógica Nova:**
+```javascript
+// 1. Primeiro, sempre tentar buscar paciente existente por CPF
+let patientId = await tryFindPatientByCPF(payload.cpf, API_TOKEN);
+
+// 2. Se não encontrou E temos dados suficientes, criar automaticamente
+if (!patientId) {
+  if (payload.skip_registration) {
+    console.log('[Communicare] skip_registration=true, mas paciente não existe. Criando automaticamente...');
+  }
+  
+  // Criar paciente (só precisa de CPF, nome, email, telefone)
+  const patientResult = await createCommunicarePatient(payload, API_TOKEN);
+  
+  if (patientResult.success && patientResult.patientId) {
+    patientId = patientResult.patientId;
+  } else {
+    // Se criação falhou, buscar novamente (pode ter sido criado por outro processo)
+    patientId = await tryFindPatientByCPF(payload.cpf, API_TOKEN);
+  }
+}
+
+// 3. Se AINDA não tem patientId, aí sim retorna erro estruturado
+if (!patientId) {
+  console.error('[Communicare] ❌ Não foi possível criar nem encontrar paciente');
+  return new Response(
+    JSON.stringify({
+      ok: false,
+      provider: 'communicare',
+      error: 'Não foi possível cadastrar paciente na Communicare. Verifique os dados e tente novamente.',
+      details: { cpf: payload.cpf, reason: 'create_patient_failed' }
+    }),
+    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+```
+
+#### A2. Extrair a busca por CPF para função reutilizável
+
+Criar helper `tryFindPatientByCPF` para evitar duplicação:
+
+```javascript
+async function tryFindPatientByCPF(cpf: string, apiToken: string): Promise<number | undefined> {
+  const PATIENTS_BASE = Deno.env.get('COMMUNICARE_PATIENTS_BASE') || 
+                        'https://api-patients-production.communicare.com.br';
+  const cpfClean = cpf.replace(/\D/g, '');
+  
+  try {
+    console.log('[Communicare] Buscando paciente por CPF:', cpfClean.substring(0, 3) + '***');
+    
+    const getRes = await fetch(`${PATIENTS_BASE}/v1/patient?cpf=${cpfClean}`, {
+      method: 'GET',
+      headers: { 'api_token': apiToken }
+    });
+    
+    if (!getRes.ok) {
+      console.warn('[Communicare] Busca por CPF falhou:', getRes.status);
+      return undefined;
+    }
+    
+    const getDataText = await getRes.text();
+    
+    try {
+      const getData = JSON.parse(getDataText);
+      const patientId = Array.isArray(getData) ? getData[0]?.id : getData?.id;
+      
+      if (patientId) {
+        console.log('[Communicare] ✓ Paciente encontrado por CPF:', patientId);
+        return patientId;
+      }
+    } catch (parseErr) {
+      console.warn('[Communicare] Resposta de busca não é JSON válido:', getDataText.substring(0, 200));
+    }
+  } catch (fetchError) {
+    console.warn('[Communicare] Erro ao buscar paciente por CPF:', fetchError);
+  }
+  
+  return undefined;
+}
+```
+
+---
+
+## Fluxo Corrigido
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ handleQuickConsult (UserRegistrationsTab.tsx)                               │
+│   → payload.skip_registration = true                                        │
+│   → payload.force_provider = 'communicare'                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ redirectCommunicare (schedule-redirect) - FLUXO CORRIGIDO                   │
+│                                                                             │
+│   1. Buscar paciente por CPF                                                │
+│      ├── Encontrou → patientId = X, prossegue                               │
+│      └── Não encontrou → vai para passo 2                                   │
+│                                                                             │
+│   2. Criar paciente automaticamente (mesmo com skip_registration=true)      │
+│      ├── Sucesso → patientId = Y, prossegue                                 │
+│      └── Falha → buscar novamente por CPF (retry)                           │
+│                                                                             │
+│   3. Se ainda sem patientId → erro estruturado                              │
+│                                                                             │
+│   4. Enfileirar paciente com patientId                                      │
+│                                                                             │
+│   5. ✅ Retornar URL da consulta                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Validação
+
+### Testes a Executar Após Deploy
+
+1. **Carolina via Communicare (primeiro acesso)**
+   - Esperado: Cadastra automaticamente na Communicare → Enfileira → Retorna URL
+   
+2. **Carolina via Communicare (segundo acesso)**
+   - Esperado: Encontra por CPF → Enfileira → Retorna URL (sem cadastrar novamente)
+
+3. **Carolina via ClickLife**
+   - Esperado: Continua funcionando como agora
+
+4. **Paciente com dados incompletos (sem telefone)**
+   - Esperado: Erro estruturado explicando que faltam dados
+
+---
+
+## Seção Técnica - Resumo das Alterações
+
+### `supabase/functions/schedule-redirect/index.ts`
+
+1. **Adicionar função `tryFindPatientByCPF`** (helper para busca)
+   - Localização: após `createCommunicarePatient` (linha ~1665)
+
+2. **Modificar `redirectCommunicare`** (linhas 1768-1831)
+   - Inverter a ordem: primeiro buscar, depois criar se não existir
+   - Remover dependência do `skip_registration` para decisão de criar paciente
+   - `skip_registration` passa a significar apenas "não falhar por erros de cadastro duplicado"
+
+### Impacto nos Outros Fluxos
+
+- **Pagamento normal → Communicare**: Continua igual (cria paciente se não existir)
+- **Plano ativo → ClickLife**: Não afetado
+- **Override → ClickLife**: Não afetado
+- **Override → Communicare**: Agora funciona mesmo para pacientes novos
+
+---
+
+## Próximo Passo
+
+Após aprovar este plano, implementarei as alterações no código. Depois você precisará:
+
+1. **Copiar o arquivo `schedule-redirect/index.ts` atualizado**
+2. **Colar no painel Supabase de produção**
+3. **Fazer deploy**
+4. **Testar criar consulta para Carolina via Communicare**
