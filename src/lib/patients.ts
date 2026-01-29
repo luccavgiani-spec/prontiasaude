@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { supabaseProduction } from "@/lib/supabase-production";
+import { supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
@@ -56,7 +56,7 @@ export async function upsertPatientBasic(payload: {
   if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
 
   // ✅ Usar cliente correto baseado no ambiente
-  const dbClient = environment === 'production' ? supabaseProduction : supabase;
+  const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
   console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
 
   await ensurePatientRow(userId, dbClient);
