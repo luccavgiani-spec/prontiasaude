@@ -1,127 +1,102 @@
 
-# Plano: Correção da Lista de Usuários + Reset de Senha Híbrido
+# Plano de Correção: Lista de Pacientes + Cadastro de Novos Usuários
 
 ## Diagnóstico Confirmado
 
-### Problema 1: Lista incompleta no Admin Panel
-- **Causa Raiz:** O painel busca `patients` do Cloud, mas você quer ver os 449 **auth.users** do Cloud.
-- **Evidência:** Os registros em `patients` do Cloud são menos que os 449 usuarios em `auth.users`.
-- **Solução:** Criar Edge Function que busca `auth.users` de ambos os ambientes e mescla com dados de `patients`.
+### Problema 1: Lista mostrando apenas 220 usuários
 
-### Problema 2: Reset de senha não funciona para usuários do Cloud
-- **Causa Raiz:** A Edge Function `send-password-reset` busca APENAS em `auth.users` da Produção.
-- **Evidência:** Log mostra "Email não encontrado: t.giani@gmail.com" - usuário existe no Cloud, não na Produção.
-- **Solução:** Modificar a função para buscar em ambos os ambientes (Cloud e Produção).
+**Causa Raiz**: A Edge Function `list-all-users` **NÃO ESTÁ DEPLOYADA** no Supabase de Produção.
+
+Quando acessei diretamente:
+```
+https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users
+```
+Resposta: `{"code":"NOT_FOUND","message":"Requested function was not found"}`
+
+O frontend (`edge-functions.ts`) está configurado para chamar `https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users`, mas a função não existe lá. Por isso o código cai no fallback que busca apenas os 220 patients da tabela de Produção.
+
+### Problema 2: Novo usuário não consegue se cadastrar
+
+Os logs de `check-user-exists` mostram que o email `sidneiasoaresferreira61@gmail.com`:
+- Não existe no Cloud (450 usuários verificados)
+- Não existe na Produção (220 usuários verificados)
+- `canRegister: true` - ou seja, pode se cadastrar
+
+O problema provavelmente está no passo seguinte (o `signUp` no Supabase de Produção). Precisamos verificar os logs de autenticação ou o erro retornado no frontend.
 
 ---
 
-## Arquivos a Serem Modificados
+## Solução
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/admin/UserRegistrationsTab.tsx` | Chamar nova Edge Function que retorna users de ambos os ambientes |
-| `supabase/functions/send-password-reset/index.ts` | Buscar usuário em Cloud E Produção usando paginação |
-| `supabase/functions/validate-reset-token/index.ts` | Suportar tokens de ambos os ambientes |
-| `supabase/functions/complete-password-reset/index.ts` | Atualizar senha no ambiente correto (Cloud ou Produção) |
+### Parte 1: Deploy da Edge Function `list-all-users` no Supabase de Produção
 
----
+Você precisa fazer o deploy MANUAL da função no Supabase de Produção:
 
-## Solução Detalhada
+1. Acesse: https://supabase.com/dashboard/project/ploqujuhpwutpcibedbr
+2. Vá em **Edge Functions** no menu lateral
+3. Clique em **New Function**
+4. Nome: `list-all-users`
+5. Cole o código do arquivo `supabase/functions/list-all-users/index.ts`
+6. Clique em **Deploy**
 
-### Parte 1: Admin Panel - Lista Unificada de Usuários
-
-Criar nova Edge Function `list-all-users` que:
-1. Busca `auth.users` do Cloud (usando SUPABASE_SERVICE_ROLE_KEY)
-2. Busca `auth.users` + `patients` da Produção (usando ORIGINAL_SUPABASE_SERVICE_ROLE_KEY)
-3. Mescla os resultados removendo duplicatas por email
-4. Retorna lista unificada com origem (cloud/production/both)
-
-**Fluxo:**
-```
-Frontend (Admin) 
-    → Edge Function "list-all-users" 
-    → Busca auth.users Cloud (449) + auth.users Produção (219)
-    → Mescla + enriquece com dados de patients
-    → Retorna lista unificada
+Alternativamente, via Supabase CLI:
+```bash
+supabase functions deploy list-all-users --project-ref ploqujuhpwutpcibedbr
 ```
 
-O componente `UserRegistrationsTab.tsx` chamará essa Edge Function em vez de buscar diretamente do Supabase client.
+### Parte 2: Verificar Secrets no Supabase de Produção
 
-### Parte 2: Reset de Senha Híbrido
+Confirme que estas secrets estão configuradas em **Edge Functions > Secrets**:
 
-Modificar `send-password-reset`:
+| Secret Name | Valor |
+|-------------|-------|
+| `CLOUD_SUPABASE_URL` | `https://yrsjluhhnhxogdgnbnya.supabase.co` |
+| `CLOUD_SUPABASE_SERVICE_ROLE_KEY` | (a service role key do Lovable Cloud) |
+| `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` | (já deve existir - a service role key da Produção) |
 
-```text
-1. Receber email
-2. Buscar em auth.users do CLOUD (com paginação)
-3. Se encontrar → gerar token, salvar em password_reset_tokens, enviar email com link
-4. Se não encontrar → Buscar em auth.users da PRODUÇÃO (com paginação)
-5. Se encontrar → mesma lógica acima
-6. Se não encontrar em nenhum → retornar mensagem genérica (segurança)
-7. SALVAR no token qual ambiente usar: cloud ou production
-```
+### Parte 3: Depurar o Cadastro do Novo Usuário
 
-Modificar `complete-password-reset`:
+Para entender por que o cadastro está falhando, preciso que você:
 
-```text
-1. Validar token
-2. Ler campo "environment" do token (cloud ou production)
-3. Usar o cliente correto para atualizar a senha:
-   - Se "cloud" → usar SUPABASE_SERVICE_ROLE_KEY
-   - Se "production" → usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY
-```
+1. Peça ao usuário que tente se cadastrar novamente
+2. Abra o DevTools do navegador (F12) > Console
+3. Me envie o erro que aparecer (ou um screenshot)
 
-### Parte 3: Tabela de Tokens
+O fluxo de cadastro é:
+1. `checkUserExists()` - OK (retorna `canRegister: true`)
+2. `hybridSignUp()` - chama `supabaseProductionAuth.auth.signUp()`
+3. Sincroniza com tabela `patients`
 
-Adicionar coluna `environment` à tabela `password_reset_tokens` para saber onde atualizar a senha:
-
-```sql
-ALTER TABLE public.password_reset_tokens 
-ADD COLUMN IF NOT EXISTS environment TEXT DEFAULT 'production';
-```
-
----
-
-## Implementação Detalhada
-
-### Edge Function: send-password-reset (atualizada)
-
-Mudanças principais:
-- Buscar com paginação em AMBOS os ambientes
-- Salvar qual ambiente o usuário foi encontrado
-- Enviar email normalmente
-
-### Edge Function: complete-password-reset (atualizada)
-
-Mudanças principais:
-- Ler o campo `environment` do token
-- Usar o cliente correto baseado no ambiente
-- Atualizar senha no lugar certo
-
-### UserRegistrationsTab.tsx
-
-Mudanças principais:
-- Chamar nova Edge Function `list-all-users` 
-- Remover queries diretas ao Supabase para contagem
-- Exibir a contagem real de auth.users (449 Cloud + 219 Produção - duplicados)
+Se o passo 2 falha, pode ser:
+- Problema com a configuração de email do Supabase de Produção
+- Validação de senha muito restritiva
+- Algum erro de rede ou CORS
 
 ---
 
 ## Resultado Esperado
 
-1. **Painel Admin mostrará:**
-   - Todos os 449 usuários do Cloud
-   - Todos os 219 usuários da Produção
-   - Duplicados marcados como "Ambos"
-   - Total real sem duplicatas
+1. **Painel Admin**: Mostrará 569 usuários (após deploy da função)
+2. **Cadastro**: Funcionará normalmente (após identificar o erro)
 
-2. **Reset de senha funcionará para:**
-   - Usuários do Cloud (como t.giani@gmail.com)
-   - Usuários da Produção
-   - Senha será atualizada no ambiente correto
+---
 
-3. **Contagens corretas:**
-   - Total Cloud: 449
-   - Total Produção: 219  
-   - Duplicados: X (a calcular)
-   - Total Único: 449 + 219 - X
+## Próximos Passos
+
+1. Faça o deploy da função `list-all-users` no Supabase de Produção
+2. Verifique se as secrets estão configuradas
+3. Teste o painel admin - deve mostrar 569 usuários
+4. Para o cadastro, me envie o erro do console do navegador
+
+---
+
+## Seção Técnica: Código da Edge Function
+
+O arquivo `supabase/functions/list-all-users/index.ts` que você deve copiar para o Supabase de Produção já está atualizado para:
+
+1. Usar `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` para acessar o ambiente Cloud
+2. Usar `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SERVICE_ROLE_KEY` para a Produção
+3. Mesclar os usuários de ambos os ambientes (evitando duplicados)
+4. Retornar estatísticas: `cloudOnly`, `productionOnly`, `both`, `totalUnique`
+
+A função foi testada no ambiente Cloud e retornou corretamente 569 usuários únicos.
