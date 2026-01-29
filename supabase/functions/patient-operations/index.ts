@@ -530,8 +530,14 @@ serve(async (req) => {
     
     const body = await req.json();
     
-    // Validate authenticated user for operations that require it
-    if (body.operation !== 'upsert_patient') {
+    // ============================================================
+    // ✅ VALIDAÇÃO GENÉRICA: exceto operações que têm validação própria
+    // - upsert_patient: permite registro sem auth
+    // - activate_plan_manual: usa validação cross-project (Lovable Cloud)
+    // ============================================================
+    const AUTH_BYPASS_OPERATIONS = ['upsert_patient', 'activate_plan_manual'];
+    
+    if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
       if (!authHeader) {
         return new Response(
           JSON.stringify({ error: 'Autenticação necessária' }),
@@ -1076,18 +1082,29 @@ serve(async (req) => {
           global: { headers: { Authorization: `Bearer ${token}` } }
         });
 
-        // ✅ PASSO 2: Validar token usando getUser() no Lovable Cloud
+        // ✅ PASSO 2: Validar token EXPLICITAMENTE usando getUser(token) no Lovable Cloud
         console.log('[activate_plan_manual] Validando token no Lovable Cloud...');
-        const { data: authData, error: authError } = await authClient.auth.getUser();
+        console.log('[activate_plan_manual] Token recebido (primeiros 20 chars):', token.substring(0, 20) + '...');
+        
+        // IMPORTANTE: Passar token explicitamente para getUser()
+        const { data: authData, error: authError } = await authClient.auth.getUser(token);
         
         if (authError || !authData?.user) {
           console.error('[activate_plan_manual] Token inválido no Lovable Cloud:', authError?.message);
+          console.error('[activate_plan_manual] Auth error code:', authError?.code);
+          
+          // Verificar se é token anon/público (fallback de sessão não autenticada)
+          const isAnonToken = token.includes('"role":"anon"') || 
+                              (!authData?.user && !authError?.message?.includes('expired'));
+          
           return new Response(
             JSON.stringify({ 
               success: false, 
               step: 'admin_auth', 
-              error: 'Invalid token - could not validate in auth server',
-              details: authError?.message 
+              error: isAnonToken 
+                ? 'Sessão do Admin não encontrada - faça login novamente'
+                : 'Token inválido - não foi possível validar no servidor de auth',
+              details: authError?.message || 'No user data returned'
             }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -1095,7 +1112,7 @@ serve(async (req) => {
 
         const adminUserId = authData.user.id;
         const adminEmail = authData.user.email;
-        console.log('[activate_plan_manual] Token válido. Admin user:', { id: adminUserId, email: adminEmail });
+        console.log('[activate_plan_manual] ✅ Token válido. Admin user:', { id: adminUserId, email: adminEmail });
 
         // ✅ PASSO 3: Verificar role admin no Lovable Cloud
         console.log('[activate_plan_manual] Verificando role admin no Lovable Cloud...');
