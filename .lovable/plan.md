@@ -1,69 +1,79 @@
 
-Contexto do problema (por que ainda dá “401 token inválido” em Produção)
-- A função `patient-operations` faz uma validação “genérica” de token logo no início (antes do `switch`), usando o client do banco/ambiente onde a função roda:
-  - Ela lê `Authorization` e faz `supabase.auth.getUser(token)` usando o backend “de produção” (service_role).
-  - Para o fluxo de ativação manual, porém, o token que chega é do login do Admin (emitido pelo backend do app/Admin), então essa validação inicial falha e retorna `401 Token inválido` antes de chegar no case `activate_plan_manual`.
-- Mesmo dentro do case `activate_plan_manual`, hoje está sendo chamado `authClient.auth.getUser()` sem passar o token explicitamente; isso pode falhar porque esse client não tem sessão armazenada. O correto é validar passando o token (`getUser(token)`) ou via claims.
+Contexto (o que está acontecendo agora)
+- O “401 Token inválido” foi superado quando você copiou a função para o seu Supabase e ela passou a entrar no fluxo do `activate_plan_manual`.
+- Agora o erro está no passo `plan_upsert`:
+  - `details: "Could not find the 'activated_at' column of 'patient_plans' in the schema cache"`
+- Isso é um erro do PostgREST (API do banco) indicando que, para o projeto Supabase onde a função está rodando, a API não enxerga a coluna `activated_at` (por cache desatualizado OU porque a coluna realmente não existe nesse banco).
 
-Objetivo
-- Fazer a ativação manual funcionar em Produção removendo o “401 token inválido”, sem abrir brecha de segurança, mantendo validação server-side do admin (role em `user_roles`).
+Objetivo (prioridade máxima)
+- Fazer a ativação manual funcionar em Produção sem depender de “reload de schema” dar certo na primeira tentativa.
+- Manter segurança (admin role continua sendo verificada no backend do login).
 
 1) ARQUIVOS QUE SERÃO MODIFICADOS
 - `supabase/functions/patient-operations/index.ts`
 
 2) MOTIVO (baseado no seu pedido)
-- Corrigir o “401 token inválido” em produção na ativação manual, garantindo que o token seja validado no backend correto (onde ele foi emitido), e não bloqueado pela validação genérica do backend de execução.
+- A ativação manual está falhando no `upsert` por incompatibilidade de schema cache/coluna (`activated_at`). Precisamos tornar o upsert resiliente para não travar a operação e destravar imediatamente o fluxo em produção.
 
 3) ESCOPO (exatamente o que vai mudar)
-A. Ajuste na validação genérica inicial (antes do switch)
-- Alterar a regra “toda operação exceto upsert_patient exige validar token no backend de execução” para:
-  - Continuar validando normalmente para as demais operações
-  - Excluir explicitamente `activate_plan_manual` dessa validação inicial
-  - Motivo: `activate_plan_manual` tem validação própria (cross-project) e não pode ser barrada antes
+A) Upsert resiliente (fallback automático) dentro do case `activate_plan_manual`
+- Manter o upsert “completo” como primeira tentativa (incluindo `activated_at` e `activated_by`).
+- Se o erro retornar com a assinatura típica de cache/coluna ausente (contendo `activated_at` + `schema cache`), fazer uma segunda tentativa automaticamente removendo campos “problemáticos”:
+  - Remover `activated_at`
+  - (se necessário) remover também `activated_by`
+- Retornar sucesso quando a segunda tentativa funcionar, e incluir um campo informativo na resposta (ex.: `warning: 'activated_at_column_unavailable_fallback_used'`) para rastreabilidade.
 
-B. Ajuste na validação cross-project dentro do `activate_plan_manual`
-- Trocar `authClient.auth.getUser()` por `authClient.auth.getUser(token)` (token explícito)
-  - Isso garante que a verificação realmente usa o JWT recebido no header
-- Manter a checagem de admin via `user_roles` no backend do login
-- Manter execução da ativação no banco de produção com `service_role`
+B) Diagnóstico melhor (sem depender de logs)
+- No retorno de erro do `plan_upsert`, incluir:
+  - `details` com a mensagem original
+  - `hint` com instruções curtas (“Verifique se a coluna activated_at existe no banco e se o schema cache foi recarregado no projeto correto.”)
+- Logar no console da função (server-side) um marcador claro quando o fallback for acionado.
 
-C. Melhorias de retorno de erro (para diagnosticar rápido)
-- Garantir que o retorno 401 do fluxo manual venha com:
-  - `success: false`
-  - `step: 'admin_auth'`
-  - `details` com a mensagem de erro real do provedor de auth
-- Se identificarmos que o token recebido é “anon/público” (fallback), retornar mensagem mais clara (ex.: “Sessão do Admin não encontrada — faça login novamente”).
+C) (Opcional, mas recomendado) Garantia de consistência do payload
+- Centralizar o objeto do payload do plano em uma variável (ex.: `planPayload`) para evitar divergência entre tentativa 1 e tentativa 2.
 
-4) CONFIRMAÇÃO (regra de alteração)
-- Estas alterações estão explicitamente solicitadas? SIM — ao aprovar este plano, você está autorizando a modificação do arquivo listado (`supabase/functions/patient-operations/index.ts`) exclusivamente para corrigir o 401 token inválido na ativação manual.
+4) O que você deve checar no seu Supabase (para corrigir “de verdade” e não só contornar)
+Mesmo com o fallback, o ideal é alinhar schema em produção. Como você relatou que rodou o SQL de reload e “deu o mesmo erro”, há duas hipóteses:
+
+Hipótese 1 — a coluna NÃO existe no banco onde você está rodando a função
+- Você vai confirmar no SQL editor do seu projeto de produção com uma query de inspeção (ex.: consultando `information_schema.columns` para `patient_plans`).
+- Se não existir, você precisa adicionar a coluna (e opcionalmente `activated_by`) com ALTER TABLE.
+  - Colunas esperadas pelo código:
+    - `activated_at` (timestamp with time zone / timestamptz)
+    - `activated_by` (text)
+
+Hipótese 2 — você recarregou o schema em um lugar, mas a função está chamando outro projeto/instância
+- Se a função estiver em um projeto e o banco/REST (PostgREST) que está sendo usado for outro (ou cache não recarregou de fato), o erro persiste.
+- O fallback elimina a urgência e a ativação passa a funcionar enquanto você confirma o alinhamento.
+
+5) Resposta direta: “Por que você não edita/atualiza as edge functions direto no Supabase?”
+- Porque o fluxo padrão de Edge Functions é: o código-fonte vive no repositório (aqui no Lovable) e depois é publicado/deployado para o projeto Supabase.
+- O “Supabase UI” não é a fonte de verdade do código nesse tipo de setup; ela recebe o bundle publicado.
+- No seu caso, como você quer operar com o projeto Supabase externo (produção), faz sentido você ter feito o “copiar/colar” lá para acelerar. Só que isso cria risco de divergência: o código no Lovable e o código no Supabase podem ficar diferentes.
+- A correção mais segura é: manter o arquivo como fonte de verdade aqui, e sempre que mudar, replicar/deployar no seu Supabase de produção (do jeito que você já está fazendo).
 
 Sequência de implementação (passo-a-passo)
-1. Ler `body.operation` antes da validação genérica e criar uma lista de exceções:
-   - Exceções mínimas: `upsert_patient` (já existe) e `activate_plan_manual` (novo)
-2. Ajustar o bloco inicial:
-   - Se `operation` NÃO estiver nas exceções:
-     - manter a validação atual (`authHeader` obrigatório + `supabase.auth.getUser(token)` no backend de execução)
-   - Se `operation` estiver nas exceções:
-     - pular a validação genérica (deixar o case cuidar)
-3. No case `activate_plan_manual`:
-   - Garantir extração do token (`Bearer ...`)
-   - Validar com `authClient.auth.getUser(token)` (token explícito)
-   - Checar admin em `user_roles` no backend do login
-   - Prosseguir com upsert de `patient_plans` no banco de produção
-4. Teste ponta a ponta em Produção
-   - Login no Admin
-   - Ativar plano manualmente
-   - Confirmar que não há mais 401 e que retorna `success: true`
-5. Se ainda houver falha, o toast deverá mostrar `step` e `details` para identificar com precisão o ponto do erro.
+1. Ajustar somente o bloco de upsert no `case 'activate_plan_manual'`:
+   - Criar `planPayloadFull` (com `activated_at` / `activated_by`)
+   - Tentar `.upsert(planPayloadFull, { onConflict: 'email' })`
+2. Se falhar e `upsertError.message` contiver “activated_at” + “schema cache”:
+   - Criar `planPayloadFallback = { ...planPayloadFull }` removendo `activated_at` (e `activated_by` se necessário)
+   - Rodar um segundo `.upsert(planPayloadFallback, { onConflict: 'email' })`
+3. Se a tentativa 2 funcionar:
+   - Responder `success: true` + `warning` informando que foi usado fallback
+4. Se a tentativa 2 também falhar:
+   - Manter `success: false`, `step: 'plan_upsert'` e devolver `details` + `hint`
+5. Você copia/atualiza essa mesma mudança no seu Supabase de produção (como já fez) e testa novamente.
 
 Critérios de aceite
 - Em Produção, logado no Admin:
-  - Ativação manual não retorna mais “401 token inválido”
-  - Plano é ativado com sucesso (registro em `patient_plans` atualizado/criado)
-  - Usuário final consegue enxergar o plano na área do paciente (quando aplicável)
+  - “Ativação Manual de Plano” não retorna mais erro bloqueando o fluxo
+  - Se a coluna estiver realmente ausente/cache quebrado, o fallback deve permitir ativar mesmo assim
 - Segurança mantida:
   - Sem admin role no backend do login → 403
-  - Sem token válido → 401
+  - Token inválido → 401
+- Observabilidade:
+  - Quando fallback acontecer, resposta traz `warning` e logs mostram que foi “fallback activated_at”.
 
-Observação sobre Preview (não incluído neste escopo agora)
-- O problema de Preview que você relatou anteriormente é CORS (domínio `*.lovableproject.com`) + `getCorsHeaders()` sem origin. Como você pediu para focar primeiro no 401 em Produção, esse ajuste de CORS ficará para um próximo passo, se você confirmar.
+Riscos/Trade-offs (explícitos)
+- O fallback é um “destravador” para produção. O ideal é alinhar o schema do banco de produção para que `activated_at` exista e o cache esteja correto, pois esse campo é útil para auditoria.
