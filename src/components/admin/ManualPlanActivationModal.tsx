@@ -82,14 +82,17 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
 
       if (error) {
         console.error('[ManualPlanActivationModal] Error:', error);
-        toast.error('Erro ao ativar plano. Verifique os logs.');
+        const errorMsg = error?.message || 'Erro ao ativar plano. Verifique os logs.';
+        toast.error(errorMsg);
         return;
       }
 
       // Verificar se a resposta indica sucesso
       if (!data?.success) {
         console.error('[ManualPlanActivationModal] Failed:', data);
-        toast.error(data?.error || 'Erro ao ativar plano');
+        const step = data?.step ? `[${data.step}] ` : '';
+        const details = data?.details ? ` (${data.details})` : '';
+        toast.error(`${step}${data?.error || 'Erro ao ativar plano'}${details}`);
         return;
       }
 
