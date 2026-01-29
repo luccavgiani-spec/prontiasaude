@@ -1,142 +1,65 @@
 
-# Plano de Correção: Erro de FK no Cadastro + Erro 500 na Ativação Manual
+# Plano de Correção: Erro de RLS no Cadastro
 
-## Problemas Identificados
+## Problema Identificado
 
-### Problema 1: Cadastro de Pacientes (Monique - Screenshot)
-**Erro:** `insert or update on table "patients" violates foreign key constraint "patients_user_id_fkey"`
+**Erro:** `new row violates row-level security policy for table "patients"`
 
-**Causa:**
-- Usuário foi criado na **Produção** via `hybridSignUp`
-- Sessão está no cliente de Produção (`supabaseProductionAuth`)
-- O arquivo `src/lib/patients.ts` usa `supabase` (Cloud) para salvar na tabela `patients`
-- O `user_id` da Produção não existe em `auth.users` do Cloud → **FK violation**
+**Causa Raiz:**
 
-### Problema 2: Ativação Manual de Planos (Admin)
-**Erro:** `null value in column "id" of relation "patients" violates not-null constraint`
+O arquivo `patients.ts` está usando o cliente ERRADO para operações de banco na Produção:
 
-**Causa:**
-- A edge function roda no Lovable Cloud
-- Quando tenta criar registro em `patients` com `user_id` da Produção, viola FK
-- O erro de FK é capturado mas sem fallback adequado
+| Cliente | Arquivo | Sessão | Uso Correto |
+|---------|---------|--------|-------------|
+| `supabaseProduction` | supabase-production.ts | ❌ `persistSession: false` | Admin/leitura anônima |
+| `supabaseProductionAuth` | auth-hybrid.ts | ✅ `persistSession: true` | Operações autenticadas |
 
----
+Quando o código usa `supabaseProduction.from('patients').insert(...)`, o `auth.uid()` retorna `NULL` porque esse cliente não tem sessão. A política RLS `user_id = auth.uid()` falha!
 
-## Arquivos que serão modificados
+## Arquivo que será modificado
 
-1. `src/lib/patients.ts` - Tornar híbrido para usar cliente correto
-2. `supabase/functions/patient-operations/index.ts` - Remover criação automática de paciente, usar apenas email
+`src/lib/patients.ts`
 
----
+## Correção Cirúrgica
 
-## Correção 1: `src/lib/patients.ts` (Frontend - Cadastro)
-
-### Problema atual:
+### ANTES (linha 2):
 ```typescript
-const { data: sess } = await supabase.auth.getSession();  // ❌ Só verifica Cloud
-// ...
-await supabase.from('patients').insert(updateData);  // ❌ Sempre usa Cloud
-```
-
-### Solução:
-Usar `getHybridSession()` para detectar o ambiente e usar o cliente correto:
-
-```typescript
-import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { supabaseProduction } from "@/lib/supabase-production";
-
-export async function upsertPatientBasic(payload: { ... }) {
-  // ✅ HÍBRIDO: Detectar ambiente correto
-  const { session, environment } = await getHybridSession();
-  const userId = session?.user?.id;
-  const userEmail = session?.user?.email;
-  if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
-
-  // ✅ Usar cliente correto baseado no ambiente
-  const dbClient = environment === 'production' ? supabaseProduction : supabase;
-  
-  // ... resto da lógica usando dbClient em vez de supabase
-}
 ```
 
-A função `ensurePatientRow` também precisa ser atualizada para aceitar o cliente correto como parâmetro.
-
----
-
-## Correção 2: `supabase/functions/patient-operations/index.ts` (Backend - Ativação Manual)
-
-### Problema atual (linhas 1291-1361):
+### DEPOIS:
 ```typescript
-// TENTATIVA 3: Criar paciente automaticamente
-const { data: newPatient, error: insertPatientErr } = await supabase
-  .from('patients')
-  .insert({
-    email: normalizedPatientEmail,
-    user_id: userIdToLink,  // ❌ user_id da Produção viola FK no Cloud
-    // ...
-  })
+import { supabaseProductionAuth } from "@/lib/auth-hybrid";
 ```
 
-### Solução:
-NÃO tentar criar paciente. Apenas prosseguir com ativação usando email:
-
+### ANTES (linha 59):
 ```typescript
-// TENTATIVA 3: Se não encontrou paciente, NÃO criar - apenas prosseguir
-if (!patient) {
-  console.log('[activate_plan_manual] 3️⃣ Paciente não existe em patients');
-  console.log('[activate_plan_manual] ⚠️ Plano será ativado apenas pelo email');
-  
-  // Criar objeto "virtual" para compatibilidade
-  patient = { id: null, user_id: null };
-  patientLookupMethod = 'email_only_no_patient_record';
-}
-
-// Remover verificação que exige patient.id
-// Ajustar upsert para usar patient.user_id apenas se existir
+const dbClient = environment === 'production' ? supabaseProduction : supabase;
 ```
 
----
+### DEPOIS:
+```typescript
+const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
+```
 
 ## Por que isso resolve
 
-### Cadastro (Monique):
-1. `upsertPatientBasic` detecta que a sessão está na Produção
-2. Usa `supabaseProduction` para inserir/atualizar em `patients`
-3. O `user_id` existe em `auth.users` da Produção → **Sem FK violation**
+1. `supabaseProductionAuth` foi criado com `persistSession: true` e `storageKey: 'supabase-production-auth'`
+2. Quando o usuário fez login via `hybridSignIn` → sessão foi salva no `supabaseProductionAuth`
+3. Agora quando fazemos operações de banco, o `auth.uid()` retorna o ID correto
+4. A política RLS `user_id = auth.uid()` passa!
 
-### Ativação Manual:
-1. Se paciente não existe, não tenta criar (evita FK violation)
-2. Ativa o plano usando apenas o `email` (que é a chave real em `patient_plans`)
-3. O plano fica ativo e quando o usuário completar o cadastro, os dados serão vinculados
+## Validação
 
----
-
-## Validação pós-implementação
-
-### Teste Cadastro:
-1. Criar novo usuário (cadastro)
-2. Verificar que o perfil é salvo sem erro de FK
-3. Verificar que dados aparecem na tabela `patients` da Produção
-
-### Teste Ativação Manual:
-1. No Admin → Pacientes → selecionar usuário
-2. Ativar plano manualmente
-3. Confirmar: retorna `success: true`, plano fica ativo
+1. Monique (ou outro usuário) tenta completar o cadastro novamente
+2. Os dados são salvos sem erro de RLS
+3. O fluxo prossegue normalmente
 
 ---
 
-## Confirmação (conforme política interna)
+## Resumo
 
-1. **ARQUIVOS QUE SERÃO MODIFICADOS:**
-   - `src/lib/patients.ts`
-   - `supabase/functions/patient-operations/index.ts`
-
-2. **MOTIVO:** 
-   - Corrigir erro de FK no cadastro (Monique)
-   - Corrigir erro 500 na ativação manual
-
-3. **ESCOPO:** 
-   - `patients.ts`: Usar cliente híbrido (Cloud/Produção) baseado na sessão
-   - `patient-operations`: Remover criação automática de paciente, usar apenas email
-
-4. **CONFIRMAÇÃO: "Estas alterações estão explicitamente solicitadas?"** SIM
+- **ARQUIVO:** `src/lib/patients.ts`
+- **MOTIVO:** Corrigir erro de RLS no cadastro
+- **ESCOPO:** Trocar `supabaseProduction` por `supabaseProductionAuth` (que tem a sessão autenticada)
+- **CONFIRMAÇÃO:** ✅ Solicitado explicitamente pelo usuário
