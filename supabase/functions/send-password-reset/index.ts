@@ -2,10 +2,14 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "npm:resend@2.0.0";
 
+// ✅ CORREÇÃO: CORS headers completos para evitar "load failed"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// ✅ CORREÇÃO: URL fixa de PRODUÇÃO (evita confusão com Lovable Cloud)
+const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface PasswordResetRequest {
   email: string;
@@ -29,11 +33,12 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[send-password-reset] Solicitação para: ${email}`);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // ✅ CORREÇÃO: Usar URL de produção + chave de serviço correta
+    const supabaseServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") 
+      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
@@ -85,8 +90,8 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Erro ao gerar token de recuperação");
     }
 
-    // URL de redefinição
-    const resetUrl = `https://prontia.com.br/nova-senha?token=${token}`;
+    // ✅ CORREÇÃO: URL de redefinição com domínio CORRETO
+    const resetUrl = `https://prontiasaude.com.br/nova-senha?token=${token}`;
 
     // Enviar email via Resend
     const resend = new Resend(resendApiKey);
@@ -121,7 +126,7 @@ serve(async (req: Request): Promise<Response> => {
             <td style="padding: 40px 32px;">
               <!-- Logo -->
               <div style="text-align: center; margin-bottom: 32px;">
-                <img src="https://prontia.com.br/assets/prontia-logo-vertical-misto.png" alt="Prontia Saúde" style="max-width: 180px; height: auto;">
+                <img src="https://prontiasaude.com.br/assets/prontia-logo-vertical-misto.png" alt="Prontia Saúde" style="max-width: 180px; height: auto;">
               </div>
               
               <p style="margin: 0 0 16px; color: #333333; font-size: 16px; line-height: 1.6;">
