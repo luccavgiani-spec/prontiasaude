@@ -1,6 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 import { getCorsHeaders } from '../common/cors.ts';
 
+// URLs fixas dos dois ambientes
+const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
+
 Deno.serve(async (req) => {
   const requestOrigin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(requestOrigin);
@@ -10,10 +14,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // ===== CLIENTES PARA AMBOS OS AMBIENTES =====
+    const cloudServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const prodServiceKey = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    const cloudClient = createClient(CLOUD_URL, cloudServiceKey);
+    const prodClient = createClient(PRODUCTION_URL, prodServiceKey);
+    
+    // Usar Cloud como cliente principal para verificação de auth
+    const supabaseClient = cloudClient;
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -251,18 +260,85 @@ Deno.serve(async (req) => {
     }
 
     // DELETE USER (via POST method - usa bodyData já parseado)
+    // Deleta de AMBOS os ambientes (Cloud e Produção)
     if ((operation === 'delete_user' || operation === 'delete') && req.method === 'POST') {
       const userId = bodyData.user_id;
+      const userEmail = bodyData.email; // Opcional: passar email para busca alternativa
       
-      if (!userId) throw new Error('user_id required');
+      if (!userId && !userEmail) throw new Error('user_id or email required');
 
-      console.log('[user-management] Deleting user via POST:', userId);
-
-      const { error } = await supabaseClient.auth.admin.deleteUser(userId);
-      if (error) throw error;
+      console.log('[user-management] Deleting user from BOTH environments:', { userId, userEmail });
+      
+      let deletedCloud = false;
+      let deletedProd = false;
+      
+      // ===== DELETAR DO CLOUD =====
+      if (userId) {
+        try {
+          const { error: cloudError } = await cloudClient.auth.admin.deleteUser(userId);
+          if (cloudError) {
+            console.log('[user-management] Cloud delete error (may not exist):', cloudError.message);
+          } else {
+            deletedCloud = true;
+            console.log('[user-management] ✅ Deleted from Cloud');
+          }
+        } catch (err: any) {
+          console.log('[user-management] Cloud delete exception:', err.message);
+        }
+      }
+      
+      // ===== DELETAR DA PRODUÇÃO =====
+      // Buscar user_id na produção pelo email, já que os IDs são diferentes
+      if (userEmail && prodServiceKey) {
+        try {
+          // Listar usuários para encontrar pelo email
+          const { data: prodUsers } = await prodClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+          const prodUser = prodUsers?.users?.find(u => u.email?.toLowerCase() === userEmail.toLowerCase());
+          
+          if (prodUser) {
+            const { error: prodError } = await prodClient.auth.admin.deleteUser(prodUser.id);
+            if (prodError) {
+              console.log('[user-management] Production delete error:', prodError.message);
+            } else {
+              deletedProd = true;
+              console.log('[user-management] ✅ Deleted from Production (id:', prodUser.id, ')');
+            }
+          } else {
+            console.log('[user-management] User not found in Production by email');
+          }
+        } catch (err: any) {
+          console.log('[user-management] Production delete exception:', err.message);
+        }
+      }
+      
+      // ===== DELETAR REGISTROS PATIENTS DE AMBOS =====
+      if (userEmail) {
+        try {
+          await cloudClient.from('patients').delete().eq('email', userEmail);
+          await cloudClient.from('patient_plans').delete().eq('email', userEmail);
+          console.log('[user-management] ✅ Deleted patients/plans from Cloud');
+        } catch (err: any) {
+          console.log('[user-management] Cloud patients delete error:', err.message);
+        }
+        
+        if (prodServiceKey) {
+          try {
+            await prodClient.from('patients').delete().eq('email', userEmail);
+            await prodClient.from('patient_plans').delete().eq('email', userEmail);
+            console.log('[user-management] ✅ Deleted patients/plans from Production');
+          } catch (err: any) {
+            console.log('[user-management] Production patients delete error:', err.message);
+          }
+        }
+      }
 
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ 
+          success: true, 
+          deletedCloud, 
+          deletedProd,
+          message: `Deleted from Cloud: ${deletedCloud}, Production: ${deletedProd}`
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
