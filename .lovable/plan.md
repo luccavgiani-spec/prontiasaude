@@ -1,103 +1,82 @@
 
-# Plano: Correção de Ativação Manual de Planos e Reset de Senha
+# Plano: Correção do Sistema Híbrido de Autenticação
 
-## Diagnóstico do Problema
+## Diagnóstico dos Problemas
 
-### Problema 1: "Paciente não encontrado" na Ativação Manual
+### Problema 1: Login falhando para usuários do Cloud
+- **Usuário afetado:** `t.giani@gmail.com`
+- **Causa:** A edge function `check-user-exists` usa `listUsers({ filter: 'email.eq.${email}' })`, mas esse filtro não funciona corretamente na API Admin do Supabase
+- **Evidência:** O usuário existe no Cloud (ID: `19d8998f-d8bc-4a6a-8323-6cc7bb3d026a`), mas a função retorna `existsInCloud: false`
 
-**Causa raiz identificada:**
-O Painel Admin (`UserRegistrationsTab.tsx`) atualmente lista pacientes do **Lovable Cloud** (linha 126: `supabase.from('patients')`), mas a função `activate_plan_manual` busca pacientes no **banco de Produção** (linha 1234-1238).
-
-Quando um usuário se cadastra via Cloud, ele pode existir no Lovable Cloud mas NÃO existir no banco de produção, gerando o erro "Paciente não encontrado".
-
-**Emails afetados:**
-- `barrosleticia774@gmail.com`
-- `neres_deisesena@hotmail.com`
-
-### Problema 2: "load failed" no Reset de Senha
-
-**Causa raiz identificada:**
-A função `send-password-reset` está funcionando corretamente no backend (usa Resend), mas o frontend (`EsqueciSenha.tsx`) pode estar falhando ao invocar a edge function, possivelmente por:
-1. O `invokeEdgeFunction` está apontando para o projeto errado (Cloud vs Produção)
-2. Erro de CORS ou headers incompletos
-3. A URL do email aponta para `prontia.com.br` (linha 89) mas o domínio real é `prontiasaude.com.br`
+### Problema 2: Painel Admin incompleto
+- **Causa:** `UserRegistrationsTab.tsx` agora busca APENAS da Produção (`supabaseProduction`), ignorando os 448 usuários do Lovable Cloud
+- **Resultado:** Usuários cadastrados no Cloud não aparecem no painel
 
 ---
 
 ## Solução Proposta
 
-### Parte 1: Painel Admin via Produção (Ativação Manual)
+### Parte 1: Corrigir `check-user-exists` (Login)
 
-Modificar o `UserRegistrationsTab.tsx` para listar pacientes diretamente do banco de **Produção**, não do Cloud.
+Alterar a lógica para buscar usuários corretamente, sem depender do filtro problemático:
 
-**Arquivos a alterar:**
-1. `src/components/admin/UserRegistrationsTab.tsx`
+**Arquivo:** `supabase/functions/check-user-exists/index.ts`
+
+**Mudanças:**
+1. Usar paginação para buscar todos os usuários (até encontrar o email)
+2. Filtrar manualmente por email após buscar
+3. Adicionar logs detalhados para debug
+
+```typescript
+// ANTES (não funciona)
+const { data: cloudUsers } = await cloudClient.auth.admin.listUsers({
+  filter: `email.eq.${normalizedEmail}`
+});
+
+// DEPOIS (funciona)
+let page = 1;
+let found = false;
+while (!found) {
+  const { data, error } = await cloudClient.auth.admin.listUsers({
+    page,
+    perPage: 1000
+  });
+  if (error || !data?.users?.length) break;
+  
+  const match = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+  if (match) found = true;
+  
+  if (data.users.length < 1000) break;
+  page++;
+}
+existsInCloud = found;
+```
+
+### Parte 2: Unificar Painel Admin (Cloud + Produção)
+
+Modificar `UserRegistrationsTab.tsx` para mostrar usuários de AMBOS os ambientes.
+
+**Arquivo:** `src/components/admin/UserRegistrationsTab.tsx`
+
+**Estratégia:**
+1. Buscar pacientes da Produção (`supabaseProduction`)
+2. Buscar pacientes do Cloud (`supabase`)
+3. Mesclar resultados, removendo duplicatas por email
+4. Marcar a origem de cada registro (Cloud/Produção)
 
 **Mudanças técnicas:**
-- Substituir `supabase.from('patients')` por `supabaseProduction.from('patients')` nas queries de listagem e contagem
-- Manter a importação existente de `supabaseProduction` (já presente na linha 11)
-- Garantir que o email passado ao modal seja o da produção
+- Criar função `mergePatients(cloudPatients, prodPatients)` que:
+  - Combina as duas listas
+  - Remove duplicatas (prioriza Produção se existir em ambos)
+  - Adiciona campo `source: 'cloud' | 'production' | 'both'`
+- Atualizar as contagens para somar ambos os ambientes
+- Adicionar badge visual indicando a origem
 
-```typescript
-// ANTES (linha 126)
-let query = supabase.from('patients')...
+### Parte 3: Deploy e Teste
 
-// DEPOIS
-let query = supabaseProduction.from('patients')...
-```
-
-**Linhas afetadas no UserRegistrationsTab.tsx:**
-- Linha 126: query principal de pacientes
-- Linhas 142-175: queries de contagem (totalCount, withAccountCount, etc.)
-
-### Parte 2: Consertar Email Customizado (Reset de Senha)
-
-**Arquivos a alterar:**
-1. `supabase/functions/send-password-reset/index.ts`
-2. `src/pages/EsqueciSenha.tsx` (verificar invokeEdgeFunction)
-3. `src/lib/edge-functions.ts` (se necessário)
-
-**Mudanças técnicas:**
-
-**a) Corrigir URL de reset no email:**
-```typescript
-// ANTES (linha 89)
-const resetUrl = `https://prontia.com.br/nova-senha?token=${token}`;
-
-// DEPOIS (domínio correto)
-const resetUrl = `https://prontiasaude.com.br/nova-senha?token=${token}`;
-```
-
-**b) Usar URLs de produção na função:**
-A função `send-password-reset` atualmente usa `SUPABASE_URL` que pode apontar para Cloud. Precisa usar URLs hardcoded de produção.
-
-```typescript
-// ANTES (linhas 32-33)
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-// DEPOIS
-const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-const supabaseServiceKey = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') 
-  || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-```
-
-**c) Melhorar CORS headers:**
-```typescript
-// ANTES (linha 8)
-"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-
-// DEPOIS
-"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-```
-
-### Parte 3: Validar/Corrigir Funções Relacionadas
-
-**Arquivos a alterar:**
-1. `supabase/functions/validate-reset-token/index.ts`
-2. `supabase/functions/complete-password-reset/index.ts`
-
-Aplicar as mesmas correções (URLs de produção + CORS headers completos) para garantir que todo o fluxo funcione.
+1. Fazer deploy da edge function corrigida
+2. Testar login com `t.giani@gmail.com`
+3. Verificar se painel mostra todos os registros
 
 ---
 
@@ -105,24 +84,43 @@ Aplicar as mesmas correções (URLs de produção + CORS headers completos) para
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/admin/UserRegistrationsTab.tsx` | Trocar queries de `supabase` para `supabaseProduction` |
-| `supabase/functions/send-password-reset/index.ts` | Corrigir URL (prontia → prontiasaude), usar URLs de produção, melhorar CORS |
-| `supabase/functions/validate-reset-token/index.ts` | Usar URLs de produção, melhorar CORS |
-| `supabase/functions/complete-password-reset/index.ts` | Usar URLs de produção, melhorar CORS |
+| `supabase/functions/check-user-exists/index.ts` | Buscar usuários com paginação, filtrar manualmente por email |
+| `src/components/admin/UserRegistrationsTab.tsx` | Buscar e mesclar pacientes do Cloud + Produção |
+
+---
+
+## Detalhes Técnicos
+
+### Edge Function `check-user-exists`
+
+A nova implementação irá:
+
+1. **Para Cloud:** Iterar páginas de 1000 usuários até encontrar o email ou esgotar
+2. **Para Produção:** Mesma lógica
+3. **Otimização:** Parar assim que encontrar (não precisa carregar tudo)
+4. **Fallback:** Em caso de erro, logar detalhadamente e retornar valores seguros
+
+### Painel Admin Unificado
+
+Interface mostrará:
+
+| Campo | Descrição |
+|-------|-----------|
+| Email | Email do paciente |
+| Nome | Nome completo |
+| Origem | Badge: "Cloud", "Produção" ou "Ambos" |
+| Status | Com conta / Sem conta |
+| Plano | Ativo/Inativo |
+
+Contagens atualizadas:
+- Total = Cloud + Produção (sem duplicatas)
+- Com conta = user_id não nulo em qualquer ambiente
+- Com plano = planos ativos da Produção
 
 ---
 
 ## Resultado Esperado
 
-1. **Ativação Manual:** O Painel Admin listará pacientes do banco de produção, eliminando o erro "Paciente não encontrado" para emails que existem em produção.
-
-2. **Reset de Senha:** O email será enviado corretamente com link para `prontiasaude.com.br/nova-senha`, e as funções de validação/conclusão funcionarão com o banco de produção.
-
----
-
-## Próximos Passos Após Implementação
-
-1. Testar ativação manual para `barrosleticia774@gmail.com`
-2. Testar ativação manual para `neres_deisesena@hotmail.com`
-3. Testar reset de senha para `maianasouza21@gmail.com`
-4. Publicar alterações (Publish → Update)
+1. **Login funcionando:** Usuários do Cloud (como `t.giani@gmail.com`) conseguirão fazer login normalmente
+2. **Painel completo:** Admin verá todos os 448+ usuários cadastrados em ambos os ambientes
+3. **Sem perda de dados:** Nenhum cadastro será perdido ou precisará ser refeito
