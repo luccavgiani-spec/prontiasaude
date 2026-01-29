@@ -1935,6 +1935,99 @@ serve(async (req) => {
         );
       }
 
+      // ============================================================
+      // ✅ ENSURE_PATIENT - Garantir que existe registro em patients (usando service_role, ignora RLS)
+      // ============================================================
+      case 'ensure_patient': {
+        const { user_id, email } = body;
+        
+        console.log('[ensure_patient] 📥 Recebido:', { user_id, email });
+        
+        if (!user_id) {
+          return new Response(
+            JSON.stringify({ error: 'user_id é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Verificar se já existe registro
+        const { data: existing, error: selectError } = await supabase
+          .from('patients')
+          .select('id, email, profile_complete')
+          .eq('user_id', user_id)
+          .maybeSingle();
+        
+        if (selectError) {
+          console.error('[ensure_patient] ❌ Erro ao buscar:', selectError);
+          return new Response(
+            JSON.stringify({ error: selectError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        if (existing) {
+          console.log('[ensure_patient] ✅ Registro já existe:', existing.id);
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              patient_id: existing.id,
+              profile_complete: existing.profile_complete,
+              already_existed: true 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Criar novo registro (service_role ignora RLS)
+        const { data: newPatient, error: insertError } = await supabase
+          .from('patients')
+          .insert({ 
+            user_id, 
+            email: email || null 
+          })
+          .select('id, profile_complete')
+          .single();
+        
+        if (insertError) {
+          // Ignorar conflito (registro pode ter sido criado por trigger em paralelo)
+          if (insertError.code === '23505') {
+            console.log('[ensure_patient] ⚠️ Conflito detectado, buscando registro existente');
+            const { data: conflictPatient } = await supabase
+              .from('patients')
+              .select('id, profile_complete')
+              .eq('user_id', user_id)
+              .maybeSingle();
+            
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                patient_id: conflictPatient?.id,
+                profile_complete: conflictPatient?.profile_complete,
+                already_existed: true 
+              }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          console.error('[ensure_patient] ❌ Erro ao inserir:', insertError);
+          return new Response(
+            JSON.stringify({ error: insertError.message }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[ensure_patient] ✅ Novo registro criado:', newPatient?.id);
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            patient_id: newPatient?.id,
+            profile_complete: false,
+            already_existed: false 
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: `Operação desconhecida: ${body.operation}` }),
