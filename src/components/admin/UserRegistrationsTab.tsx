@@ -36,6 +36,7 @@ interface Patient {
   profile_complete: boolean;
   user_id?: string;
   created_at: string;
+  source?: 'cloud' | 'production' | 'both';
 }
 
 interface User {
@@ -69,6 +70,8 @@ interface User {
   hasInvalidCpf?: boolean;
   hasPlaceholderPhone?: boolean;
   hasMissingCriticalData?: boolean;
+  // Source environment
+  source?: 'cloud' | 'production' | 'both';
 }
 
 // Constants for placeholder detection
@@ -100,7 +103,9 @@ export default function UserRegistrationsTab() {
   const [stats, setStats] = useState({
     total: 0,
     withPlan: 0,
-    criticalWithPlan: 0
+    criticalWithPlan: 0,
+    cloudOnly: 0,
+    productionOnly: 0,
   });
   const limit = 50;
 
@@ -119,11 +124,128 @@ export default function UserRegistrationsTab() {
     return !patient.cpf || !patient.phone_e164 || isPlaceholderPhone(patient.phone_e164) || isInvalidCpf(patient.cpf);
   };
 
+  // Helper to transform raw patient data to User format
+  const transformPatientToUser = async (patient: any, source: 'cloud' | 'production'): Promise<User> => {
+    try {
+      // Buscar plano de PRODUÇÃO por EMAIL (planos sempre ficam em produção)
+      const plan = source === 'production' ? await getPatientPlanByEmail(patient.email || '') : null;
+      
+      let expiresAt: Date | null = null;
+      if (plan?.plan_expires_at) {
+        expiresAt = new Date(plan.plan_expires_at);
+        if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
+          expiresAt.setUTCHours(23, 59, 59, 999);
+        }
+      }
+      const now = new Date();
+      const isActive = expiresAt && expiresAt >= now && plan?.status === 'active';
+
+      const patientData = {
+        first_name: patient.first_name,
+        last_name: patient.last_name,
+        cpf: patient.cpf,
+        phone_e164: patient.phone_e164,
+        birth_date: patient.birth_date,
+        gender: patient.gender,
+        cep: patient.cep,
+        address_line: patient.address_line,
+        address_number: patient.address_number,
+        city: patient.city,
+        state: patient.state,
+        profile_complete: patient.profile_complete || false,
+      };
+
+      return {
+        id: patient.user_id || patient.id,
+        patientId: patient.id,
+        email: patient.email || '',
+        created_at: patient.created_at,
+        roles: [],
+        patient: patientData,
+        activePlan: isActive || false,
+        planCode: plan?.plan_code,
+        hasAuthAccount: !!patient.user_id,
+        authProvider: patient.user_id ? 'email' : 'none',
+        hasInvalidCpf: isInvalidCpf(patient.cpf),
+        hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
+        hasMissingCriticalData: hasCriticalDataMissing(patientData),
+        source,
+      } as User;
+    } catch (error) {
+      console.error(`Error loading plan for ${patient.email}:`, error);
+      const patientData = {
+        first_name: patient.first_name,
+        last_name: patient.last_name,
+        cpf: patient.cpf,
+        phone_e164: patient.phone_e164,
+        birth_date: patient.birth_date,
+        gender: patient.gender,
+        cep: patient.cep,
+        address_line: patient.address_line,
+        address_number: patient.address_number,
+        city: patient.city,
+        state: patient.state,
+        profile_complete: patient.profile_complete || false,
+      };
+      return {
+        id: patient.user_id || patient.id,
+        patientId: patient.id,
+        email: patient.email || '',
+        created_at: patient.created_at,
+        roles: [],
+        patient: patientData,
+        activePlan: false,
+        hasAuthAccount: !!patient.user_id,
+        authProvider: patient.user_id ? 'email' : 'none',
+        hasInvalidCpf: isInvalidCpf(patient.cpf),
+        hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
+        hasMissingCriticalData: hasCriticalDataMissing(patientData),
+        source,
+      } as User;
+    }
+  };
+
+  // Merge patients from Cloud and Production, removing duplicates by email
+  const mergePatients = (cloudUsers: User[], prodUsers: User[]): User[] => {
+    const emailMap = new Map<string, User>();
+    
+    // Add production users first (they take priority)
+    for (const user of prodUsers) {
+      const email = user.email.toLowerCase();
+      emailMap.set(email, { ...user, source: 'production' });
+    }
+    
+    // Add cloud users, marking as 'both' if already exists
+    for (const user of cloudUsers) {
+      const email = user.email.toLowerCase();
+      if (emailMap.has(email)) {
+        // User exists in both - mark as 'both' but keep production data
+        const existing = emailMap.get(email)!;
+        emailMap.set(email, { ...existing, source: 'both' });
+      } else {
+        emailMap.set(email, { ...user, source: 'cloud' });
+      }
+    }
+    
+    return Array.from(emailMap.values());
+  };
+
   const loadPatients = async () => {
     setLoading(true);
     try {
-      // ✅ CORREÇÃO: Buscar pacientes do banco de PRODUÇÃO, não do Cloud
-      let query = supabaseProduction
+      // ==========================================
+      // BUSCAR DE AMBOS OS AMBIENTES EM PARALELO
+      // ==========================================
+      
+      // Query base para Produção
+      let prodQuery = supabaseProduction
+        .from('patients')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range((page - 1) * limit, page * limit - 1);
+
+      // Query base para Cloud
+      let cloudQuery = supabase
         .from('patients')
         .select('*')
         .order('created_at', { ascending: false })
@@ -131,163 +253,77 @@ export default function UserRegistrationsTab() {
 
       // Apply search filter
       if (search) {
-        query = query.or(`email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,cpf.ilike.%${search}%`);
+        const searchFilter = `email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,cpf.ilike.%${search}%`;
+        prodQuery = prodQuery.or(searchFilter);
+        cloudQuery = cloudQuery.or(searchFilter);
       }
 
-      const { data: patients, error } = await query;
+      // Fetch both in parallel
+      const [prodResult, cloudResult, prodCountResult, cloudCountResult] = await Promise.all([
+        prodQuery,
+        cloudQuery,
+        supabaseProduction.from('patients').select('*', { count: 'exact', head: true }),
+        supabase.from('patients').select('*', { count: 'exact', head: true }),
+      ]);
 
-      if (error) throw error;
+      if (prodResult.error) console.error('Erro ao buscar produção:', prodResult.error);
+      if (cloudResult.error) console.error('Erro ao buscar cloud:', cloudResult.error);
 
-      // ✅ CORREÇÃO: Buscar contagens do banco de PRODUÇÃO
-      const { count: totalCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true });
+      const prodPatients = prodResult.data || [];
+      const cloudPatients = cloudResult.data || [];
 
-      const { count: withAccountCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .not('user_id', 'is', null);
+      console.log(`[UserRegistrationsTab] Encontrados: ${prodPatients.length} produção, ${cloudPatients.length} cloud`);
 
-      const { count: profileCompleteCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .eq('profile_complete', true);
+      // Transform to User format
+      const [prodUsers, cloudUsers] = await Promise.all([
+        Promise.all(prodPatients.map(p => transformPatientToUser(p, 'production'))),
+        Promise.all(cloudPatients.map(p => transformPatientToUser(p, 'cloud'))),
+      ]);
 
-      // Count data quality issues
-      const { count: invalidPhoneCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .eq('phone_e164', PLACEHOLDER_PHONE);
-
-      const { count: invalidCpfCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .eq('cpf', PLACEHOLDER_CPF);
-
-      const { count: missingCpfCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .is('cpf', null);
-
-      const { count: missingPhoneCount } = await supabaseProduction
-        .from('patients')
-        .select('*', { count: 'exact', head: true })
-        .is('phone_e164', null);
-
-      // Transform patients to User format
-      const usersWithPlans = await Promise.all(
-        (patients || []).map(async (patient: Patient) => {
-          try {
-            // ✅ CORREÇÃO: Buscar plano de PRODUÇÃO por EMAIL
-            // Estratégia: email → patients.id → patient_plans.id
-            const plan = await getPatientPlanByEmail(patient.email || '');
-            
-            // Tratar plan_expires_at como DATE ou TIMESTAMP
-            // Considerar válido até fim do dia de expiração
-            let expiresAt: Date | null = null;
-            if (plan?.plan_expires_at) {
-              expiresAt = new Date(plan.plan_expires_at);
-              // Se é meia-noite (vindo de DATE ou TIMESTAMP 00:00), ajustar para fim do dia
-              if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
-                expiresAt.setUTCHours(23, 59, 59, 999);
-              }
-            }
-            const now = new Date();
-            const isActive = expiresAt && expiresAt >= now && plan?.status === 'active';
-
-            const patientData = {
-              first_name: patient.first_name,
-              last_name: patient.last_name,
-              cpf: patient.cpf,
-              phone_e164: patient.phone_e164,
-              birth_date: patient.birth_date,
-              gender: patient.gender,
-              cep: patient.cep,
-              address_line: patient.address_line,
-              address_number: patient.address_number,
-              city: patient.city,
-              state: patient.state,
-              profile_complete: patient.profile_complete || false,
-            };
-
-            return {
-              id: patient.user_id || patient.id,
-              patientId: patient.id,
-              email: patient.email || '',
-              created_at: patient.created_at,
-              roles: [],
-              patient: patientData,
-              activePlan: isActive,
-              planCode: plan?.plan_code,
-              hasAuthAccount: !!patient.user_id,
-              authProvider: patient.user_id ? 'email' : 'none',
-              hasInvalidCpf: isInvalidCpf(patient.cpf),
-              hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
-              hasMissingCriticalData: hasCriticalDataMissing(patientData),
-            } as User;
-          } catch (error) {
-            console.error(`Error loading plan for ${patient.email}:`, error);
-            const patientData = {
-              first_name: patient.first_name,
-              last_name: patient.last_name,
-              cpf: patient.cpf,
-              phone_e164: patient.phone_e164,
-              birth_date: patient.birth_date,
-              gender: patient.gender,
-              cep: patient.cep,
-              address_line: patient.address_line,
-              address_number: patient.address_number,
-              city: patient.city,
-              state: patient.state,
-              profile_complete: patient.profile_complete || false,
-            };
-            return {
-              id: patient.user_id || patient.id,
-              patientId: patient.id,
-              email: patient.email || '',
-              created_at: patient.created_at,
-              roles: [],
-              patient: patientData,
-              activePlan: false,
-              hasAuthAccount: !!patient.user_id,
-              authProvider: patient.user_id ? 'email' : 'none',
-              hasInvalidCpf: isInvalidCpf(patient.cpf),
-              hasPlaceholderPhone: isPlaceholderPhone(patient.phone_e164),
-              hasMissingCriticalData: hasCriticalDataMissing(patientData),
-            } as User;
-          }
-        })
-      );
+      // Merge removing duplicates
+      const mergedUsers = mergePatients(cloudUsers, prodUsers);
 
       // Apply status filter
-      let filteredUsers = usersWithPlans;
+      let filteredUsers = mergedUsers;
       if (statusFilter === 'with_account') {
-        filteredUsers = usersWithPlans.filter(u => u.hasAuthAccount);
+        filteredUsers = mergedUsers.filter(u => u.hasAuthAccount);
       } else if (statusFilter === 'without_account') {
-        filteredUsers = usersWithPlans.filter(u => !u.hasAuthAccount);
+        filteredUsers = mergedUsers.filter(u => !u.hasAuthAccount);
       } else if (statusFilter === 'with_plan') {
-        filteredUsers = usersWithPlans.filter(u => u.activePlan);
+        filteredUsers = mergedUsers.filter(u => u.activePlan);
       } else if (statusFilter === 'incomplete_data') {
-        filteredUsers = usersWithPlans.filter(u => u.hasMissingCriticalData);
+        filteredUsers = mergedUsers.filter(u => u.hasMissingCriticalData);
       } else if (statusFilter === 'invalid_phone') {
-        filteredUsers = usersWithPlans.filter(u => u.hasPlaceholderPhone);
+        filteredUsers = mergedUsers.filter(u => u.hasPlaceholderPhone);
       } else if (statusFilter === 'invalid_cpf') {
-        filteredUsers = usersWithPlans.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
+        filteredUsers = mergedUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
       } else if (statusFilter === 'critical_with_plan') {
-        filteredUsers = usersWithPlans.filter(u => u.activePlan && u.hasMissingCriticalData);
+        filteredUsers = mergedUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
+      } else if (statusFilter === 'cloud_only') {
+        filteredUsers = mergedUsers.filter(u => u.source === 'cloud');
+      } else if (statusFilter === 'production_only') {
+        filteredUsers = mergedUsers.filter(u => u.source === 'production');
       }
 
       setUsers(filteredUsers);
 
-      // Count users with active plans
-      const withPlanCount = usersWithPlans.filter(u => u.activePlan).length;
-      const incompleteDataCount = usersWithPlans.filter(u => u.hasMissingCriticalData).length;
-      const criticalWithPlanCount = usersWithPlans.filter(u => u.activePlan && u.hasMissingCriticalData).length;
+      // Calculate stats
+      const totalProd = prodCountResult.count || 0;
+      const totalCloud = cloudCountResult.count || 0;
+      const cloudOnlyCount = mergedUsers.filter(u => u.source === 'cloud').length;
+      const prodOnlyCount = mergedUsers.filter(u => u.source === 'production').length;
+      const withPlanCount = mergedUsers.filter(u => u.activePlan).length;
+      const criticalWithPlanCount = mergedUsers.filter(u => u.activePlan && u.hasMissingCriticalData).length;
+
+      // Total único (sem duplicatas)
+      const uniqueTotal = totalProd + cloudOnlyCount;
 
       setStats({
-        total: totalCount || 0,
+        total: uniqueTotal,
         withPlan: withPlanCount,
-        criticalWithPlan: criticalWithPlanCount
+        criticalWithPlan: criticalWithPlanCount,
+        cloudOnly: cloudOnlyCount,
+        productionOnly: prodOnlyCount,
       });
 
     } catch (error) {
@@ -668,6 +704,8 @@ export default function UserRegistrationsTab() {
               <SelectItem value="with_plan">Com Plano Ativo</SelectItem>
               <SelectItem value="incomplete_data">⚠️ Perfis Incompletos (Migração)</SelectItem>
               <SelectItem value="critical_with_plan">🚨 Críticos com Plano</SelectItem>
+              <SelectItem value="cloud_only">☁️ Apenas Cloud ({stats.cloudOnly})</SelectItem>
+              <SelectItem value="production_only">🏭 Apenas Produção</SelectItem>
             </SelectContent>
           </Select>
 
@@ -712,6 +750,7 @@ export default function UserRegistrationsTab() {
                     <TableHead>CPF</TableHead>
                     <TableHead>Telefone</TableHead>
                     <TableHead>Cadastrado</TableHead>
+                    <TableHead>Origem</TableHead>
                     <TableHead>Login</TableHead>
                     <TableHead>Plano</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
@@ -734,6 +773,15 @@ export default function UserRegistrationsTab() {
                       <TableCell>{renderCpfCell(user)}</TableCell>
                       <TableCell>{renderPhoneCell(user)}</TableCell>
                       <TableCell className="text-sm">{new Date(user.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                      <TableCell>
+                        {user.source === 'both' ? (
+                          <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">Ambos</Badge>
+                        ) : user.source === 'cloud' ? (
+                          <Badge variant="outline" className="text-xs border-blue-500 text-blue-600">☁️ Cloud</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-xs border-green-500 text-green-600">🏭 Prod</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {user.hasAuthAccount ? (
                           <Badge variant="default" className="bg-green-600 text-xs">

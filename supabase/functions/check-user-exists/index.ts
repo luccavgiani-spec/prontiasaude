@@ -12,6 +12,67 @@ const CLOUD_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PRODUCTION_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 const PRODUCTION_SERVICE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+/**
+ * Busca usuário por email usando paginação (o filtro email.eq não funciona corretamente)
+ */
+async function findUserByEmail(client: ReturnType<typeof createClient>, email: string, envName: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
+  let page = 1;
+  const perPage = 1000;
+  
+  try {
+    while (true) {
+      console.log(`[check-user-exists] ${envName}: buscando página ${page}...`);
+      
+      const { data, error } = await client.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+      
+      if (error) {
+        console.error(`[check-user-exists] ${envName} erro na página ${page}:`, error.message);
+        return false;
+      }
+      
+      if (!data?.users?.length) {
+        console.log(`[check-user-exists] ${envName}: nenhum usuário na página ${page}, encerrando`);
+        break;
+      }
+      
+      console.log(`[check-user-exists] ${envName}: ${data.users.length} usuários na página ${page}`);
+      
+      // Buscar correspondência exata por email
+      const match = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+      
+      if (match) {
+        console.log(`[check-user-exists] ${envName}: ENCONTRADO! ID: ${match.id}`);
+        return true;
+      }
+      
+      // Se retornou menos que o limite, não há mais páginas
+      if (data.users.length < perPage) {
+        console.log(`[check-user-exists] ${envName}: última página alcançada`);
+        break;
+      }
+      
+      page++;
+      
+      // Limite de segurança para evitar loop infinito
+      if (page > 10) {
+        console.log(`[check-user-exists] ${envName}: limite de páginas alcançado (10)`);
+        break;
+      }
+    }
+    
+    console.log(`[check-user-exists] ${envName}: NÃO encontrado`);
+    return false;
+    
+  } catch (e) {
+    console.error(`[check-user-exists] ${envName} exceção:`, e);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -28,6 +89,7 @@ Deno.serve(async (req) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
+    console.log('[check-user-exists] ====================================');
     console.log('[check-user-exists] Verificando email:', normalizedEmail);
 
     // Criar clientes para ambos ambientes
@@ -39,35 +101,11 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    // Verificar no Cloud (Lovable Cloud)
-    let existsInCloud = false;
-    try {
-      const { data: cloudUsers, error: cloudError } = await cloudClient.auth.admin.listUsers({
-        filter: `email.eq.${normalizedEmail}`
-      } as any);
-      
-      if (!cloudError && cloudUsers?.users) {
-        existsInCloud = cloudUsers.users.some(u => u.email?.toLowerCase() === normalizedEmail);
-      }
-      console.log('[check-user-exists] Cloud:', existsInCloud);
-    } catch (e) {
-      console.error('[check-user-exists] Erro ao verificar Cloud:', e);
-    }
-
-    // Verificar na Produção (Supabase original)
-    let existsInProduction = false;
-    try {
-      const { data: prodUsers, error: prodError } = await productionClient.auth.admin.listUsers({
-        filter: `email.eq.${normalizedEmail}`
-      } as any);
-      
-      if (!prodError && prodUsers?.users) {
-        existsInProduction = prodUsers.users.some(u => u.email?.toLowerCase() === normalizedEmail);
-      }
-      console.log('[check-user-exists] Produção:', existsInProduction);
-    } catch (e) {
-      console.error('[check-user-exists] Erro ao verificar Produção:', e);
-    }
+    // Buscar em paralelo nos dois ambientes usando paginação
+    const [existsInCloud, existsInProduction] = await Promise.all([
+      findUserByEmail(cloudClient, normalizedEmail, 'Cloud'),
+      findUserByEmail(productionClient, normalizedEmail, 'Produção'),
+    ]);
 
     // Determinar qual ambiente usar para login
     let loginEnvironment: 'cloud' | 'production' | 'none' = 'none';
@@ -88,6 +126,7 @@ Deno.serve(async (req) => {
       loginEnvironment,
       canRegister
     });
+    console.log('[check-user-exists] ====================================');
 
     return new Response(
       JSON.stringify({
