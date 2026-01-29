@@ -1,107 +1,147 @@
-# Plano de Correção: Lista de Pacientes + Cadastro de Novos Usuários
+
+# Plano de Correção Definitivo: Lista de Pacientes + Cadastro
 
 ## Diagnóstico Confirmado
 
-### Problema 1: Lista mostrando apenas 220 usuários
+### Problema 1: Apenas 220 usuários na lista
 
-**Causa Raiz**: A Edge Function `list-all-users` **NÃO ESTÁ DEPLOYADA** no Supabase de Produção.
+A Edge Function `list-all-users` no Supabase de Produção está com a lógica de fallback incorreta. Quando as variáveis `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` não são encontradas, ela usa `SUPABASE_URL` como fallback, que aponta para a própria Produção. Resultado: busca a Produção duas vezes e ignora o Cloud.
 
-Quando acessei diretamente:
+Evidência dos logs de `check-user-exists` (que funciona corretamente):
+- Cloud: 450 usuários
+- Produção: 220 usuários
+- Total esperado: ~569 únicos
 
-```
-https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users
-```
+### Problema 2: Cadastro falha
 
-Resposta: `{"code":"NOT_FOUND","message":"Requested function was not found"}`
-
-O frontend (`edge-functions.ts`) está configurado para chamar `https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users`, mas a função não existe lá. Por isso o código cai no fallback que busca apenas os 220 patients da tabela de Produção.
-
-### Problema 2: Novo usuário não consegue se cadastrar
-
-Os logs de `check-user-exists` mostram que o email `sidneiasoaresferreira61@gmail.com`:
-
-- Não existe no Cloud (450 usuários verificados)
-- Não existe na Produção (220 usuários verificados)
-- `canRegister: true` - ou seja, pode se cadastrar
-
-O problema provavelmente está no passo seguinte (o `signUp` no Supabase de Produção). Precisamos verificar os logs de autenticação ou o erro retornado no frontend.
+O sistema híbrido de cadastro (`hybridSignUp`) cria usuários apenas na Produção. Você quer que crie nos dois ambientes para garantir consistência.
 
 ---
 
-## Solução
+## Solução Completa
 
-### Parte 1: Deploy da Edge Function `list-all-users` no Supabase de Produção
+### Parte 1: Corrigir `list-all-users` (Edge Function)
 
-Você precisa fazer o deploy MANUAL da função no Supabase de Produção:
+Modificar a lógica para:
+1. Usar `CLOUD_SUPABASE_URL` obrigatoriamente (não usar fallback para `SUPABASE_URL`)
+2. Adicionar logs claros para debug
+3. Retornar erro se as credenciais do Cloud não existirem
 
-1. Acesse: https://supabase.com/dashboard/project/ploqujuhpwutpcibedbr
-2. Vá em **Edge Functions** no menu lateral
-3. Clique em **New Function**
-4. Nome: `list-all-users`
-5. Cole o código do arquivo `supabase/functions/list-all-users/index.ts`
-6. Clique em **Deploy**
+Mudanças principais:
+```text
+// ANTES (problemático):
+const CLOUD_URL = Deno.env.get("CLOUD_SUPABASE_URL") || Deno.env.get("SUPABASE_URL")!;
 
-Alternativamente, via Supabase CLI:
+// DEPOIS (corrigido):
+const CLOUD_URL = Deno.env.get("CLOUD_SUPABASE_URL");
+const cloudServiceKey = Deno.env.get("CLOUD_SUPABASE_SERVICE_ROLE_KEY");
 
-```bash
-supabase functions deploy list-all-users --project-ref ploqujuhpwutpcibedbr
+if (!CLOUD_URL || !cloudServiceKey) {
+  console.error("[list-all-users] CLOUD credentials missing!");
+  // Continuar apenas com Produção, mas logar claramente
+}
 ```
 
-### Parte 2: Verificar Secrets no Supabase de Produção
+### Parte 2: Ajustar `UserRegistrationsTab.tsx`
 
-Confirme que estas secrets estão configuradas em **Edge Functions > Secrets**:
+1. Adicionar logs para debug do retorno da Edge Function
+2. Mostrar claramente as estatísticas (cloudOnly, productionOnly, both)
+3. Garantir que o filtro de busca funcione corretamente
 
-| Secret Name                          | Valor                                              |
-| ------------------------------------ | -------------------------------------------------- |
-| `CLOUD_SUPABASE_URL`                 | `https://yrsjluhhnhxogdgnbnya.supabase.co`         |
-| `CLOUD_SUPABASE_SERVICE_ROLE_KEY`    | (a service role key do Lovable Cloud)              |
-| `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` | (já deve existir - a service role key da Produção) |
+### Parte 3: Criar usuário nos 2 ambientes (Cadastro)
 
-### Parte 3: Depurar o Cadastro do Novo Usuário
+Modificar `auth-hybrid.ts` e `Cadastrar.tsx` para:
+1. Criar usuário primeiro na Produção (principal)
+2. Em seguida, criar no Cloud (via Edge Function segura)
+3. Sincronizar dados de `patients` em ambos
 
-Para entender por que o cadastro está falhando, preciso que você:
-
-1. Peça ao usuário que tente se cadastrar novamente
-2. Abra o DevTools do navegador (F12) > Console
-3. Me envie o erro que aparecer (ou um screenshot)
-
-O fluxo de cadastro é:
-
-1. `checkUserExists()` - OK (retorna `canRegister: true`)
-2. `hybridSignUp()` - chama `supabaseProductionAuth.auth.signUp()`
-3. Sincroniza com tabela `patients`
-
-Se o passo 2 falha, pode ser:
-
-- Problema com a configuração de email do Supabase de Produção
-- Validação de senha muito restritiva
-- Algum erro de rede ou CORS
+Nova função `create-user-both-envs` para criar em ambos com segurança.
 
 ---
 
-## Resultado Esperado
+## Arquivos a Modificar
 
-1. **Painel Admin**: Mostrará 569 usuários (após deploy da função)
-2. **Cadastro**: Funcionará normalmente (após identificar o erro)
-
----
-
-## Próximos Passos
-
-1. Faça o deploy da função `list-all-users` no Supabase de Produção
-2. Verifique se as secrets estão configuradas
-3. Teste o painel admin - deve mostrar 569 usuários
-4. Para o cadastro, me envie o erro do console do navegador
+| Arquivo | Alteração |
+|---------|-----------|
+| `supabase/functions/list-all-users/index.ts` | Remover fallback problemático, adicionar validação e logs |
+| `src/components/admin/UserRegistrationsTab.tsx` | Adicionar debug logs, melhorar exibição de stats |
+| `src/lib/auth-hybrid.ts` | Modificar `hybridSignUp` para criar em ambos |
+| `src/pages/Cadastrar.tsx` | Usar nova lógica de cadastro dual |
+| `supabase/functions/create-user-both-envs/index.ts` | Nova função para criar usuário nos 2 ambientes |
 
 ---
 
-## Seção Técnica: Código da Edge Function
+## Passo a Passo da Implementação
 
-O arquivo `supabase/functions/list-all-users/index.ts` que você deve copiar para o Supabase de Produção já está atualizado para:
+### Etapa 1: Corrigir `list-all-users`
 
-1. Usar `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` para acessar o ambiente Cloud
-2. Usar `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` ou `SUPABASE_SERVICE_ROLE_KEY` para a Produção
-3. Mesclar os usuários de ambos os ambientes (evitando duplicados)
-4. Retornar estatísticas: `cloudOnly`, `productionOnly`, `both`, `totalUnique`
+Atualizar a função para:
+- Validar que `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` existem
+- Se não existirem, retornar apenas dados da Produção com aviso
+- Adicionar logs detalhados para cada etapa
 
-A função foi testada no ambiente Cloud e retornou corretamente 569 usuários únicos.
+### Etapa 2: Criar Edge Function `create-user-both-envs`
+
+Nova função que:
+- Recebe email, password, metadata
+- Cria usuário na Produção via `auth.admin.createUser`
+- Cria usuário no Cloud via cliente Cloud
+- Sincroniza tabela `patients` em ambos
+- Retorna sucesso apenas se ambos forem criados
+
+### Etapa 3: Atualizar Frontend
+
+- `hybridSignUp` chama a nova Edge Function em vez de criar diretamente
+- `UserRegistrationsTab` exibe logs de debug e estatísticas corretas
+
+---
+
+## Validação Pós-Implementação
+
+1. Acessar `/admin/dashboard` > aba Pacientes
+2. Verificar se mostra ~569 usuários (não 220)
+3. Tentar cadastrar novo usuário
+4. Verificar se aparece nos dois ambientes
+
+---
+
+## Seção Técnica
+
+### Configuração de Secrets Necessária (Produção)
+
+Confirme que estas secrets existem no Supabase de Produção:
+
+| Secret | Valor |
+|--------|-------|
+| `CLOUD_SUPABASE_URL` | `https://yrsjluhhnhxogdgnbnya.supabase.co` |
+| `CLOUD_SUPABASE_SERVICE_ROLE_KEY` | (service role key do projeto Cloud) |
+| `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` | (service role key da Produção - já existe) |
+
+### Arquitetura Final
+
+```text
+[Frontend]
+    |
+    v
+[list-all-users] --> Cloud (450 users)
+         |           Production (220 users)
+         |
+         v
+     Merge by email --> 569 unique users
+```
+
+### Fluxo de Cadastro
+
+```text
+[Cadastrar.tsx]
+    |
+    v
+[hybridSignUp] --> [create-user-both-envs Edge Function]
+                        |
+                        +-> Production auth.admin.createUser
+                        +-> Cloud auth.admin.createUser
+                        +-> Sync patients table (both)
+                        |
+                        v
+                    Return success
+```
