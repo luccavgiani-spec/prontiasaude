@@ -5,27 +5,33 @@ import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-/** Garante que exista uma linha em public.patients para o usuário atual */
+/** 
+ * Garante que exista uma linha em public.patients para o usuário atual.
+ * ✅ CORREÇÃO: Usar Edge Function (service_role) para evitar violação de RLS
+ * em ambientes híbridos (Cloud + Produção) onde o JWT não é reconhecido.
+ */
 export async function ensurePatientRow(userId: string, dbClient: SupabaseClient = supabase) {
-  const { data, error } = await dbClient
-    .from('patients')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (data?.id) return true;
-
+  console.log('[ensurePatientRow] Chamando edge function para user_id:', userId);
+  
   // Buscar email do usuário autenticado
   const { data: authData } = await dbClient.auth.getUser();
   const userEmail = authData?.user?.email;
-
-  const { error: insErr } = await dbClient.from('patients').insert({ 
-    user_id: userId,
-    email: userEmail 
+  
+  // ✅ Usar Edge Function que roda com service_role (ignora RLS)
+  const { data, error } = await invokeEdgeFunction('patient-operations', {
+    body: {
+      operation: 'ensure_patient',
+      user_id: userId,
+      email: userEmail
+    }
   });
-  // Ignora conflito se linha foi criada por trigger em paralelo
-  if (insErr && insErr.code !== '23505') throw insErr;
+  
+  if (error) {
+    console.error('[ensurePatientRow] Edge function error:', error);
+    throw new Error(error.message || 'Falha ao garantir registro do paciente');
+  }
+  
+  console.log('[ensurePatientRow] Resultado:', data);
   return true;
 }
 
