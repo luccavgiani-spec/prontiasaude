@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseProduction } from '@/lib/supabase-production';
-import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction, invokeCloudEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -240,27 +240,38 @@ export default function UserRegistrationsTab() {
       // ==========================================
       // BUSCAR VIA EDGE FUNCTION - TODOS OS AUTH.USERS
       // ==========================================
+      console.log('[UserRegistrationsTab] ========================================');
       console.log('[UserRegistrationsTab] Buscando via list-all-users...');
       
-      const { data: response, error: fetchError } = await invokeEdgeFunction('list-all-users', {
+      // ✅ IMPORTANTE: Usar invokeCloudEdgeFunction porque a função está no Lovable Cloud
+      // e precisa das service keys de ambos os ambientes
+      const { data: response, error: fetchError } = await invokeCloudEdgeFunction('list-all-users', {
         body: {}
       });
       
+      console.log('[UserRegistrationsTab] Resposta recebida:', {
+        success: response?.success,
+        usersCount: response?.users?.length,
+        stats: response?.stats,
+        error: fetchError
+      });
+      
       if (fetchError) {
-        console.error('[UserRegistrationsTab] Erro ao buscar usuários:', fetchError);
+        console.error('[UserRegistrationsTab] ❌ Erro ao buscar usuários:', fetchError);
         toast.error('Erro ao buscar usuários');
         setLoading(false);
         return;
       }
       
       if (!response?.success) {
-        console.error('[UserRegistrationsTab] Resposta inválida:', response);
-        toast.error('Erro ao processar dados');
+        console.error('[UserRegistrationsTab] ❌ Resposta inválida:', response);
+        toast.error(response?.error || 'Erro ao processar dados');
         setLoading(false);
         return;
       }
       
-      console.log(`[UserRegistrationsTab] Recebidos: ${response.users?.length || 0} usuários, stats:`, response.stats);
+      console.log(`[UserRegistrationsTab] ✅ Recebidos: ${response.users?.length || 0} usuários`);
+      console.log('[UserRegistrationsTab] Stats:', response.stats);
       
       // Transformar dados da Edge Function para formato User
       const allUsers: User[] = await Promise.all(

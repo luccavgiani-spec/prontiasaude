@@ -302,44 +302,7 @@ const Cadastrar = () => {
 
     setIsLoading(true);
     
-    // ✅ HÍBRIDO: Verificar se email já existe em qualquer ambiente (Cloud ou Produção)
-    const userCheck = await checkUserExists(formData.email);
-    console.log('[Cadastrar] User check:', userCheck);
-    
-    if (!userCheck.canRegister) {
-      toast({
-        title: "Email já cadastrado",
-        description: "Este email já está cadastrado. Faça login ou recupere sua senha.",
-        variant: "warning",
-      });
-      setIsLoading(false);
-      return;
-    }
-    
-    // Verificar se CPF já existe (em ambos os ambientes)
-    const { data: existingPatientCloud } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('cpf', formData.cpf)
-      .maybeSingle();
-    
-    const { data: existingPatientProd } = await supabaseProduction
-      .from('patients')
-      .select('id')
-      .eq('cpf', formData.cpf)
-      .maybeSingle();
-    
-    if (existingPatientCloud || existingPatientProd) {
-      toast({
-        title: "CPF já cadastrado",
-        description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
-        variant: "warning",
-      });
-      setIsLoading(false);
-      return;
-    }
-    
-    // ✅ HÍBRIDO: Criar usuário no Supabase de PRODUÇÃO (não no Cloud)
+    // Preparar metadata para o cadastro
     const metadata = {
       first_name: formData.first_name,
       last_name: formData.last_name,
@@ -357,7 +320,10 @@ const Cadastrar = () => {
       marketing_opt_in: formData.marketing_opt_in
     };
 
+    // ✅ HÍBRIDO: Usar hybridSignUp que cria em AMBOS os ambientes (Produção + Cloud)
+    console.log('[Cadastrar] Iniciando cadastro híbrido...');
     const signUpResult = await hybridSignUp(formData.email, formData.password, metadata);
+    console.log('[Cadastrar] Resultado:', signUpResult);
 
     if (!signUpResult.success) {
       toast({
@@ -367,45 +333,6 @@ const Cadastrar = () => {
       });
       setIsLoading(false);
       return;
-    }
-
-    // ✅ Sincronizar dados com tabela patients no PRODUÇÃO
-    if (signUpResult.user?.id) {
-      try {
-        const { error: insertError } = await supabaseProduction
-          .from('patients')
-          .upsert({
-            user_id: signUpResult.user.id,
-            first_name: formData.first_name,
-            last_name: formData.last_name,
-            email: formData.email,
-            cpf: formData.cpf,
-            phone_e164: formData.phone_e164,
-            birth_date: formData.birth_date,
-            gender: toDbGender(formData.gender),
-            cep: formData.cep,
-            address_line: formData.address_line,
-            address_number: formData.numero,
-            complement: formData.complemento,
-            city: formData.cidade,
-            state: formData.uf,
-            terms_accepted_at: new Date().toISOString(),
-            marketing_opt_in: formData.marketing_opt_in,
-            profile_complete: true
-          } as any, { onConflict: 'user_id' });
-
-        if (insertError && insertError.code !== '23505') {
-          console.error('[Cadastro] Erro ao criar paciente em produção:', insertError);
-          toast({
-            title: "Erro ao salvar perfil",
-            description: "Sua conta foi criada, mas houve um erro ao salvar seus dados. Por favor, complete seu perfil após fazer login.",
-            variant: "warning",
-            duration: 8000,
-          });
-        }
-      } catch (syncError) {
-        console.error('[Cadastro] Exceção ao sincronizar paciente:', syncError);
-      }
     }
 
     // Salvar que o login foi feito via produção

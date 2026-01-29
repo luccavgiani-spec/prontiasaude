@@ -62,3 +62,6 @@ verify_jwt = false
 
 [functions.list-all-users]
 verify_jwt = false
+
+[functions.create-user-both-envs]
+verify_jwt = false
