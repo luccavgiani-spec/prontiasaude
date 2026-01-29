@@ -1,79 +1,129 @@
 
-Contexto (o que está acontecendo agora)
-- O “401 Token inválido” foi superado quando você copiou a função para o seu Supabase e ela passou a entrar no fluxo do `activate_plan_manual`.
-- Agora o erro está no passo `plan_upsert`:
-  - `details: "Could not find the 'activated_at' column of 'patient_plans' in the schema cache"`
-- Isso é um erro do PostgREST (API do banco) indicando que, para o projeto Supabase onde a função está rodando, a API não enxerga a coluna `activated_at` (por cache desatualizado OU porque a coluna realmente não existe nesse banco).
 
-Objetivo (prioridade máxima)
-- Fazer a ativação manual funcionar em Produção sem depender de “reload de schema” dar certo na primeira tentativa.
-- Manter segurança (admin role continua sendo verificada no backend do login).
+# Plano: Ajustar patient-operations para colunas reais do banco de produção
 
-1) ARQUIVOS QUE SERÃO MODIFICADOS
+## Problema identificado
+A função `patient-operations` está tentando inserir/atualizar as colunas:
+- `activated_at` ❌ (não existe)
+- `activated_by` ❌ (não existe)
+- `patient_id` ❌ (provavelmente não existe no seu schema)
+- `user_id` ❌ (provavelmente não existe no seu schema)
+
+Mas o schema real da tabela `patient_plans` no banco de produção tem apenas:
+- `id`
+- `plan_code`
+- `plan_expires_at`
+- `status`
+- `created_at`
+- `updated_at`
+- `email` (você confirmou que upsert usa onConflict: 'email')
+
+## Objetivo
+Modificar a edge function para usar APENAS as colunas que realmente existem no banco de produção.
+
+---
+
+## Arquivo que será modificado
 - `supabase/functions/patient-operations/index.ts`
 
-2) MOTIVO (baseado no seu pedido)
-- A ativação manual está falhando no `upsert` por incompatibilidade de schema cache/coluna (`activated_at`). Precisamos tornar o upsert resiliente para não travar a operação e destravar imediatamente o fluxo em produção.
+---
 
-3) ESCOPO (exatamente o que vai mudar)
-A) Upsert resiliente (fallback automático) dentro do case `activate_plan_manual`
-- Manter o upsert “completo” como primeira tentativa (incluindo `activated_at` e `activated_by`).
-- Se o erro retornar com a assinatura típica de cache/coluna ausente (contendo `activated_at` + `schema cache`), fazer uma segunda tentativa automaticamente removendo campos “problemáticos”:
-  - Remover `activated_at`
-  - (se necessário) remover também `activated_by`
-- Retornar sucesso quando a segunda tentativa funcionar, e incluir um campo informativo na resposta (ex.: `warning: 'activated_at_column_unavailable_fallback_used'`) para rastreabilidade.
+## Escopo das alterações
 
-B) Diagnóstico melhor (sem depender de logs)
-- No retorno de erro do `plan_upsert`, incluir:
-  - `details` com a mensagem original
-  - `hint` com instruções curtas (“Verifique se a coluna activated_at existe no banco e se o schema cache foi recarregado no projeto correto.”)
-- Logar no console da função (server-side) um marcador claro quando o fallback for acionado.
+### 1. Payload do upsert (linhas ~1222-1232)
+**Antes:**
+```typescript
+const planPayloadFull = {
+  patient_id: patient.id,        // ❌ não existe
+  user_id: patient.user_id,      // ❌ não existe
+  email: patient_email,
+  plan_code: plan_code,
+  status: 'active',
+  plan_expires_at: expiresAtDate,
+  activated_at: new Date().toISOString(),  // ❌ não existe
+  activated_by: adminEmail,       // ❌ não existe
+  updated_at: new Date().toISOString()
+};
+```
 
-C) (Opcional, mas recomendado) Garantia de consistência do payload
-- Centralizar o objeto do payload do plano em uma variável (ex.: `planPayload`) para evitar divergência entre tentativa 1 e tentativa 2.
+**Depois:**
+```typescript
+const planPayload = {
+  email: patient_email.toLowerCase().trim(),
+  plan_code: plan_code,
+  status: 'active',
+  plan_expires_at: expiresAtDate,
+  updated_at: new Date().toISOString()
+  // Removidos: patient_id, user_id, activated_at, activated_by
+};
+```
 
-4) O que você deve checar no seu Supabase (para corrigir “de verdade” e não só contornar)
-Mesmo com o fallback, o ideal é alinhar schema em produção. Como você relatou que rodou o SQL de reload e “deu o mesmo erro”, há duas hipóteses:
+### 2. Remover lógica de fallback (linhas ~1239-1270)
+Como não haverá mais colunas "problemáticas", o fallback não é mais necessário. O código ficará mais simples:
+- Tentar upsert uma única vez
+- Se falhar, retornar erro com detalhes
 
-Hipótese 1 — a coluna NÃO existe no banco onde você está rodando a função
-- Você vai confirmar no SQL editor do seu projeto de produção com uma query de inspeção (ex.: consultando `information_schema.columns` para `patient_plans`).
-- Se não existir, você precisa adicionar a coluna (e opcionalmente `activated_by`) com ALTER TABLE.
-  - Colunas esperadas pelo código:
-    - `activated_at` (timestamp with time zone / timestamptz)
-    - `activated_by` (text)
+### 3. Ajustar resposta de sucesso (linhas ~1347-1359)
+- Remover `activated_by` da resposta (não foi gravado)
+- Manter `expires_at` e `patient_id` (do lookup anterior)
+- Remover `warning`/`hint` de fallback (não existe mais)
 
-Hipótese 2 — você recarregou o schema em um lugar, mas a função está chamando outro projeto/instância
-- Se a função estiver em um projeto e o banco/REST (PostgREST) que está sendo usado for outro (ou cache não recarregou de fato), o erro persiste.
-- O fallback elimina a urgência e a ativação passa a funcionar enquanto você confirma o alinhamento.
+### 4. Ajustar métrica de auditoria (linhas ~1289-1299)
+- Manter `activated_by_admin: adminEmail` nos metadados da métrica (para rastreabilidade)
+- Isso fica no campo `metadata` (jsonb), não depende de coluna específica
 
-5) Resposta direta: “Por que você não edita/atualiza as edge functions direto no Supabase?”
-- Porque o fluxo padrão de Edge Functions é: o código-fonte vive no repositório (aqui no Lovable) e depois é publicado/deployado para o projeto Supabase.
-- O “Supabase UI” não é a fonte de verdade do código nesse tipo de setup; ela recebe o bundle publicado.
-- No seu caso, como você quer operar com o projeto Supabase externo (produção), faz sentido você ter feito o “copiar/colar” lá para acelerar. Só que isso cria risco de divergência: o código no Lovable e o código no Supabase podem ficar diferentes.
-- A correção mais segura é: manter o arquivo como fonte de verdade aqui, e sempre que mudar, replicar/deployar no seu Supabase de produção (do jeito que você já está fazendo).
+---
 
-Sequência de implementação (passo-a-passo)
-1. Ajustar somente o bloco de upsert no `case 'activate_plan_manual'`:
-   - Criar `planPayloadFull` (com `activated_at` / `activated_by`)
-   - Tentar `.upsert(planPayloadFull, { onConflict: 'email' })`
-2. Se falhar e `upsertError.message` contiver “activated_at” + “schema cache”:
-   - Criar `planPayloadFallback = { ...planPayloadFull }` removendo `activated_at` (e `activated_by` se necessário)
-   - Rodar um segundo `.upsert(planPayloadFallback, { onConflict: 'email' })`
-3. Se a tentativa 2 funcionar:
-   - Responder `success: true` + `warning` informando que foi usado fallback
-4. Se a tentativa 2 também falhar:
-   - Manter `success: false`, `step: 'plan_upsert'` e devolver `details` + `hint`
-5. Você copia/atualiza essa mesma mudança no seu Supabase de produção (como já fez) e testa novamente.
+## Visão do código corrigido
 
-Critérios de aceite
-- Em Produção, logado no Admin:
-  - “Ativação Manual de Plano” não retorna mais erro bloqueando o fluxo
-  - Se a coluna estiver realmente ausente/cache quebrado, o fallback deve permitir ativar mesmo assim
-- Segurança mantida:
-  - Sem admin role no backend do login → 403
-  - Token inválido → 401
-- Observabilidade:
-  - Quando fallback acontecer, resposta traz `warning` e logs mostram que foi “fallback activated_at”.
+```typescript
+// ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
+console.log('[activate_plan_manual] Upserting plano...');
 
-Riscos/Trade-offs (explícitos)
-- O fallback é um “destravador” para produção. O ideal é alinhar o schema do banco de produção para que `activated_at` exista e o cache esteja correto, pois esse campo é útil para auditoria.
+const planPayload = {
+  email: patient_email.toLowerCase().trim(),
+  plan_code: plan_code,
+  status: 'active',
+  plan_expires_at: expiresAtDate,
+  updated_at: new Date().toISOString()
+};
+
+const { error: upsertError } = await supabase
+  .from('patient_plans')
+  .upsert(planPayload, { onConflict: 'email' });
+
+if (upsertError) {
+  console.error('[activate_plan_manual] Erro no upsert:', upsertError.message);
+  return new Response(
+    JSON.stringify({ 
+      success: false, 
+      step: 'plan_upsert', 
+      error: 'Failed to upsert plan',
+      details: upsertError.message 
+    }),
+    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+  );
+}
+```
+
+---
+
+## O que NÃO será alterado
+- Validação de admin (PASSO 1-3) — mantida intacta
+- Busca de paciente (PASSO 4) — mantida (mesmo que `patient_id` não seja gravado, é usado para ClickLife)
+- Cadastro na ClickLife (PASSO 7) — mantido
+- Envio de email opcional — mantido
+- Todas as outras operações da função — intocadas
+
+---
+
+## Próximos passos após aprovação
+1. Aplicar alteração no arquivo aqui no Lovable
+2. Você copia o código atualizado para o Supabase de produção (como já está fazendo)
+3. Testar a ativação manual — deve funcionar sem erro
+
+---
+
+## Benefício adicional
+Se no futuro você quiser adicionar as colunas `activated_at`, `activated_by`, `patient_id`, `user_id` no banco de produção (via ALTER TABLE), podemos reintroduzir esses campos no payload depois, sem retrabalho significativo.
+
