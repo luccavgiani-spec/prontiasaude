@@ -1229,55 +1229,169 @@ serve(async (req) => {
         expiresAt.setDate(expiresAt.getDate() + parseInt(duration_days));
         const expiresAtDate = expiresAt.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        // ✅ PASSO 4: Buscar paciente no banco de PRODUÇÃO
-        console.log('[activate_plan_manual] Buscando paciente:', patient_email);
-        const { data: patient, error: patientError } = await supabase
-          .from('patients')
-          .select('id, user_id')
-          .eq('email', patient_email.toLowerCase().trim())
-          .maybeSingle();
+        // ✅ PASSO 4: Buscar paciente no banco de PRODUÇÃO (com fallback para criar)
+        // CORRIGIDO: Implementa fallback resiliente para criar o paciente se não existir
+        const normalizedPatientEmail = patient_email.toLowerCase().trim();
+        console.log('[activate_plan_manual] ========================================');
+        console.log('[activate_plan_manual] 🔍 Buscando paciente:', normalizedPatientEmail);
+        console.log('[activate_plan_manual] patient_id recebido:', patient_id || '(não informado)');
+        
+        let patient: { id: string; user_id: string | null } | null = null;
+        let patientLookupMethod = 'none';
 
-        if (patientError) {
-          console.error('[activate_plan_manual] Erro ao buscar paciente:', patientError.message);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              step: 'patient_lookup', 
-              error: 'Database error looking up patient',
-              details: patientError.message 
-            }),
-            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+        // TENTATIVA 1: Buscar por patient_id (se fornecido como patients.id)
+        if (patient_id) {
+          console.log('[activate_plan_manual] 1️⃣ Tentando buscar por patient_id:', patient_id);
+          const { data: patientById, error: errById } = await supabase
+            .from('patients')
+            .select('id, user_id')
+            .eq('id', patient_id)
+            .maybeSingle();
+          
+          if (!errById && patientById) {
+            patient = patientById;
+            patientLookupMethod = 'by_patient_id';
+            console.log('[activate_plan_manual] ✅ Encontrado por patient_id:', { id: patient.id, user_id: patient.user_id });
+          } else {
+            console.log('[activate_plan_manual] ❌ Não encontrado por patient_id');
+          }
         }
 
+        // TENTATIVA 2: Buscar por email
         if (!patient) {
-          console.error('[activate_plan_manual] Paciente não encontrado:', patient_email);
+          console.log('[activate_plan_manual] 2️⃣ Tentando buscar por email:', normalizedPatientEmail);
+          const { data: patientByEmail, error: errByEmail } = await supabase
+            .from('patients')
+            .select('id, user_id')
+            .eq('email', normalizedPatientEmail)
+            .maybeSingle();
+
+          if (errByEmail) {
+            console.error('[activate_plan_manual] Erro na busca por email:', errByEmail.message);
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                step: 'patient_lookup', 
+                error: 'Database error looking up patient by email',
+                details: errByEmail.message 
+              }),
+              { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
+          
+          if (patientByEmail) {
+            patient = patientByEmail;
+            patientLookupMethod = 'by_email';
+            console.log('[activate_plan_manual] ✅ Encontrado por email:', { id: patient.id, user_id: patient.user_id });
+          } else {
+            console.log('[activate_plan_manual] ❌ Não encontrado por email');
+          }
+        }
+
+        // TENTATIVA 3: Se não encontrou, tentar criar o registro automaticamente
+        if (!patient) {
+          console.log('[activate_plan_manual] 3️⃣ Paciente não existe - tentando criar automaticamente...');
+          
+          // Tentar descobrir se o patient_id é um user_id válido na Produção
+          let userIdToLink: string | null = null;
+          
+          if (patient_id) {
+            console.log('[activate_plan_manual] 🔍 Verificando se patient_id é um user_id válido na Produção...');
+            try {
+              const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(patient_id);
+              
+              if (!authUserError && authUserData?.user) {
+                userIdToLink = authUserData.user.id;
+                console.log('[activate_plan_manual] ✅ Encontrado auth.user na Produção, vinculando user_id:', userIdToLink);
+              } else {
+                console.log('[activate_plan_manual] ⚠️ patient_id não é um user_id válido na Produção (pode ser do Cloud):', authUserError?.message || 'user not found');
+              }
+            } catch (authCheckErr) {
+              console.log('[activate_plan_manual] ⚠️ Erro ao verificar auth.users (não crítico):', authCheckErr);
+            }
+          }
+          
+          // Criar registro mínimo em patients
+          console.log('[activate_plan_manual] 📝 Criando registro mínimo em patients...');
+          const { data: newPatient, error: insertPatientErr } = await supabase
+            .from('patients')
+            .insert({
+              email: normalizedPatientEmail,
+              user_id: userIdToLink,
+              profile_complete: false,
+              source: 'admin_manual_activation'
+            })
+            .select('id, user_id')
+            .single();
+          
+          if (insertPatientErr) {
+            // Pode ser conflito de email (já existe) - tentar buscar novamente
+            if (insertPatientErr.message?.includes('duplicate') || insertPatientErr.code === '23505') {
+              console.log('[activate_plan_manual] ⚠️ Conflito de email - buscando registro existente...');
+              const { data: existingPatient } = await supabase
+                .from('patients')
+                .select('id, user_id')
+                .eq('email', normalizedPatientEmail)
+                .maybeSingle();
+              
+              if (existingPatient) {
+                patient = existingPatient;
+                patientLookupMethod = 'by_email_after_conflict';
+                console.log('[activate_plan_manual] ✅ Encontrado após conflito:', { id: patient.id, user_id: patient.user_id });
+              }
+            }
+            
+            if (!patient) {
+              console.error('[activate_plan_manual] ❌ Falha ao criar paciente:', insertPatientErr.message);
+              return new Response(
+                JSON.stringify({ 
+                  success: false, 
+                  step: 'patient_auto_create', 
+                  error: 'Não foi possível criar o registro do paciente automaticamente',
+                  details: insertPatientErr.message 
+                }),
+                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          } else if (newPatient) {
+            patient = newPatient;
+            patientLookupMethod = 'auto_created';
+            console.log('[activate_plan_manual] ✅ Paciente criado automaticamente:', { id: patient.id, user_id: patient.user_id });
+          }
+        }
+
+        // Verificação final
+        if (!patient) {
+          console.error('[activate_plan_manual] ❌ Todas as tentativas falharam para:', normalizedPatientEmail);
           return new Response(
             JSON.stringify({ 
               success: false, 
               step: 'patient_lookup', 
-              error: 'Paciente não encontrado com este email' 
+              error: 'Não foi possível localizar ou criar o paciente',
+              details: `Email: ${normalizedPatientEmail}, patient_id informado: ${patient_id || 'nenhum'}` 
             }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        console.log('[activate_plan_manual] Paciente encontrado:', { 
+        console.log('[activate_plan_manual] ✅ Paciente resolvido:', { 
           patient_id: patient.id, 
-          user_id: patient.user_id 
+          user_id: patient.user_id,
+          method: patientLookupMethod
         });
+        console.log('[activate_plan_manual] ========================================');
 
         // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
         // CORRIGIDO: email é a chave de referência (NOT NULL) no banco de produção
         // O id é um UUID autônomo - NÃO é igual ao patients.id
-        const normalizedEmailForPlan = patient_email.toLowerCase().trim();
-        console.log('[activate_plan_manual] Verificando plano existente para email:', normalizedEmailForPlan);
+        // Usar normalizedPatientEmail já definido no PASSO 4
+        console.log('[activate_plan_manual] Verificando plano existente para email:', normalizedPatientEmail);
         
         // Verificar se já existe plano para esse email
         const { data: existingPlan } = await supabase
           .from('patient_plans')
           .select('id')
-          .eq('email', normalizedEmailForPlan)
+          .eq('email', normalizedPatientEmail)
           .maybeSingle();
 
         let planUpsertError = null;
@@ -1299,11 +1413,11 @@ serve(async (req) => {
           planUpsertError = updateErr;
         } else {
           // INSERT de novo plano - email é obrigatório (NOT NULL)
-          console.log('[activate_plan_manual] Inserindo novo plano para email:', normalizedEmailForPlan);
+          console.log('[activate_plan_manual] Inserindo novo plano para email:', normalizedPatientEmail);
           const { error: insertErr } = await supabase
             .from('patient_plans')
             .insert({
-              email: normalizedEmailForPlan,
+              email: normalizedPatientEmail,
               user_id: patient.user_id || null,
               plan_code: plan_code,
               status: 'active',
