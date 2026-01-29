@@ -65,3 +65,6 @@ verify_jwt = false
 
 [functions.create-user-both-envs]
 verify_jwt = false
+
+[functions.admin-settings-update]
+verify_jwt = false
