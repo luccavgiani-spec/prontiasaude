@@ -839,10 +839,11 @@ Deno.serve(async (req) => {
       console.log('[mp-webhook] SKU:', schedulePayload.sku);
       console.log('[mp-webhook] Email:', schedulePayload.email);
 
-      // ✅ CORRIGIDO: Usar URL fixa do projeto original
+      // ✅ CORRIGIDO: Usar URL fixa E service role key do projeto original (com fallback)
+      const ORIGINAL_SRK_PLAN = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const supabaseAdmin = createClient(
         ORIGINAL_SUPABASE_URL,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        ORIGINAL_SRK_PLAN
       );
 
       // ✅ GARANTIR que o registro do paciente existe COM email e user_id
