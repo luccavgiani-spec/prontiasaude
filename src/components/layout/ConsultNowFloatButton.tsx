@@ -4,7 +4,9 @@ import { X, Stethoscope, Clock, Users, MessageCircle, Loader2 } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { PaymentModal } from '@/components/payment/PaymentModal';
 import { CATALOGO_SERVICOS } from '@/lib/constants';
+import { getHybridSession } from '@/lib/auth-hybrid';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 const ConsultNowFloatButton = () => {
@@ -19,12 +21,10 @@ const ConsultNowFloatButton = () => {
     if (!prontoAtendimento) return;
     setIsLoading(true);
     try {
-      // 1. Verificar se usuário está logado
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
+      // 1. Verificar sessão híbrida (Cloud ou Produção)
+      const { session, environment } = await getHybridSession();
+      const user = session?.user;
+      
       if (!user) {
         // Salvar returnUrl e serviço pendente
         localStorage.setItem('returnUrl', window.location.pathname);
@@ -38,10 +38,16 @@ const ConsultNowFloatButton = () => {
         return;
       }
 
-      // 2. Verificar se perfil está completo
-      const {
-        data: patient
-      } = await supabase.from('patients').select('profile_complete, cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
+      // 2. Usar cliente correto baseado no ambiente de autenticação
+      const client = environment === 'production' ? supabaseProduction : supabase;
+      
+      // 3. Verificar se perfil está completo
+      const { data: patient } = await client
+        .from('patients')
+        .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
+        .eq('user_id', user.id)
+        .maybeSingle();
+        
       if (!patient?.profile_complete) {
         localStorage.setItem('returnUrl', window.location.pathname);
         localStorage.setItem('pendingService', JSON.stringify({
@@ -54,10 +60,8 @@ const ConsultNowFloatButton = () => {
         return;
       }
 
-      // 3. Verificar se tem plano ativo
-      const {
-        checkPatientPlanActive
-      } = await import('@/lib/patient-plan');
+      // 4. Verificar se tem plano ativo
+      const { checkPatientPlanActive } = await import('@/lib/patient-plan');
       const planStatus = await checkPatientPlanActive(user.email!);
       if (planStatus.canBypassPayment) {
         // ✅ COM PLANO ATIVO: Redirecionar direto para agendamento
@@ -68,12 +72,8 @@ const ConsultNowFloatButton = () => {
           return;
         }
         const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
-        toast('Redirecionando para agendamento...', {
-          duration: 2000
-        });
-        const {
-          scheduleWithActivePlan
-        } = await import('@/lib/schedule-service');
+        toast('Redirecionando para agendamento...', { duration: 2000 });
+        const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
         const result = await scheduleWithActivePlan({
           cpf: patient.cpf,
           email: user.email!,
