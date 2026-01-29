@@ -11,6 +11,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Check } from "lucide-react";
 import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, formatPhoneMask, validateCEP, formatCEP } from "@/lib/validations";
 import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
+import { hybridSignUp, checkUserExists, supabaseProductionAuth } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
 
 const Cadastrar = () => {
   const [formData, setFormData] = useState({
@@ -300,14 +302,34 @@ const Cadastrar = () => {
 
     setIsLoading(true);
     
-    // Verificar se CPF já existe
-    const { data: existingPatient } = await supabase
+    // ✅ HÍBRIDO: Verificar se email já existe em qualquer ambiente (Cloud ou Produção)
+    const userCheck = await checkUserExists(formData.email);
+    console.log('[Cadastrar] User check:', userCheck);
+    
+    if (!userCheck.canRegister) {
+      toast({
+        title: "Email já cadastrado",
+        description: "Este email já está cadastrado. Faça login ou recupere sua senha.",
+        variant: "warning",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    // Verificar se CPF já existe (em ambos os ambientes)
+    const { data: existingPatientCloud } = await supabase
       .from('patients')
       .select('id')
       .eq('cpf', formData.cpf)
       .maybeSingle();
     
-    if (existingPatient) {
+    const { data: existingPatientProd } = await supabaseProduction
+      .from('patients')
+      .select('id')
+      .eq('cpf', formData.cpf)
+      .maybeSingle();
+    
+    if (existingPatientCloud || existingPatientProd) {
       toast({
         title: "CPF já cadastrado",
         description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
@@ -317,47 +339,43 @@ const Cadastrar = () => {
       return;
     }
     
-    const { data: signUpData, error } = await supabase.auth.signUp({
-      email: formData.email,
-      password: formData.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: {
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          address_line: formData.address_line,
-          cep: formData.cep,
-          city: formData.cidade,
-          state: formData.uf,
-          address_number: formData.numero,
-          complement: formData.complemento,
-          cpf: formData.cpf,
-          phone_e164: formData.phone_e164,
-          birth_date: formData.birth_date,
-          gender: toDbGender(formData.gender),
-          terms_accepted_at: new Date().toISOString(),
-          marketing_opt_in: formData.marketing_opt_in
-        }
-      }
-    });
+    // ✅ HÍBRIDO: Criar usuário no Supabase de PRODUÇÃO (não no Cloud)
+    const metadata = {
+      first_name: formData.first_name,
+      last_name: formData.last_name,
+      address_line: formData.address_line,
+      cep: formData.cep,
+      city: formData.cidade,
+      state: formData.uf,
+      address_number: formData.numero,
+      complement: formData.complemento,
+      cpf: formData.cpf,
+      phone_e164: formData.phone_e164,
+      birth_date: formData.birth_date,
+      gender: toDbGender(formData.gender),
+      terms_accepted_at: new Date().toISOString(),
+      marketing_opt_in: formData.marketing_opt_in
+    };
 
-    if (error) {
+    const signUpResult = await hybridSignUp(formData.email, formData.password, metadata);
+
+    if (!signUpResult.success) {
       toast({
         title: "Erro no cadastro",
-        description: translateAuthError(error),
+        description: signUpResult.error || "Erro ao criar conta. Tente novamente.",
         variant: "warning",
       });
       setIsLoading(false);
       return;
     }
 
-    // Sincronizar dados com tabela patients (fallback caso trigger não funcione)
-    if (signUpData?.user?.id) {
+    // ✅ Sincronizar dados com tabela patients no PRODUÇÃO
+    if (signUpResult.user?.id) {
       try {
-        const { error: insertError } = await supabase
+        const { error: insertError } = await supabaseProduction
           .from('patients')
           .upsert({
-            user_id: signUpData.user.id,
+            user_id: signUpResult.user.id,
             first_name: formData.first_name,
             last_name: formData.last_name,
             email: formData.email,
@@ -374,11 +392,10 @@ const Cadastrar = () => {
             terms_accepted_at: new Date().toISOString(),
             marketing_opt_in: formData.marketing_opt_in,
             profile_complete: true
-          }, { onConflict: 'user_id' });
+          } as any, { onConflict: 'user_id' });
 
         if (insertError && insertError.code !== '23505') {
-          // 23505 = duplicate key (ignore se já existe)
-          console.error('[Cadastro] Erro ao criar paciente:', insertError);
+          console.error('[Cadastro] Erro ao criar paciente em produção:', insertError);
           toast({
             title: "Erro ao salvar perfil",
             description: "Sua conta foi criada, mas houve um erro ao salvar seus dados. Por favor, complete seu perfil após fazer login.",
@@ -391,13 +408,16 @@ const Cadastrar = () => {
       }
     }
 
+    // Salvar que o login foi feito via produção
+    sessionStorage.setItem('auth_environment', 'production');
+
     toast({
       title: "✅ Cadastro realizado com sucesso!",
       description: "Bem-vindo(a)! Você será redirecionado para sua área.",
       duration: 4000,
     });
-    // Usuário JÁ está logado após signUp com auto-confirm
-    // Redirecionar para callback que leva para /area-do-paciente
+    
+    // Redirecionar para callback
     navigate('/auth/callback');
     
     setIsLoading(false);
