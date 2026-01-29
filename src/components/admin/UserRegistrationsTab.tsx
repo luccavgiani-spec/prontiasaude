@@ -234,96 +234,129 @@ export default function UserRegistrationsTab() {
     setLoading(true);
     try {
       // ==========================================
-      // BUSCAR DE AMBOS OS AMBIENTES EM PARALELO
+      // BUSCAR VIA EDGE FUNCTION - TODOS OS AUTH.USERS
       // ==========================================
+      console.log('[UserRegistrationsTab] Buscando via list-all-users...');
       
-      // Query base para Produção
-      let prodQuery = supabaseProduction
-        .from('patients')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range((page - 1) * limit, page * limit - 1);
-
-      // Query base para Cloud
-      let cloudQuery = supabase
-        .from('patients')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range((page - 1) * limit, page * limit - 1);
-
-      // Apply search filter
-      if (search) {
-        const searchFilter = `email.ilike.%${search}%,first_name.ilike.%${search}%,last_name.ilike.%${search}%,cpf.ilike.%${search}%`;
-        prodQuery = prodQuery.or(searchFilter);
-        cloudQuery = cloudQuery.or(searchFilter);
+      const { data: response, error: fetchError } = await invokeEdgeFunction('list-all-users', {
+        body: {}
+      });
+      
+      if (fetchError) {
+        console.error('[UserRegistrationsTab] Erro ao buscar usuários:', fetchError);
+        toast.error('Erro ao buscar usuários');
+        setLoading(false);
+        return;
       }
-
-      // Fetch both in parallel
-      const [prodResult, cloudResult, prodCountResult, cloudCountResult] = await Promise.all([
-        prodQuery,
-        cloudQuery,
-        supabaseProduction.from('patients').select('*', { count: 'exact', head: true }),
-        supabase.from('patients').select('*', { count: 'exact', head: true }),
-      ]);
-
-      if (prodResult.error) console.error('Erro ao buscar produção:', prodResult.error);
-      if (cloudResult.error) console.error('Erro ao buscar cloud:', cloudResult.error);
-
-      const prodPatients = prodResult.data || [];
-      const cloudPatients = cloudResult.data || [];
-
-      console.log(`[UserRegistrationsTab] Encontrados: ${prodPatients.length} produção, ${cloudPatients.length} cloud`);
-
-      // Transform to User format
-      const [prodUsers, cloudUsers] = await Promise.all([
-        Promise.all(prodPatients.map(p => transformPatientToUser(p, 'production'))),
-        Promise.all(cloudPatients.map(p => transformPatientToUser(p, 'cloud'))),
-      ]);
-
-      // Merge removing duplicates
-      const mergedUsers = mergePatients(cloudUsers, prodUsers);
-
+      
+      if (!response?.success) {
+        console.error('[UserRegistrationsTab] Resposta inválida:', response);
+        toast.error('Erro ao processar dados');
+        setLoading(false);
+        return;
+      }
+      
+      console.log(`[UserRegistrationsTab] Recebidos: ${response.users?.length || 0} usuários, stats:`, response.stats);
+      
+      // Transformar dados da Edge Function para formato User
+      const allUsers: User[] = await Promise.all(
+        (response.users || []).map(async (u: any) => {
+          // Buscar plano por email (sempre da Produção)
+          let activePlan = false;
+          let planCode: string | undefined;
+          
+          try {
+            const plan = await getPatientPlanByEmail(u.email || '');
+            if (plan) {
+              let expiresAt: Date | null = null;
+              if (plan.plan_expires_at) {
+                expiresAt = new Date(plan.plan_expires_at);
+                if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
+                  expiresAt.setUTCHours(23, 59, 59, 999);
+                }
+              }
+              const now = new Date();
+              activePlan = expiresAt !== null && expiresAt >= now && plan.status === 'active';
+              planCode = plan.plan_code;
+            }
+          } catch (err) {
+            console.error(`Erro ao buscar plano para ${u.email}:`, err);
+          }
+          
+          const patientData = u.patient ? {
+            first_name: u.patient.first_name,
+            last_name: u.patient.last_name,
+            cpf: u.patient.cpf,
+            phone_e164: u.patient.phone_e164,
+            birth_date: u.patient.birth_date,
+            gender: u.patient.gender,
+            cep: u.patient.cep,
+            address_line: u.patient.address_line,
+            address_number: u.patient.address_number,
+            city: u.patient.city,
+            state: u.patient.state,
+            profile_complete: u.patient.profile_complete || false,
+          } : undefined;
+          
+          return {
+            id: u.id,
+            patientId: u.patient?.id || u.id,
+            email: u.email || '',
+            created_at: u.created_at,
+            last_sign_in_at: u.last_sign_in_at,
+            email_confirmed_at: u.email_confirmed_at,
+            roles: [],
+            patient: patientData,
+            activePlan,
+            planCode,
+            hasAuthAccount: true, // Todos vêm do auth.users
+            authProvider: 'email',
+            hasInvalidCpf: isInvalidCpf(patientData?.cpf),
+            hasPlaceholderPhone: isPlaceholderPhone(patientData?.phone_e164),
+            hasMissingCriticalData: hasCriticalDataMissing(patientData),
+            source: u.source as 'cloud' | 'production' | 'both',
+          } as User;
+        })
+      );
+      
       // Apply status filter
-      let filteredUsers = mergedUsers;
+      let filteredUsers = allUsers;
       if (statusFilter === 'with_account') {
-        filteredUsers = mergedUsers.filter(u => u.hasAuthAccount);
+        filteredUsers = allUsers.filter(u => u.hasAuthAccount);
       } else if (statusFilter === 'without_account') {
-        filteredUsers = mergedUsers.filter(u => !u.hasAuthAccount);
+        filteredUsers = allUsers.filter(u => !u.hasAuthAccount);
       } else if (statusFilter === 'with_plan') {
-        filteredUsers = mergedUsers.filter(u => u.activePlan);
+        filteredUsers = allUsers.filter(u => u.activePlan);
       } else if (statusFilter === 'incomplete_data') {
-        filteredUsers = mergedUsers.filter(u => u.hasMissingCriticalData);
+        filteredUsers = allUsers.filter(u => u.hasMissingCriticalData);
       } else if (statusFilter === 'invalid_phone') {
-        filteredUsers = mergedUsers.filter(u => u.hasPlaceholderPhone);
+        filteredUsers = allUsers.filter(u => u.hasPlaceholderPhone);
       } else if (statusFilter === 'invalid_cpf') {
-        filteredUsers = mergedUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
+        filteredUsers = allUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
       } else if (statusFilter === 'critical_with_plan') {
-        filteredUsers = mergedUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
+        filteredUsers = allUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
       } else if (statusFilter === 'cloud_only') {
-        filteredUsers = mergedUsers.filter(u => u.source === 'cloud');
+        filteredUsers = allUsers.filter(u => u.source === 'cloud');
       } else if (statusFilter === 'production_only') {
-        filteredUsers = mergedUsers.filter(u => u.source === 'production');
+        filteredUsers = allUsers.filter(u => u.source === 'production');
       }
 
-      setUsers(filteredUsers);
+      // Paginar localmente
+      const startIdx = (page - 1) * limit;
+      const paginatedUsers = filteredUsers.slice(startIdx, startIdx + limit);
 
-      // Calculate stats
-      const totalProd = prodCountResult.count || 0;
-      const totalCloud = cloudCountResult.count || 0;
-      const cloudOnlyCount = mergedUsers.filter(u => u.source === 'cloud').length;
-      const prodOnlyCount = mergedUsers.filter(u => u.source === 'production').length;
-      const withPlanCount = mergedUsers.filter(u => u.activePlan).length;
-      const criticalWithPlanCount = mergedUsers.filter(u => u.activePlan && u.hasMissingCriticalData).length;
+      setUsers(paginatedUsers);
 
-      // Total único (sem duplicatas)
-      const uniqueTotal = totalProd + cloudOnlyCount;
+      // Calculate stats from response
+      const withPlanCount = allUsers.filter(u => u.activePlan).length;
+      const criticalWithPlanCount = allUsers.filter(u => u.activePlan && u.hasMissingCriticalData).length;
 
       setStats({
-        total: uniqueTotal,
+        total: response.stats?.totalUnique || allUsers.length,
         withPlan: withPlanCount,
         criticalWithPlan: criticalWithPlanCount,
-        cloudOnly: cloudOnlyCount,
-        productionOnly: prodOnlyCount,
+        cloudOnly: response.stats?.cloudOnly || 0,
+        productionOnly: response.stats?.productionOnly || 0,
       });
 
     } catch (error) {
