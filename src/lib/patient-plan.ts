@@ -18,9 +18,78 @@ const getTodayDateString = (): string => {
 
 /**
  * Busca plano de paciente diretamente no banco de PRODUÇÃO
- * Usa patient.id como chave (conforme schema: id, plan_code, plan_expires_at, status, created_at, updated_at)
+ * 
+ * ESTRATÉGIA (aprovada pelo usuário):
+ * 1. Receber EMAIL como parâmetro
+ * 2. Buscar patients.id pelo email no banco de PRODUÇÃO
+ * 3. Buscar patient_plans.id = patients.id
+ * 4. Retornar plano ativo (se existir)
+ * 
+ * Isso funciona porque patient_plans.id armazena o patients.id (1:1 relationship)
+ */
+export const getPatientPlanByEmail = async (email: string): Promise<PatientPlan | null> => {
+  try {
+    const normalizedEmail = (email || '').toLowerCase().trim();
+    if (!normalizedEmail) {
+      console.log('[patient-plan-production] Email vazio');
+      return null;
+    }
+    
+    const todayStr = getTodayDateString();
+    
+    // Passo 1: Buscar patient.id pelo email no banco de PRODUÇÃO
+    const { data: patient, error: patientError } = await supabaseProduction
+      .from('patients')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    
+    if (patientError) {
+      console.error('[patient-plan-production] Erro ao buscar patient:', patientError);
+      return null;
+    }
+    
+    if (!patient) {
+      console.log('[patient-plan-production] Patient não encontrado para email:', normalizedEmail);
+      return null;
+    }
+    
+    console.log('[patient-plan-production] Patient encontrado:', patient.id);
+    
+    // Passo 2: Buscar plano ativo onde patient_plans.id = patients.id
+    const { data: plan, error: planError } = await supabaseProduction
+      .from('patient_plans')
+      .select('id, plan_code, plan_expires_at, status, created_at, updated_at')
+      .eq('id', patient.id)
+      .eq('status', 'active')
+      .gte('plan_expires_at', todayStr)
+      .maybeSingle();
+
+    if (planError) {
+      console.error('[patient-plan-production] Erro ao buscar plan:', planError);
+      return null;
+    }
+
+    if (!plan) {
+      console.log('[patient-plan-production] Nenhum plano ativo para patient:', patient.id);
+      return null;
+    }
+
+    console.log('[patient-plan-production] Plano ativo encontrado:', plan);
+    return plan;
+  } catch (error) {
+    console.error('[patient-plan-production] Exception:', error);
+    return null;
+  }
+};
+
+/**
+ * @deprecated Use getPatientPlanByEmail instead
+ * Mantido para compatibilidade, mas delega para getPatientPlanByEmail
  */
 export const getPatientPlanFromProduction = async (patientId: string): Promise<PatientPlan | null> => {
+  console.warn('[patient-plan-production] DEPRECATED: getPatientPlanFromProduction - use getPatientPlanByEmail');
+  // Para compatibilidade, buscar diretamente por id (comportamento antigo)
   try {
     const todayStr = getTodayDateString();
     
@@ -37,12 +106,6 @@ export const getPatientPlanFromProduction = async (patientId: string): Promise<P
       return null;
     }
 
-    if (!data) {
-      console.log('[patient-plan-production] No active plan found for patientId:', patientId);
-      return null;
-    }
-
-    console.log('[patient-plan-production] Active plan found:', data);
     return data;
   } catch (error) {
     console.error('[patient-plan-production] Exception:', error);
