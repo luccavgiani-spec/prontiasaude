@@ -1288,95 +1288,25 @@ serve(async (req) => {
           }
         }
 
-        // TENTATIVA 3: Se não encontrou, tentar criar o registro automaticamente
+        // TENTATIVA 3: Se não encontrou paciente, NÃO criar - prosseguir apenas com email
+        // ✅ CORREÇÃO: Evita erro de FK constraint quando user_id da Produção não existe no Cloud
         if (!patient) {
-          console.log('[activate_plan_manual] 3️⃣ Paciente não existe - tentando criar automaticamente...');
+          console.log('[activate_plan_manual] 3️⃣ Paciente não existe em patients - continuando sem criar');
+          console.log('[activate_plan_manual] ⚠️ Plano será ativado apenas pelo email (sem vínculo com patients.id)');
           
-          // Tentar descobrir se o patient_id é um user_id válido na Produção
-          let userIdToLink: string | null = null;
-          
-          if (patient_id) {
-            console.log('[activate_plan_manual] 🔍 Verificando se patient_id é um user_id válido na Produção...');
-            try {
-              const { data: authUserData, error: authUserError } = await supabase.auth.admin.getUserById(patient_id);
-              
-              if (!authUserError && authUserData?.user) {
-                userIdToLink = authUserData.user.id;
-                console.log('[activate_plan_manual] ✅ Encontrado auth.user na Produção, vinculando user_id:', userIdToLink);
-              } else {
-                console.log('[activate_plan_manual] ⚠️ patient_id não é um user_id válido na Produção (pode ser do Cloud):', authUserError?.message || 'user not found');
-              }
-            } catch (authCheckErr) {
-              console.log('[activate_plan_manual] ⚠️ Erro ao verificar auth.users (não crítico):', authCheckErr);
-            }
-          }
-          
-          // Criar registro mínimo em patients
-          console.log('[activate_plan_manual] 📝 Criando registro mínimo em patients...');
-          const { data: newPatient, error: insertPatientErr } = await supabase
-            .from('patients')
-            .insert({
-              email: normalizedPatientEmail,
-              user_id: userIdToLink,
-              profile_complete: false,
-              source: 'admin_manual_activation'
-            })
-            .select('id, user_id')
-            .single();
-          
-          if (insertPatientErr) {
-            // Pode ser conflito de email (já existe) - tentar buscar novamente
-            if (insertPatientErr.message?.includes('duplicate') || insertPatientErr.code === '23505') {
-              console.log('[activate_plan_manual] ⚠️ Conflito de email - buscando registro existente...');
-              const { data: existingPatient } = await supabase
-                .from('patients')
-                .select('id, user_id')
-                .eq('email', normalizedPatientEmail)
-                .maybeSingle();
-              
-              if (existingPatient) {
-                patient = existingPatient;
-                patientLookupMethod = 'by_email_after_conflict';
-                console.log('[activate_plan_manual] ✅ Encontrado após conflito:', { id: patient.id, user_id: patient.user_id });
-              }
-            }
-            
-            if (!patient) {
-              console.error('[activate_plan_manual] ❌ Falha ao criar paciente:', insertPatientErr.message);
-              return new Response(
-                JSON.stringify({ 
-                  success: false, 
-                  step: 'patient_auto_create', 
-                  error: 'Não foi possível criar o registro do paciente automaticamente',
-                  details: insertPatientErr.message 
-                }),
-                { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
-          } else if (newPatient) {
-            patient = newPatient;
-            patientLookupMethod = 'auto_created';
-            console.log('[activate_plan_manual] ✅ Paciente criado automaticamente:', { id: patient.id, user_id: patient.user_id });
-          }
+          // Criar objeto "virtual" para compatibilidade com o código seguinte
+          patient = {
+            id: null,
+            user_id: null
+          };
+          patientLookupMethod = 'email_only_no_patient_record';
         }
 
-        // Verificação final
-        if (!patient) {
-          console.error('[activate_plan_manual] ❌ Todas as tentativas falharam para:', normalizedPatientEmail);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              step: 'patient_lookup', 
-              error: 'Não foi possível localizar ou criar o paciente',
-              details: `Email: ${normalizedPatientEmail}, patient_id informado: ${patient_id || 'nenhum'}` 
-            }),
-            { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
+        // Verificação final - agora permite patient.id = null
+        // pois patient_plans pode ser criado apenas com email
         console.log('[activate_plan_manual] ✅ Paciente resolvido:', { 
-          patient_id: patient.id, 
-          user_id: patient.user_id,
+          patient_id: patient?.id || '(nenhum - apenas email)', 
+          user_id: patient?.user_id || '(nenhum)',
           method: patientLookupMethod
         });
         console.log('[activate_plan_manual] ========================================');

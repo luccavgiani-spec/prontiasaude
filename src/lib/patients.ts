@@ -1,10 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Garante que exista uma linha em public.patients para o usuário atual */
-export async function ensurePatientRow(userId: string) {
-  const { data, error } = await supabase
+export async function ensurePatientRow(userId: string, dbClient: SupabaseClient = supabase) {
+  const { data, error } = await dbClient
     .from('patients')
     .select('id')
     .eq('user_id', userId)
@@ -14,10 +17,10 @@ export async function ensurePatientRow(userId: string) {
   if (data?.id) return true;
 
   // Buscar email do usuário autenticado
-  const { data: authData } = await supabase.auth.getUser();
+  const { data: authData } = await dbClient.auth.getUser();
   const userEmail = authData?.user?.email;
 
-  const { error: insErr } = await supabase.from('patients').insert({ 
+  const { error: insErr } = await dbClient.from('patients').insert({ 
     user_id: userId,
     email: userEmail 
   });
@@ -43,12 +46,20 @@ export async function upsertPatientBasic(payload: {
   state: string;            // obrigatório: UF
   source?: string;          // opcional: origem do cadastro
 }) {
-  const { data: sess } = await supabase.auth.getSession();
-  const userId = sess?.session?.user?.id;
-  const userEmail = sess?.session?.user?.email;
+  // ✅ HÍBRIDO: Detectar ambiente correto (Cloud ou Produção)
+  const { session, environment } = await getHybridSession();
+  const userId = session?.user?.id;
+  const userEmail = session?.user?.email;
+  
+  console.log('[patients] Ambiente detectado:', environment, 'userId:', userId);
+  
   if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
 
-  await ensurePatientRow(userId);
+  // ✅ Usar cliente correto baseado no ambiente
+  const dbClient = environment === 'production' ? supabaseProduction : supabase;
+  console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
+
+  await ensurePatientRow(userId, dbClient);
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');
@@ -68,7 +79,7 @@ export async function upsertPatientBasic(payload: {
   if (!payload.city || !payload.state) throw new Error('Cidade e UF são obrigatórios.');
 
   // Buscar patient.id existente pelo user_id
-  const { data: existingPatient } = await supabase
+  const { data: existingPatient } = await dbClient
     .from('patients')
     .select('id')
     .eq('user_id', userId)
@@ -96,7 +107,7 @@ export async function upsertPatientBasic(payload: {
 
   // Lógica explícita: UPDATE se existe, INSERT se não
   if (existingPatient?.id) {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('patients')
       .update(updateData)
       .eq('id', existingPatient.id);
@@ -105,7 +116,7 @@ export async function upsertPatientBasic(payload: {
       throw new Error(error.message || 'Falha ao salvar seus dados.');
     }
   } else {
-    const { error } = await supabase
+    const { error } = await dbClient
       .from('patients')
       .insert(updateData);
     if (error) {
