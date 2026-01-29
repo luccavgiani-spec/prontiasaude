@@ -410,16 +410,18 @@ export default function UserRegistrationsTab() {
     }
   };
 
-  const handleDelete = async (userId: string) => {
-    if (!confirm('Tem certeza que deseja deletar este usuário? Esta ação não pode ser desfeita.')) {
+  const handleDelete = async (userId: string, userEmail: string) => {
+    if (!confirm(`Tem certeza que deseja deletar o usuário ${userEmail}?\n\nEsta ação não pode ser desfeita e remove o usuário de AMBOS os ambientes (Cloud e Produção).`)) {
       return;
     }
 
     try {
-      const { error } = await invokeEdgeFunction('user-management', {
+      // Usar invokeCloudEdgeFunction porque a edge function está no Cloud
+      const { data, error } = await invokeCloudEdgeFunction('user-management', {
         body: {
           operation: 'delete_user',
-          user_id: userId
+          user_id: userId,
+          email: userEmail // Passar email para deletar da Produção também
         }
       });
 
@@ -429,7 +431,8 @@ export default function UserRegistrationsTab() {
         return;
       }
 
-      toast.success('Usuário deletado com sucesso');
+      console.log('[handleDelete] Resultado:', data);
+      toast.success(`Usuário ${userEmail} deletado com sucesso`);
       loadPatients();
     } catch (error) {
       console.error('Error deleting user:', error);
@@ -963,10 +966,11 @@ export default function UserRegistrationsTab() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(user.id)}
+                              onClick={() => handleDelete(user.id, user.email)}
                               title="Excluir"
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              <Trash2 className="h-4 w-4" />
                             </Button>
                           )}
                         </div>
