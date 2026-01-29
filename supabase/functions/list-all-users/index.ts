@@ -6,8 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// URLs dos dois ambientes
-const CLOUD_URL = Deno.env.get("SUPABASE_URL")!;
+// URLs dos dois ambientes - suporta execução em Cloud ou Produção
+const CLOUD_URL = Deno.env.get("CLOUD_SUPABASE_URL") || Deno.env.get("SUPABASE_URL")!;
 const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface UserRecord {
@@ -120,8 +120,14 @@ serve(async (req: Request): Promise<Response> => {
     console.log("[list-all-users] Iniciando busca unificada...");
     
     // Criar clientes para ambos os ambientes
-    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
+    // Suporta execução tanto no Cloud quanto na Produção
+    const cloudServiceKey = Deno.env.get("CLOUD_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    
+    console.log("[list-all-users] Cloud URL:", CLOUD_URL);
+    console.log("[list-all-users] Prod URL:", PRODUCTION_URL);
+    console.log("[list-all-users] Cloud key exists:", !!cloudServiceKey);
+    console.log("[list-all-users] Prod key exists:", !!prodServiceKey);
     
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
