@@ -1061,27 +1061,30 @@ serve(async (req) => {
         // ============================================================
         // ✅ REMOVER/CANCELAR PLANO MANUALMENTE
         // Usado pelo painel admin para desativar plano de um paciente
+        // CORRIGIDO: Buscar por EMAIL (não por id), pois email é a chave de referência
         // ============================================================
         
-        const { patient_id } = body;
+        const { patient_email } = body;
         
-        if (!patient_id) {
+        if (!patient_email) {
           return new Response(
-            JSON.stringify({ success: false, error: 'Missing patient_id' }),
+            JSON.stringify({ success: false, error: 'Missing patient_email' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
-        console.log('[deactivate_plan_manual] Desativando plano para patient_id:', patient_id);
+        const normalizedEmail = patient_email.toLowerCase().trim();
+        console.log('[deactivate_plan_manual] Desativando plano para email:', normalizedEmail);
         
         // Atualizar status para 'cancelled' no banco de PRODUÇÃO
-        const { error: updateError } = await supabase
+        // CORRIGIDO: Usar .eq('email', email) - email é a chave de referência na produção
+        const { error: updateError, count } = await supabase
           .from('patient_plans')
           .update({ 
             status: 'cancelled',
             updated_at: new Date().toISOString()
           })
-          .eq('id', patient_id);
+          .eq('email', normalizedEmail);
         
         if (updateError) {
           console.error('[deactivate_plan_manual] Erro:', updateError.message);
@@ -1095,7 +1098,7 @@ serve(async (req) => {
           );
         }
         
-        console.log('[deactivate_plan_manual] ✅ Plano desativado com sucesso');
+        console.log('[deactivate_plan_manual] ✅ Plano desativado com sucesso para:', normalizedEmail);
         
         return new Response(
           JSON.stringify({ 
@@ -1265,34 +1268,59 @@ serve(async (req) => {
         });
 
         // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
-        // NOTA: Usando apenas as 6 colunas que existem no schema real de produção:
-        // id, plan_code, plan_expires_at, status, created_at, updated_at
-        // 
-        // ESTRATÉGIA: Usar patient.id como patient_plans.id (1:1 relationship)
-        // Isso permite buscar plano ativo por: patients.email → patients.id → patient_plans.id
-        console.log('[activate_plan_manual] Upserting plano com id =', patient.id);
+        // CORRIGIDO: email é a chave de referência (NOT NULL) no banco de produção
+        // O id é um UUID autônomo - NÃO é igual ao patients.id
+        const normalizedEmailForPlan = patient_email.toLowerCase().trim();
+        console.log('[activate_plan_manual] Verificando plano existente para email:', normalizedEmailForPlan);
         
-        const planPayload = {
-          id: patient.id,  // ✅ patient_plans.id = patients.id
-          plan_code: plan_code,
-          status: 'active',
-          plan_expires_at: expiresAtDate,
-          updated_at: new Date().toISOString()
-        };
-
-        // Upsert usando 'id' como chave de conflito (é a PK)
-        const { error: upsertError } = await supabase
+        // Verificar se já existe plano para esse email
+        const { data: existingPlan } = await supabase
           .from('patient_plans')
-          .upsert(planPayload, { onConflict: 'id' });
+          .select('id')
+          .eq('email', normalizedEmailForPlan)
+          .maybeSingle();
 
-        if (upsertError) {
-          console.error('[activate_plan_manual] Erro no upsert:', upsertError.message);
+        let planUpsertError = null;
+
+        if (existingPlan) {
+          // UPDATE do plano existente
+          console.log('[activate_plan_manual] Atualizando plano existente:', existingPlan.id);
+          const { error: updateErr } = await supabase
+            .from('patient_plans')
+            .update({
+              plan_code: plan_code,
+              status: 'active',
+              plan_expires_at: expiresAtDate,
+              user_id: patient.user_id || null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingPlan.id);
+          
+          planUpsertError = updateErr;
+        } else {
+          // INSERT de novo plano - email é obrigatório (NOT NULL)
+          console.log('[activate_plan_manual] Inserindo novo plano para email:', normalizedEmailForPlan);
+          const { error: insertErr } = await supabase
+            .from('patient_plans')
+            .insert({
+              email: normalizedEmailForPlan,
+              user_id: patient.user_id || null,
+              plan_code: plan_code,
+              status: 'active',
+              plan_expires_at: expiresAtDate
+            });
+          
+          planUpsertError = insertErr;
+        }
+
+        if (planUpsertError) {
+          console.error('[activate_plan_manual] Erro no upsert:', planUpsertError.message);
           return new Response(
             JSON.stringify({ 
               success: false, 
               step: 'plan_upsert', 
               error: 'Failed to upsert plan',
-              details: upsertError.message
+              details: planUpsertError.message
             }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
