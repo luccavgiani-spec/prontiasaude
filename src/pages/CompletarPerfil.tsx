@@ -711,11 +711,22 @@ const CompletarPerfil = () => {
         });
       }
       
+      // ✅ CORREÇÃO: Limpar sessão Cloud antes do redirect para evitar loop
+      // (getHybridSession verifica Cloud primeiro, então precisamos garantir
+      // que só a sessão de Produção existe antes de ir para /area-do-paciente)
+      try {
+        await supabase.auth.signOut();
+        console.log('[CompletarPerfil] Cloud session cleared before redirect');
+      } catch (e) {
+        console.warn('[CompletarPerfil] Could not clear cloud session:', e);
+      }
+
       const redirectUrl = searchParams.get('redirect');
       if (redirectUrl) {
-        window.location.href = decodeURIComponent(redirectUrl);
+        window.location.replace(decodeURIComponent(redirectUrl));
       } else {
-        navigate('/area-do-paciente');
+        // Usar window.location.replace para forçar reload e garantir detecção correta do ambiente
+        window.location.replace('/area-do-paciente');
       }
     } catch (error: any) {
       toast({
