@@ -13,7 +13,7 @@ import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import { getPatientPlanFromProduction } from '@/lib/patient-plan';
+import { getPatientPlanByEmail } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
 import { EditPatientModal } from './EditPatientModal';
@@ -178,8 +178,9 @@ export default function UserRegistrationsTab() {
       const usersWithPlans = await Promise.all(
         (patients || []).map(async (patient: Patient) => {
           try {
-            // ✅ CORREÇÃO: Buscar plano de PRODUÇÃO por patient.id
-            const plan = await getPatientPlanFromProduction(patient.id);
+            // ✅ CORREÇÃO: Buscar plano de PRODUÇÃO por EMAIL
+            // Estratégia: email → patients.id → patient_plans.id
+            const plan = await getPatientPlanByEmail(patient.email || '');
             // Para plan_expires_at (DATE), considerar ativo se expira hoje ou depois
             // Normalizar expiresAt para fim do dia para garantir que "hoje" é válido
             const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at + 'T23:59:59') : null;

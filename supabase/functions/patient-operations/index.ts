@@ -1265,21 +1265,25 @@ serve(async (req) => {
         });
 
         // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
-        // NOTA: Usando apenas as colunas que existem no schema real de produção:
-        // id, plan_code, plan_expires_at, status, created_at, updated_at, email
-        console.log('[activate_plan_manual] Upserting plano...');
+        // NOTA: Usando apenas as 6 colunas que existem no schema real de produção:
+        // id, plan_code, plan_expires_at, status, created_at, updated_at
+        // 
+        // ESTRATÉGIA: Usar patient.id como patient_plans.id (1:1 relationship)
+        // Isso permite buscar plano ativo por: patients.email → patients.id → patient_plans.id
+        console.log('[activate_plan_manual] Upserting plano com id =', patient.id);
         
         const planPayload = {
-          email: patient_email.toLowerCase().trim(),
+          id: patient.id,  // ✅ patient_plans.id = patients.id
           plan_code: plan_code,
           status: 'active',
           plan_expires_at: expiresAtDate,
           updated_at: new Date().toISOString()
         };
 
+        // Upsert usando 'id' como chave de conflito (é a PK)
         const { error: upsertError } = await supabase
           .from('patient_plans')
-          .upsert(planPayload, { onConflict: 'email' });
+          .upsert(planPayload, { onConflict: 'id' });
 
         if (upsertError) {
           console.error('[activate_plan_manual] Erro no upsert:', upsertError.message);
