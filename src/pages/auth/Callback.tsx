@@ -3,22 +3,41 @@ import { supabase } from '@/integrations/supabase/client';
 import { ensurePatientRow } from '@/lib/patients';
 import { trackPurchase } from '@/lib/meta-tracking';
 import { Loader2 } from "lucide-react";
+import { getHybridSession, supabaseProductionAuth } from '@/lib/auth-hybrid';
+import { supabaseProduction } from '@/lib/supabase-production';
 
 const AuthCallback = () => {
   useEffect(() => {
     (async () => {
-      // ✅ Tentar obter sessão com retry (até 3 segundos)
+      // ✅ HÍBRIDO: Verificar sessão em ambos os ambientes
       let session = null;
+      let authEnvironment: 'cloud' | 'production' | null = null;
       let attempts = 0;
       const maxAttempts = 30; // 3 segundos (100ms * 30)
       
+      // Verificar qual ambiente usar (pode vir do sessionStorage)
+      const savedEnvironment = sessionStorage.getItem('auth_environment') as 'cloud' | 'production' | null;
+      
       while (!session && attempts < maxAttempts) {
-        const { data } = await supabase.auth.getSession();
-        session = data.session;
+        const hybridResult = await getHybridSession();
+        session = hybridResult.session;
+        authEnvironment = hybridResult.environment;
         
         if (!session) {
           await new Promise(resolve => setTimeout(resolve, 100));
           attempts++;
+        }
+      }
+      
+      // Se não encontrou sessão híbrida, usar ambiente salvo
+      if (!session && savedEnvironment) {
+        authEnvironment = savedEnvironment;
+        if (savedEnvironment === 'production') {
+          const { data } = await supabaseProductionAuth.auth.getSession();
+          session = data.session;
+        } else {
+          const { data } = await supabase.auth.getSession();
+          session = data.session;
         }
       }
       
@@ -27,6 +46,8 @@ const AuthCallback = () => {
         window.location.replace('/entrar');
         return;
       }
+      
+      console.log('[AuthCallback] Session found via:', authEnvironment);
       
       // ✅ CRÍTICO: Verificar tokens de convite ANTES de qualquer redirecionamento
       // Verificar sessionStorage E localStorage (redundância)
@@ -79,8 +100,11 @@ const AuthCallback = () => {
         });
       }
 
+      // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente de autenticação
+      const dbClient = authEnvironment === 'production' ? supabaseProduction : supabase;
+
       // ✅ Verificar se é admin de empresa
-      const { data: companyCredentials } = await supabase
+      const { data: companyCredentials } = await dbClient
         .from('company_credentials')
         .select('company_id')
         .eq('user_id', session.user.id)
@@ -93,19 +117,30 @@ const AuthCallback = () => {
       }
 
       // Busca flags pra decidir o redirecionamento (fluxo paciente)
-      const { data, error } = await supabase
+      // Tentar em ambos os ambientes para encontrar o paciente
+      let patientData = null;
+      
+      // Primeiro, tentar no ambiente atual
+      const { data: currentEnvData } = await dbClient
         .from('patients')
         .select('profile_complete')
         .eq('user_id', session.user.id)
         .maybeSingle();
-
-      if (error) {
-        console.error('Fetch patient flags error:', error);
-        window.location.replace('/completar-perfil');
-        return;
+      
+      patientData = currentEnvData;
+      
+      // Se não encontrou, tentar no outro ambiente
+      if (!patientData) {
+        const otherClient = authEnvironment === 'production' ? supabase : supabaseProduction;
+        const { data: otherEnvData } = await otherClient
+          .from('patients')
+          .select('profile_complete')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        patientData = otherEnvData;
       }
 
-      if (!data?.profile_complete) {
+      if (!patientData?.profile_complete) {
         window.location.replace('/completar-perfil');
       } else {
         window.location.replace('/area-do-paciente');

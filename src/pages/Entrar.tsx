@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { validateEmail } from "@/lib/validations";
+import { hybridSignIn, getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
 
 const Entrar = () => {
   const [searchParams] = useSearchParams();
@@ -15,15 +16,17 @@ const Entrar = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is already logged in
+    // Check if user is already logged in (in either environment)
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { session, environment } = await getHybridSession();
       if (session) {
-        handleSuccessfulLogin();
+        console.log('[Entrar] Already logged in via:', environment);
+        handleSuccessfulLogin(environment || 'cloud');
       }
     };
     checkSession();
@@ -38,7 +41,9 @@ const Entrar = () => {
     }
   }, [navigate]);
 
-  const handleSuccessfulLogin = () => {
+  const handleSuccessfulLogin = (environment: 'cloud' | 'production' = 'cloud') => {
+    console.log('[Entrar] Login successful via:', environment);
+    
     // ✅ Verificar convite familiar PRIMEIRO (sessionStorage + localStorage fallback)
     const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token') 
       || localStorage.getItem('pending_family_invite_token');
@@ -61,6 +66,8 @@ const Entrar = () => {
       return;
     }
     
+    // Salvar ambiente de login para uso posterior
+    sessionStorage.setItem('auth_environment', environment);
     navigate('/auth/callback');
   };
 
@@ -78,21 +85,26 @@ const Entrar = () => {
 
     setIsLoading(true);
     
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    // Usar login híbrido que verifica onde o email existe
+    const result = await hybridSignIn(email, password);
 
-    if (error) {
-      // Show user-friendly error messages only (don't log sensitive auth details)
-      if (error.message === "Invalid login credentials") {
+    if (!result.success) {
+      // Show user-friendly error messages
+      if (result.error?.includes('não encontrado')) {
+        toast({
+          title: "❌ Email não cadastrado",
+          description: "Este email não está cadastrado. Crie uma conta para continuar.",
+          variant: "warning",
+          duration: 5000,
+        });
+      } else if (result.error?.includes('incorretos')) {
         toast({
           title: "❌ Erro no login",
           description: "Email ou senha incorretos. Verifique seus dados e tente novamente.",
           variant: "warning",
           duration: 5000,
         });
-      } else if (error.message.includes("Email not confirmed")) {
+      } else if (result.error?.includes('Email not confirmed')) {
         toast({
           title: "⚠️ Email não confirmado",
           description: "Verifique sua caixa de entrada para confirmar seu email.",
@@ -102,13 +114,14 @@ const Entrar = () => {
       } else {
         toast({
           title: "❌ Erro no login",
-          description: "Não foi possível fazer login. Tente novamente.",
+          description: result.error || "Não foi possível fazer login. Tente novamente.",
           variant: "warning",
           duration: 5000,
         });
       }
     } else {
-      handleSuccessfulLogin();
+      console.log('[Entrar] Login successful via:', result.environment);
+      handleSuccessfulLogin(result.environment || 'cloud');
     }
     
     setIsLoading(false);
