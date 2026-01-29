@@ -1,5 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
 
 export interface Patient {
   id: string;
@@ -30,25 +32,35 @@ export interface Patient {
 }
 
 export const requireAuth = async (): Promise<{ user: User; session: Session } | null> => {
-  const { data: { session } } = await supabase.auth.getSession();
+  // ✅ HÍBRIDO: Verificar sessão em ambos os ambientes (Cloud e Produção)
+  const { session, environment } = await getHybridSession();
   
   if (!session?.user) {
     window.location.href = '/entrar';
     return null;
   }
   
+  // Salvar ambiente para uso posterior (para getPatient usar o cliente correto)
+  if (environment) {
+    sessionStorage.setItem('auth_environment', environment);
+  }
+  
   return { user: session.user, session };
 };
 
 export const getPatient = async (userId: string): Promise<Patient | null> => {
-  const { data, error } = await supabase
+  // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente de autenticação
+  const environment = sessionStorage.getItem('auth_environment') as 'cloud' | 'production' | null;
+  const client = environment === 'production' ? supabaseProduction : supabase;
+  
+  const { data, error } = await client
     .from('patients' as any)
     .select('*')
     .eq('user_id', userId)
     .maybeSingle();
     
   if (error) {
-    console.error('Error fetching patient:', error);
+    console.error('[getPatient] Error fetching patient:', error);
     return null;
   }
   
