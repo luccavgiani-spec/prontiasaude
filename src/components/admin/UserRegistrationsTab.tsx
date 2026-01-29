@@ -181,9 +181,17 @@ export default function UserRegistrationsTab() {
             // ✅ CORREÇÃO: Buscar plano de PRODUÇÃO por EMAIL
             // Estratégia: email → patients.id → patient_plans.id
             const plan = await getPatientPlanByEmail(patient.email || '');
-            // Para plan_expires_at (DATE), considerar ativo se expira hoje ou depois
-            // Normalizar expiresAt para fim do dia para garantir que "hoje" é válido
-            const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at + 'T23:59:59') : null;
+            
+            // Tratar plan_expires_at como DATE ou TIMESTAMP
+            // Considerar válido até fim do dia de expiração
+            let expiresAt: Date | null = null;
+            if (plan?.plan_expires_at) {
+              expiresAt = new Date(plan.plan_expires_at);
+              // Se é meia-noite (vindo de DATE ou TIMESTAMP 00:00), ajustar para fim do dia
+              if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
+                expiresAt.setUTCHours(23, 59, 59, 999);
+              }
+            }
             const now = new Date();
             const isActive = expiresAt && expiresAt >= now && plan?.status === 'active';
 
@@ -326,7 +334,7 @@ export default function UserRegistrationsTab() {
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'deactivate_plan_manual',
-          patient_id: user.patientId
+          patient_email: user.email  // ✅ Correto: usar email, não patient_id
         }
       });
 

@@ -1,4 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
 import { supabaseProduction } from "@/lib/supabase-production";
 
 export interface PatientPlan {
@@ -10,150 +9,87 @@ export interface PatientPlan {
   updated_at?: string;
 }
 
-// Helper: retorna data de hoje no formato YYYY-MM-DD (para comparar com DATE do banco)
-const getTodayDateString = (): string => {
-  const now = new Date();
-  return now.toISOString().split('T')[0]; // "2026-01-12"
-};
-
 /**
- * Busca plano de paciente diretamente no banco de PRODUÇÃO
+ * FUNÇÃO PRINCIPAL - Busca plano ativo por email no banco de PRODUÇÃO
  * 
- * ESTRATÉGIA CORRIGIDA:
- * - A tabela patient_plans usa EMAIL como chave de referência (NOT NULL)
- * - O id é um UUID autônomo (NÃO é igual ao patients.id)
- * - Busca DIRETA: patient_plans.email = email do paciente
+ * Estratégia: Buscar diretamente na tabela patient_plans por email
+ * O campo email é NOT NULL e é a chave de referência para planos
  */
-export const getPatientPlanByEmail = async (email: string): Promise<PatientPlan | null> => {
+export const getPatientPlan = async (email: string): Promise<PatientPlan | null> => {
   try {
     const normalizedEmail = (email || '').toLowerCase().trim();
     if (!normalizedEmail) {
-      console.log('[patient-plan-production] Email vazio');
+      console.log('[patient-plan] Email vazio');
       return null;
     }
     
-    const todayStr = getTodayDateString();
+    // Data de agora para comparar expiração
+    const now = new Date();
     
-    // BUSCA DIRETA: email na tabela patient_plans
-    // (email é a chave de referência no banco de produção)
-    const { data: plan, error: planError } = await supabaseProduction
+    // Buscar plano DIRETO por email no banco de PRODUÇÃO
+    const { data: plan, error } = await supabaseProduction
       .from('patient_plans')
       .select('id, plan_code, plan_expires_at, status, created_at, updated_at')
-      .eq('email', normalizedEmail)  // ✅ Busca direta por email
+      .eq('email', normalizedEmail)
       .eq('status', 'active')
-      .gte('plan_expires_at', todayStr)
       .maybeSingle();
 
-    if (planError) {
-      console.error('[patient-plan-production] Erro ao buscar plan:', planError);
+    if (error) {
+      console.error('[patient-plan] Erro ao buscar plano:', error);
       return null;
     }
 
     if (!plan) {
-      console.log('[patient-plan-production] Nenhum plano ativo para email:', normalizedEmail);
+      console.log('[patient-plan] Nenhum plano encontrado para:', normalizedEmail);
       return null;
     }
 
-    console.log('[patient-plan-production] Plano ativo encontrado:', plan);
+    // plan_expires_at pode vir como:
+    // - DATE: "2026-02-28"
+    // - TIMESTAMP: "2026-02-28 00:00:00+00"
+    // Tratar ambos: considerar válido até o FIM do dia de expiração
+    const expiresAt = new Date(plan.plan_expires_at);
+    
+    // Se não tem horário definido ou é meia-noite, ajustar para fim do dia
+    if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
+      expiresAt.setUTCHours(23, 59, 59, 999);
+    }
+    
+    if (expiresAt < now) {
+      console.log('[patient-plan] Plano expirado:', normalizedEmail, plan.plan_expires_at);
+      return null;
+    }
+
+    console.log('[patient-plan] ✅ Plano ativo encontrado:', {
+      email: normalizedEmail,
+      plan_code: plan.plan_code,
+      expires: plan.plan_expires_at
+    });
+    
     return plan;
-  } catch (error) {
-    console.error('[patient-plan-production] Exception:', error);
-    return null;
-  }
-};
-
-/**
- * @deprecated Use getPatientPlanByEmail instead
- * Mantido para compatibilidade, mas delega para getPatientPlanByEmail
- */
-export const getPatientPlanFromProduction = async (patientId: string): Promise<PatientPlan | null> => {
-  console.warn('[patient-plan-production] DEPRECATED: getPatientPlanFromProduction - use getPatientPlanByEmail');
-  // Para compatibilidade, buscar diretamente por id (comportamento antigo)
-  try {
-    const todayStr = getTodayDateString();
-    
-    const { data, error } = await supabaseProduction
-      .from('patient_plans')
-      .select('id, plan_code, plan_expires_at, status, created_at, updated_at')
-      .eq('id', patientId)
-      .eq('status', 'active')
-      .gte('plan_expires_at', todayStr)
-      .maybeSingle();
-
-    if (error) {
-      console.error('[patient-plan-production] Error:', error);
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('[patient-plan-production] Exception:', error);
-    return null;
-  }
-};
-
-export const getPatientPlan = async (email: string, byEmailOnly: boolean = false): Promise<PatientPlan | null> => {
-  try {
-    // Tentar buscar usuário logado primeiro
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    
-    // Usar data de hoje (YYYY-MM-DD) para comparar com plan_expires_at (DATE)
-    // Isso garante que planos que expiram "hoje" ainda são válidos durante todo o dia
-    const todayStr = getTodayDateString();
-    
-    // PRIORIDADE 1: Buscar por user_id (se logado E não for busca apenas por email)
-    if (userId && !byEmailOnly) {
-      const { data: planByUserId, error: userIdError } = await supabase
-        .from('patient_plans')
-        .select('id, plan_code, plan_expires_at, status, created_at')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .gte('plan_expires_at', todayStr)
-        .order('plan_expires_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (!userIdError && planByUserId) {
-        console.log('[patient-plan] Active plan found by user_id:', planByUserId);
-        return planByUserId;
-      }
-    }
-    
-    // PRIORIDADE 2: Buscar por email (fallback)
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    const { data, error } = await supabase
-      .from('patient_plans')
-      .select('id, plan_code, plan_expires_at, status, created_at')
-      .eq('email', normalizedEmail)
-      .eq('status', 'active')
-      .gte('plan_expires_at', todayStr)
-      .order('plan_expires_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      console.error('[patient-plan] Error fetching plan by email:', error);
-      return null;
-    }
-
-    if (!data) {
-      console.log('[patient-plan] No active plan found for:', email);
-      return null;
-    }
-
-    console.log('[patient-plan] Active plan found by email:', data);
-    return data;
   } catch (error) {
     console.error('[patient-plan] Exception:', error);
     return null;
   }
 };
 
+/**
+ * Alias para compatibilidade - usa getPatientPlan
+ */
+export const getPatientPlanByEmail = getPatientPlan;
+
+/**
+ * @deprecated Mantido apenas para compatibilidade com código legado
+ */
+export const getPatientPlanFromProduction = async (patientId: string): Promise<PatientPlan | null> => {
+  console.warn('[patient-plan] DEPRECATED: getPatientPlanFromProduction - use getPatientPlan(email)');
+  return null;
+};
+
 export const formatPlanName = (planCode?: string): string => {
   if (!planCode) return 'Nenhum plano ativo';
   
-  // ✅ Detectar planos empresariais
+  // Detectar planos empresariais
   if (planCode.startsWith('EMPRESA_')) {
     const companyName = planCode
       .replace('EMPRESA_', '')
@@ -222,6 +158,10 @@ export interface PatientPlanStatus {
   canBypassPayment: boolean;
 }
 
+/**
+ * Verifica se o paciente tem plano ativo
+ * Retorna informações do plano se existir
+ */
 export const checkPatientPlanActive = async (email: string): Promise<PatientPlanStatus> => {
   try {
     const plan = await getPatientPlan(email);
@@ -233,19 +173,14 @@ export const checkPatientPlanActive = async (email: string): Promise<PatientPlan
       };
     }
 
-    // Verificar se o plano está ativo (não expirado)
-    const expiresAt = new Date(plan.plan_expires_at);
-    const now = new Date();
-    const isActive = expiresAt > now && plan.status === 'active';
-
     return {
-      hasActivePlan: isActive,
+      hasActivePlan: true,
       planCode: plan.plan_code,
       planExpiresAt: plan.plan_expires_at,
-      canBypassPayment: isActive,
+      canBypassPayment: true,
     };
   } catch (error) {
-    console.error('Error checking plan status:', error);
+    console.error('[patient-plan] Erro ao verificar status:', error);
     return {
       hasActivePlan: false,
       canBypassPayment: false,
