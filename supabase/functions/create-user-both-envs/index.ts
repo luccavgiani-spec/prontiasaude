@@ -190,7 +190,8 @@ serve(async (req: Request): Promise<Response> => {
     // =============================================
     console.log("[create-user-both-envs] Sincronizando tabela patients...");
     
-    const patientData = {
+    // Dados base SEM colunas problemáticas (complement causa erro de schema cache)
+    const patientCoreData = {
       user_id: prodUserId,
       email: normalizedEmail,
       first_name: metadata?.first_name || null,
@@ -202,7 +203,6 @@ serve(async (req: Request): Promise<Response> => {
       cep: metadata?.cep || null,
       address_line: metadata?.address_line || null,
       address_number: metadata?.address_number || null,
-      complement: metadata?.complement || null,
       city: metadata?.city || null,
       state: metadata?.state || null,
       terms_accepted_at: metadata?.terms_accepted_at || new Date().toISOString(),
@@ -210,33 +210,78 @@ serve(async (req: Request): Promise<Response> => {
       profile_complete: !!(metadata?.cpf && metadata?.phone_e164 && metadata?.birth_date),
     };
     
-    // Inserir na Produção
+    // Inserir na Produção - usar INSERT direto (não upsert) com verificação prévia
     try {
-      const { error: prodPatientError } = await prodClient
+      // Verificar se já existe patient com este email
+      const { data: existingProd } = await prodClient
         .from('patients')
-        .upsert(patientData, { onConflict: 'email' });
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
       
-      if (prodPatientError && prodPatientError.code !== '23505') {
-        console.error("[create-user-both-envs] Erro ao criar patient em Produção:", prodPatientError.message);
+      if (existingProd) {
+        // Atualizar registro existente
+        const { error: updateError } = await prodClient
+          .from('patients')
+          .update({ ...patientCoreData, user_id: prodUserId })
+          .eq('id', existingProd.id);
+        
+        if (updateError) {
+          console.error("[create-user-both-envs] Erro ao atualizar patient em Produção:", updateError.message);
+        } else {
+          console.log("[create-user-both-envs] ✅ Patient atualizado em Produção (id:", existingProd.id, ")");
+        }
       } else {
-        console.log("[create-user-both-envs] ✅ Patient criado em Produção");
+        // Inserir novo registro
+        const { error: insertError } = await prodClient
+          .from('patients')
+          .insert(patientCoreData);
+        
+        if (insertError) {
+          console.error("[create-user-both-envs] Erro ao inserir patient em Produção:", insertError.message);
+        } else {
+          console.log("[create-user-both-envs] ✅ Patient criado em Produção");
+        }
       }
     } catch (err: any) {
       console.error("[create-user-both-envs] Exceção ao criar patient em Produção:", err.message);
     }
     
-    // Inserir no Cloud (com user_id do Cloud)
+    // Inserir no Cloud (com user_id do Cloud) - mesma lógica
     if (cloudUserId) {
       try {
-        const cloudPatientData = { ...patientData, user_id: cloudUserId };
-        const { error: cloudPatientError } = await cloudClient
-          .from('patients')
-          .upsert(cloudPatientData, { onConflict: 'email' });
+        const cloudPatientData = { ...patientCoreData, user_id: cloudUserId };
         
-        if (cloudPatientError && cloudPatientError.code !== '23505') {
-          console.error("[create-user-both-envs] Erro ao criar patient no Cloud:", cloudPatientError.message);
+        // Verificar se já existe patient com este email no Cloud
+        const { data: existingCloud } = await cloudClient
+          .from('patients')
+          .select('id')
+          .eq('email', normalizedEmail)
+          .maybeSingle();
+        
+        if (existingCloud) {
+          // Atualizar registro existente
+          const { error: updateError } = await cloudClient
+            .from('patients')
+            .update(cloudPatientData)
+            .eq('id', existingCloud.id);
+          
+          if (updateError) {
+            console.error("[create-user-both-envs] Erro ao atualizar patient no Cloud:", updateError.message);
+          } else {
+            console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud (id:", existingCloud.id, ")");
+          }
         } else {
-          console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
+          // Inserir novo registro
+          const { error: insertError } = await cloudClient
+            .from('patients')
+            .insert(cloudPatientData);
+          
+          if (insertError) {
+            console.error("[create-user-both-envs] Erro ao inserir patient no Cloud:", insertError.message);
+          } else {
+            console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
+          }
         }
       } catch (err: any) {
         console.error("[create-user-both-envs] Exceção ao criar patient no Cloud:", err.message);
