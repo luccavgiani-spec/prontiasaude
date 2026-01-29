@@ -1,126 +1,127 @@
 
-# Plano: Correção do Sistema Híbrido de Autenticação
+# Plano: Correção da Lista de Usuários + Reset de Senha Híbrido
 
-## Diagnóstico dos Problemas
+## Diagnóstico Confirmado
 
-### Problema 1: Login falhando para usuários do Cloud
-- **Usuário afetado:** `t.giani@gmail.com`
-- **Causa:** A edge function `check-user-exists` usa `listUsers({ filter: 'email.eq.${email}' })`, mas esse filtro não funciona corretamente na API Admin do Supabase
-- **Evidência:** O usuário existe no Cloud (ID: `19d8998f-d8bc-4a6a-8323-6cc7bb3d026a`), mas a função retorna `existsInCloud: false`
+### Problema 1: Lista incompleta no Admin Panel
+- **Causa Raiz:** O painel busca `patients` do Cloud, mas você quer ver os 449 **auth.users** do Cloud.
+- **Evidência:** Os registros em `patients` do Cloud são menos que os 449 usuarios em `auth.users`.
+- **Solução:** Criar Edge Function que busca `auth.users` de ambos os ambientes e mescla com dados de `patients`.
 
-### Problema 2: Painel Admin incompleto
-- **Causa:** `UserRegistrationsTab.tsx` agora busca APENAS da Produção (`supabaseProduction`), ignorando os 448 usuários do Lovable Cloud
-- **Resultado:** Usuários cadastrados no Cloud não aparecem no painel
-
----
-
-## Solução Proposta
-
-### Parte 1: Corrigir `check-user-exists` (Login)
-
-Alterar a lógica para buscar usuários corretamente, sem depender do filtro problemático:
-
-**Arquivo:** `supabase/functions/check-user-exists/index.ts`
-
-**Mudanças:**
-1. Usar paginação para buscar todos os usuários (até encontrar o email)
-2. Filtrar manualmente por email após buscar
-3. Adicionar logs detalhados para debug
-
-```typescript
-// ANTES (não funciona)
-const { data: cloudUsers } = await cloudClient.auth.admin.listUsers({
-  filter: `email.eq.${normalizedEmail}`
-});
-
-// DEPOIS (funciona)
-let page = 1;
-let found = false;
-while (!found) {
-  const { data, error } = await cloudClient.auth.admin.listUsers({
-    page,
-    perPage: 1000
-  });
-  if (error || !data?.users?.length) break;
-  
-  const match = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
-  if (match) found = true;
-  
-  if (data.users.length < 1000) break;
-  page++;
-}
-existsInCloud = found;
-```
-
-### Parte 2: Unificar Painel Admin (Cloud + Produção)
-
-Modificar `UserRegistrationsTab.tsx` para mostrar usuários de AMBOS os ambientes.
-
-**Arquivo:** `src/components/admin/UserRegistrationsTab.tsx`
-
-**Estratégia:**
-1. Buscar pacientes da Produção (`supabaseProduction`)
-2. Buscar pacientes do Cloud (`supabase`)
-3. Mesclar resultados, removendo duplicatas por email
-4. Marcar a origem de cada registro (Cloud/Produção)
-
-**Mudanças técnicas:**
-- Criar função `mergePatients(cloudPatients, prodPatients)` que:
-  - Combina as duas listas
-  - Remove duplicatas (prioriza Produção se existir em ambos)
-  - Adiciona campo `source: 'cloud' | 'production' | 'both'`
-- Atualizar as contagens para somar ambos os ambientes
-- Adicionar badge visual indicando a origem
-
-### Parte 3: Deploy e Teste
-
-1. Fazer deploy da edge function corrigida
-2. Testar login com `t.giani@gmail.com`
-3. Verificar se painel mostra todos os registros
+### Problema 2: Reset de senha não funciona para usuários do Cloud
+- **Causa Raiz:** A Edge Function `send-password-reset` busca APENAS em `auth.users` da Produção.
+- **Evidência:** Log mostra "Email não encontrado: t.giani@gmail.com" - usuário existe no Cloud, não na Produção.
+- **Solução:** Modificar a função para buscar em ambos os ambientes (Cloud e Produção).
 
 ---
 
-## Resumo das Alterações
+## Arquivos a Serem Modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `supabase/functions/check-user-exists/index.ts` | Buscar usuários com paginação, filtrar manualmente por email |
-| `src/components/admin/UserRegistrationsTab.tsx` | Buscar e mesclar pacientes do Cloud + Produção |
+| `src/components/admin/UserRegistrationsTab.tsx` | Chamar nova Edge Function que retorna users de ambos os ambientes |
+| `supabase/functions/send-password-reset/index.ts` | Buscar usuário em Cloud E Produção usando paginação |
+| `supabase/functions/validate-reset-token/index.ts` | Suportar tokens de ambos os ambientes |
+| `supabase/functions/complete-password-reset/index.ts` | Atualizar senha no ambiente correto (Cloud ou Produção) |
 
 ---
 
-## Detalhes Técnicos
+## Solução Detalhada
 
-### Edge Function `check-user-exists`
+### Parte 1: Admin Panel - Lista Unificada de Usuários
 
-A nova implementação irá:
+Criar nova Edge Function `list-all-users` que:
+1. Busca `auth.users` do Cloud (usando SUPABASE_SERVICE_ROLE_KEY)
+2. Busca `auth.users` + `patients` da Produção (usando ORIGINAL_SUPABASE_SERVICE_ROLE_KEY)
+3. Mescla os resultados removendo duplicatas por email
+4. Retorna lista unificada com origem (cloud/production/both)
 
-1. **Para Cloud:** Iterar páginas de 1000 usuários até encontrar o email ou esgotar
-2. **Para Produção:** Mesma lógica
-3. **Otimização:** Parar assim que encontrar (não precisa carregar tudo)
-4. **Fallback:** Em caso de erro, logar detalhadamente e retornar valores seguros
+**Fluxo:**
+```
+Frontend (Admin) 
+    → Edge Function "list-all-users" 
+    → Busca auth.users Cloud (449) + auth.users Produção (219)
+    → Mescla + enriquece com dados de patients
+    → Retorna lista unificada
+```
 
-### Painel Admin Unificado
+O componente `UserRegistrationsTab.tsx` chamará essa Edge Function em vez de buscar diretamente do Supabase client.
 
-Interface mostrará:
+### Parte 2: Reset de Senha Híbrido
 
-| Campo | Descrição |
-|-------|-----------|
-| Email | Email do paciente |
-| Nome | Nome completo |
-| Origem | Badge: "Cloud", "Produção" ou "Ambos" |
-| Status | Com conta / Sem conta |
-| Plano | Ativo/Inativo |
+Modificar `send-password-reset`:
 
-Contagens atualizadas:
-- Total = Cloud + Produção (sem duplicatas)
-- Com conta = user_id não nulo em qualquer ambiente
-- Com plano = planos ativos da Produção
+```text
+1. Receber email
+2. Buscar em auth.users do CLOUD (com paginação)
+3. Se encontrar → gerar token, salvar em password_reset_tokens, enviar email com link
+4. Se não encontrar → Buscar em auth.users da PRODUÇÃO (com paginação)
+5. Se encontrar → mesma lógica acima
+6. Se não encontrar em nenhum → retornar mensagem genérica (segurança)
+7. SALVAR no token qual ambiente usar: cloud ou production
+```
+
+Modificar `complete-password-reset`:
+
+```text
+1. Validar token
+2. Ler campo "environment" do token (cloud ou production)
+3. Usar o cliente correto para atualizar a senha:
+   - Se "cloud" → usar SUPABASE_SERVICE_ROLE_KEY
+   - Se "production" → usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY
+```
+
+### Parte 3: Tabela de Tokens
+
+Adicionar coluna `environment` à tabela `password_reset_tokens` para saber onde atualizar a senha:
+
+```sql
+ALTER TABLE public.password_reset_tokens 
+ADD COLUMN IF NOT EXISTS environment TEXT DEFAULT 'production';
+```
+
+---
+
+## Implementação Detalhada
+
+### Edge Function: send-password-reset (atualizada)
+
+Mudanças principais:
+- Buscar com paginação em AMBOS os ambientes
+- Salvar qual ambiente o usuário foi encontrado
+- Enviar email normalmente
+
+### Edge Function: complete-password-reset (atualizada)
+
+Mudanças principais:
+- Ler o campo `environment` do token
+- Usar o cliente correto baseado no ambiente
+- Atualizar senha no lugar certo
+
+### UserRegistrationsTab.tsx
+
+Mudanças principais:
+- Chamar nova Edge Function `list-all-users` 
+- Remover queries diretas ao Supabase para contagem
+- Exibir a contagem real de auth.users (449 Cloud + 219 Produção - duplicados)
 
 ---
 
 ## Resultado Esperado
 
-1. **Login funcionando:** Usuários do Cloud (como `t.giani@gmail.com`) conseguirão fazer login normalmente
-2. **Painel completo:** Admin verá todos os 448+ usuários cadastrados em ambos os ambientes
-3. **Sem perda de dados:** Nenhum cadastro será perdido ou precisará ser refeito
+1. **Painel Admin mostrará:**
+   - Todos os 449 usuários do Cloud
+   - Todos os 219 usuários da Produção
+   - Duplicados marcados como "Ambos"
+   - Total real sem duplicatas
+
+2. **Reset de senha funcionará para:**
+   - Usuários do Cloud (como t.giani@gmail.com)
+   - Usuários da Produção
+   - Senha será atualizada no ambiente correto
+
+3. **Contagens corretas:**
+   - Total Cloud: 449
+   - Total Produção: 219  
+   - Duplicados: X (a calcular)
+   - Total Único: 449 + 219 - X
