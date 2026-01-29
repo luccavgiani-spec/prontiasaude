@@ -82,17 +82,20 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
 
       if (error) {
         console.error('[ManualPlanActivationModal] Error:', error);
-        const errorMsg = error?.message || 'Erro ao ativar plano. Verifique os logs.';
-        toast.error(errorMsg);
+        toast.error(`Erro: ${error?.message || 'Falha ao ativar plano'}`);
         return;
       }
 
       // Verificar se a resposta indica sucesso
       if (!data?.success) {
         console.error('[ManualPlanActivationModal] Failed:', data);
-        const step = data?.step ? `[${data.step}] ` : '';
-        const details = data?.details ? ` (${data.details})` : '';
-        toast.error(`${step}${data?.error || 'Erro ao ativar plano'}${details}`);
+        // Mostrar detalhes do erro de forma clara
+        const errorParts = [];
+        if (data?.step) errorParts.push(`Etapa: ${data.step}`);
+        if (data?.error) errorParts.push(data.error);
+        if (data?.details) errorParts.push(`Detalhes: ${data.details}`);
+        
+        toast.error(errorParts.length > 0 ? errorParts.join(' | ') : 'Erro desconhecido ao ativar plano');
         return;
       }
 

@@ -2,14 +2,18 @@
 
 # Plano Completo: Ativação de Planos — Manual, Por Compra e Visualização
 
-## Resumo do Problema
+## ✅ IMPLEMENTADO (29/01/2026)
 
-1. **Área do Paciente** mostra "Nenhum plano ativo" mesmo com plano gravado no banco
-2. **Painel Admin** não exibe badge do plano na aba Pacientes
-3. **Ativação manual** pelo admin falhou em iterações anteriores
-4. **Ativação automática por compra** precisa funcionar para planos recorrentes e não recorrentes
+### Correções Aplicadas
 
-**Causa raiz:** O frontend consulta o banco ERRADO (Lovable Cloud) ou usa lógica incorreta para comparar datas.
+1. **`src/lib/patient-plan.ts`**: Refatorado para sempre consultar banco de PRODUÇÃO via `supabaseProduction`, busca direta por `email`
+2. **`src/components/admin/UserRegistrationsTab.tsx`**: Corrigida comparação de data (DATE e TIMESTAMP) e remover plano usa `patient_email`
+3. **`src/components/admin/ManualPlanActivationModal.tsx`**: Melhorado tratamento de erros
+
+### Arquitetura Final
+- A tabela `patient_plans` usa `email` como chave de referência (NOT NULL)
+- Todas as buscas e operações são feitas por `email`, não por `id`
+- O `id` da tabela é um UUID autônomo (não relacionado ao `patients.id`)
 
 ---
 
