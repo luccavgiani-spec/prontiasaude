@@ -3,13 +3,14 @@
  * 
  * Estratégia:
  * - Login: Verificar onde o email existe (Cloud ou Produção) e usar o cliente correto
- * - Cadastro: Novos usuários vão SOMENTE para Produção
+ * - Cadastro: Novos usuários são criados em AMBOS os ambientes (Produção + Cloud)
  * - Bloquear cadastro se email já existir em qualquer ambiente
  */
 
 import { supabase } from "@/integrations/supabase/client";
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/integrations/supabase/types';
+import { invokeCloudEdgeFunction } from './edge-functions';
 
 // Cliente de Produção para autenticação de novos usuários
 const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
@@ -157,7 +158,8 @@ export const hybridSignIn = async (
 };
 
 /**
- * Cadastro híbrido - novos usuários vão para Produção
+ * Cadastro híbrido - cria usuários em AMBOS os ambientes (Produção + Cloud)
+ * Usa Edge Function segura para garantir consistência
  */
 export const hybridSignUp = async (
   email: string,
@@ -168,6 +170,8 @@ export const hybridSignUp = async (
   error?: string;
   user?: any;
   session?: any;
+  prodUserId?: string;
+  cloudUserId?: string;
 }> => {
   const normalizedEmail = email.toLowerCase().trim();
   
@@ -182,33 +186,65 @@ export const hybridSignUp = async (
     };
   }
 
-  // Criar usuário no Supabase de Produção
-  console.log('[hybridSignUp] Creating user in Production...');
-  const { data, error } = await supabaseProductionAuth.auth.signUp({
-    email: normalizedEmail,
-    password,
-    options: {
-      emailRedirectTo: `${window.location.origin}/auth/callback`,
-      data: metadata
-    }
-  });
+  // =============================================
+  // CRIAR USUÁRIO EM AMBOS OS AMBIENTES VIA EDGE FUNCTION
+  // =============================================
+  console.log('[hybridSignUp] Chamando create-user-both-envs...');
+  
+  try {
+    // ✅ Usar invokeCloudEdgeFunction porque a função está no Lovable Cloud
+    const { data: result, error: fetchError } = await invokeCloudEdgeFunction('create-user-both-envs', {
+      body: { 
+        email: normalizedEmail, 
+        password,
+        metadata 
+      }
+    });
 
-  if (error) {
-    console.error('[hybridSignUp] Error:', error);
+    console.log('[hybridSignUp] Result:', result, 'Error:', fetchError);
+
+    if (fetchError || !result?.success) {
+      return {
+        success: false,
+        error: result?.error || fetchError?.message || 'Erro ao criar conta. Tente novamente.'
+      };
+    }
+
+    // Fazer login automaticamente na Produção após criar
+    console.log('[hybridSignUp] Fazendo login automático na Produção...');
+    const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+
+    if (loginError) {
+      console.error('[hybridSignUp] Erro no login automático:', loginError.message);
+      // Usuário foi criado, mas login falhou - não é erro crítico
+      return {
+        success: true,
+        prodUserId: result.prodUserId,
+        cloudUserId: result.cloudUserId,
+        error: 'Conta criada! Por favor, faça login manualmente.'
+      };
+    }
+
+    console.log('[hybridSignUp] ✅ Cadastro completo! ProdID:', result.prodUserId, 'CloudID:', result.cloudUserId);
+    
+    return {
+      success: true,
+      user: loginData.user,
+      session: loginData.session,
+      prodUserId: result.prodUserId,
+      cloudUserId: result.cloudUserId,
+    };
+    
+  } catch (error: any) {
+    console.error('[hybridSignUp] Exceção:', error);
     return {
       success: false,
-      error: error.message.includes('already registered')
-        ? 'Este email já está cadastrado. Faça login ou recupere sua senha.'
-        : error.message
+      error: error.message || 'Erro ao criar conta. Tente novamente.'
     };
   }
-
-  console.log('[hybridSignUp] User created successfully:', data.user?.id);
-  return {
-    success: true,
-    user: data.user,
-    session: data.session
-  };
 };
 
 /**

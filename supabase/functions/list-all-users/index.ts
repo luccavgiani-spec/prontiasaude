@@ -6,8 +6,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// URLs dos dois ambientes - suporta execução em Cloud ou Produção
-const CLOUD_URL = Deno.env.get("CLOUD_SUPABASE_URL") || Deno.env.get("SUPABASE_URL")!;
+// URLs fixas dos dois ambientes
+const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
 const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface UserRecord {
@@ -46,28 +46,33 @@ async function fetchAllAuthUsers(client: ReturnType<typeof createClient>, label:
   console.log(`[list-all-users] Buscando auth.users de ${label}...`);
   
   while (true) {
-    const { data, error } = await client.auth.admin.listUsers({
-      page,
-      perPage,
-    });
-    
-    if (error) {
-      console.error(`[list-all-users] Erro ao buscar ${label} página ${page}:`, error);
+    try {
+      const { data, error } = await client.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+      
+      if (error) {
+        console.error(`[list-all-users] Erro ao buscar ${label} página ${page}:`, error.message);
+        break;
+      }
+      
+      if (!data?.users?.length) {
+        break;
+      }
+      
+      allUsers.push(...data.users);
+      console.log(`[list-all-users] ${label} página ${page}: ${data.users.length} usuários (total: ${allUsers.length})`);
+      
+      if (data.users.length < perPage) {
+        break;
+      }
+      
+      page++;
+    } catch (err: any) {
+      console.error(`[list-all-users] Exceção ao buscar ${label}:`, err.message);
       break;
     }
-    
-    if (!data?.users?.length) {
-      break;
-    }
-    
-    allUsers.push(...data.users);
-    console.log(`[list-all-users] ${label} página ${page}: ${data.users.length} usuários (total: ${allUsers.length})`);
-    
-    if (data.users.length < perPage) {
-      break;
-    }
-    
-    page++;
   }
   
   return allUsers;
@@ -84,27 +89,32 @@ async function fetchAllPatients(client: ReturnType<typeof createClient>, label: 
   console.log(`[list-all-users] Buscando patients de ${label}...`);
   
   while (true) {
-    const { data, error } = await client
-      .from('patients')
-      .select('*')
-      .range(offset, offset + limit - 1);
-    
-    if (error) {
-      console.error(`[list-all-users] Erro ao buscar patients ${label}:`, error);
+    try {
+      const { data, error } = await client
+        .from('patients')
+        .select('*')
+        .range(offset, offset + limit - 1);
+      
+      if (error) {
+        console.error(`[list-all-users] Erro ao buscar patients ${label}:`, error.message);
+        break;
+      }
+      
+      if (!data?.length) {
+        break;
+      }
+      
+      allPatients.push(...data);
+      
+      if (data.length < limit) {
+        break;
+      }
+      
+      offset += limit;
+    } catch (err: any) {
+      console.error(`[list-all-users] Exceção ao buscar patients ${label}:`, err.message);
       break;
     }
-    
-    if (!data?.length) {
-      break;
-    }
-    
-    allPatients.push(...data);
-    
-    if (data.length < limit) {
-      break;
-    }
-    
-    offset += limit;
   }
   
   console.log(`[list-all-users] ${label}: ${allPatients.length} patients`);
@@ -117,35 +127,96 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
+    console.log("[list-all-users] ========================================");
     console.log("[list-all-users] Iniciando busca unificada...");
     
-    // Criar clientes para ambos os ambientes
-    // Suporta execução tanto no Cloud quanto na Produção
-    const cloudServiceKey = Deno.env.get("CLOUD_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // =============================================
+    // OBTER SERVICE KEYS
+    // No Lovable Cloud:
+    //   - SUPABASE_SERVICE_ROLE_KEY = chave do Cloud (automático)
+    //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave da Produção (manual)
+    // =============================================
+    
+    // Cloud: usar SUPABASE_SERVICE_ROLE_KEY padrão (é o Cloud no Lovable)
+    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    // Produção: usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY 
+    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
     
     console.log("[list-all-users] Cloud URL:", CLOUD_URL);
     console.log("[list-all-users] Prod URL:", PRODUCTION_URL);
     console.log("[list-all-users] Cloud key exists:", !!cloudServiceKey);
+    console.log("[list-all-users] Cloud key length:", cloudServiceKey?.length || 0);
     console.log("[list-all-users] Prod key exists:", !!prodServiceKey);
+    console.log("[list-all-users] Prod key length:", prodServiceKey?.length || 0);
     
-    const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    // Validar que temos as credenciais da Produção
+    if (!prodServiceKey) {
+      console.error("[list-all-users] ❌ ORIGINAL_SUPABASE_SERVICE_ROLE_KEY não configurada!");
+      console.error("[list-all-users] A função só consegue buscar usuários do Cloud.");
+    }
     
-    const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    // Arrays para armazenar resultados
+    let cloudAuthUsers: any[] = [];
+    let cloudPatients: any[] = [];
+    let prodAuthUsers: any[] = [];
+    let prodPatients: any[] = [];
     
-    // Buscar em paralelo
-    const [cloudAuthUsers, prodAuthUsers, cloudPatients, prodPatients] = await Promise.all([
-      fetchAllAuthUsers(cloudClient, 'Cloud'),
-      fetchAllAuthUsers(prodClient, 'Produção'),
-      fetchAllPatients(cloudClient, 'Cloud'),
-      fetchAllPatients(prodClient, 'Produção'),
-    ]);
+    // =============================================
+    // BUSCAR DO CLOUD (se tiver credenciais)
+    // =============================================
+    if (cloudServiceKey) {
+      try {
+        const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        
+        console.log("[list-all-users] Buscando do Cloud...");
+        
+        const [cloudUsers, cloudPats] = await Promise.all([
+          fetchAllAuthUsers(cloudClient, 'Cloud'),
+          fetchAllPatients(cloudClient, 'Cloud'),
+        ]);
+        
+        cloudAuthUsers = cloudUsers;
+        cloudPatients = cloudPats;
+        
+        console.log(`[list-all-users] ✅ Cloud: ${cloudAuthUsers.length} auth.users, ${cloudPatients.length} patients`);
+      } catch (cloudErr: any) {
+        console.error("[list-all-users] ❌ Erro ao buscar Cloud:", cloudErr.message);
+      }
+    }
     
-    console.log(`[list-all-users] Totais: Cloud auth=${cloudAuthUsers.length}, Prod auth=${prodAuthUsers.length}, Cloud patients=${cloudPatients.length}, Prod patients=${prodPatients.length}`);
+    // =============================================
+    // BUSCAR DA PRODUÇÃO
+    // =============================================
+    if (prodServiceKey) {
+      try {
+        const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        
+        console.log("[list-all-users] Buscando da Produção...");
+        
+        const [prodUsers, prodPats] = await Promise.all([
+          fetchAllAuthUsers(prodClient, 'Produção'),
+          fetchAllPatients(prodClient, 'Produção'),
+        ]);
+        
+        prodAuthUsers = prodUsers;
+        prodPatients = prodPats;
+        
+        console.log(`[list-all-users] ✅ Produção: ${prodAuthUsers.length} auth.users, ${prodPatients.length} patients`);
+      } catch (prodErr: any) {
+        console.error("[list-all-users] ❌ Erro ao buscar Produção:", prodErr.message);
+      }
+    }
+    
+    console.log(`[list-all-users] Totais brutos: Cloud auth=${cloudAuthUsers.length}, Prod auth=${prodAuthUsers.length}`);
+    
+    // =============================================
+    // MESCLAR RESULTADOS
+    // =============================================
     
     // Criar mapas por email para mesclagem
     const emailToUserMap = new Map<string, UserRecord>();
@@ -268,9 +339,17 @@ serve(async (req: Request): Promise<Response> => {
       both: allUsers.filter(u => u.source === 'both').length,
       cloudAuthTotal: cloudAuthUsers.length,
       prodAuthTotal: prodAuthUsers.length,
+      cloudKeyConfigured: !!cloudServiceKey,
+      prodKeyConfigured: !!prodServiceKey,
     };
     
-    console.log(`[list-all-users] Resultado: ${JSON.stringify(stats)}`);
+    console.log(`[list-all-users] ========================================`);
+    console.log(`[list-all-users] RESULTADO FINAL:`);
+    console.log(`[list-all-users] - Total únicos: ${stats.totalUnique}`);
+    console.log(`[list-all-users] - Somente Cloud: ${stats.cloudOnly}`);
+    console.log(`[list-all-users] - Somente Produção: ${stats.productionOnly}`);
+    console.log(`[list-all-users] - Em ambos: ${stats.both}`);
+    console.log(`[list-all-users] ========================================`);
     
     return new Response(
       JSON.stringify({ 
@@ -282,7 +361,7 @@ serve(async (req: Request): Promise<Response> => {
     );
     
   } catch (error: any) {
-    console.error("[list-all-users] Erro:", error);
+    console.error("[list-all-users] Erro geral:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message || "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
