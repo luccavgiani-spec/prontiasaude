@@ -1,97 +1,142 @@
 
-# Plano de Correção: Loop Infinito no Cadastro da Monique
+# Plano de Correção: Erro de FK no Cadastro + Erro 500 na Ativação Manual
 
-## Problema Identificado
-O cadastro entra em loop entre `/completar-perfil` e `/auth/callback` porque:
-1. O usuário foi autenticado na **Produção** (via `hybridSignUp`)
-2. A sessão está salva em `supabaseProductionAuth` (chave `supabase-production-auth` no localStorage)
-3. O `AuthCallback.tsx` verifica **ambos** os ambientes e encontra a sessão
-4. Mas o `CompletarPerfil.tsx` usa `requireAuth()` que **só verifica o Cloud**
-5. Sem sessão no Cloud, `requireAuth()` redireciona para `/entrar`
-6. Login reconecta e o ciclo recomeça
+## Problemas Identificados
+
+### Problema 1: Cadastro de Pacientes (Monique - Screenshot)
+**Erro:** `insert or update on table "patients" violates foreign key constraint "patients_user_id_fkey"`
+
+**Causa:**
+- Usuário foi criado na **Produção** via `hybridSignUp`
+- Sessão está no cliente de Produção (`supabaseProductionAuth`)
+- O arquivo `src/lib/patients.ts` usa `supabase` (Cloud) para salvar na tabela `patients`
+- O `user_id` da Produção não existe em `auth.users` do Cloud → **FK violation**
+
+### Problema 2: Ativação Manual de Planos (Admin)
+**Erro:** `null value in column "id" of relation "patients" violates not-null constraint`
+
+**Causa:**
+- A edge function roda no Lovable Cloud
+- Quando tenta criar registro em `patients` com `user_id` da Produção, viola FK
+- O erro de FK é capturado mas sem fallback adequado
+
+---
 
 ## Arquivos que serão modificados
 
-1. `src/lib/auth.ts` - atualizar `requireAuth()` para suportar autenticação híbrida
+1. `src/lib/patients.ts` - Tornar híbrido para usar cliente correto
+2. `supabase/functions/patient-operations/index.ts` - Remover criação automática de paciente, usar apenas email
 
-## Escopo exato da correção
+---
 
-### Arquivo: `src/lib/auth.ts`
+## Correção 1: `src/lib/patients.ts` (Frontend - Cadastro)
 
-**ANTES (atual):**
+### Problema atual:
 ```typescript
-export const requireAuth = async (): Promise<{ user: User; session: Session } | null> => {
-  const { data: { session } } = await supabase.auth.getSession();
-  
-  if (!session?.user) {
-    window.location.href = '/entrar';
-    return null;
-  }
-  
-  return { user: session.user, session };
-};
+const { data: sess } = await supabase.auth.getSession();  // ❌ Só verifica Cloud
+// ...
+await supabase.from('patients').insert(updateData);  // ❌ Sempre usa Cloud
 ```
 
-**DEPOIS (corrigido):**
+### Solução:
+Usar `getHybridSession()` para detectar o ambiente e usar o cliente correto:
+
 ```typescript
 import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
 
-export const requireAuth = async (): Promise<{ user: User; session: Session } | null> => {
-  // ✅ HÍBRIDO: Verificar sessão em ambos os ambientes (Cloud e Produção)
+export async function upsertPatientBasic(payload: { ... }) {
+  // ✅ HÍBRIDO: Detectar ambiente correto
   const { session, environment } = await getHybridSession();
+  const userId = session?.user?.id;
+  const userEmail = session?.user?.email;
+  if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
+
+  // ✅ Usar cliente correto baseado no ambiente
+  const dbClient = environment === 'production' ? supabaseProduction : supabase;
   
-  if (!session?.user) {
-    window.location.href = '/entrar';
-    return null;
-  }
-  
-  // Salvar ambiente para uso posterior
-  if (environment) {
-    sessionStorage.setItem('auth_environment', environment);
-  }
-  
-  return { user: session.user, session };
-};
+  // ... resto da lógica usando dbClient em vez de supabase
+}
 ```
 
-Também atualizar `getPatient()` para usar o cliente correto:
+A função `ensurePatientRow` também precisa ser atualizada para aceitar o cliente correto como parâmetro.
+
+---
+
+## Correção 2: `supabase/functions/patient-operations/index.ts` (Backend - Ativação Manual)
+
+### Problema atual (linhas 1291-1361):
 ```typescript
-export const getPatient = async (userId: string): Promise<Patient | null> => {
-  // Verificar qual ambiente está ativo
-  const environment = sessionStorage.getItem('auth_environment') as 'cloud' | 'production' | null;
-  const client = environment === 'production' ? supabaseProduction : supabase;
-  
-  const { data, error } = await client
-    .from('patients' as any)
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
-    
-  if (error) {
-    console.error('Error fetching patient:', error);
-    return null;
-  }
-  
-  return data as unknown as Patient;
-};
+// TENTATIVA 3: Criar paciente automaticamente
+const { data: newPatient, error: insertPatientErr } = await supabase
+  .from('patients')
+  .insert({
+    email: normalizedPatientEmail,
+    user_id: userIdToLink,  // ❌ user_id da Produção viola FK no Cloud
+    // ...
+  })
 ```
 
-## Por que isso resolve o problema
+### Solução:
+NÃO tentar criar paciente. Apenas prosseguir com ativação usando email:
 
-1. `requireAuth()` agora usa `getHybridSession()` que verifica **ambos** os ambientes
-2. Se o usuário logou via Produção, a sessão será encontrada corretamente
-3. O fluxo de salvamento do perfil funcionará porque temos uma sessão válida
-4. O loop é quebrado porque o usuário não será mais redirecionado para `/entrar`
+```typescript
+// TENTATIVA 3: Se não encontrou paciente, NÃO criar - apenas prosseguir
+if (!patient) {
+  console.log('[activate_plan_manual] 3️⃣ Paciente não existe em patients');
+  console.log('[activate_plan_manual] ⚠️ Plano será ativado apenas pelo email');
+  
+  // Criar objeto "virtual" para compatibilidade
+  patient = { id: null, user_id: null };
+  patientLookupMethod = 'email_only_no_patient_record';
+}
 
-## Impacto
+// Remover verificação que exige patient.id
+// Ajustar upsert para usar patient.user_id apenas se existir
+```
 
-- **Baixo risco**: A função `getHybridSession()` já existe e é usada em `AuthCallback.tsx`
-- **Compatibilidade**: Usuários do Cloud continuarão funcionando normalmente
-- **Sem breaking changes**: A interface da função permanece a mesma
+---
+
+## Por que isso resolve
+
+### Cadastro (Monique):
+1. `upsertPatientBasic` detecta que a sessão está na Produção
+2. Usa `supabaseProduction` para inserir/atualizar em `patients`
+3. O `user_id` existe em `auth.users` da Produção → **Sem FK violation**
+
+### Ativação Manual:
+1. Se paciente não existe, não tenta criar (evita FK violation)
+2. Ativa o plano usando apenas o `email` (que é a chave real em `patient_plans`)
+3. O plano fica ativo e quando o usuário completar o cadastro, os dados serão vinculados
+
+---
 
 ## Validação pós-implementação
 
-1. Criar um novo usuário (cadastro normal)
-2. Verificar que não há loop entre páginas
-3. Confirmar que o perfil é salvo corretamente
-4. Testar login de usuários existentes (Cloud e Produção)
+### Teste Cadastro:
+1. Criar novo usuário (cadastro)
+2. Verificar que o perfil é salvo sem erro de FK
+3. Verificar que dados aparecem na tabela `patients` da Produção
+
+### Teste Ativação Manual:
+1. No Admin → Pacientes → selecionar usuário
+2. Ativar plano manualmente
+3. Confirmar: retorna `success: true`, plano fica ativo
+
+---
+
+## Confirmação (conforme política interna)
+
+1. **ARQUIVOS QUE SERÃO MODIFICADOS:**
+   - `src/lib/patients.ts`
+   - `supabase/functions/patient-operations/index.ts`
+
+2. **MOTIVO:** 
+   - Corrigir erro de FK no cadastro (Monique)
+   - Corrigir erro 500 na ativação manual
+
+3. **ESCOPO:** 
+   - `patients.ts`: Usar cliente híbrido (Cloud/Produção) baseado na sessão
+   - `patient-operations`: Remover criação automática de paciente, usar apenas email
+
+4. **CONFIRMAÇÃO: "Estas alterações estão explicitamente solicitadas?"** SIM
