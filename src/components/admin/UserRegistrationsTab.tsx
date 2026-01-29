@@ -112,10 +112,15 @@ export default function UserRegistrationsTab() {
   useEffect(() => {
     // Debounce search to avoid too many API calls
     const timeoutId = setTimeout(() => {
+      setPage(1); // Reset to first page when search changes
       loadPatients();
     }, search ? 300 : 0);
     return () => clearTimeout(timeoutId);
-  }, [page, statusFilter, search]);
+  }, [statusFilter, search]);
+  
+  useEffect(() => {
+    loadPatients();
+  }, [page]);
 
   const isPlaceholderPhone = (phone?: string) => phone === PLACEHOLDER_PHONE;
   const isInvalidCpf = (cpf?: string) => {
@@ -334,16 +339,28 @@ export default function UserRegistrationsTab() {
         })
       );
       
-      // Apply search filter FIRST (by email, name, or CPF)
+      // Apply search filter FIRST (by email, name, CPF, or phone)
       let filteredUsers = allUsers;
       if (search.trim()) {
         const searchLower = search.toLowerCase().trim();
-        filteredUsers = filteredUsers.filter(u => 
-          u.email?.toLowerCase().includes(searchLower) ||
-          u.patient?.first_name?.toLowerCase().includes(searchLower) ||
-          u.patient?.last_name?.toLowerCase().includes(searchLower) ||
-          u.patient?.cpf?.includes(search.replace(/\D/g, ''))
-        );
+        const searchDigits = search.replace(/\D/g, '');
+        filteredUsers = filteredUsers.filter(u => {
+          // Search in email
+          if (u.email?.toLowerCase().includes(searchLower)) return true;
+          // Search in first name
+          if (u.patient?.first_name?.toLowerCase().includes(searchLower)) return true;
+          // Search in last name
+          if (u.patient?.last_name?.toLowerCase().includes(searchLower)) return true;
+          // Search in full name (first + last)
+          const fullName = `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.toLowerCase();
+          if (fullName.includes(searchLower)) return true;
+          // Search in CPF (digits only)
+          if (searchDigits && u.patient?.cpf?.replace(/\D/g, '').includes(searchDigits)) return true;
+          // Search in phone (digits only)
+          if (searchDigits && u.patient?.phone_e164?.replace(/\D/g, '').includes(searchDigits)) return true;
+          return false;
+        });
+        console.log(`[UserRegistrationsTab] Filtro de busca: "${search}" -> ${filteredUsers.length} resultados`);
       }
       
       // Apply status filter
