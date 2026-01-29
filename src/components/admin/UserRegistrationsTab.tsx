@@ -110,8 +110,12 @@ export default function UserRegistrationsTab() {
   const limit = 50;
 
   useEffect(() => {
-    loadPatients();
-  }, [page, statusFilter]);
+    // Debounce search to avoid too many API calls
+    const timeoutId = setTimeout(() => {
+      loadPatients();
+    }, search ? 300 : 0);
+    return () => clearTimeout(timeoutId);
+  }, [page, statusFilter, search]);
 
   const isPlaceholderPhone = (phone?: string) => phone === PLACEHOLDER_PHONE;
   const isInvalidCpf = (cpf?: string) => {
@@ -319,26 +323,37 @@ export default function UserRegistrationsTab() {
         })
       );
       
-      // Apply status filter
+      // Apply search filter FIRST (by email, name, or CPF)
       let filteredUsers = allUsers;
+      if (search.trim()) {
+        const searchLower = search.toLowerCase().trim();
+        filteredUsers = filteredUsers.filter(u => 
+          u.email?.toLowerCase().includes(searchLower) ||
+          u.patient?.first_name?.toLowerCase().includes(searchLower) ||
+          u.patient?.last_name?.toLowerCase().includes(searchLower) ||
+          u.patient?.cpf?.includes(search.replace(/\D/g, ''))
+        );
+      }
+      
+      // Apply status filter
       if (statusFilter === 'with_account') {
-        filteredUsers = allUsers.filter(u => u.hasAuthAccount);
+        filteredUsers = filteredUsers.filter(u => u.hasAuthAccount);
       } else if (statusFilter === 'without_account') {
-        filteredUsers = allUsers.filter(u => !u.hasAuthAccount);
+        filteredUsers = filteredUsers.filter(u => !u.hasAuthAccount);
       } else if (statusFilter === 'with_plan') {
-        filteredUsers = allUsers.filter(u => u.activePlan);
+        filteredUsers = filteredUsers.filter(u => u.activePlan);
       } else if (statusFilter === 'incomplete_data') {
-        filteredUsers = allUsers.filter(u => u.hasMissingCriticalData);
+        filteredUsers = filteredUsers.filter(u => u.hasMissingCriticalData);
       } else if (statusFilter === 'invalid_phone') {
-        filteredUsers = allUsers.filter(u => u.hasPlaceholderPhone);
+        filteredUsers = filteredUsers.filter(u => u.hasPlaceholderPhone);
       } else if (statusFilter === 'invalid_cpf') {
-        filteredUsers = allUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
+        filteredUsers = filteredUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
       } else if (statusFilter === 'critical_with_plan') {
-        filteredUsers = allUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
+        filteredUsers = filteredUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
       } else if (statusFilter === 'cloud_only') {
-        filteredUsers = allUsers.filter(u => u.source === 'cloud');
+        filteredUsers = filteredUsers.filter(u => u.source === 'cloud');
       } else if (statusFilter === 'production_only') {
-        filteredUsers = allUsers.filter(u => u.source === 'production');
+        filteredUsers = filteredUsers.filter(u => u.source === 'production');
       }
 
       // Paginar localmente
