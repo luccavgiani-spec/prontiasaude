@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
 
 export interface PatientPlan {
   id?: string;
@@ -6,12 +7,47 @@ export interface PatientPlan {
   plan_expires_at?: string;
   status?: string;
   created_at?: string;
+  updated_at?: string;
 }
 
 // Helper: retorna data de hoje no formato YYYY-MM-DD (para comparar com DATE do banco)
 const getTodayDateString = (): string => {
   const now = new Date();
   return now.toISOString().split('T')[0]; // "2026-01-12"
+};
+
+/**
+ * Busca plano de paciente diretamente no banco de PRODUÇÃO
+ * Usa patient.id como chave (conforme schema: id, plan_code, plan_expires_at, status, created_at, updated_at)
+ */
+export const getPatientPlanFromProduction = async (patientId: string): Promise<PatientPlan | null> => {
+  try {
+    const todayStr = getTodayDateString();
+    
+    const { data, error } = await supabaseProduction
+      .from('patient_plans')
+      .select('id, plan_code, plan_expires_at, status, created_at, updated_at')
+      .eq('id', patientId)
+      .eq('status', 'active')
+      .gte('plan_expires_at', todayStr)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[patient-plan-production] Error:', error);
+      return null;
+    }
+
+    if (!data) {
+      console.log('[patient-plan-production] No active plan found for patientId:', patientId);
+      return null;
+    }
+
+    console.log('[patient-plan-production] Active plan found:', data);
+    return data;
+  } catch (error) {
+    console.error('[patient-plan-production] Exception:', error);
+    return null;
+  }
 };
 
 export const getPatientPlan = async (email: string, byEmailOnly: boolean = false): Promise<PatientPlan | null> => {

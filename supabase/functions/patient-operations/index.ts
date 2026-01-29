@@ -1057,6 +1057,55 @@ serve(async (req) => {
         );
       }
 
+      case 'deactivate_plan_manual': {
+        // ============================================================
+        // ✅ REMOVER/CANCELAR PLANO MANUALMENTE
+        // Usado pelo painel admin para desativar plano de um paciente
+        // ============================================================
+        
+        const { patient_id } = body;
+        
+        if (!patient_id) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Missing patient_id' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[deactivate_plan_manual] Desativando plano para patient_id:', patient_id);
+        
+        // Atualizar status para 'cancelled' no banco de PRODUÇÃO
+        const { error: updateError } = await supabase
+          .from('patient_plans')
+          .update({ 
+            status: 'cancelled',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', patient_id);
+        
+        if (updateError) {
+          console.error('[deactivate_plan_manual] Erro:', updateError.message);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Failed to deactivate plan',
+              details: updateError.message 
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        console.log('[deactivate_plan_manual] ✅ Plano desativado com sucesso');
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'Plan deactivated successfully'
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       case 'activate_plan_manual': {
         // ============================================================
         // ✅ ARQUITETURA CROSS-PROJECT:
