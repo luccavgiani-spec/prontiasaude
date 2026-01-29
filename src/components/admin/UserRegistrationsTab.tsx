@@ -11,9 +11,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import { getPatientPlan } from '@/lib/patient-plan';
+import { getPatientPlanFromProduction } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
 import { EditPatientModal } from './EditPatientModal';
@@ -178,7 +178,8 @@ export default function UserRegistrationsTab() {
       const usersWithPlans = await Promise.all(
         (patients || []).map(async (patient: Patient) => {
           try {
-            const plan = await getPatientPlan(patient.email, true);
+            // ✅ CORREÇÃO: Buscar plano de PRODUÇÃO por patient.id
+            const plan = await getPatientPlanFromProduction(patient.id);
             // Para plan_expires_at (DATE), considerar ativo se expira hoje ou depois
             // Normalizar expiresAt para fim do dia para garantir que "hoje" é válido
             const expiresAt = plan?.plan_expires_at ? new Date(plan.plan_expires_at + 'T23:59:59') : null;
@@ -312,6 +313,38 @@ export default function UserRegistrationsTab() {
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Erro ao deletar usuário');
+    }
+  };
+
+  const handleRemovePlan = async (user: User) => {
+    if (!confirm(`Deseja realmente remover o plano de ${user.email}?\n\nEsta ação irá cancelar o plano ativo.`)) {
+      return;
+    }
+
+    try {
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
+        body: {
+          operation: 'deactivate_plan_manual',
+          patient_id: user.patientId
+        }
+      });
+
+      if (error) {
+        console.error('[handleRemovePlan] Error:', error);
+        toast.error('Erro ao remover plano');
+        return;
+      }
+
+      if (!data?.success) {
+        toast.error(data?.error || 'Erro ao remover plano');
+        return;
+      }
+
+      toast.success('Plano removido com sucesso!');
+      loadPatients();
+    } catch (error) {
+      console.error('[handleRemovePlan] Exception:', error);
+      toast.error('Erro inesperado ao remover plano');
     }
   };
 
@@ -705,11 +738,24 @@ export default function UserRegistrationsTab() {
                         )}
                       </TableCell>
                       <TableCell>
-                        {user.activePlan ? (
-                          <Badge variant="default" className="bg-green-600 text-xs">✓ {user.planCode}</Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs">✗</Badge>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {user.activePlan ? (
+                            <>
+                              <Badge variant="default" className="bg-green-600 text-xs">✓ {user.planCode}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleRemovePlan(user)}
+                                title="Remover Plano"
+                                className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                              </Button>
+                            </>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">✗</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
