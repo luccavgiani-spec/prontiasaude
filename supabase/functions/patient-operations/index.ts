@@ -1215,60 +1215,22 @@ serve(async (req) => {
           user_id: patient.user_id 
         });
 
-        // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO (com fallback resiliente)
+        // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
+        // NOTA: Usando apenas as colunas que existem no schema real de produção:
+        // id, plan_code, plan_expires_at, status, created_at, updated_at, email
         console.log('[activate_plan_manual] Upserting plano...');
         
-        // Payload completo (tentativa 1)
-        const planPayloadFull = {
-          patient_id: patient.id,
-          user_id: patient.user_id,
+        const planPayload = {
           email: patient_email.toLowerCase().trim(),
           plan_code: plan_code,
           status: 'active',
           plan_expires_at: expiresAtDate,
-          activated_at: new Date().toISOString(),
-          activated_by: adminEmail,
           updated_at: new Date().toISOString()
         };
 
-        let usedFallback = false;
-        let { error: upsertError } = await supabase
+        const { error: upsertError } = await supabase
           .from('patient_plans')
-          .upsert(planPayloadFull, { onConflict: 'email' });
-
-        // ✅ Fallback: Se falhar por schema cache/coluna ausente, tentar sem activated_at/activated_by
-        if (upsertError && upsertError.message && 
-            upsertError.message.includes('schema cache') && 
-            (upsertError.message.includes('activated_at') || upsertError.message.includes('activated_by'))) {
-          
-          console.warn('[activate_plan_manual] ⚠️ FALLBACK ACIONADO: removendo campos activated_at/activated_by');
-          console.warn('[activate_plan_manual] Erro original:', upsertError.message);
-          
-          // Payload mínimo (sem colunas problemáticas)
-          const planPayloadFallback = {
-            patient_id: patient.id,
-            user_id: patient.user_id,
-            email: patient_email.toLowerCase().trim(),
-            plan_code: plan_code,
-            status: 'active',
-            plan_expires_at: expiresAtDate,
-            updated_at: new Date().toISOString()
-          };
-
-          const fallbackResult = await supabase
-            .from('patient_plans')
-            .upsert(planPayloadFallback, { onConflict: 'email' });
-          
-          if (!fallbackResult.error) {
-            usedFallback = true;
-            upsertError = null; // Sucesso via fallback
-            console.log('[activate_plan_manual] ✅ Fallback funcionou! Plano ativado sem activated_at/activated_by');
-          } else {
-            // Fallback também falhou
-            console.error('[activate_plan_manual] ❌ Fallback também falhou:', fallbackResult.error.message);
-            upsertError = fallbackResult.error;
-          }
-        }
+          .upsert(planPayload, { onConflict: 'email' });
 
         if (upsertError) {
           console.error('[activate_plan_manual] Erro no upsert:', upsertError.message);
@@ -1277,8 +1239,7 @@ serve(async (req) => {
               success: false, 
               step: 'plan_upsert', 
               error: 'Failed to upsert plan',
-              details: upsertError.message,
-              hint: 'Verifique se a coluna activated_at existe no banco e se o schema cache foi recarregado no projeto correto (NOTIFY pgrst, reload schema).'
+              details: upsertError.message
             }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
@@ -1343,23 +1304,14 @@ serve(async (req) => {
           console.log('[activate_plan_manual] Email notification queued for:', patient_email);
         }
 
-        // Resposta de sucesso com warning opcional se fallback foi usado
-        const successResponse: Record<string, any> = { 
-          success: true,
-          step: 'complete',
-          message: 'Plan activated successfully',
-          expires_at: expiresAtDate,
-          patient_id: patient.id,
-          activated_by: adminEmail
-        };
-        
-        if (usedFallback) {
-          successResponse.warning = 'activated_at_column_unavailable_fallback_used';
-          successResponse.hint = 'A coluna activated_at não foi gravada. Execute NOTIFY pgrst, reload schema no seu banco de produção e adicione a coluna se não existir.';
-        }
-
         return new Response(
-          JSON.stringify(successResponse),
+          JSON.stringify({ 
+            success: true,
+            step: 'complete',
+            message: 'Plan activated successfully',
+            expires_at: expiresAtDate,
+            patient_id: patient.id
+          }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
