@@ -330,18 +330,22 @@ Deno.serve(async (req) => {
           planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
         }
         
-        // Buscar patient_id pelo email
+        // ✅ CORREÇÃO: Buscar patient_id E user_id pelo email
         const patientEmail = schedulePayload.email?.toLowerCase()?.trim();
         let patientId = null;
+        let userId = null;
         
         if (patientEmail) {
           const { data: patient } = await supabaseAdmin
             .from('patients')
-            .select('id')
+            .select('id, user_id')  // ✅ Buscar user_id também
             .eq('email', patientEmail)
             .maybeSingle();
           patientId = patient?.id || null;
+          userId = patient?.user_id || null;  // ✅ NOVO: Capturar user_id
         }
+        
+        console.log('[check-payment-status] 👤 Patient lookup:', { patientEmail, patientId, userId });
         
         // Verificar se já existe um plano ativo
         const { data: existingPlan } = await supabaseAdmin
@@ -357,10 +361,12 @@ Deno.serve(async (req) => {
         if (existingPlan) {
           console.log('[check-payment-status] ⚠️ Plano já existe e está ativo, atualizando expiração');
           
+          // ✅ CORREÇÃO: Também atualizar user_id se estava NULL
           const { error: updateError } = await supabaseAdmin
             .from('patient_plans')
             .update({
               plan_expires_at: planExpiresAt.toISOString().split('T')[0],
+              user_id: userId,  // ✅ Atualizar user_id se faltava
               updated_at: new Date().toISOString()
             })
             .eq('id', existingPlan.id);
@@ -373,6 +379,7 @@ Deno.serve(async (req) => {
             .insert({
               email: patientEmail,
               patient_id: patientId,
+              user_id: userId,  // ✅ CORREÇÃO: Incluir user_id
               plan_code: sku,
               plan_expires_at: planExpiresAt.toISOString().split('T')[0],
               start_date: new Date().toISOString().split('T')[0],

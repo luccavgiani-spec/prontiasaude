@@ -891,29 +891,30 @@ Deno.serve(async (req) => {
         // Fallback: buscar via query em patients que já tem o id do auth
       } catch (_) {}
 
+      // ✅ CORREÇÃO: Buscar id, user_id e email do paciente
       const { data: existingPatient } = await supabaseAdmin
         .from('patients')
-        .select('id, email')
+        .select('id, user_id, email')  // ✅ Incluir user_id
         .eq('email', schedulePayload.email)
         .maybeSingle();
 
+      let patientId: string | null = null;
+      
       if (existingPatient) {
-        userId = existingPatient.id;
-        console.log('[mp-webhook] ✅ Patient já existe:', userId);
+        patientId = existingPatient.id;           // ✅ UUID da tabela patients
+        userId = existingPatient.user_id || null; // ✅ CORREÇÃO: UUID de auth.users (não patients.id!)
+        console.log('[mp-webhook] ✅ Patient já existe:', { patientId, userId });
         
         // ✅ GARANTIR que email está preenchido no paciente
         if (!existingPatient.email) {
           await supabaseAdmin
             .from('patients')
             .update({ email: schedulePayload.email })
-            .eq('id', userId);
+            .eq('id', patientId);
           console.log('[mp-webhook] ✅ Email atualizado no patient existente');
         }
       } else {
         console.log('[mp-webhook] 🆕 Criando registro de paciente para:', schedulePayload.email);
-        
-        // Tentar buscar user_id existente em auth.users pelo email
-        // Como não podemos buscar diretamente, usamos o email do payer para o id
         
         // Criar registro básico do paciente
         const { data: newPatient, error: patientError } = await supabaseAdmin
@@ -927,14 +928,15 @@ Deno.serve(async (req) => {
             profile_complete: false,
             clubeben_status: 'pending'
           })
-          .select('id')
+          .select('id, user_id')  // ✅ Retornar user_id também
           .single();
         
         if (patientError) {
           console.error('[mp-webhook] ❌ Erro ao criar patient:', patientError);
         } else if (newPatient) {
           console.log('[mp-webhook] ✅ Patient criado com sucesso:', newPatient.id);
-          userId = newPatient.id;
+          patientId = newPatient.id;
+          userId = newPatient.user_id || null;  // ✅ Capturar user_id do novo paciente
           
           // ✅ Se temos contact_id no schedulePayload, atualizar
           if (schedulePayload.contact_id) {
@@ -959,23 +961,14 @@ Deno.serve(async (req) => {
         planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
       }
 
-      // ✅ CRIAR patient_plans COM user_id GARANTIDO
-      console.log('[mp-webhook] 📝 Criando plano com user_id:', userId, 'email:', schedulePayload.email);
-      
-      // ✅ CORREÇÃO: Buscar patient_id também
-      let patientId: string | null = null;
-      const { data: patientData } = await supabaseAdmin
-        .from('patients')
-        .select('id')
-        .eq('email', schedulePayload.email?.toLowerCase()?.trim())
-        .maybeSingle();
-      patientId = patientData?.id || null;
+      // ✅ CRIAR patient_plans COM user_id E patient_id CORRETOS
+      console.log('[mp-webhook] 📝 Criando plano:', { userId, patientId, email: schedulePayload.email });
       
       const { error: planError } = await supabaseAdmin
         .from('patient_plans')
         .insert({
-          user_id: userId,
-          patient_id: patientId,
+          user_id: userId,       // ✅ UUID de auth.users (pode ser null se não registrado)
+          patient_id: patientId, // ✅ UUID de patients
           email: schedulePayload.email,
           plan_code: schedulePayload.sku,
           plan_expires_at: planExpiresAt.toISOString(),

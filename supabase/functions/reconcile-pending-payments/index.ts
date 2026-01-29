@@ -202,20 +202,24 @@ Deno.serve(async (req) => {
               planExpiresAt.setMonth(planExpiresAt.getMonth() + 1);
             }
             
-            // Buscar patient_id pelo email
+            // ✅ CORREÇÃO: Buscar patient_id E user_id pelo email
             const patientEmail = (schedulePayload?.email || payment.patient_email)?.toLowerCase()?.trim();
             let patientId = null;
+            let userId = null;
             let patientData = null;
             
             if (patientEmail) {
               const { data: patient } = await supabase
                 .from('patients')
-                .select('id, first_name, last_name, cpf, phone_e164, gender, birth_date')
+                .select('id, user_id, first_name, last_name, cpf, phone_e164, gender, birth_date')  // ✅ Incluir user_id
                 .eq('email', patientEmail)
                 .maybeSingle();
               patientId = patient?.id || null;
+              userId = patient?.user_id || null;  // ✅ NOVO: Capturar user_id
               patientData = patient;
             }
+            
+            console.log(`[reconcile-pending-payments] 👤 Patient lookup:`, { patientEmail, patientId, userId });
             
             // Verificar se já existe plano ativo
             const { data: existingPlan } = await supabase
@@ -233,6 +237,7 @@ Deno.serve(async (req) => {
                 .insert({
                   email: patientEmail,
                   patient_id: patientId,
+                  user_id: userId,  // ✅ CORREÇÃO: Incluir user_id
                   plan_code: sku,
                   plan_expires_at: planExpiresAt.toISOString().split('T')[0],
                   start_date: new Date().toISOString().split('T')[0],
