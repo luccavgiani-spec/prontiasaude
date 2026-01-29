@@ -81,10 +81,35 @@ const AreaDoPaciente = () => {
         
         setPatient(fallbackData as Patient);
       } else if (!data || !data.profile_complete) {
-        // Se não encontrou paciente ou perfil incompleto, redirecionar
-        console.log('[AreaDoPaciente] Perfil incompleto, redirecionando para /completar-perfil');
-        window.location.replace('/completar-perfil');
-        return;
+        // ✅ CORREÇÃO: Antes de redirecionar, tentar buscar no OUTRO ambiente
+        // (o perfil pode estar completo na Produção mas não existir no Cloud)
+        console.log('[AreaDoPaciente] Perfil incompleto no ambiente', environment, '- tentando fallback...');
+        
+        const otherClient = environment === 'production' ? supabase : supabaseProductionAuth;
+        const otherEnvName = environment === 'production' ? 'cloud' : 'production';
+        
+        const { data: fallbackData, error: fallbackError } = await otherClient
+          .from('patients')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        
+        console.log('[AreaDoPaciente] Fallback no', otherEnvName, ':', { 
+          found: !!fallbackData, 
+          profile_complete: fallbackData?.profile_complete,
+          error: fallbackError?.message 
+        });
+        
+        if (fallbackData?.profile_complete) {
+          // ✅ Encontrou perfil completo no outro ambiente - usar esse
+          console.log('[AreaDoPaciente] ✅ Usando perfil do ambiente', otherEnvName);
+          setPatient(fallbackData as Patient);
+        } else {
+          // Não encontrou perfil completo em nenhum ambiente - redirecionar
+          console.log('[AreaDoPaciente] Perfil incompleto em ambos ambientes, redirecionando para /completar-perfil');
+          window.location.replace('/completar-perfil');
+          return;
+        }
       } else {
         setPatient(data as Patient);
       }
