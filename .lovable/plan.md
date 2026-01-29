@@ -1,4 +1,3 @@
-
 # Plano de Correção: Lista de Pacientes + Cadastro de Novos Usuários
 
 ## Diagnóstico Confirmado
@@ -8,9 +7,11 @@
 **Causa Raiz**: A Edge Function `list-all-users` **NÃO ESTÁ DEPLOYADA** no Supabase de Produção.
 
 Quando acessei diretamente:
+
 ```
 https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users
 ```
+
 Resposta: `{"code":"NOT_FOUND","message":"Requested function was not found"}`
 
 O frontend (`edge-functions.ts`) está configurado para chamar `https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/list-all-users`, mas a função não existe lá. Por isso o código cai no fallback que busca apenas os 220 patients da tabela de Produção.
@@ -18,6 +19,7 @@ O frontend (`edge-functions.ts`) está configurado para chamar `https://ploqujuh
 ### Problema 2: Novo usuário não consegue se cadastrar
 
 Os logs de `check-user-exists` mostram que o email `sidneiasoaresferreira61@gmail.com`:
+
 - Não existe no Cloud (450 usuários verificados)
 - Não existe na Produção (220 usuários verificados)
 - `canRegister: true` - ou seja, pode se cadastrar
@@ -40,6 +42,7 @@ Você precisa fazer o deploy MANUAL da função no Supabase de Produção:
 6. Clique em **Deploy**
 
 Alternativamente, via Supabase CLI:
+
 ```bash
 supabase functions deploy list-all-users --project-ref ploqujuhpwutpcibedbr
 ```
@@ -48,10 +51,10 @@ supabase functions deploy list-all-users --project-ref ploqujuhpwutpcibedbr
 
 Confirme que estas secrets estão configuradas em **Edge Functions > Secrets**:
 
-| Secret Name | Valor |
-|-------------|-------|
-| `CLOUD_SUPABASE_URL` | `https://yrsjluhhnhxogdgnbnya.supabase.co` |
-| `CLOUD_SUPABASE_SERVICE_ROLE_KEY` | (a service role key do Lovable Cloud) |
+| Secret Name                          | Valor                                              |
+| ------------------------------------ | -------------------------------------------------- |
+| `CLOUD_SUPABASE_URL`                 | `https://yrsjluhhnhxogdgnbnya.supabase.co`         |
+| `CLOUD_SUPABASE_SERVICE_ROLE_KEY`    | (a service role key do Lovable Cloud)              |
 | `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` | (já deve existir - a service role key da Produção) |
 
 ### Parte 3: Depurar o Cadastro do Novo Usuário
@@ -63,11 +66,13 @@ Para entender por que o cadastro está falhando, preciso que você:
 3. Me envie o erro que aparecer (ou um screenshot)
 
 O fluxo de cadastro é:
+
 1. `checkUserExists()` - OK (retorna `canRegister: true`)
 2. `hybridSignUp()` - chama `supabaseProductionAuth.auth.signUp()`
 3. Sincroniza com tabela `patients`
 
 Se o passo 2 falha, pode ser:
+
 - Problema com a configuração de email do Supabase de Produção
 - Validação de senha muito restritiva
 - Algum erro de rede ou CORS
