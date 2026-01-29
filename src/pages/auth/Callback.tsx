@@ -71,11 +71,13 @@ const AuthCallback = () => {
         return;
       }
       
-      try {
-        await ensurePatientRow(session.user.id);
-      } catch (e) {
-        console.error('ensurePatientRow error:', e);
-      }
+try {
+  // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente
+  const patientDbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
+  await ensurePatientRow(session.user.id, patientDbClient);
+} catch (e) {
+  console.error('ensurePatientRow error:', e);
+}
 
       // Check if this is a successful payment redirect (from Mercado Pago)
       const urlParams = new URLSearchParams(window.location.search);

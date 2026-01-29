@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -519,8 +520,12 @@ const CompletarPerfil = () => {
     }
     
     try {
-      // ✅ VERIFICAR CPF DUPLICADO
-      const { data: existingCPF } = await supabase
+      // ✅ HÍBRIDO: Detectar ambiente para usar cliente correto
+      const { environment } = await getHybridSession();
+      const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
+      
+      // ✅ VERIFICAR CPF DUPLICADO (usando cliente híbrido)
+      const { data: existingCPF } = await dbClient
         .from('patients')
         .select('id')
         .eq('cpf', formData.cpf.replace(/\D/g, ''))
@@ -564,8 +569,8 @@ const CompletarPerfil = () => {
         source: inviteData ? 'empresa_invite' : undefined
       });
       
-      // ✅ Verificar se dados foram salvos corretamente (verificação robusta)
-      const { data: savedPatient, error: checkError } = await supabase
+      // ✅ Verificar se dados foram salvos corretamente (usando mesmo cliente híbrido)
+      const { data: savedPatient, error: checkError } = await dbClient
         .from('patients')
         .select('id, user_id, cpf, phone_e164, cep, first_name, last_name, birth_date, profile_complete')
         .eq('user_id', activeUser.id)
