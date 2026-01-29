@@ -1052,71 +1052,88 @@ serve(async (req) => {
       }
 
       case 'activate_plan_manual': {
-        // ✅ Validar admin usando decodificação do JWT + verificação no banco
-        // (cross-project JWT não pode ser validado via supabase.auth.getUser)
+        // ============================================================
+        // ✅ ARQUITETURA CROSS-PROJECT:
+        // 1. Validar token no LOVABLE CLOUD (onde admin fez login)
+        // 2. Verificar role admin no LOVABLE CLOUD
+        // 3. Executar ativação no BANCO DE PRODUÇÃO
+        // ============================================================
+        
         const token = authHeader?.replace('Bearer ', '');
         
         if (!token) {
           return new Response(
-            JSON.stringify({ error: 'Unauthorized - No token provided' }),
+            JSON.stringify({ success: false, step: 'admin_auth', error: 'No token provided' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Decodificar JWT sem validar assinatura (cross-project)
-        let userEmail: string | null = null;
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          userEmail = payload.email;
-          console.log('[activate_plan_manual] Decoded JWT email:', userEmail);
-        } catch (e) {
-          console.error('[activate_plan_manual] Failed to decode JWT:', e);
+        // ✅ PASSO 1: Criar client do LOVABLE CLOUD para validar o JWT
+        const LOVABLE_CLOUD_URL = 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+        const LOVABLE_CLOUD_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY';
+        
+        const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${token}` } }
+        });
+
+        // ✅ PASSO 2: Validar token usando getUser() no Lovable Cloud
+        console.log('[activate_plan_manual] Validando token no Lovable Cloud...');
+        const { data: authData, error: authError } = await authClient.auth.getUser();
+        
+        if (authError || !authData?.user) {
+          console.error('[activate_plan_manual] Token inválido no Lovable Cloud:', authError?.message);
           return new Response(
-            JSON.stringify({ error: 'Invalid token format' }),
+            JSON.stringify({ 
+              success: false, 
+              step: 'admin_auth', 
+              error: 'Invalid token - could not validate in auth server',
+              details: authError?.message 
+            }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        if (!userEmail) {
-          return new Response(
-            JSON.stringify({ error: 'No email in token' }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+        const adminUserId = authData.user.id;
+        const adminEmail = authData.user.email;
+        console.log('[activate_plan_manual] Token válido. Admin user:', { id: adminUserId, email: adminEmail });
 
-        // Buscar user_id pelo email na tabela patients (usuários admin também estão lá)
-        const { data: adminPatient } = await supabase
-          .from('patients')
-          .select('user_id')
-          .eq('email', userEmail.toLowerCase().trim())
-          .maybeSingle();
-
-        if (!adminPatient?.user_id) {
-          console.error('[activate_plan_manual] Admin not found in patients table:', userEmail);
-          return new Response(
-            JSON.stringify({ error: 'Admin user not found' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        // Verificar se é admin no banco de produção
-        const { data: roles } = await supabase
+        // ✅ PASSO 3: Verificar role admin no Lovable Cloud
+        console.log('[activate_plan_manual] Verificando role admin no Lovable Cloud...');
+        const { data: roles, error: rolesError } = await authClient
           .from('user_roles')
           .select('role')
-          .eq('user_id', adminPatient.user_id);
+          .eq('user_id', adminUserId);
         
-        console.log('[activate_plan_manual] User roles:', roles);
-        
-        if (!roles?.some((r: any) => r.role === 'admin')) {
-          console.error('[activate_plan_manual] User is not admin:', userEmail);
+        if (rolesError) {
+          console.error('[activate_plan_manual] Erro ao buscar roles:', rolesError.message);
           return new Response(
-            JSON.stringify({ error: 'Forbidden - Admin only' }),
+            JSON.stringify({ 
+              success: false, 
+              step: 'admin_role_check', 
+              error: 'Failed to check admin role',
+              details: rolesError.message 
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const isAdmin = roles?.some((r: any) => r.role === 'admin');
+        console.log('[activate_plan_manual] Roles encontradas:', roles, '| É admin?', isAdmin);
+        
+        if (!isAdmin) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              step: 'admin_role_check', 
+              error: 'Forbidden - Admin role required',
+              details: `User ${adminEmail} does not have admin role` 
+            }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // ✅ Admin validado! Criar objeto user simulado para logs
-        const user = { id: adminPatient.user_id, email: userEmail };
+        // ✅ Admin validado! Agora executar no banco de PRODUÇÃO
+        console.log('[activate_plan_manual] ✅ Admin validado! Executando no banco de produção...');
 
         const { 
           patient_email, 
@@ -1130,85 +1147,113 @@ serve(async (req) => {
         if (!patient_email || !plan_code || !duration_days) {
           return new Response(
             JSON.stringify({ 
+              success: false,
+              step: 'validation',
               error: 'Missing required fields: patient_email, plan_code, duration_days' 
             }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Calcular data de expiração
+        // Calcular data de expiração (formato DATE para o banco)
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + parseInt(duration_days));
+        const expiresAtDate = expiresAt.toISOString().split('T')[0]; // YYYY-MM-DD
 
-        // Buscar dados completos do paciente
-        const { data: patient } = await supabase
+        // ✅ PASSO 4: Buscar paciente no banco de PRODUÇÃO
+        console.log('[activate_plan_manual] Buscando paciente:', patient_email);
+        const { data: patient, error: patientError } = await supabase
           .from('patients')
           .select('id, user_id')
-          .eq('email', patient_email)
-          .single();
+          .eq('email', patient_email.toLowerCase().trim())
+          .maybeSingle();
+
+        if (patientError) {
+          console.error('[activate_plan_manual] Erro ao buscar paciente:', patientError.message);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              step: 'patient_lookup', 
+              error: 'Database error looking up patient',
+              details: patientError.message 
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
 
         if (!patient) {
-          console.error('[activate_plan_manual] Patient not found:', patient_email);
+          console.error('[activate_plan_manual] Paciente não encontrado:', patient_email);
           return new Response(
-            JSON.stringify({ error: 'Paciente não encontrado com este email' }),
+            JSON.stringify({ 
+              success: false, 
+              step: 'patient_lookup', 
+              error: 'Paciente não encontrado com este email' 
+            }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        console.log('[activate_plan_manual] Found patient:', { 
+        console.log('[activate_plan_manual] Paciente encontrado:', { 
           patient_id: patient.id, 
           user_id: patient.user_id 
         });
 
-        // Upsert plano na tabela patient_plans
+        // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
+        console.log('[activate_plan_manual] Upserting plano...');
         const { error: upsertError } = await supabase
           .from('patient_plans')
           .upsert({
-            patient_id: patient.id,           // ID da tabela patients
-            user_id: patient.user_id,         // ID do auth.users (pode ser null)
+            patient_id: patient.id,
+            user_id: patient.user_id,
             email: patient_email.toLowerCase().trim(),
             plan_code: plan_code,
             status: 'active',
-            plan_expires_at: expiresAt.toISOString(),
+            plan_expires_at: expiresAtDate,
+            activated_at: new Date().toISOString(),
+            activated_by: adminEmail,
             updated_at: new Date().toISOString()
           }, {
             onConflict: 'email'
           });
 
         if (upsertError) {
-          console.error('[activate_plan_manual] Error upserting plan:', upsertError);
+          console.error('[activate_plan_manual] Erro no upsert:', upsertError.message);
           return new Response(
-            JSON.stringify({ error: upsertError.message }),
+            JSON.stringify({ 
+              success: false, 
+              step: 'plan_upsert', 
+              error: 'Failed to upsert plan',
+              details: upsertError.message 
+            }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Registrar métrica de auditoria
-        await supabase.from('metrics').insert({
-          metric_type: 'manual_plan_activation',
-          patient_email: patient_email,
-          plan_code: plan_code,
-          status: 'success',
-          platform: 'admin_dashboard',
-          metadata: {
-            activated_by_admin: user.email,
-            duration_days: duration_days,
-            expires_at: expiresAt.toISOString(),
-            timestamp: new Date().toISOString()
-          }
-        });
+        // ✅ PASSO 6: Registrar métrica de auditoria
+        try {
+          await supabase.from('metrics').insert({
+            metric_type: 'manual_plan_activation',
+            metadata: {
+              patient_email: patient_email,
+              plan_code: plan_code,
+              activated_by_admin: adminEmail,
+              duration_days: duration_days,
+              expires_at: expiresAtDate,
+              timestamp: new Date().toISOString()
+            }
+          });
+        } catch (metricErr) {
+          console.warn('[activate_plan_manual] Erro ao gravar métrica (não crítico):', metricErr);
+        }
 
-        console.log('[activate_plan_manual] Plan activated successfully:', {
+        console.log('[activate_plan_manual] ✅ Plano ativado com sucesso:', {
           patient_email,
           plan_code,
-          expires_at: expiresAt.toISOString(),
-          activated_by: user.email
+          expires_at: expiresAtDate,
+          activated_by: adminEmail
         });
 
-        // ✅ CADASTRAR NA CLICKLIFE AO ATIVAR PLANO MANUALMENTE
-        console.log('[activate_plan_manual] 🏥 Cadastrando paciente na ClickLife...');
-
-        // Buscar dados completos do paciente para cadastro ClickLife
+        // ✅ PASSO 7: Cadastrar na ClickLife (opcional)
         const { data: patientFull } = await supabase
           .from('patients')
           .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
@@ -1216,17 +1261,12 @@ serve(async (req) => {
           .maybeSingle();
 
         if (patientFull?.cpf) {
-          // Determinar planoId baseado no plan_code
-          // COM_ESP → 864 (com especialistas)
-          // SEM_ESP → 863 (sem especialistas)
-          // EMPRESA_ → 864 (empresariais têm especialistas)
           const clickLifePlanoId = plan_code.includes('COM_ESP') ? 864 : 
                                     plan_code.includes('SEM_ESP') ? 863 : 
                                     plan_code.startsWith('EMPRESA_') ? 864 : 864;
           
-          // Chamar edge function de ativação ClickLife
           try {
-            const { data: clicklifeResult, error: clicklifeError } = await supabase.functions.invoke('activate-clicklife-manual', {
+            const { error: clicklifeError } = await supabase.functions.invoke('activate-clicklife-manual', {
               body: { 
                 email: patient_email,
                 plan_id: clickLifePlanoId
@@ -1234,15 +1274,13 @@ serve(async (req) => {
             });
             
             if (clicklifeError) {
-              console.warn('[activate_plan_manual] ⚠️ Falha no cadastro ClickLife:', clicklifeError);
+              console.warn('[activate_plan_manual] ⚠️ ClickLife falhou (não crítico):', clicklifeError);
             } else {
-              console.log('[activate_plan_manual] ✅ Paciente cadastrado na ClickLife com planoId:', clickLifePlanoId);
+              console.log('[activate_plan_manual] ✅ ClickLife OK, planoId:', clickLifePlanoId);
             }
           } catch (clicklifeErr) {
-            console.warn('[activate_plan_manual] ⚠️ Erro ao invocar activate-clicklife-manual:', clicklifeErr);
+            console.warn('[activate_plan_manual] ⚠️ ClickLife exception (não crítico):', clicklifeErr);
           }
-        } else {
-          console.warn('[activate_plan_manual] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
         }
 
         // TODO: Enviar email (opcional)
@@ -1253,8 +1291,11 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ 
             success: true,
+            step: 'complete',
             message: 'Plan activated successfully',
-            expires_at: expiresAt.toISOString()
+            expires_at: expiresAtDate,
+            patient_id: patient.id,
+            activated_by: adminEmail
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
