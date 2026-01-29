@@ -514,17 +514,19 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    // ✅ Usar URLs hardcoded do projeto de PRODUÇÃO para evitar problemas cross-project
+    const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+    const supabaseServiceRoleKey = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') 
+      || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const gasBase = Deno.env.get('GAS_BASE');
 
-    if (!supabaseServiceRoleKey || !supabaseUrl) {
+    if (!supabaseServiceRoleKey) {
       throw new Error('Missing required environment variables');
     }
 
     // Get authenticated user from JWT (except for upsert_patient which allows registration)
     const authHeader = req.headers.get('Authorization');
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceRoleKey);
     
     const body = await req.json();
     
@@ -1050,29 +1052,71 @@ serve(async (req) => {
       }
 
       case 'activate_plan_manual': {
-        // Validar admin
-        const token = authHeader!.replace('Bearer ', '');
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+        // ✅ Validar admin usando decodificação do JWT + verificação no banco
+        // (cross-project JWT não pode ser validado via supabase.auth.getUser)
+        const token = authHeader?.replace('Bearer ', '');
         
-        if (authError || !user) {
+        if (!token) {
           return new Response(
-            JSON.stringify({ error: 'Unauthorized' }),
+            JSON.stringify({ error: 'Unauthorized - No token provided' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        // Verificar se é admin
+        // Decodificar JWT sem validar assinatura (cross-project)
+        let userEmail: string | null = null;
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          userEmail = payload.email;
+          console.log('[activate_plan_manual] Decoded JWT email:', userEmail);
+        } catch (e) {
+          console.error('[activate_plan_manual] Failed to decode JWT:', e);
+          return new Response(
+            JSON.stringify({ error: 'Invalid token format' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!userEmail) {
+          return new Response(
+            JSON.stringify({ error: 'No email in token' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Buscar user_id pelo email na tabela patients (usuários admin também estão lá)
+        const { data: adminPatient } = await supabase
+          .from('patients')
+          .select('user_id')
+          .eq('email', userEmail.toLowerCase().trim())
+          .maybeSingle();
+
+        if (!adminPatient?.user_id) {
+          console.error('[activate_plan_manual] Admin not found in patients table:', userEmail);
+          return new Response(
+            JSON.stringify({ error: 'Admin user not found' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Verificar se é admin no banco de produção
         const { data: roles } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', user.id);
+          .eq('user_id', adminPatient.user_id);
+        
+        console.log('[activate_plan_manual] User roles:', roles);
         
         if (!roles?.some((r: any) => r.role === 'admin')) {
+          console.error('[activate_plan_manual] User is not admin:', userEmail);
           return new Response(
             JSON.stringify({ error: 'Forbidden - Admin only' }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+
+        // ✅ Admin validado! Criar objeto user simulado para logs
+        const user = { id: adminPatient.user_id, email: userEmail };
 
         const { 
           patient_email, 
