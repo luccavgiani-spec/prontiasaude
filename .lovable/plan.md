@@ -1,65 +1,129 @@
 
-# Plano de Correção: Erro de RLS no Cadastro
+# Plano de Correção: Redirecionamento Incorreto para /completar-perfil
 
-## Problema Identificado
+## Problema
+Usuários novos e existentes são sempre redirecionados para `/completar-perfil` ao invés de `/area-do-paciente`, mesmo após completar o cadastro com sucesso.
 
-**Erro:** `new row violates row-level security policy for table "patients"`
+## Causa Raiz
+O sistema híbrido (Cloud + Produção) tem inconsistências nos clientes de banco de dados:
 
-**Causa Raiz:**
+| Local | Operação | Cliente Usado | Cliente Correto |
+|-------|----------|---------------|-----------------|
+| `AuthCallback.tsx:75` | `ensurePatientRow()` | `supabase` (Cloud) | `dbClient` (baseado no ambiente) |
+| `CompletarPerfil.tsx:568` | Verificação pós-save | `supabase` (Cloud) | `supabaseProductionAuth` |
+| `CompletarPerfil.tsx:523` | Verificação CPF duplicado | `supabase` (Cloud) | Cliente híbrido |
 
-O arquivo `patients.ts` está usando o cliente ERRADO para operações de banco na Produção:
+### O que acontece:
+1. Usuário cria conta via `hybridSignUp` → sessão fica na **Produção**
+2. `upsertPatientBasic` salva dados na **Produção** (corrigido anteriormente)
+3. `CompletarPerfil.tsx` verifica se dados foram salvos usando **Cloud** → não encontra!
+4. Erro é lançado OU dados aparecem como "faltando"
+5. `AuthCallback.tsx` também verifica usando cliente inconsistente → `profile_complete = false`
+6. Usuário é redirecionado para `/completar-perfil` em loop
 
-| Cliente | Arquivo | Sessão | Uso Correto |
-|---------|---------|--------|-------------|
-| `supabaseProduction` | supabase-production.ts | ❌ `persistSession: false` | Admin/leitura anônima |
-| `supabaseProductionAuth` | auth-hybrid.ts | ✅ `persistSession: true` | Operações autenticadas |
+---
 
-Quando o código usa `supabaseProduction.from('patients').insert(...)`, o `auth.uid()` retorna `NULL` porque esse cliente não tem sessão. A política RLS `user_id = auth.uid()` falha!
+## Arquivos que serão modificados
 
-## Arquivo que será modificado
+1. `src/pages/auth/Callback.tsx` - Passar cliente correto para `ensurePatientRow`
+2. `src/pages/CompletarPerfil.tsx` - Usar cliente híbrido para verificações pós-save e CPF duplicado
 
-`src/lib/patients.ts`
+---
 
-## Correção Cirúrgica
+## Correção 1: AuthCallback.tsx
 
-### ANTES (linha 2):
+### Linha 6 (imports) - ADICIONAR:
 ```typescript
-import { supabaseProduction } from "@/lib/supabase-production";
+import { supabaseProductionAuth } from '@/lib/auth-hybrid';
+```
+
+### Linha 74-78 - ANTES:
+```typescript
+try {
+  await ensurePatientRow(session.user.id);
+} catch (e) {
+  console.error('ensurePatientRow error:', e);
+}
 ```
 
 ### DEPOIS:
 ```typescript
-import { supabaseProductionAuth } from "@/lib/auth-hybrid";
+try {
+  // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente
+  const patientDbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
+  await ensurePatientRow(session.user.id, patientDbClient);
+} catch (e) {
+  console.error('ensurePatientRow error:', e);
+}
 ```
 
-### ANTES (linha 59):
+---
+
+## Correção 2: CompletarPerfil.tsx
+
+### Linha 2 (imports) - ADICIONAR:
 ```typescript
-const dbClient = environment === 'production' ? supabaseProduction : supabase;
+import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
+```
+
+### Linha 521-572 - ANTES:
+```typescript
+try {
+  // ✅ VERIFICAR CPF DUPLICADO
+  const { data: existingCPF } = await supabase
+    .from('patients')
+    ...
+    
+  // ✅ Verificar se dados foram salvos corretamente
+  const { data: savedPatient, error: checkError } = await supabase
+    .from('patients')
+    ...
 ```
 
 ### DEPOIS:
 ```typescript
-const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
+try {
+  // ✅ HÍBRIDO: Detectar ambiente para usar cliente correto
+  const { environment } = await getHybridSession();
+  const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
+  
+  // ✅ VERIFICAR CPF DUPLICADO (usando cliente híbrido)
+  const { data: existingCPF } = await dbClient
+    .from('patients')
+    ...
+    
+  // ✅ Verificar se dados foram salvos corretamente (usando mesmo cliente)
+  const { data: savedPatient, error: checkError } = await dbClient
+    .from('patients')
+    ...
 ```
+
+---
 
 ## Por que isso resolve
 
-1. `supabaseProductionAuth` foi criado com `persistSession: true` e `storageKey: 'supabase-production-auth'`
-2. Quando o usuário fez login via `hybridSignIn` → sessão foi salva no `supabaseProductionAuth`
-3. Agora quando fazemos operações de banco, o `auth.uid()` retorna o ID correto
-4. A política RLS `user_id = auth.uid()` passa!
+1. **AuthCallback**: Agora cria o registro `patients` no ambiente correto (Produção se for production)
+2. **CompletarPerfil (CPF)**: Verifica duplicidade no banco correto
+3. **CompletarPerfil (verificação)**: Confirma que os dados foram salvos usando o MESMO cliente que salvou
+4. **Fluxo completo**: Todos os pontos usam o mesmo ambiente → `profile_complete = true` é encontrado → redirecionamento para `/area-do-paciente`
 
-## Validação
+---
 
-1. Monique (ou outro usuário) tenta completar o cadastro novamente
-2. Os dados são salvos sem erro de RLS
-3. O fluxo prossegue normalmente
+## Validação pós-implementação
+
+1. Criar nova conta de teste
+2. Verificar que o cadastro é salvo sem erros
+3. Confirmar redirecionamento para `/area-do-paciente` (não `/completar-perfil`)
+4. Fazer logout e login novamente
+5. Confirmar que vai direto para `/area-do-paciente`
 
 ---
 
 ## Resumo
 
-- **ARQUIVO:** `src/lib/patients.ts`
-- **MOTIVO:** Corrigir erro de RLS no cadastro
-- **ESCOPO:** Trocar `supabaseProduction` por `supabaseProductionAuth` (que tem a sessão autenticada)
-- **CONFIRMAÇÃO:** ✅ Solicitado explicitamente pelo usuário
+| Arquivo | Motivo | Escopo |
+|---------|--------|--------|
+| `src/pages/auth/Callback.tsx` | Passar cliente correto para `ensurePatientRow` | Linhas 6, 74-78 |
+| `src/pages/CompletarPerfil.tsx` | Usar cliente híbrido para verificações | Linhas 2, 521-572 |
+
+**CONFIRMAÇÃO: Estas alterações estão explicitamente solicitadas? SIM**
