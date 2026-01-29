@@ -608,6 +608,14 @@ const CompletarPerfil = () => {
         try {
           console.log('[CompletarPerfil] Calling activate-employee-plan Edge Function...');
           
+          // ✅ CORREÇÃO: Obter token do ambiente correto para Authorization
+          const { session: currentSession, environment: currentEnv } = await getHybridSession();
+          const authHeaders: Record<string, string> = {};
+          if (currentSession?.access_token) {
+            authHeaders['Authorization'] = `Bearer ${currentSession.access_token}`;
+          }
+          console.log('[CompletarPerfil] Usando token do ambiente:', currentEnv);
+          
           const { data: planResult, error: planError } = await invokeEdgeFunction('company-operations', {
             body: {
               operation: 'activate-employee-plan',
@@ -625,7 +633,8 @@ const CompletarPerfil = () => {
                 city: formData.city,
                 state: formData.state
               }
-            }
+            },
+            headers: authHeaders
           });
           
           if (planError || !planResult.success) {
@@ -657,12 +666,21 @@ const CompletarPerfil = () => {
         try {
           console.log('[CompletarPerfil] Activating family member plan...');
           
+          // ✅ CORREÇÃO: Obter token do ambiente correto para Authorization
+          const { session: currentSession, environment: currentEnv } = await getHybridSession();
+          const authHeaders: Record<string, string> = {};
+          if (currentSession?.access_token) {
+            authHeaders['Authorization'] = `Bearer ${currentSession.access_token}`;
+          }
+          console.log('[CompletarPerfil] Usando token do ambiente:', currentEnv);
+          
           const { data: familyResult, error: familyError } = await invokeEdgeFunction('patient-operations', {
             body: {
               operation: 'activate-family-member',
               invite_token: inviteData.invite_token,
               user_id: activeUser.id // ✅ Passar user_id para usuários existentes
-            }
+            },
+            headers: authHeaders
           });
           
           if (familyError || !familyResult.success) {

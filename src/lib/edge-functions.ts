@@ -48,8 +48,11 @@ export async function invokeEdgeFunction<T = any>(
       ...options.headers,
     };
 
-    // Se tem usuário logado, usa o access_token; se não, usa a anon key.
-    headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
+    // ✅ CORREÇÃO: Se options.headers.Authorization já vier definido, NÃO sobrescrever.
+    // Isso permite que chamadas híbridas (Cloud/Produção) enviem o token correto.
+    if (!options.headers?.Authorization) {
+      headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
+    }
 
     const response = await fetch(`${EDGE_FUNCTIONS_URL}/${functionName}`, {
       method: options.method || "POST",

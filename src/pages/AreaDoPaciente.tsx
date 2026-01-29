@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
@@ -17,6 +18,7 @@ import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 import { PlanCardWithActions } from "@/components/patient/PlanCardWithActions";
 import { FamiliaresSection } from "@/components/patient/FamiliaresSection";
+
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -29,35 +31,63 @@ const AreaDoPaciente = () => {
     toast
   } = useToast();
   const navigate = useNavigate();
+
   useEffect(() => {
     const loadPatientData = async () => {
-      const {
-        data: {
-          session
-        }
-      } = await supabase.auth.getSession();
+      // ✅ CORREÇÃO: Usar getHybridSession para detectar sessão em Cloud OU Produção
+      const { session, environment } = await getHybridSession();
+      
+      console.log('[AreaDoPaciente] Sessão híbrida:', { 
+        hasSession: !!session, 
+        environment, 
+        userId: session?.user?.id 
+      });
+      
+      // Se não houver sessão em NENHUM ambiente, redirecionar para /entrar (NÃO /completar-perfil)
       if (!session?.user?.id) {
+        console.log('[AreaDoPaciente] Nenhuma sessão encontrada, redirecionando para /entrar');
         window.location.replace('/entrar');
         return;
       }
+      
       setCurrentUser(session.user);
-      const {
-        data,
-        error
-      } = await supabase.from('patients').select('*').eq('user_id', session.user.id).maybeSingle();
+      
+      // ✅ CORREÇÃO: Escolher cliente correto baseado no ambiente detectado
+      const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
+      console.log('[AreaDoPaciente] Usando cliente:', environment);
+      
+      // Buscar paciente no ambiente correto
+      const { data, error } = await dbClient
+        .from('patients')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
       
       if (error) {
-        console.error('Fetch patient error:', error);
+        console.error('[AreaDoPaciente] Fetch patient error:', error);
+        // Tentar no outro ambiente como fallback
+        const fallbackClient = environment === 'production' ? supabase : supabaseProductionAuth;
+        const { data: fallbackData, error: fallbackError } = await fallbackClient
+          .from('patients')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        
+        if (fallbackError || !fallbackData || !fallbackData.profile_complete) {
+          console.log('[AreaDoPaciente] Paciente não encontrado em nenhum ambiente, redirecionando para /completar-perfil');
+          window.location.replace('/completar-perfil');
+          return;
+        }
+        
+        setPatient(fallbackData as Patient);
+      } else if (!data || !data.profile_complete) {
+        // Se não encontrou paciente ou perfil incompleto, redirecionar
+        console.log('[AreaDoPaciente] Perfil incompleto, redirecionando para /completar-perfil');
         window.location.replace('/completar-perfil');
         return;
+      } else {
+        setPatient(data as Patient);
       }
-      
-      // Se não encontrou paciente ou perfil incompleto, redirecionar
-      if (!data || !data.profile_complete) {
-        window.location.replace('/completar-perfil');
-        return;
-      }
-      setPatient(data as Patient);
 
       // Load patient plan
       try {
@@ -90,8 +120,11 @@ const AreaDoPaciente = () => {
     };
     loadPatientData();
   }, [navigate, toast]);
+
   const handleLogout = async () => {
+    // ✅ Fazer logout em ambos os ambientes
     await supabase.auth.signOut();
+    await supabaseProductionAuth.auth.signOut();
     toast({
       title: "Logout realizado",
       description: "Você foi desconectado com sucesso."
