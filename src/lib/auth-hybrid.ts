@@ -210,6 +210,16 @@ export const hybridSignUp = async (
       };
     }
 
+    // ✅ CORREÇÃO: Limpar qualquer sessão no Cloud antes de fazer login na Produção
+    // Isso evita que getHybridSession() encontre sessão "fantasma" no Cloud
+    // e cause conflito com o ambiente de Produção onde os dados foram salvos
+    try {
+      await supabase.auth.signOut();
+      console.log('[hybridSignUp] Cloud session cleared');
+    } catch (e) {
+      console.warn('[hybridSignUp] Could not clear cloud session:', e);
+    }
+
     // Fazer login automaticamente na Produção após criar
     console.log('[hybridSignUp] Fazendo login automático na Produção...');
     const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
