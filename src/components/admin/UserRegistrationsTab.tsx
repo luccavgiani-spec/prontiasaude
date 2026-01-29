@@ -122,8 +122,8 @@ export default function UserRegistrationsTab() {
   const loadPatients = async () => {
     setLoading(true);
     try {
-      // Fetch all patients directly from the patients table
-      let query = supabase
+      // ✅ CORREÇÃO: Buscar pacientes do banco de PRODUÇÃO, não do Cloud
+      let query = supabaseProduction
         .from('patients')
         .select('*')
         .order('created_at', { ascending: false })
@@ -138,38 +138,38 @@ export default function UserRegistrationsTab() {
 
       if (error) throw error;
 
-      // Get total count for stats
-      const { count: totalCount } = await supabase
+      // ✅ CORREÇÃO: Buscar contagens do banco de PRODUÇÃO
+      const { count: totalCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true });
 
-      const { count: withAccountCount } = await supabase
+      const { count: withAccountCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .not('user_id', 'is', null);
 
-      const { count: profileCompleteCount } = await supabase
+      const { count: profileCompleteCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .eq('profile_complete', true);
 
       // Count data quality issues
-      const { count: invalidPhoneCount } = await supabase
+      const { count: invalidPhoneCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .eq('phone_e164', PLACEHOLDER_PHONE);
 
-      const { count: invalidCpfCount } = await supabase
+      const { count: invalidCpfCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .eq('cpf', PLACEHOLDER_CPF);
 
-      const { count: missingCpfCount } = await supabase
+      const { count: missingCpfCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .is('cpf', null);
 
-      const { count: missingPhoneCount } = await supabase
+      const { count: missingPhoneCount } = await supabaseProduction
         .from('patients')
         .select('*', { count: 'exact', head: true })
         .is('phone_e164', null);

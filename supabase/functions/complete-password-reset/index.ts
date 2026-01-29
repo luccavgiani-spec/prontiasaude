@@ -1,10 +1,14 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
+// ✅ CORREÇÃO: CORS headers completos
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// ✅ CORREÇÃO: URL fixa de PRODUÇÃO
+const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface CompleteResetRequest {
   token: string;
@@ -37,10 +41,11 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[complete-password-reset] Processando reset para token: ${token.substring(0, 8)}...`);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // ✅ CORREÇÃO: Usar URL de produção + chave de serviço correta
+    const supabaseServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") 
+      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
