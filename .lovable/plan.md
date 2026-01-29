@@ -1,81 +1,77 @@
 
-# Correção: Loop de Redirecionamento Após Salvar Perfil
 
-## Problema Identificado
-Após salvar o perfil com sucesso, o usuário é redirecionado para `/area-do-paciente`, mas essa página o manda de volta para `/completar-perfil` em loop.
+# Correção: Loop de Redirect Após Salvar Perfil (Versão Final)
 
-## Causa Raiz (com base no código)
+## Problema Confirmado
 
-O `hybridSignUp` (cadastro) executa:
-1. Cria usuário em **ambos** os ambientes (Cloud + Produção)
-2. Faz login automático apenas na **Produção** (linha 215-218)
+Após salvar o perfil:
+- Toast "Cadastro salvo" aparece ✓
+- Dados são salvos no banco ✓
+- `navigate('/area-do-paciente')` é chamado
+- **AreaDoPaciente chama `getHybridSession()` que encontra sessão "fantasma" no Cloud**
+- Busca paciente no Cloud → não existe ou `profile_complete = false`
+- **Loop: redireciona de volta para `/completar-perfil`**
 
-Porém, o usuário que já existia ou tem sessão residual no **Cloud** causa problema:
+## Causa Raiz
 
-### O conflito está no `getHybridSession()`:
-```typescript
-// Linha 282-284: Verifica Cloud PRIMEIRO
-const { data: cloudData } = await supabase.auth.getSession();
-if (cloudData.session) {
-  return { session: cloudData.session, environment: 'cloud' };  // ← PRIORIZA CLOUD
-}
-```
+A correção anterior só limpa sessão Cloud em `hybridSignUp` (novos cadastros). 
 
-### Fluxo problemático:
-1. Cadastro: `hybridSignUp` cria user em Produção + Cloud, mas faz login apenas na **Produção**
-2. Perfil salvo: `upsertPatientBasic` salva `profile_complete = true` na **Produção**
-3. Redirect: `navigate('/area-do-paciente')`
-4. `AreaDoPaciente` chama `getHybridSession()` → verifica **Cloud primeiro**
-5. Se houver sessão "fantasma" no Cloud (usuário antigo ou criado junto), retorna `environment: 'cloud'`
-6. Busca paciente no **Cloud** → não existe ou `profile_complete = false`
-7. Loop: redireciona para `/completar-perfil`
-
----
+Mas o problema persiste porque:
+1. O usuário pode ter sessão **residual** no Cloud (de login anterior ou de criação de user em ambos os ambientes)
+2. `getHybridSession()` verifica Cloud **antes** de Produção (linha 292-294)
+3. Quando o perfil é salvo na **Produção** mas há sessão no **Cloud**, o redirect falha
 
 ## Arquivo que será modificado
 
-**`src/lib/auth-hybrid.ts`** (apenas este arquivo)
+**`src/pages/CompletarPerfil.tsx`** (apenas este arquivo)
 
 ---
 
-## Correção Proposta
+## Correção Proposta (Cirúrgica)
 
-Após o cadastro bem-sucedido em `hybridSignUp`, fazer `signOut` do Cloud antes de fazer login na Produção. Isso garante que não haverá sessão "fantasma" no Cloud conflitando.
+Antes de fazer o redirect após salvar o perfil, **limpar sessão do Cloud** para garantir que `getHybridSession()` encontre apenas a sessão de Produção.
 
-### Linha ~212-215 - ADICIONAR signOut do Cloud ANTES do login na Produção:
+### Localização: Linha ~714-719
 
 **ANTES:**
 ```typescript
-    // Fazer login automaticamente na Produção após criar
-    console.log('[hybridSignUp] Fazendo login automático na Produção...');
-    const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
+      const redirectUrl = searchParams.get('redirect');
+      if (redirectUrl) {
+        window.location.href = decodeURIComponent(redirectUrl);
+      } else {
+        navigate('/area-do-paciente');
+      }
 ```
 
 **DEPOIS:**
 ```typescript
-    // ✅ CORREÇÃO: Limpar qualquer sessão no Cloud antes de fazer login na Produção
-    // Isso evita que getHybridSession() encontre sessão "fantasma" no Cloud
-    // e cause conflito com o ambiente de Produção onde os dados foram salvos
-    try {
-      await supabase.auth.signOut();
-      console.log('[hybridSignUp] Cloud session cleared');
-    } catch (e) {
-      console.warn('[hybridSignUp] Could not clear cloud session:', e);
-    }
+      // ✅ CORREÇÃO: Limpar sessão Cloud antes do redirect para evitar loop
+      // (getHybridSession verifica Cloud primeiro, então precisamos garantir
+      // que só a sessão de Produção existe antes de ir para /area-do-paciente)
+      try {
+        await supabase.auth.signOut();
+        console.log('[CompletarPerfil] Cloud session cleared before redirect');
+      } catch (e) {
+        console.warn('[CompletarPerfil] Could not clear cloud session:', e);
+      }
 
-    // Fazer login automaticamente na Produção após criar
-    console.log('[hybridSignUp] Fazendo login automático na Produção...');
-    const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
+      const redirectUrl = searchParams.get('redirect');
+      if (redirectUrl) {
+        window.location.replace(decodeURIComponent(redirectUrl));
+      } else {
+        // Usar window.location.replace para forçar reload e garantir detecção correta do ambiente
+        window.location.replace('/area-do-paciente');
+      }
 ```
 
 ---
 
 ## Por que isso resolve
 
-1. **Antes do login na Produção**, limpamos qualquer sessão residual no Cloud
-2. Quando `getHybridSession()` verificar Cloud, não encontrará sessão
-3. `getHybridSession()` verificará Produção → encontrará a sessão ativa
-4. `AreaDoPaciente` usará cliente de **Produção** → encontrará `profile_complete = true`
+1. Após salvar perfil, limpamos sessão do Cloud
+2. `window.location.replace` força reload completo (não usa cache de estado React)
+3. `AreaDoPaciente` → `getHybridSession()` → Cloud não tem sessão → verifica Produção → encontra sessão ativa
+4. Busca paciente na Produção → `profile_complete = true`
 5. Usuário permanece em `/area-do-paciente` ✓
 
 ---
@@ -85,16 +81,18 @@ Após o cadastro bem-sucedido em `hybridSignUp`, fazer `signOut` do Cloud antes 
 1. Criar nova conta de teste
 2. Preencher e salvar perfil
 3. Verificar que vai para `/area-do-paciente` (sem loop)
-4. Recarregar a página
-5. Confirmar que permanece em `/area-do-paciente`
-6. Logout e login novamente → deve ir para área do paciente
+4. Verificar console:
+   - `[CompletarPerfil] Cloud session cleared before redirect`
+   - `[AreaDoPaciente] Usando cliente: production`
+5. Recarregar página → deve permanecer
 
 ---
 
-## Escopo (alinhado às suas regras)
+## Escopo
 
 | Arquivo | Motivo | Escopo |
 |---------|--------|--------|
-| `src/lib/auth-hybrid.ts` | Limpar sessão Cloud antes do login Produção | Linhas ~212-215 (adicionar 7 linhas) |
+| `src/pages/CompletarPerfil.tsx` | Limpar sessão Cloud + usar window.location.replace | Linhas ~714-719 (substituir 5 linhas por 13 linhas) |
 
 **CONFIRMAÇÃO: Esta alteração está explicitamente solicitada? SIM** (você pediu para achar e corrigir pontualmente o erro de redirect pós-save)
+
