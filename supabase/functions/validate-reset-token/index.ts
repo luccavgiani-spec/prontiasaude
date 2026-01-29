@@ -1,21 +1,19 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-// ✅ CORREÇÃO: CORS headers completos
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ✅ CORREÇÃO: URL fixa de PRODUÇÃO
-const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
+// URLs - usar Cloud para ler tokens (onde são salvos)
+const CLOUD_URL = Deno.env.get("SUPABASE_URL")!;
 
 interface ValidateTokenRequest {
   token: string;
 }
 
 serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,11 +30,10 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[validate-reset-token] Validando token: ${token.substring(0, 8)}...`);
 
-    // ✅ CORREÇÃO: Usar URL de produção + chave de serviço correta
-    const supabaseServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") 
-      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Usar Cloud para ler tokens (onde foram salvos)
+    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceKey, {
+    const supabase = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
@@ -66,12 +63,13 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    console.log(`[validate-reset-token] Token válido para: ${tokenData.email}`);
+    console.log(`[validate-reset-token] Token válido para: ${tokenData.email}, ambiente: ${tokenData.environment || 'production'}`);
 
     return new Response(
       JSON.stringify({ 
         valid: true, 
-        email: tokenData.email 
+        email: tokenData.email,
+        environment: tokenData.environment || 'production', // ✅ Retornar ambiente
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -610,6 +610,7 @@ export type Database = {
         Row: {
           created_at: string | null
           email: string
+          environment: string | null
           expires_at: string
           id: string
           token: string
@@ -618,6 +619,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           email: string
+          environment?: string | null
           expires_at: string
           id?: string
           token: string
@@ -626,6 +628,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           email?: string
+          environment?: string | null
           expires_at?: string
           id?: string
           token?: string

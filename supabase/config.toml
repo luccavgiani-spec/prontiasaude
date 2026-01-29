@@ -36,7 +36,6 @@ verify_jwt = false
 [functions.mp-subscription-webhook]
 verify_jwt = false
 
-# ✅ Funções críticas para fluxo de pagamento/agendamento
 [functions.schedule-redirect]
 verify_jwt = false
 
@@ -59,4 +58,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.check-user-exists]
+verify_jwt = false
+
+[functions.list-all-users]
 verify_jwt = false

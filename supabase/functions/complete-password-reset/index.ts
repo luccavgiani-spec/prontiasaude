@@ -1,22 +1,54 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-// ✅ CORREÇÃO: CORS headers completos
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ✅ CORREÇÃO: URL fixa de PRODUÇÃO
-const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
+// URLs dos dois ambientes
+const CLOUD_URL = Deno.env.get("SUPABASE_URL")!;
+const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface CompleteResetRequest {
   token: string;
   new_password: string;
 }
 
+/**
+ * Busca usuário por email com paginação em um ambiente
+ */
+async function findUserByEmail(client: ReturnType<typeof createClient>, email: string): Promise<string | null> {
+  const normalizedEmail = email.toLowerCase();
+  let page = 1;
+  const perPage = 1000;
+  
+  while (true) {
+    const { data, error } = await client.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+    
+    if (error || !data?.users?.length) {
+      break;
+    }
+    
+    const found = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+    if (found) {
+      return found.id;
+    }
+    
+    if (data.users.length < perPage) {
+      break;
+    }
+    
+    page++;
+  }
+  
+  return null;
+}
+
 serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -41,16 +73,16 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[complete-password-reset] Processando reset para token: ${token.substring(0, 8)}...`);
 
-    // ✅ CORREÇÃO: Usar URL de produção + chave de serviço correta
-    const supabaseServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") 
-      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Criar clientes
+    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
 
-    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceKey, {
+    const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Buscar e validar token
-    const { data: tokenData, error: tokenError } = await supabase
+    // Buscar e validar token (sempre no Cloud)
+    const { data: tokenData, error: tokenError } = await cloudClient
       .from("password_reset_tokens")
       .select("*")
       .eq("token", token)
@@ -75,26 +107,32 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // Buscar usuário pelo email
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-    
-    if (userError) {
-      console.error("[complete-password-reset] Erro ao buscar usuários:", userError);
-      throw new Error("Erro ao buscar usuário");
-    }
+    // ✅ Determinar qual ambiente usar
+    const environment = tokenData.environment || 'production';
+    console.log(`[complete-password-reset] Ambiente do token: ${environment}`);
 
-    const user = users.users.find(u => u.email?.toLowerCase() === tokenData.email.toLowerCase());
+    // Criar cliente do ambiente correto
+    const targetClient = environment === 'cloud'
+      ? cloudClient
+      : createClient(PRODUCTION_URL, prodServiceKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+
+    // Buscar usuário por email no ambiente correto
+    const userId = await findUserByEmail(targetClient, tokenData.email);
     
-    if (!user) {
-      console.log(`[complete-password-reset] Usuário não encontrado: ${tokenData.email}`);
+    if (!userId) {
+      console.log(`[complete-password-reset] Usuário não encontrado em ${environment}: ${tokenData.email}`);
       return new Response(
         JSON.stringify({ success: false, error: "Usuário não encontrado" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Atualizar senha
-    const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
+    console.log(`[complete-password-reset] Usuário encontrado em ${environment}: ${userId}`);
+
+    // Atualizar senha no ambiente correto
+    const { error: updateError } = await targetClient.auth.admin.updateUserById(userId, {
       password: new_password
     });
 
@@ -103,13 +141,13 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Erro ao atualizar senha");
     }
 
-    // Invalidar token
-    await supabase
+    // Invalidar token (sempre no Cloud)
+    await cloudClient
       .from("password_reset_tokens")
       .update({ used_at: new Date().toISOString() })
       .eq("id", tokenData.id);
 
-    console.log(`[complete-password-reset] Senha atualizada com sucesso para: ${tokenData.email}`);
+    console.log(`[complete-password-reset] Senha atualizada com sucesso em ${environment} para: ${tokenData.email}`);
 
     return new Response(
       JSON.stringify({ 

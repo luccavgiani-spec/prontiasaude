@@ -2,21 +2,64 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { Resend } from "npm:resend@2.0.0";
 
-// ✅ CORREÇÃO: CORS headers completos para evitar "load failed"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// ✅ CORREÇÃO: URL fixa de PRODUÇÃO (evita confusão com Lovable Cloud)
-const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
+// URLs dos dois ambientes
+const CLOUD_URL = Deno.env.get("SUPABASE_URL")!;
+const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface PasswordResetRequest {
   email: string;
 }
 
+/**
+ * Busca usuário por email com paginação em um ambiente
+ */
+async function findUserByEmail(client: ReturnType<typeof createClient>, email: string, label: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase();
+  let page = 1;
+  const perPage = 1000;
+  
+  console.log(`[send-password-reset] Buscando ${email} em ${label}...`);
+  
+  while (true) {
+    const { data, error } = await client.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+    
+    if (error) {
+      console.error(`[send-password-reset] Erro ao buscar ${label} página ${page}:`, error);
+      return false;
+    }
+    
+    if (!data?.users?.length) {
+      break;
+    }
+    
+    // Buscar manualmente por email
+    const found = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+    if (found) {
+      console.log(`[send-password-reset] Usuário encontrado em ${label}: ${found.id}`);
+      return true;
+    }
+    
+    // Se buscamos menos que o limite, não há mais páginas
+    if (data.users.length < perPage) {
+      break;
+    }
+    
+    page++;
+  }
+  
+  console.log(`[send-password-reset] Usuário NÃO encontrado em ${label}`);
+  return false;
+}
+
 serve(async (req: Request): Promise<Response> => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -33,20 +76,37 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[send-password-reset] Solicitação para: ${email}`);
 
-    // ✅ CORREÇÃO: Usar URL de produção + chave de serviço correta
-    const supabaseServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") 
-      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Criar clientes para ambos os ambientes
+    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
     const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
-    const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceKey, {
+    const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+    
+    const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Verificar se email existe no auth.users
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers();
+    // Buscar em ambos os ambientes
+    const [existsInCloud, existsInProd] = await Promise.all([
+      findUserByEmail(cloudClient, email, 'Cloud'),
+      findUserByEmail(prodClient, email, 'Produção'),
+    ]);
+
+    console.log(`[send-password-reset] Resultado: Cloud=${existsInCloud}, Prod=${existsInProd}`);
+
+    // Determinar ambiente
+    let environment: 'cloud' | 'production' | null = null;
+    if (existsInCloud) {
+      environment = 'cloud';
+    } else if (existsInProd) {
+      environment = 'production';
+    }
     
-    if (userError) {
-      console.error("[send-password-reset] Erro ao buscar usuários:", userError);
+    if (!environment) {
+      console.log(`[send-password-reset] Email não encontrado em nenhum ambiente: ${email}`);
       // Não revelar se email existe ou não (segurança)
       return new Response(
         JSON.stringify({ success: true, message: "Se o email existir, você receberá um link de recuperação." }),
@@ -54,35 +114,28 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const userExists = users.users.some(u => u.email?.toLowerCase() === email.toLowerCase());
-    
-    if (!userExists) {
-      console.log(`[send-password-reset] Email não encontrado: ${email}`);
-      // Não revelar se email existe ou não (segurança)
-      return new Response(
-        JSON.stringify({ success: true, message: "Se o email existir, você receberá um link de recuperação." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log(`[send-password-reset] Ambiente determinado: ${environment}`);
 
     // Gerar token seguro
     const token = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hora
 
+    // Salvar token na tabela (sempre no Cloud, pois é onde as edge functions rodam)
     // Invalidar tokens anteriores para este email
-    await supabase
+    await cloudClient
       .from("password_reset_tokens")
       .update({ used_at: new Date().toISOString() })
       .eq("email", email.toLowerCase())
       .is("used_at", null);
 
-    // Salvar novo token
-    const { error: insertError } = await supabase
+    // Salvar novo token COM o ambiente
+    const { error: insertError } = await cloudClient
       .from("password_reset_tokens")
       .insert({
         email: email.toLowerCase(),
         token,
         expires_at: expiresAt.toISOString(),
+        environment, // ✅ NOVO: Salvar qual ambiente usar
       });
 
     if (insertError) {
@@ -90,7 +143,7 @@ serve(async (req: Request): Promise<Response> => {
       throw new Error("Erro ao gerar token de recuperação");
     }
 
-    // ✅ CORREÇÃO: URL de redefinição com domínio CORRETO
+    // URL de redefinição
     const resetUrl = `https://prontiasaude.com.br/nova-senha?token=${token}`;
 
     // Enviar email via Resend
