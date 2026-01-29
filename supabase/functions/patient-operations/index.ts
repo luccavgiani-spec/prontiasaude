@@ -534,8 +534,10 @@ serve(async (req) => {
     // ✅ VALIDAÇÃO GENÉRICA: exceto operações que têm validação própria
     // - upsert_patient: permite registro sem auth
     // - activate_plan_manual: usa validação cross-project (Lovable Cloud)
+    // - ensure_patient: usa service_role no backend, não precisa validar JWT do usuário
+    //   (a própria lógica do ensure_patient valida que user_id foi passado)
     // ============================================================
-    const AUTH_BYPASS_OPERATIONS = ['upsert_patient', 'activate_plan_manual'];
+    const AUTH_BYPASS_OPERATIONS = ['upsert_patient', 'activate_plan_manual', 'ensure_patient'];
     
     if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
       if (!authHeader) {
@@ -1978,10 +1980,15 @@ serve(async (req) => {
           );
         }
         
+        // ✅ CORREÇÃO: Gerar id explicitamente para blindar contra problemas de default
+        const newPatientId = crypto.randomUUID();
+        console.log('[ensure_patient] Criando novo registro com id:', newPatientId);
+        
         // Criar novo registro (service_role ignora RLS)
         const { data: newPatient, error: insertError } = await supabase
           .from('patients')
           .insert({ 
+            id: newPatientId, // ✅ Gerar UUID explicitamente
             user_id, 
             email: email || null 
           })

@@ -9,13 +9,24 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Garante que exista uma linha em public.patients para o usuário atual.
  * ✅ CORREÇÃO: Usar Edge Function (service_role) para evitar violação de RLS
  * em ambientes híbridos (Cloud + Produção) onde o JWT não é reconhecido.
+ * 
+ * IMPORTANTE: Agora envia o token correto do dbClient para autenticação.
  */
 export async function ensurePatientRow(userId: string, dbClient: SupabaseClient = supabase) {
   console.log('[ensurePatientRow] Chamando edge function para user_id:', userId);
   
-  // Buscar email do usuário autenticado
-  const { data: authData } = await dbClient.auth.getUser();
-  const userEmail = authData?.user?.email;
+  // ✅ Buscar session/token do cliente correto (Cloud ou Produção)
+  const { data: sessionData } = await dbClient.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  const userEmail = sessionData?.session?.user?.email;
+  
+  console.log('[ensurePatientRow] Token presente:', !!accessToken, 'Email:', userEmail);
+  
+  // ✅ Construir headers com Authorization do ambiente correto
+  const headers: Record<string, string> = {};
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
   
   // ✅ Usar Edge Function que roda com service_role (ignora RLS)
   const { data, error } = await invokeEdgeFunction('patient-operations', {
@@ -23,7 +34,8 @@ export async function ensurePatientRow(userId: string, dbClient: SupabaseClient 
       operation: 'ensure_patient',
       user_id: userId,
       email: userEmail
-    }
+    },
+    headers
   });
   
   if (error) {
