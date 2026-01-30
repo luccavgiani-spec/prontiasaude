@@ -9,6 +9,7 @@ import { validateCPF } from "@/lib/cpf-validator";
 import { validatePhoneE164 } from "@/lib/validations";
 import { supabase } from "@/integrations/supabase/client";
 import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getAppointments } from "@/lib/appointments";
 import { toast } from "sonner";
@@ -376,17 +377,29 @@ export function PaymentModal({
     console.log("[loadUserData] Starting...");
     setIsLoadingUserData(true);
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
+      const { session, environment } = await getHybridSession();
+      const user = session?.user;
+      
+      console.log("[loadUserData] Hybrid session:", { hasUser: !!user, environment });
+      
       if (!user) {
+        console.log("[loadUserData] No user found in any environment");
         setIsUserLoggedIn(false);
         return;
       }
 
       setIsUserLoggedIn(true);
 
-      const { data: patient } = await supabase.from("patients").select("*").eq("user_id", user.id).single();
+      // ✅ CORREÇÃO: Usar cliente correto baseado no ambiente da sessão
+      const client = environment === 'production' ? supabaseProduction : supabase;
+      console.log("[loadUserData] Using client for environment:", environment);
+      
+      const { data: patient, error: patientError } = await client.from("patients").select("*").eq("user_id", user.id).single();
+      
+      if (patientError) {
+        console.warn("[loadUserData] Error fetching patient:", patientError);
+      }
 
       if (patient) {
         const hasData = !!(
