@@ -1,174 +1,167 @@
 
-# Plano: Correção do Fluxo Google OAuth para Sincronização com Produção
+# Plano de Correção: Bloqueio no Fluxo de Compra
 
-## Objetivo
-Garantir que usuários que fazem login via Google OAuth sejam criados em **AMBOS** os ambientes (Cloud + Produção), evitando que fiquem apenas com "Origem: Cloud".
+## 🔍 Diagnóstico Completo
+
+### Problema Identificado
+Após análise detalhada dos logs, banco de dados e código, identifiquei **o problema principal**:
+
+### 🚨 CAUSA RAIZ: Desconexão entre Cloud e Produção
+
+O frontend está rodando no **Lovable Cloud** (`yrsjluhhnhxogdgnbnya`), mas:
+
+1. **A autenticação está acontecendo no Cloud**
+   - Usuários novos estão sendo criados apenas no Cloud
+   - Exemplo: `avalonemartins22@gmail.com` - existe APENAS no Cloud (`existsInCloud: true, existsInProduction: false`)
+
+2. **O PaymentModal usa `supabase.auth.getUser()` do Cloud**
+   - Linha 381: `const { data: { user } } = await supabase.auth.getUser();`
+   - Isso busca usuário do **Cloud** (onde ele está logado)
+
+3. **Mas o `patients` está sendo lido do Cloud também**
+   - Linha 389: `await supabase.from("patients").select("*").eq("user_id", user.id).single();`
+   - O `user.id` é do Cloud, mas a tabela `patients` pode não ter dados sincronizados
+
+4. **As Edge Functions de pagamento estão na PRODUÇÃO**
+   - `mp-create-payment` está no projeto `ploqujuhpwutpcibedbr`
+   - Quando o pagamento é criado, ele grava no banco de **PRODUÇÃO**
+
+### 📊 Evidências:
+
+| Verificação | Resultado |
+|-------------|-----------|
+| Último pagamento no Cloud | 27/01/2026 (3 dias atrás) |
+| Logs mp-create-payment no Cloud | **Nenhum** (função não existe lá!) |
+| Webhooks no Cloud | **Vazios** |
+| Usuários com profile_complete=false recentes | 79 de 694 (11%) |
+| Avalone Martins | `existsInCloud: true, existsInProduction: false`, profile_complete: **false** |
 
 ---
 
-## Arquivos a Modificar
+## 🔧 Problemas Específicos a Corrigir
 
-### 1. Nova Edge Function: `supabase/functions/sync-google-user/index.ts`
-**Localização:** Lovable Cloud (deploy automático)
+### 1. **HeroSection e ConsultNowFloatButton usam cliente Cloud**
+Os componentes que iniciam o fluxo de compra usam `supabase` (Cloud):
+- Verificam `profile_complete` no Cloud
+- Se perfil incompleto → redirecionam para `/completar-perfil`
+- Usuários ficam em loop ou não conseguem prosseguir
 
-**Propósito:** Criar/sincronizar usuário na Produção quando já existe no Cloud (login Google)
+### 2. **PaymentModal não considera sessão híbrida**
+O modal de pagamento:
+- Usa `supabase.auth.getUser()` (Cloud)
+- Busca `patients` usando `user_id` do Cloud
+- Usuários que logaram via Produção podem ter `user = null` aqui
 
-**Diferença do `create-user-both-envs`:**
-- Aceita usuários que já existem no Cloud (não falha)
-- Cria apenas na Produção se não existir lá
-- Usa senha aleatória gerada (usuário nunca vai usar - login é via Google)
-
-### 2. Modificação: `src/pages/Entrar.tsx`
-**Alteração no callback do Google Login:**
-- Após `signInWithIdToken` bem-sucedido, chamar `sync-google-user` em background
-- Não bloquear o fluxo se a sincronização falhar (é secundário)
-
-### 3. Modificação: `src/pages/auth/Callback.tsx`
-**Alteração adicional de segurança:**
-- Verificar se usuário existe na Produção
-- Se não existir, chamar `sync-google-user` (fallback)
+### 3. **Dados de paciente podem não existir no Cloud**
+- Usuários que existem apenas na Produção não têm dados no Cloud
+- A query `patients.eq('user_id', user.id)` retorna vazio
 
 ---
 
-## Detalhamento Técnico
+## ✅ Plano de Correção (Ações no Supabase de Produção)
 
-### Edge Function: sync-google-user
+### AÇÃO 1: Verificar Edge Functions no Supabase de Produção
+
+Você deve acessar o **Supabase de Produção** (`ploqujuhpwutpcibedbr`) e:
+
+1. **Verificar logs de mp-create-payment:**
+   ```
+   Dashboard → Edge Functions → mp-create-payment → Logs
+   ```
+   - Procurar por erros nos últimos 3 dias
+   - Verificar se há chamadas chegando
+
+2. **Verificar pending_payments:**
+   ```sql
+   SELECT * FROM pending_payments 
+   WHERE created_at > '2026-01-28' 
+   ORDER BY created_at DESC;
+   ```
+
+3. **Verificar webhook_audit:**
+   ```sql
+   SELECT * FROM webhook_audit 
+   WHERE received_at > '2026-01-28' 
+   ORDER BY received_at DESC;
+   ```
+
+### AÇÃO 2: Verificar conectividade MP_ACCESS_TOKEN
+
+No Supabase de Produção:
+```
+Dashboard → Project Settings → Edge Functions → Secrets
+```
+
+Confirmar que existe:
+- `MP_ACCESS_TOKEN` (token do Mercado Pago)
+- `MP_NOTIFICATION_URL` (URL do webhook)
+- `SUPABASE_SERVICE_ROLE_KEY` (para escrita no banco)
+
+---
+
+## 🔧 Correções de Código Necessárias
+
+### CORREÇÃO 1: PaymentModal deve usar sessão híbrida
+
+O `PaymentModal.tsx` precisa:
 
 ```typescript
-// Fluxo:
-// 1. Recebe: email, cloudUserId, metadata (nome do Google)
-// 2. Verifica se já existe na Produção auth.users
-// 3. Se NÃO existe: criar com senha aleatória + email_confirm: true
-// 4. Sincroniza tabela patients em ambos os ambientes
-// 5. Retorna: prodUserId (ou null se já existia)
+// ANTES (linha ~375-389):
+const { data: { user } } = await supabase.auth.getUser();
+const { data: patient } = await supabase.from("patients").select("*").eq("user_id", user.id).single();
+
+// DEPOIS:
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
+
+const { session, environment } = await getHybridSession();
+const user = session?.user;
+const client = environment === 'production' ? supabaseProduction : supabase;
+const { data: patient } = await client.from("patients").select("*").eq("user_id", user.id).single();
 ```
 
-**Campos do metadata aproveitados do Google:**
-- `given_name` → `first_name`
-- `family_name` → `last_name`
-- `email` → `email`
-
-### Alteração em Entrar.tsx
+### CORREÇÃO 2: HeroSection deve usar sessão híbrida
 
 ```typescript
-// Dentro do callback do Google (linha ~202-233):
-// APÓS: console.log('[Google Login] ✅ Sessão estabelecida para:', session.user.email);
-// ADICIONAR:
+// ANTES (linha ~14-18):
+const { data: { user } } = await supabase.auth.getUser();
 
-// ✅ SINCRONIZAR COM PRODUÇÃO (em background, não bloqueia)
-try {
-  await invokeCloudEdgeFunction('sync-google-user', {
-    body: {
-      email: session.user.email,
-      cloudUserId: session.user.id,
-      metadata: {
-        first_name: session.user.user_metadata?.given_name || session.user.user_metadata?.first_name,
-        last_name: session.user.user_metadata?.family_name || session.user.user_metadata?.last_name,
-      }
-    }
-  });
-  console.log('[Google Login] ✅ Usuário sincronizado com Produção');
-} catch (e) {
-  console.warn('[Google Login] Sincronização com Produção falhou (não crítico):', e);
-}
+// DEPOIS:
+import { getHybridSession } from "@/lib/auth-hybrid";
+const { session, environment } = await getHybridSession();
+const user = session?.user;
+// E usar o cliente correto para buscar dados do patient
 ```
 
-### Alteração em AuthCallback.tsx
+### CORREÇÃO 3: ConsultNowFloatButton já usa sessão híbrida parcialmente
 
-Adicionar verificação de fallback após linha 80:
-
-```typescript
-// ✅ FALLBACK: Se login foi via Cloud (Google), garantir que existe na Produção
-if (authEnvironment === 'cloud' && session?.user?.email) {
-  try {
-    await invokeCloudEdgeFunction('sync-google-user', {
-      body: {
-        email: session.user.email,
-        cloudUserId: session.user.id,
-        metadata: {
-          first_name: session.user.user_metadata?.given_name,
-          last_name: session.user.user_metadata?.family_name,
-        }
-      }
-    });
-  } catch (e) {
-    console.warn('[AuthCallback] Sync to production failed:', e);
-  }
-}
-```
+Verificar se está usando corretamente nas linhas onde busca `patients`.
 
 ---
 
-## Configuração Necessária
+## 📋 Checklist para Execução
 
-### supabase/config.toml
-Adicionar a nova função:
+### No Supabase de Produção (você deve fazer):
 
-```toml
-[functions.sync-google-user]
-verify_jwt = false
-```
+- [ ] Verificar logs de `mp-create-payment` dos últimos 3 dias
+- [ ] Executar query para ver `pending_payments` recentes
+- [ ] Executar query para ver `webhook_audit` recentes
+- [ ] Confirmar secrets (`MP_ACCESS_TOKEN`, `MP_NOTIFICATION_URL`)
+- [ ] Testar uma compra de R$ 0,01 via PIX para verificar conectividade
 
----
+### Correções de Código (eu posso implementar):
 
-## Fluxo Após Correção
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO GOOGLE LOGIN CORRIGIDO                 │
-├─────────────────────────────────────────────────────────────────┤
-│  1. Usuário clica "Entrar com Google"                          │
-│  2. Google Identity Services → signInWithIdToken (Cloud)       │
-│  3. Sessão criada no Cloud auth.users                          │
-│  4. ✨ NOVO: sync-google-user chamado em background             │
-│     → Verifica se existe na Produção                           │
-│     → Se NÃO: cria com senha aleatória                         │
-│     → Sincroniza patients em ambos                             │
-│  5. Usuário redirecionado para /auth/callback                  │
-│  6. ✨ FALLBACK: AuthCallback verifica e sincroniza novamente   │
-│  7. Fluxo normal continua (completar-perfil ou area-paciente)  │
-└─────────────────────────────────────────────────────────────────┘
-```
+- [ ] Atualizar `PaymentModal.tsx` para usar sessão híbrida
+- [ ] Atualizar `HeroSection.tsx` para usar sessão híbrida
+- [ ] Adicionar logs detalhados antes de chamar `invokeEdgeFunction`
+- [ ] Garantir que `loadUserData()` funcione para ambos os ambientes
 
 ---
 
-## O que NÃO precisa fazer manualmente
+## 🎯 Resultado Esperado
 
-- Nenhuma alteração no Supabase de Produção
-- A edge function `sync-google-user` será deployada automaticamente no Lovable Cloud
-- As secrets já existem (`ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` está configurada)
-
----
-
-## Resultado Esperado
-
-| Antes | Depois |
-|-------|--------|
-| Login Google → Origem: Cloud | Login Google → Origem: Ambos |
-| auth.users apenas no Cloud | auth.users em Cloud + Produção |
-| patients com user_id do Cloud | patients com user_id correto em cada ambiente |
-
----
-
-## Arquivos que serão criados/modificados
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/sync-google-user/index.ts` | Criar |
-| `supabase/config.toml` | Adicionar entrada |
-| `src/pages/Entrar.tsx` | Modificar callback Google |
-| `src/pages/auth/Callback.tsx` | Adicionar fallback sync |
-
----
-
-## Sobre Sincronização Retroativa (355 usuários)
-
-**Recomendação: NÃO FAZER**
-
-O benefício é apenas cosmético (mudar "Origem: Cloud" para "Origem: Ambos" no admin). Na prática:
-- Esses usuários já conseguem fazer login
-- Esses usuários já conseguem completar perfil
-- Esses usuários já conseguem comprar consultas/planos
-- A tabela `patients` já está sincronizada (é onde os dados reais ficam)
-
-A única diferença seria visual no painel admin. Se quiser fazer no futuro, posso criar o script, mas não é necessário para o funcionamento do sistema.
+Após as correções:
+1. Usuários logados via Cloud OU Produção conseguem iniciar compras
+2. Dados do paciente são lidos do ambiente correto
+3. Edge functions são chamadas no Supabase de Produção
+4. Pagamentos voltam a funcionar normalmente
