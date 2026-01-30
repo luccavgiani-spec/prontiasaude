@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { invokeCloudEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
@@ -31,8 +31,8 @@ const EsqueciSenha = () => {
     setIsLoading(true);
     
     try {
-      // Usar edge function customizada na produção
-      const { data, error } = await invokeEdgeFunction('send-password-reset', {
+      // Usar edge function no Cloud (precisa acessar ambos os ambientes)
+      const { data, error } = await invokeCloudEdgeFunction('send-password-reset', {
         body: { email: email.toLowerCase() }
       });
 

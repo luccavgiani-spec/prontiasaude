@@ -11,7 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { invokeEdgeFunction, invokeCloudEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
-import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle } from 'lucide-react';
+import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle, Key } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { getPatientPlanByEmail } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
@@ -99,6 +99,11 @@ export default function UserRegistrationsTab() {
   const [platformActivationUser, setPlatformActivationUser] = useState<User | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<'clicklife' | 'communicare'>('clicklife');
   const [platformActivationLoading, setPlatformActivationLoading] = useState(false);
+  
+  // Reset password modal state
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
   
   const [stats, setStats] = useState({
     total: 0,
@@ -537,6 +542,46 @@ export default function UserRegistrationsTab() {
     });
   };
 
+  const handleResetPassword = async (user: User) => {
+    setResetLoading(true);
+    
+    // Gerar senha aleatória forte (12 caracteres)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    
+    try {
+      // Chamar Edge Function para atualizar senha em ambos os ambientes
+      const { data, error } = await invokeCloudEdgeFunction('reset-user-password', {
+        body: { email: user.email, new_password: password }
+      });
+
+      if (error) {
+        console.error('[handleResetPassword] Erro:', error);
+        toast.error('Erro ao resetar senha: ' + (error.message || 'Erro desconhecido'));
+        setResetLoading(false);
+        return;
+      }
+
+      if (!data?.success) {
+        toast.error(data?.message || 'Erro ao resetar senha');
+        setResetLoading(false);
+        return;
+      }
+
+      setGeneratedPassword(password);
+      setResetPasswordUser(user);
+      toast.success('Senha resetada com sucesso!');
+    } catch (err: any) {
+      console.error('[handleResetPassword] Exception:', err);
+      toast.error('Erro inesperado ao resetar senha');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const handleQuickConsult = async () => {
     if (!quickConsultUser) return;
     
@@ -926,10 +971,12 @@ export default function UserRegistrationsTab() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            title="Ver Detalhes"
-                            onClick={() => setViewingUser(user)}
+                            title="Resetar Senha"
+                            onClick={() => handleResetPassword(user)}
+                            disabled={resetLoading}
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Key className="h-4 w-4" />
                           </Button>
                           
                           {user.patient?.cpf && (
@@ -1359,6 +1406,54 @@ export default function UserRegistrationsTab() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Senha Resetada */}
+      <Dialog open={!!resetPasswordUser && !!generatedPassword} onOpenChange={(open) => {
+        if (!open) {
+          setResetPasswordUser(null);
+          setGeneratedPassword(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-green-600">
+              <Key className="h-5 w-5" />
+              Senha Resetada com Sucesso
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p>Nova senha gerada para <strong>{resetPasswordUser?.email}</strong>:</p>
+            
+            <div className="flex items-center gap-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <code className="flex-1 text-lg font-mono select-all">{generatedPassword}</code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedPassword || '');
+                  toast.success('Senha copiada!');
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              Envie esta senha para o usuário. Ele poderá usá-la imediatamente para fazer login.
+            </p>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button onClick={() => {
+              setResetPasswordUser(null);
+              setGeneratedPassword(null);
+            }}>
+              Fechar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
