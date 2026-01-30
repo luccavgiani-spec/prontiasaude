@@ -350,86 +350,7 @@ const Cadastrar = () => {
     setIsLoading(false);
   };
 
-  const handleMagicLink = async () => {
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    
-    // Verificar se CPF já existe
-    const { data: existingPatient } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('cpf', formData.cpf)
-      .maybeSingle();
-    
-    if (existingPatient) {
-      toast({
-        title: "CPF já cadastrado",
-        description: "Este CPF já está cadastrado. Faça login ou recupere sua senha.",
-        variant: "warning",
-      });
-      setIsLoading(false);
-      return;
-    }
-    
-    // First create user with password then send magic link
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: formData.email,
-      password: 'temp_password_' + Math.random().toString(36),
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: {
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          address_line: formData.address_line,
-          cep: formData.cep,
-          city: formData.cidade,
-          state: formData.uf,
-          address_number: formData.numero,
-          complement: formData.complemento,
-          cpf: formData.cpf,
-          phone_e164: formData.phone_e164,
-          birth_date: formData.birth_date,
-          gender: toDbGender(formData.gender),
-          terms_accepted_at: new Date().toISOString(),
-          marketing_opt_in: formData.marketing_opt_in
-        }
-      }
-    });
-
-    if (signUpError) {
-      toast({
-        title: "Erro no cadastro",
-        description: translateAuthError(signUpError),
-        variant: "warning",
-      });
-    } else {
-      // Send magic link for login
-      const { error: magicError } = await supabase.auth.signInWithOtp({
-        email: formData.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      
-      if (magicError) {
-        toast({
-          title: "Erro ao enviar magic link",
-          description: translateAuthError(magicError),
-          variant: "warning",
-        });
-      } else {
-        toast({
-          title: "✅ Link de acesso enviado!",
-          description: `Enviamos um link de acesso para ${formData.email}. Clique no link para fazer login.`,
-          duration: 6000,
-        });
-        navigate('/entrar');
-      }
-    }
-    
-    setIsLoading(false);
-  };
+  // Magic Link REMOVIDO - causava cadastros incompletos
 
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-background">
@@ -741,27 +662,14 @@ const Cadastrar = () => {
               </div>
             </div>
             
-            <div className="flex flex-col gap-2">
-              <Button 
-                type="submit" 
-                className="w-full bg-primary hover:bg-primary/90" 
-                disabled={isLoading || (formData.password && !isPasswordValid(formData.password))}
-              >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar conta com senha
-              </Button>
-              
-              <Button 
-                type="button"
-                onClick={handleMagicLink} 
-                variant="outline" 
-                className="w-full"
-                disabled={isLoading}
-              >
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Receber magic link
-              </Button>
-            </div>
+            <Button 
+              type="submit" 
+              className="w-full bg-primary hover:bg-primary/90" 
+              disabled={isLoading || (formData.password && !isPasswordValid(formData.password))}
+            >
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Criar conta
+            </Button>
           </form>
           
           <div className="text-center">
