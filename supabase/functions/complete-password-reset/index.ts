@@ -81,6 +81,10 @@ serve(async (req: Request): Promise<Response> => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
+    const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
     // Buscar e validar token (sempre no Cloud)
     const { data: tokenData, error: tokenError } = await cloudClient
       .from("password_reset_tokens")
@@ -107,38 +111,71 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    // ✅ Determinar qual ambiente usar
-    const environment = tokenData.environment || 'production';
-    console.log(`[complete-password-reset] Ambiente do token: ${environment}`);
+    console.log(`[complete-password-reset] Buscando usuário em AMBOS os ambientes: ${tokenData.email}`);
 
-    // Criar cliente do ambiente correto
-    const targetClient = environment === 'cloud'
-      ? cloudClient
-      : createClient(PRODUCTION_URL, prodServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
+    // ✅ CORREÇÃO: Buscar usuário em AMBOS os ambientes
+    const [cloudUserId, prodUserId] = await Promise.all([
+      findUserByEmail(cloudClient, tokenData.email),
+      findUserByEmail(prodClient, tokenData.email)
+    ]);
 
-    // Buscar usuário por email no ambiente correto
-    const userId = await findUserByEmail(targetClient, tokenData.email);
-    
-    if (!userId) {
-      console.log(`[complete-password-reset] Usuário não encontrado em ${environment}: ${tokenData.email}`);
+    console.log(`[complete-password-reset] Cloud: ${cloudUserId || 'não encontrado'}, Prod: ${prodUserId || 'não encontrado'}`);
+
+    if (!cloudUserId && !prodUserId) {
+      console.log(`[complete-password-reset] Usuário não encontrado em nenhum ambiente: ${tokenData.email}`);
       return new Response(
         JSON.stringify({ success: false, error: "Usuário não encontrado" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log(`[complete-password-reset] Usuário encontrado em ${environment}: ${userId}`);
+    // ✅ CORREÇÃO: Atualizar senha em TODOS os ambientes onde o usuário existe
+    const updateResults: string[] = [];
+    const errors: string[] = [];
 
-    // Atualizar senha no ambiente correto
-    const { error: updateError } = await targetClient.auth.admin.updateUserById(userId, {
-      password: new_password
-    });
+    if (cloudUserId) {
+      try {
+        const { error: cloudError } = await cloudClient.auth.admin.updateUserById(cloudUserId, {
+          password: new_password
+        });
+        if (cloudError) {
+          console.error("[complete-password-reset] Erro ao atualizar no Cloud:", cloudError);
+          errors.push(`Cloud: ${cloudError.message}`);
+        } else {
+          updateResults.push('cloud');
+          console.log(`[complete-password-reset] ✅ Senha atualizada no Cloud`);
+        }
+      } catch (e: any) {
+        console.error("[complete-password-reset] Exceção ao atualizar no Cloud:", e);
+        errors.push(`Cloud: ${e.message}`);
+      }
+    }
 
-    if (updateError) {
-      console.error("[complete-password-reset] Erro ao atualizar senha:", updateError);
-      throw new Error("Erro ao atualizar senha");
+    if (prodUserId) {
+      try {
+        const { error: prodError } = await prodClient.auth.admin.updateUserById(prodUserId, {
+          password: new_password
+        });
+        if (prodError) {
+          console.error("[complete-password-reset] Erro ao atualizar em Produção:", prodError);
+          errors.push(`Produção: ${prodError.message}`);
+        } else {
+          updateResults.push('production');
+          console.log(`[complete-password-reset] ✅ Senha atualizada em Produção`);
+        }
+      } catch (e: any) {
+        console.error("[complete-password-reset] Exceção ao atualizar em Produção:", e);
+        errors.push(`Produção: ${e.message}`);
+      }
+    }
+
+    // Se nenhuma atualização foi bem-sucedida, retornar erro
+    if (updateResults.length === 0) {
+      console.error("[complete-password-reset] Falha ao atualizar senha em todos os ambientes");
+      return new Response(
+        JSON.stringify({ success: false, error: "Erro ao atualizar senha: " + errors.join("; ") }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Invalidar token (sempre no Cloud)
@@ -147,12 +184,13 @@ serve(async (req: Request): Promise<Response> => {
       .update({ used_at: new Date().toISOString() })
       .eq("id", tokenData.id);
 
-    console.log(`[complete-password-reset] Senha atualizada com sucesso em ${environment} para: ${tokenData.email}`);
+    console.log(`[complete-password-reset] ✅ Senha atualizada com sucesso em: ${updateResults.join(', ')} para: ${tokenData.email}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Senha atualizada com sucesso!" 
+        message: "Senha atualizada com sucesso!",
+        environments: updateResults
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
