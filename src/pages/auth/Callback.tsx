@@ -5,6 +5,7 @@ import { trackPurchase } from '@/lib/meta-tracking';
 import { Loader2 } from "lucide-react";
 import { getHybridSession, supabaseProductionAuth } from '@/lib/auth-hybrid';
 import { supabaseProduction } from '@/lib/supabase-production';
+import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
 
 const AuthCallback = () => {
   useEffect(() => {
@@ -77,6 +78,33 @@ try {
   await ensurePatientRow(session.user.id, patientDbClient);
 } catch (e) {
   console.error('ensurePatientRow error:', e);
+}
+
+// ✅ FALLBACK: Se login foi via Cloud (Google OAuth), garantir que existe na Produção
+if (authEnvironment === 'cloud' && session?.user?.email) {
+  try {
+    console.log('[AuthCallback] Sincronizando usuário Cloud com Produção...');
+    invokeCloudEdgeFunction('sync-google-user', {
+      body: {
+        email: session.user.email,
+        cloudUserId: session.user.id,
+        metadata: {
+          first_name: session.user.user_metadata?.given_name || session.user.user_metadata?.first_name,
+          last_name: session.user.user_metadata?.family_name || session.user.user_metadata?.last_name,
+        }
+      }
+    }).then(result => {
+      if (result.error) {
+        console.warn('[AuthCallback] Sync to production failed (non-critical):', result.error);
+      } else {
+        console.log('[AuthCallback] ✅ User synced to production:', result.data);
+      }
+    }).catch(e => {
+      console.warn('[AuthCallback] Sync to production failed:', e);
+    });
+  } catch (e) {
+    console.warn('[AuthCallback] Error initiating sync:', e);
+  }
 }
 
       // Check if this is a successful payment redirect (from Mercado Pago)
