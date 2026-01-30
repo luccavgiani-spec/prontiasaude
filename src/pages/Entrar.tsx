@@ -9,6 +9,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { validateEmail } from "@/lib/validations";
 import { hybridSignIn, getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
+import { invokeCloudEdgeFunction } from "@/lib/edge-functions";
 
 const Entrar = () => {
   const [searchParams] = useSearchParams();
@@ -210,6 +211,31 @@ const Entrar = () => {
               
                 if (session?.user) {
                 console.log('[Google Login] ✅ Sessão estabelecida para:', session.user.email);
+                
+                // ✅ SINCRONIZAR COM PRODUÇÃO (em background, não bloqueia)
+                try {
+                  console.log('[Google Login] Sincronizando usuário com Produção...');
+                  invokeCloudEdgeFunction('sync-google-user', {
+                    body: {
+                      email: session.user.email,
+                      cloudUserId: session.user.id,
+                      metadata: {
+                        first_name: session.user.user_metadata?.given_name || session.user.user_metadata?.first_name,
+                        last_name: session.user.user_metadata?.family_name || session.user.user_metadata?.last_name,
+                      }
+                    }
+                  }).then(result => {
+                    if (result.error) {
+                      console.warn('[Google Login] Sincronização com Produção falhou (não crítico):', result.error);
+                    } else {
+                      console.log('[Google Login] ✅ Usuário sincronizado com Produção:', result.data);
+                    }
+                  }).catch(e => {
+                    console.warn('[Google Login] Sincronização com Produção falhou (não crítico):', e);
+                  });
+                } catch (e) {
+                  console.warn('[Google Login] Erro ao iniciar sincronização:', e);
+                }
                 
                 // ✅ Verificar convite familiar PRIMEIRO
                 const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token');
