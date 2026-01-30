@@ -10,6 +10,8 @@ import { PaymentModal } from "@/components/payment/PaymentModal";
 import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession } from "@/lib/auth-hybrid";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { toast as sonnerToast } from "sonner";
@@ -39,13 +41,10 @@ export function PlanosSection() {
   }, []);
   const checkActivePlan = async () => {
     try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user?.email) return;
-      const planStatus = await checkPatientPlanActive(user.email);
+      // ✅ HÍBRIDO: Usar getHybridSession para detectar ambiente correto
+      const { session, environment } = await getHybridSession();
+      if (!session?.user?.email) return;
+      const planStatus = await checkPatientPlanActive(session.user.email);
       setUserHasActivePlan(planStatus.canBypassPayment);
     } catch (error) {
       console.error('Error checking plan:', error);
@@ -268,12 +267,9 @@ export function PlanosSection() {
       return;
     }
 
-    // 1. Verificar login PRIMEIRO
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    // 1. Verificar login PRIMEIRO - ✅ HÍBRIDO
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
     if (!user) {
       localStorage.setItem('returnUrl', '/planos');
       localStorage.setItem('pendingPlan', JSON.stringify({
@@ -282,6 +278,9 @@ export function PlanosSection() {
       navigate('/area-do-paciente');
       return;
     }
+    
+    // ✅ Selecionar cliente correto baseado no ambiente
+    const dbClient = environment === 'production' ? supabaseProduction : supabase;
     const plano = novosPlanosData.find(p => p.id === planoId);
     if (!plano) return;
     const precoMensal = calcularPreco(planoId, parseInt(duracaoSelecionada));
@@ -290,21 +289,19 @@ export function PlanosSection() {
     // 2. BYPASS: Se usuário tem plano ativo, agenda direto
     if (userHasActivePlan) {
       try {
-        const {
-          data: {
-            user
-          }
-        } = await supabase.auth.getUser();
+        // ✅ Já temos user do getHybridSession acima
         if (!user?.email) {
           sonnerToast.error('Você precisa estar logado');
           navigate('/entrar');
           return;
         }
 
-        // Buscar dados do paciente
-        const {
-          data: patient
-        } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).single();
+        // ✅ HÍBRIDO: Buscar dados do paciente no cliente correto
+        const { data: patient } = await dbClient
+          .from('patients')
+          .select('cpf, first_name, last_name, phone_e164, gender')
+          .eq('user_id', user.id)
+          .single();
         if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
           sonnerToast.error('Complete seu cadastro antes de agendar');
           navigate('/completar-perfil');
