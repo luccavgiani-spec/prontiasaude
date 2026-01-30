@@ -69,8 +69,5 @@ verify_jwt = false
 [functions.admin-settings-update]
 verify_jwt = false
 
-[functions.sync-google-user]
-verify_jwt = false
-
 [functions.delete-user-by-email]
 verify_jwt = false

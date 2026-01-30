@@ -120,14 +120,13 @@ serve(async (req) => {
 
     for (const user of users) {
       try {
-        // Pular usuários Google OAuth (sem encrypted_password)
-        // Eles serão recriados automaticamente quando fizerem login com Google
+        // Pular usuários sem senha (não podem ser importados)
         if (!user.encrypted_password) {
-          console.log(`[import-users] Skipping Google OAuth user: ${user.email}`);
+          console.log(`[import-users] Skipping user without password: ${user.email}`);
           results.push({
             email: user.email,
             status: "skipped",
-            message: "Usuário Google OAuth - será recriado no primeiro login"
+            message: "Usuário sem senha - não pode ser importado"
           });
           skipped++;
           continue;
