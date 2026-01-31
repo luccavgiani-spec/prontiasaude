@@ -1,133 +1,109 @@
 
+# Plano de Correção Imediata: Edge Functions com CORS Inline
 
-# Plano de Correção Cirúrgica: Reset de Senha + Pagamentos
+## Diagnóstico do Problema
 
-## 🔍 Diagnóstico Completo
+A causa raiz dos problemas com PIX e consultas manuais é a mesma:
 
-### Problema 1: Reset de Senha - "Link Inválido"
+**As Edge Functions `schedule-redirect` e outras estão usando `import { getCorsHeaders } from '../common/cors.ts'`**, mas quando coladas diretamente no Dashboard do Supabase, esse import falha silenciosamente porque o Dashboard não suporta imports de arquivos locais.
 
-| Etapa | Função | Ambiente | Status |
-|-------|--------|----------|--------|
-| 1. Usuário solicita reset | `EsqueciSenha.tsx` | `invokeCloudEdgeFunction` → **CLOUD** | ✅ Correto |
-| 2. Token criado e salvo | `send-password-reset` | Salva em `password_reset_tokens` no **CLOUD** | ✅ Correto |
-| 3. Usuário clica no link | `NovaSenha.tsx` | `invokeEdgeFunction` → **PRODUÇÃO** | ❌ **ERRADO** |
-| 4. Validação do token | `validate-reset-token` | Busca `password_reset_tokens` na **PRODUÇÃO** | ❌ **Função não existe** |
+### Funções Afetadas (deployadas em PRODUÇÃO)
 
-**Causa Raiz**: O arquivo `NovaSenha.tsx` usa `invokeEdgeFunction()` (linhas 36 e 190) que aponta para PRODUÇÃO, mas as funções `validate-reset-token` e `complete-password-reset` estão deployadas apenas no CLOUD.
-
----
-
-### Problema 2: Pagamentos Recusados
-
-**Evidências coletadas:**
-- Apenas **1 pagamento por cartão** aprovado nos últimos 7 dias
-- **19 pagamentos PIX** criados no mesmo período
-- Nenhum log de erro de `mp-create-payment` no Cloud (função está em produção)
-- O código busca dados do paciente do **ambiente correto** via `getHybridSession()` (linha 381-398 do PaymentModal.tsx)
-
-**Problemas identificados no `mp-create-payment`:**
-
-1. **3DS Obrigatório** (linha 492): `three_d_secure_mode = 'required'`
-   - Força autenticação 3DS que pode estar falhando silenciosamente
-   - Recomendação do MP é usar `'optional'` para aumentar aprovação
-
-2. **Busca de serviço no frontend usa Cloud** (linhas 1475-1480 e 2020-2025):
-   ```typescript
-   const { data: service } = await supabase  // ❌ Cloud
-     .from("services")
-   ```
-   Isso funciona porque a tabela `services` existe no Cloud, mas é inconsistente com a arquitetura.
-
-3. **Edge Function não usa dados do ambiente correto**:
-   - `mp-create-payment` usa `SUPABASE_URL` padrão (correto em produção)
-   - Mas está validada para funcionar
+| Função | Status Atual | Ação Necessária |
+|--------|--------------|-----------------|
+| `mp-create-payment` | ✅ CORS inline (atualizada) | Copiar/colar no Supabase Prod |
+| `mp-create-subscription` | ✅ CORS inline (atualizada) | Copiar/colar no Supabase Prod |
+| `schedule-redirect` | ❌ Usa import externo | **PRECISA ser tornada auto-contida** |
 
 ---
 
-## ✅ Correções Necessárias
+## Correções Necessárias
 
-### Correção 1: Reset de Senha (CRÍTICO)
+### 1. Tornar `schedule-redirect` Auto-Contida
 
-**Arquivo**: `src/pages/NovaSenha.tsx`
+Substituir o import externo por CORS inline no arquivo `supabase/functions/schedule-redirect/index.ts`:
 
-| Linha | Mudança |
-|-------|---------|
-| 7 | Adicionar import: `import { invokeCloudEdgeFunction } from "@/lib/edge-functions";` |
-| 36 | Trocar `invokeEdgeFunction` por `invokeCloudEdgeFunction` |
-| 190 | Trocar `invokeEdgeFunction` por `invokeCloudEdgeFunction` |
+**Remover linha 3:**
+```typescript
+import { getCorsHeaders } from '../common/cors.ts';
+```
 
-### Correção 2: Pagamentos - Busca de Serviços (Consistência)
+**Adicionar após linha 2 (após o import do supabase-js):**
+```typescript
+// ============================================================
+// ✅ CORS INLINE - Headers para permitir chamadas do frontend
+// ============================================================
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app',
+  'http://localhost:5173',
+];
 
-**Arquivo**: `src/components/payment/PaymentModal.tsx`
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
 
-Trocar busca de serviços para usar `supabaseProduction` ao invés de `supabase` (Cloud):
+function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const origin = requestOrigin || '';
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : '';
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+}
+// ============================================================
+```
 
-| Linha | Mudança |
-|-------|---------|
-| 1475-1476 | Trocar `supabase.from("services")` por `supabaseProduction.from("services")` |
-| 2020-2021 | Trocar `supabase.from("services")` por `supabaseProduction.from("services")` |
+### 2. Atualizar Chamada getCorsHeaders no Handler Principal
 
----
+A função `schedule-redirect` também precisa passar o `requestOrigin` para `getCorsHeaders()`. Encontrar onde `corsHeaders` é usado e garantir que está usando:
 
-## 📊 Fluxo de Reset Corrigido
-
-```text
-ANTES (QUEBRADO):
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ EsqueciSenha    │────▶│ CLOUD           │────▶│ Token salvo     │
-│ (Cloud)         │     │ send-password-  │     │ no CLOUD DB     │
-│                 │     │ reset           │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ NovaSenha       │────▶│ PRODUÇÃO        │────▶│ Busca token     │
-│ (PRODUÇÃO!)     │     │ validate-reset  │     │ na PRODUÇÃO     │
-│                 │     │ (NÃO EXISTE!)   │     │ (VAZIA!)        │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │                                              │
-         └──────── ❌ ERRO: Link Inválido ◀─────────────┘
-
-
-DEPOIS (CORRIGIDO):
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ EsqueciSenha    │────▶│ CLOUD           │────▶│ Token salvo     │
-│ (Cloud)         │     │ send-password-  │     │ no CLOUD DB     │
-│                 │     │ reset           │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                                                        │
-                                                        ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│ NovaSenha       │────▶│ CLOUD           │────▶│ Busca token     │
-│ (CLOUD!)        │     │ validate-reset  │     │ no CLOUD        │
-│                 │     │ (EXISTE!)       │     │ (36 registros!) │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │                                              │
-         └──────── ✅ Senha redefinida! ◀───────────────┘
+```typescript
+const requestOrigin = req.headers.get('origin');
+const corsHeaders = getCorsHeaders(requestOrigin);
 ```
 
 ---
 
-## 📋 Resumo das Alterações
+## Sequência de Deploy
 
-| # | Arquivo | Alteração | Problema Corrigido |
-|---|---------|-----------|-------------------|
-| 1 | `src/pages/NovaSenha.tsx` | Adicionar import `invokeCloudEdgeFunction` | Setup |
-| 2 | `src/pages/NovaSenha.tsx` | Trocar função na linha 36 | Validação de token |
-| 3 | `src/pages/NovaSenha.tsx` | Trocar função na linha 190 | Atualização de senha |
-| 4 | `src/components/payment/PaymentModal.tsx` | Trocar `supabase` por `supabaseProduction` na linha 1475 | Consistência de dados |
-| 5 | `src/components/payment/PaymentModal.tsx` | Trocar `supabase` por `supabaseProduction` na linha 2020 | Consistência de dados |
+1. **Atualizo o arquivo `schedule-redirect` aqui no Cloud** com CORS inline
+2. **Você copia/cola no Supabase de Produção** as 3 funções:
+   - `mp-create-payment` (já atualizada)
+   - `mp-create-subscription` (já atualizada)
+   - `schedule-redirect` (será atualizada)
+3. **Testamos gerando uma consulta** para a paciente CPF 001.822.997-24
 
 ---
 
-## ⚠️ Observação sobre 3DS e Recusas de Cartão
+## Sobre a pasta `common/cors.ts` no Supabase
 
-A configuração `three_d_secure_mode = 'required'` na linha 492 de `mp-create-payment` pode estar causando recusas, mas essa alteração exige deploy manual no Supabase de Produção. 
+**Resposta à sua pergunta:**
 
-**Recomendação para investigação futura:**
-1. Acessar Dashboard do Mercado Pago → Atividade → Filtrar recusados
-2. Verificar códigos de erro específicos
-3. Se necessário, alterar para `three_d_secure_mode = 'optional'`
+Se você fez deploy das Edge Functions **via Dashboard (copiar/colar)**, a pasta `common/` **não tem efeito** e pode ser ignorada ou deletada do ambiente de produção.
 
-Por ora, as correções acima resolvem os problemas de **ambiente inconsistente** que são a causa principal das falhas.
+Se você fez deploy **via Supabase CLI** (`supabase functions deploy`), a pasta `common/` é usada corretamente e os imports funcionam.
 
+**Recomendação**: Mantenha todas as funções críticas como **auto-contidas** (CORS inline) para garantir que funcionem tanto via CLI quanto via Dashboard.
+
+---
+
+## Arquivos a Modificar
+
+| # | Arquivo | Alteração |
+|---|---------|-----------|
+| 1 | `supabase/functions/schedule-redirect/index.ts` | Remover import de `../common/cors.ts` e adicionar CORS inline |
+
+---
+
+## Teste Pós-Correção
+
+Após o deploy das funções atualizadas:
+
+1. Testar geração de PIX no PaymentModal
+2. Testar geração de consulta manual pelo Admin Dashboard
+3. Gerar consulta para paciente CPF 001.822.997-24 (Sonia Mara Lyrio Volpe)
