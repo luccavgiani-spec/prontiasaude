@@ -206,6 +206,6 @@ export function HeroSection() {
       </div>
 
       {/* Payment Modal */}
-      <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku="ITC6534" serviceName="Pronto Atendimento" amount={4390} onSuccess={() => {}} />
+      <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku="ITC6534" serviceName="Pronto Atendimento" amount={3990} onSuccess={() => {}} />
     </section>;
 }
