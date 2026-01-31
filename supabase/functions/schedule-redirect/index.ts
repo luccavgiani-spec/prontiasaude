@@ -1529,25 +1529,6 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   }
   
   const data = attendanceResult.data;
-  
-  // ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML ao invés de JSON
-  const responseText = await response.text();
-  let data;
-  try {
-    data = JSON.parse(responseText);
-  } catch (parseError) {
-    console.error('[ClickLife] ❌ Resposta de scheduling não é JSON válido:', responseText.substring(0, 500));
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        provider: 'clicklife',
-        error: 'ClickLife retornou resposta inválida',
-        debug_hint: 'API retornou HTML ao invés de JSON. Possível erro no backend da ClickLife.',
-        response_preview: responseText.substring(0, 200)
-      }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
   console.log('[ClickLife] Response:', data);
 
   // ✅ Usar URL retornada pela API (com token JWT de login automático)
