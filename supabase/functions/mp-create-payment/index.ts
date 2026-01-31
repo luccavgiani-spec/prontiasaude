@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
       .from('services')
       .select('sku, name, price_cents, allows_recurring, recurring_frequency, recurring_frequency_type')
       .eq('sku', sku)
-      .eq('is_active', true)
+      .eq('active', true)
       .maybeSingle();
 
     if (serviceError || !service) {
