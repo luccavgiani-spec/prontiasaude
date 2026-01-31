@@ -1476,7 +1476,6 @@ export function PaymentModal({
         .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
-        .eq("is_active", true)
         .maybeSingle();
 
       if (serviceError || !service) {
@@ -2021,7 +2020,6 @@ export function PaymentModal({
         .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
-        .eq("is_active", true)
         .maybeSingle();
 
       if (serviceError || !service) {
