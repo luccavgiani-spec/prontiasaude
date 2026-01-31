@@ -1355,64 +1355,11 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
 
   console.log('[ClickLife] Sexo enviado para cadastro:', sexoFinal);
 
-  // 1. CADASTRAR PACIENTE (ou pular se skip_registration)
-  if (payload.skip_registration) {
-    console.log('[ClickLife] ⏭️ skip_registration=true, pulando cadastro/ativação - indo direto para criação de atendimento');
-  } else {
-    const registration = await registerClickLifePatient(
-      payload.cpf,
-      payload.nome,
-      payload.email,
-      payload.telefone,
-      planoId,
-      sexoFinal,
-      payload.birth_date // ✅ NOVO: Passar data de nascimento
-    );
-
-    // ✅ ETAPA 2: Se falhar, tentar apenas ativar sem re-cadastrar
-    if (!registration.success) {
-      console.warn('[ClickLife] Cadastro falhou, tentando apenas ativar:', registration.error);
-      
-      // Tentar ativação direta (assume que usuário já existe)
-      const cpfClean = payload.cpf.replace(/\D/g, '');
-      const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN')!;
-      
-      const activationPayload = {
-        authtoken: INTEGRATOR_TOKEN,
-        cpf: cpfClean,
-        empresaid: 9083,
-        planoid: planoId,
-        proposito: "Ativar"
-      };
-      
-      try {
-        const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'authtoken': INTEGRATOR_TOKEN
-          },
-          body: JSON.stringify(activationPayload)
-        });
-        
-        if (!activationRes.ok) {
-          const errorText = await activationRes.text();
-          console.warn('[ClickLife] ⚠️ Ativação também falhou (paciente pode já estar ativo):', activationRes.status, errorText.substring(0, 200));
-          // ✅ NÃO RETORNAR ERRO - continuar para criar atendimento (paciente já ativo é OK)
-          console.log('[ClickLife] Prosseguindo mesmo com erro de ativação - paciente pode já estar ativo');
-        } else {
-          console.log('[ClickLife] ✓ Usuário ativado diretamente (fallback)');
-        }
-      } catch (error) {
-        console.warn('[ClickLife] Exceção na ativação direta (continuando mesmo assim):', error);
-        // ✅ NÃO RETORNAR ERRO - continuar para criar atendimento
-      }
-    }
-  }
-
-  console.log('[ClickLife] ✓ Prosseguindo com criação de atendimento');
-
-  // 2. OBTER TOKEN DO INTEGRADOR
+  // ============================================================
+  // ✅ CORREÇÃO 2026-01-31: Fallback de cadastro para skip_registration
+  // Se skip_registration=true e ClickLife retornar 401, cadastrar e retry
+  // ============================================================
+  
   const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
   if (!INTEGRATOR_TOKEN) {
     console.error('[ClickLife] ❌ CLICKLIFE_AUTH_TOKEN não configurado');
@@ -1433,54 +1380,145 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
     );
   }
 
-  // 3. CRIAR AGENDAMENTO USANDO AUTHTOKEN DO INTEGRADOR (não depende da senha do paciente)
-  const requestBody: any = {
-    cpf: payload.cpf.replace(/\D/g, ''),
-    authtoken: INTEGRATOR_TOKEN, // ✅ Token do integrador no body (conforme documentação ClickLife)
-    especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
-  };
+  // Função auxiliar para criar atendimento (permite retry)
+  async function tryCreateClickLifeAttendance(): Promise<{ ok: boolean; status: number; data?: any; errorText?: string }> {
+    const requestBody: any = {
+      cpf: payload.cpf.replace(/\D/g, ''),
+      authtoken: INTEGRATOR_TOKEN,
+      especialidadeid: SKU_TO_CLICKLIFE_ID[payload.sku] || 8,
+    };
 
-  console.log('[ClickLife] Request body (usando authtoken):', {
-    cpf: requestBody.cpf,
-    authtoken: `${INTEGRATOR_TOKEN.substring(0, 10)}...`, // Mascarar token no log
-    especialidadeid: requestBody.especialidadeid
-  });
+    console.log('[ClickLife] Tentando criar atendimento:', {
+      cpf: requestBody.cpf,
+      authtoken: `${INTEGRATOR_TOKEN.substring(0, 10)}...`,
+      especialidadeid: requestBody.especialidadeid
+    });
 
-  const response = await fetch(
-    `${API_BASE}/atendimentos/atendimentos`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestBody)
+    const response = await fetch(
+      `${API_BASE}/atendimentos/atendimentos`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`[ClickLife] Atendimento falhou - HTTP ${response.status}:`, errorText.substring(0, 200));
+      return { ok: false, status: response.status, errorText };
     }
-  );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[ClickLife] HTTP ${response.status}:`, errorText);
+    const responseText = await response.text();
+    try {
+      const data = JSON.parse(responseText);
+      return { ok: true, status: response.status, data };
+    } catch (parseError) {
+      console.error('[ClickLife] ❌ Resposta não é JSON válido:', responseText.substring(0, 200));
+      return { ok: false, status: response.status, errorText: responseText };
+    }
+  }
+
+  // Função auxiliar para cadastrar paciente
+  async function doRegisterPatient(): Promise<boolean> {
+    const registration = await registerClickLifePatient(
+      payload.cpf,
+      payload.nome,
+      payload.email,
+      payload.telefone,
+      planoId,
+      sexoFinal,
+      payload.birth_date
+    );
+
+    if (!registration.success) {
+      console.warn('[ClickLife] Cadastro falhou, tentando apenas ativar:', registration.error);
+      
+      const cpfClean = payload.cpf.replace(/\D/g, '');
+      const activationPayload = {
+        authtoken: INTEGRATOR_TOKEN,
+        cpf: cpfClean,
+        empresaid: 9083,
+        planoid: planoId,
+        proposito: "Ativar"
+      };
+      
+      try {
+        const activationRes = await fetch(`${API_BASE}/usuarios/ativacao`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'authtoken': INTEGRATOR_TOKEN
+          },
+          body: JSON.stringify(activationPayload)
+        });
+        
+        if (!activationRes.ok) {
+          const errorText = await activationRes.text();
+          console.warn('[ClickLife] ⚠️ Ativação também falhou:', activationRes.status, errorText.substring(0, 200));
+        } else {
+          console.log('[ClickLife] ✓ Usuário ativado via fallback');
+        }
+      } catch (error) {
+        console.warn('[ClickLife] Exceção na ativação direta:', error);
+      }
+    }
+    return true; // Sempre continuar para tentar criar atendimento
+  }
+
+  // ============================================================
+  // LÓGICA PRINCIPAL COM FALLBACK
+  // ============================================================
+  
+  let attendanceResult: { ok: boolean; status: number; data?: any; errorText?: string };
+  
+  if (payload.skip_registration) {
+    // CENÁRIO 1: skip_registration=true (admin console)
+    // Tentar criar atendimento diretamente
+    console.log('[ClickLife] ⏭️ skip_registration=true, tentando criar atendimento diretamente');
+    attendanceResult = await tryCreateClickLifeAttendance();
+    
+    // Se 401 "Usuário não encontrado", fazer cadastro e retry
+    if (!attendanceResult.ok && attendanceResult.status === 401) {
+      console.log('[ClickLife] 🔄 401 detectado - fazendo cadastro do paciente como fallback');
+      await doRegisterPatient();
+      
+      console.log('[ClickLife] 🔄 Retry: criando atendimento após cadastro');
+      attendanceResult = await tryCreateClickLifeAttendance();
+    }
+  } else {
+    // CENÁRIO 2: Fluxo normal (pagamento, plano ativo)
+    // Cadastrar primeiro, depois criar atendimento
+    console.log('[ClickLife] 📝 Cadastrando/ativando paciente antes de criar atendimento');
+    await doRegisterPatient();
+    attendanceResult = await tryCreateClickLifeAttendance();
+  }
+  
+  // Processar resultado final
+  if (!attendanceResult.ok) {
+    const errorText = attendanceResult.errorText || 'Erro desconhecido';
+    const statusCode = attendanceResult.status;
     
     let errorReason = 'Erro na API ClickLife';
-    if (response.status === 401) {
-      console.error('[ClickLife] ⚠️ Token inválido - Verifique CLICKLIFE_AUTH_TOKEN no ambiente');
+    if (statusCode === 401) {
       errorReason = 'Token inválido ou usuário não encontrado';
-    } else if (response.status === 403) {
-      console.error('[ClickLife] ⚠️ Acesso negado - Verifique se o cadastro está ativo na plataforma');
+    } else if (statusCode === 403) {
       errorReason = 'Cadastro inativo';
     }
     
-    // Retornar erro estruturado
     return new Response(
       JSON.stringify({
         ok: false,
         provider: 'clicklife',
-        error: `ClickLife API error: ${response.status} - ${errorText}`,
+        error: `ClickLife API error: ${statusCode} - ${errorText}`,
         details: {
-          status_code: response.status,
+          status_code: statusCode,
           response_body: errorText,
           reason: errorReason,
-          endpoint: '/atendimentos/atendimentos'
+          endpoint: '/atendimentos/atendimentos',
+          skip_registration: payload.skip_registration || false
         }
       }),
       { 
@@ -1489,6 +1527,8 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
       }
     );
   }
+  
+  const data = attendanceResult.data;
   
   // ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML ao invés de JSON
   const responseText = await response.text();
