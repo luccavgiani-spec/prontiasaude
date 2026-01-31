@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { invokeCloudEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Lock, AlertCircle } from "lucide-react";
@@ -33,7 +33,7 @@ const NovaSenha = () => {
       if (customToken) {
         console.log('🔐 Token customizado detectado, validando...');
         try {
-          const { data, error } = await invokeEdgeFunction('validate-reset-token', {
+          const { data, error } = await invokeCloudEdgeFunction('validate-reset-token', {
             body: { token: customToken }
           });
 
@@ -187,7 +187,7 @@ const NovaSenha = () => {
     
     if (customToken) {
       try {
-        const { data, error } = await invokeEdgeFunction('complete-password-reset', {
+        const { data, error } = await invokeCloudEdgeFunction('complete-password-reset', {
           body: { 
             token: customToken,
             new_password: password
