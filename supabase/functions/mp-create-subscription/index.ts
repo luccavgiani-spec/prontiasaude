@@ -1,10 +1,35 @@
 // Supabase Edge Function: mp-create-subscription
 // Cria assinaturas recorrentes no Mercado Pago usando a API de Subscriptions (preapproval)
+// ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
 
-import { getCorsHeaders } from '../common/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
-const corsHeaders = getCorsHeaders();
+// ============================================================
+// ✅ CORS INLINE - Headers para permitir chamadas do frontend
+// ============================================================
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app',
+  'http://localhost:5173',
+];
+
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
+
+function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const origin = requestOrigin || '';
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : '';
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+}
+// ============================================================
 
 // ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
 // Isso evita o problema de split-brain onde a função roda em um projeto diferente
@@ -63,6 +88,10 @@ function extractPlanCode(sku: string): string {
 }
 
 Deno.serve(async (req) => {
+  // ✅ CORS: Obter origin da requisição
+  const requestOrigin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(requestOrigin);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -285,6 +314,10 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[mp-create-subscription] Erro:', error);
+    
+    // ✅ CORS: Obter origin da requisição para resposta de erro
+    const requestOrigin = req.headers.get('origin');
+    const corsHeaders = getCorsHeaders(requestOrigin);
     
     return new Response(JSON.stringify({
       success: false,
