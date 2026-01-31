@@ -54,6 +54,8 @@ export async function invokeEdgeFunction<T = any>(
       headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
     }
 
+    console.log(`[invokeEdgeFunction] target=production function=${functionName}`);
+
     const response = await fetch(`${EDGE_FUNCTIONS_URL}/${functionName}`, {
       method: options.method || "POST",
       headers,
