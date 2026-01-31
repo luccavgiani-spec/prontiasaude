@@ -1,6 +1,33 @@
-// [schedule-redirect] VERSION: 2026-01-28T-v3-communicare-auto-register
+// [schedule-redirect] VERSION: 2026-01-31T-v4-self-contained-cors
+// ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getCorsHeaders } from '../common/cors.ts';
+
+// ============================================================
+// ✅ CORS INLINE - Headers para permitir chamadas do frontend
+// ============================================================
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app',
+  'http://localhost:5173',
+];
+
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
+
+function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const origin = requestOrigin || '';
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : '';
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+}
+// ============================================================
 
 // ✅ ETAPA 4: Função de retry para operações críticas
 async function retryOperation<T>(
