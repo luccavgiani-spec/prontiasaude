@@ -1471,8 +1471,8 @@ export function PaymentModal({
       const orderId = `order_${Date.now()}`;
       const schedulePayload = buildSchedulePayload();
 
-      // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await (supabase
+      // ✅ SEMPRE buscar preço do DB de PRODUÇÃO, NUNCA usar fallback de props
+      const { data: service, error: serviceError } = await (supabaseProduction
         .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
@@ -2016,8 +2016,8 @@ export function PaymentModal({
         telefone: formattedPhone, // Usar telefone formatado localmente
       };
 
-      // ✅ SEMPRE buscar preço do DB, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await (supabase
+      // ✅ SEMPRE buscar preço do DB de PRODUÇÃO, NUNCA usar fallback de props
+      const { data: service, error: serviceError } = await (supabaseProduction
         .from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
