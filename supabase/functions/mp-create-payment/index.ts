@@ -488,12 +488,13 @@ Deno.serve(async (req) => {
       // ✅ binary_mode CONDICIONAL: false se override (permitir review), true caso contrário
       paymentData.binary_mode = !paymentRequest.payerOverride;
       
-      // ✅ Forçar 3DS 2.0 em modo REQUIRED para aumentar aprovação
-      paymentData.three_d_secure_mode = 'required';
+      // ✅ 3DS 2.0 em modo OPTIONAL: tenta autenticação mas não bloqueia se falhar
+      // Modo 'required' estava causando muitas recusas por "alto risco"
+      paymentData.three_d_secure_mode = 'optional';
       
       console.log('[mp-create-payment] Card payment config:', {
         binary_mode: paymentData.binary_mode,
-        three_d_secure_mode: 'required',
+        three_d_secure_mode: 'optional',
         is_third_party: !!paymentRequest.payerOverride
       });
     } else {
