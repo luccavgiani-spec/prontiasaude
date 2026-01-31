@@ -1,71 +1,133 @@
 
 
-# Correção: Erro "Unknown error" para Kelly Solamita
+# Plano de Correção Cirúrgica: Reset de Senha + Pagamentos
 
-## 🔍 Diagnóstico
+## 🔍 Diagnóstico Completo
 
-| Dado | Valor |
-|------|-------|
-| Email | kellysolamita33@gmail.com |
-| Origem | Ambos (Cloud + Produção) |
-| Login Environment | Cloud |
-| User ID Cloud | e97b5b60-df67-4f29-96cf-48ea520fe508 |
-| User ID Produção | 7cae5103-9721-487c-b633-fd1bd51dffd5 |
-| Dados completos | Sim (profile_complete: true) |
-| Pagamentos gerados | Nenhum (erro ocorre antes da chamada ao backend) |
+### Problema 1: Reset de Senha - "Link Inválido"
 
-## Causa Raiz
+| Etapa | Função | Ambiente | Status |
+|-------|--------|----------|--------|
+| 1. Usuário solicita reset | `EsqueciSenha.tsx` | `invokeCloudEdgeFunction` → **CLOUD** | ✅ Correto |
+| 2. Token criado e salvo | `send-password-reset` | Salva em `password_reset_tokens` no **CLOUD** | ✅ Correto |
+| 3. Usuário clica no link | `NovaSenha.tsx` | `invokeEdgeFunction` → **PRODUÇÃO** | ❌ **ERRADO** |
+| 4. Validação do token | `validate-reset-token` | Busca `password_reset_tokens` na **PRODUÇÃO** | ❌ **Função não existe** |
 
-O componente `PlanosSection.tsx` usa `supabase.auth.getUser()` diretamente (linha 42-47), que pode retornar dados inconsistentes quando o usuário está logado no ambiente Cloud mas o código espera dados da Produção.
+**Causa Raiz**: O arquivo `NovaSenha.tsx` usa `invokeEdgeFunction()` (linhas 36 e 190) que aponta para PRODUÇÃO, mas as funções `validate-reset-token` e `complete-password-reset` estão deployadas apenas no CLOUD.
 
-O mesmo problema existe em outros componentes que não utilizam `getHybridSession()`:
-- `src/components/home/PlanosSection.tsx` (linhas 42-53, 296-312)
+---
 
-## Correção
+### Problema 2: Pagamentos Recusados
 
-Atualizar `PlanosSection.tsx` para usar `getHybridSession()` e o cliente correto (Cloud ou Produção) baseado no ambiente detectado.
+**Evidências coletadas:**
+- Apenas **1 pagamento por cartão** aprovado nos últimos 7 dias
+- **19 pagamentos PIX** criados no mesmo período
+- Nenhum log de erro de `mp-create-payment` no Cloud (função está em produção)
+- O código busca dados do paciente do **ambiente correto** via `getHybridSession()` (linha 381-398 do PaymentModal.tsx)
 
-### Arquivo: `src/components/home/PlanosSection.tsx`
+**Problemas identificados no `mp-create-payment`:**
 
-**Mudança 1**: Adicionar import do `getHybridSession` e `supabaseProduction`
+1. **3DS Obrigatório** (linha 492): `three_d_secure_mode = 'required'`
+   - Força autenticação 3DS que pode estar falhando silenciosamente
+   - Recomendação do MP é usar `'optional'` para aumentar aprovação
 
-**Mudança 2**: Atualizar função `checkActivePlan` (linhas 40-53)
-- Substituir `supabase.auth.getUser()` por `getHybridSession()`
+2. **Busca de serviço no frontend usa Cloud** (linhas 1475-1480 e 2020-2025):
+   ```typescript
+   const { data: service } = await supabase  // ❌ Cloud
+     .from("services")
+   ```
+   Isso funciona porque a tabela `services` existe no Cloud, mas é inconsistente com a arquitetura.
 
-**Mudança 3**: Atualizar handler de bypass de plano (linhas 296-312)
-- Usar cliente correto baseado no ambiente da sessão
+3. **Edge Function não usa dados do ambiente correto**:
+   - `mp-create-payment` usa `SUPABASE_URL` padrão (correto em produção)
+   - Mas está validada para funcionar
 
-## Detalhes Técnicos
+---
+
+## ✅ Correções Necessárias
+
+### Correção 1: Reset de Senha (CRÍTICO)
+
+**Arquivo**: `src/pages/NovaSenha.tsx`
+
+| Linha | Mudança |
+|-------|---------|
+| 7 | Adicionar import: `import { invokeCloudEdgeFunction } from "@/lib/edge-functions";` |
+| 36 | Trocar `invokeEdgeFunction` por `invokeCloudEdgeFunction` |
+| 190 | Trocar `invokeEdgeFunction` por `invokeCloudEdgeFunction` |
+
+### Correção 2: Pagamentos - Busca de Serviços (Consistência)
+
+**Arquivo**: `src/components/payment/PaymentModal.tsx`
+
+Trocar busca de serviços para usar `supabaseProduction` ao invés de `supabase` (Cloud):
+
+| Linha | Mudança |
+|-------|---------|
+| 1475-1476 | Trocar `supabase.from("services")` por `supabaseProduction.from("services")` |
+| 2020-2021 | Trocar `supabase.from("services")` por `supabaseProduction.from("services")` |
+
+---
+
+## 📊 Fluxo de Reset Corrigido
 
 ```text
-ANTES (linha 42-47):
-┌──────────────────────────────────────────┐
-│ const { data: { user } } =               │
-│   await supabase.auth.getUser();         │
-│                                          │
-│ // Usa apenas Cloud, ignora Produção     │
-└──────────────────────────────────────────┘
+ANTES (QUEBRADO):
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ EsqueciSenha    │────▶│ CLOUD           │────▶│ Token salvo     │
+│ (Cloud)         │     │ send-password-  │     │ no CLOUD DB     │
+│                 │     │ reset           │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ NovaSenha       │────▶│ PRODUÇÃO        │────▶│ Busca token     │
+│ (PRODUÇÃO!)     │     │ validate-reset  │     │ na PRODUÇÃO     │
+│                 │     │ (NÃO EXISTE!)   │     │ (VAZIA!)        │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                                              │
+         └──────── ❌ ERRO: Link Inválido ◀─────────────┘
 
-DEPOIS:
-┌──────────────────────────────────────────┐
-│ const { session, environment } =          │
-│   await getHybridSession();              │
-│ const user = session?.user;              │
-│ const client = environment === 'production' │
-│   ? supabaseProduction : supabase;       │
-└──────────────────────────────────────────┘
+
+DEPOIS (CORRIGIDO):
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ EsqueciSenha    │────▶│ CLOUD           │────▶│ Token salvo     │
+│ (Cloud)         │     │ send-password-  │     │ no CLOUD DB     │
+│                 │     │ reset           │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ NovaSenha       │────▶│ CLOUD           │────▶│ Busca token     │
+│ (CLOUD!)        │     │ validate-reset  │     │ no CLOUD        │
+│                 │     │ (EXISTE!)       │     │ (36 registros!) │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                                              │
+         └──────── ✅ Senha redefinida! ◀───────────────┘
 ```
 
-## Resumo das Alterações
+---
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/home/PlanosSection.tsx` | Usar `getHybridSession()` e cliente híbrido |
+## 📋 Resumo das Alterações
 
-## Resultado Esperado
+| # | Arquivo | Alteração | Problema Corrigido |
+|---|---------|-----------|-------------------|
+| 1 | `src/pages/NovaSenha.tsx` | Adicionar import `invokeCloudEdgeFunction` | Setup |
+| 2 | `src/pages/NovaSenha.tsx` | Trocar função na linha 36 | Validação de token |
+| 3 | `src/pages/NovaSenha.tsx` | Trocar função na linha 190 | Atualização de senha |
+| 4 | `src/components/payment/PaymentModal.tsx` | Trocar `supabase` por `supabaseProduction` na linha 1475 | Consistência de dados |
+| 5 | `src/components/payment/PaymentModal.tsx` | Trocar `supabase` por `supabaseProduction` na linha 2020 | Consistência de dados |
 
-Após a correção, a Kelly (e qualquer usuário logado em qualquer ambiente) poderá:
-1. Visualizar corretamente se tem plano ativo
-2. Iniciar compras de consultas e planos sem erro
-3. Ter seus dados carregados do ambiente correto (Cloud ou Produção)
+---
+
+## ⚠️ Observação sobre 3DS e Recusas de Cartão
+
+A configuração `three_d_secure_mode = 'required'` na linha 492 de `mp-create-payment` pode estar causando recusas, mas essa alteração exige deploy manual no Supabase de Produção. 
+
+**Recomendação para investigação futura:**
+1. Acessar Dashboard do Mercado Pago → Atividade → Filtrar recusados
+2. Verificar códigos de erro específicos
+3. Se necessário, alterar para `three_d_secure_mode = 'optional'`
+
+Por ora, as correções acima resolvem os problemas de **ambiente inconsistente** que são a causa principal das falhas.
 
