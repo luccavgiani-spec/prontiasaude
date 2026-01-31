@@ -1,72 +1,83 @@
 
 
-# Correção Urgente: Declaração Duplicada de `data` no schedule-redirect
+# Plano de Correção: PIX Não Funciona - Chamadas Indo para Lovable Cloud
 
-## Problema Identificado
+## Diagnóstico Confirmado
 
-O erro `SyntaxError: Identifier 'data' has already been declared` ocorre porque há código duplicado no arquivo `schedule-redirect/index.ts`:
+### Evidência dos Logs do Lovable Cloud
 
-```text
-Linha 1531: const data = attendanceResult.data;  ← NOVA lógica (correta)
-Linha 1534: const responseText = await response.text();  ← CÓDIGO ANTIGO (deveria ter sido removido)
-Linha 1535: let data;  ← DECLARAÇÃO DUPLICADA (causa o erro!)
+```
+[mp-create-payment] Price mismatch detected: { sku: "ITC6534", client_sent: 43.9, expected: 39.9 }
 ```
 
-## Causa Raiz
+### Análise do Problema
 
-Quando implementei o novo fluxo com `tryCreateClickLifeAttendance()` e `doRegisterPatient()`, esqueci de remover o bloco de código antigo que processava a resposta de forma diferente.
+| Componente | Estado Esperado | Estado Real |
+|------------|-----------------|-------------|
+| Código fonte `PaymentModal.tsx` | Busca preço do `supabaseProduction` (39.90) | ✅ Correto |
+| Código fonte `invokeEdgeFunction` | Chama URL de produção | ✅ Correto |
+| Build em execução | Usa código atualizado | ❌ **USA CÓDIGO ANTIGO** |
+| Frontend envia | `unit_price: 39.9` | ❌ Envia `43.9` |
+| Endpoint chamado | `ploqujuhpwutpcibedbr` | ❌ Chama `yrsjluhhnhxogdgnbnya` |
+
+### Causa Raiz
+
+O build/preview em execução **NÃO reflete o código atual**. Está usando uma versão antiga que:
+
+1. Passa a prop `amount={4390}` diretamente (4390/100 = 43.9)
+2. OU usa `supabase.functions.invoke` ao invés de `invokeEdgeFunction`
 
 ---
 
-## Correção a Ser Feita
+## Correções Necessárias
 
-**Arquivo:** `supabase/functions/schedule-redirect/index.ts`
+### Correção 1: Sincronizar Preço no HeroSection.tsx
 
-**Ação:** Remover as linhas 1533-1550 (código antigo duplicado) e manter apenas a linha 1531 que já extrai `data` corretamente de `attendanceResult.data`.
+**Problema:** A prop `amount={4390}` está incorreta. Mesmo que o código atual busque do DB, uma versão de fallback antiga pode usar a prop.
 
-### Código a Remover (linhas 1533-1550):
+**Arquivo:** `src/components/home/HeroSection.tsx`
 
+**Alteração:**
+```diff
+- <PaymentModal ... amount={4390} ... />
++ <PaymentModal ... amount={3990} ... />
+```
+
+### Correção 2: Adicionar Log de Debug na URL Chamada
+
+Para confirmar que o build correto está em execução, adicionar log na função `invokeEdgeFunction`.
+
+**Arquivo:** `src/lib/edge-functions.ts`
+
+**Alteração:** Adicionar console.log para mostrar a URL exata sendo chamada:
 ```typescript
-// ✅ SAFE PARSING: Evitar crash se ClickLife retornar HTML ao invés de JSON
-const responseText = await response.text();
-let data;
-try {
-  data = JSON.parse(responseText);
-} catch (parseError) {
-  console.error('[ClickLife] ❌ Resposta de scheduling não é JSON válido:', responseText.substring(0, 500));
-  return new Response(
-    JSON.stringify({
-      ok: false,
-      provider: 'clicklife',
-      error: 'ClickLife retornou resposta inválida',
-      debug_hint: 'API retornou HTML ao invés de JSON. Possível erro no backend da ClickLife.',
-      response_preview: responseText.substring(0, 200)
-    }),
-    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
-```
-
-### Código que permanece (linha 1531):
-
-```typescript
-const data = attendanceResult.data;
+console.log("[invokeEdgeFunction] Calling:", `${EDGE_FUNCTIONS_URL}/${functionName}`);
 ```
 
 ---
 
-## Resumo
+## Resumo das Alterações
 
-| Ação | Linhas | Descrição |
-|------|--------|-----------|
-| REMOVER | 1533-1550 | Código antigo de parsing que duplica variável `data` |
-| MANTER | 1531 | Extração correta de `data` do resultado |
+| # | Arquivo | Alteração | Motivo |
+|---|---------|-----------|--------|
+| 1 | `src/components/home/HeroSection.tsx` | Alterar `amount={4390}` → `amount={3990}` | Sincronizar fallback com DB |
+| 2 | `src/lib/edge-functions.ts` | Adicionar log de URL | Debug para confirmar build correto |
 
 ---
 
-## Após Correção
+## Após as Correções
 
-1. Atualizarei o arquivo aqui no Cloud
-2. Você copiará/colará novamente no Supabase de Produção
-3. Testaremos a geração de consulta ClickLife para CPF 001.822.997-24
+1. O Lovable Cloud fará um **rebuild automático**
+2. O preview usará o código atualizado
+3. Você poderá ver no console: `[invokeEdgeFunction] Calling: https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/mp-create-payment`
+4. Se ainda aparecer logs no Lovable Cloud, significa que a função `mp-create-payment` precisa ser **removida** do Lovable Cloud para evitar conflitos
+
+---
+
+## Nota Importante
+
+Se após as correções o problema persistir e os logs ainda mostrarem chamadas no Lovable Cloud, a próxima etapa será:
+
+1. Verificar se há uma função `mp-create-payment` deployada no Lovable Cloud que precisa ser deletada
+2. OU adicionar validação na própria função do Cloud para rejeitar chamadas e redirecionar para produção
 
