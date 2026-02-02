@@ -11,13 +11,51 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 const SALES_START_DATE = '2025-03-01T00:00:00.000Z';
 
 // Emails de teste a serem ignorados nos relatórios
-const TEST_EMAILS = ['victoria_toledo_@hotmail.com', 'luccavgiani@gmail.com', 'luccapbe420@gmail.com', 'sandra.toledo@atccontabil.com.br', 'suporte@prontiasaude.com.br', 'teste@clubeben.com', 'teste@teste.com', 'joao.maria.teste01@gmail.com'];
+const TEST_EMAILS = [
+  'victoria_toledo_@hotmail.com', 
+  'luccavgiani@gmail.com', 
+  'luccapbe420@gmail.com', 
+  'sandra.toledo@atccontabil.com.br', 
+  'suporte@prontiasaude.com.br', 
+  'teste@clubeben.com', 
+  'teste@teste.com', 
+  'joao.maria.teste01@gmail.com',
+  'nevescristiellis@gmail.com',
+  't.giani@gmail.com',
+];
+
+// Nomes de usuários internos a excluir
+const TEST_NAMES = ['lucca', 'victoria toledo', 'sandra toledo', 'tulio giani', 'tulio'];
 
 // Função para verificar se é email de teste
 const isTestEmail = (email: string | null | undefined): boolean => {
   if (!email) return false;
   const lowerEmail = email.toLowerCase();
-  return TEST_EMAILS.some(testEmail => lowerEmail.includes(testEmail.toLowerCase()));
+  
+  // Verificar lista de emails de teste
+  if (TEST_EMAILS.some(te => lowerEmail.includes(te.toLowerCase()))) return true;
+  
+  // Verificar padrões de email de teste
+  if (lowerEmail.includes('+')) return true;
+  if (lowerEmail.includes('@prontia.com.br')) return true;
+  if (lowerEmail.includes('atccontabil')) return true;
+  
+  return false;
+};
+
+// Função para verificar se é nome de teste
+const isTestName = (name: string | null | undefined): boolean => {
+  if (!name) return false;
+  const lowerName = name.toLowerCase();
+  return TEST_NAMES.some(tn => lowerName.includes(tn));
+};
+
+// Normalizar valores: valores >= 1000 assumidos como centavos
+// valores < 1000 assumidos como reais e convertidos para centavos
+const normalizeAmount = (amount: number | null | undefined): number => {
+  if (!amount) return 0;
+  const num = Number(amount);
+  return num >= 1000 ? num : Math.round(num * 100);
 };
 interface MetricsData {
   totalRevenue: number;
@@ -231,75 +269,55 @@ export default function ReportsTab() {
       const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => {
         // Fallback: PostgREST pode retornar 'email' (cache antigo) ou 'patient_email' (schema atual)
         const email = pp.patient_email || (pp as any).email;
-        return !isTestEmail(email);
+        const name = pp.patient_name || '';
+        return !isTestEmail(email) && !isTestName(name);
       });
       const plans = (plansResult.data || []).filter(plan => !isTestEmail(plan.email));
       const patients = patientsResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
 
-      // Combinar vendas de appointments + pending_payments (sem duplicatas por order_id)
+      // Combinar vendas usando APENAS pending_payments como fonte de verdade para receita
       interface UnifiedSale {
         id: string;
         sku: string;
         created_at: string;
         order_id: string | null;
-        source: 'appointment' | 'pending_payment' | 'plan';
-        price: number;
+        source: 'pending_payment';
+        price: number; // Em centavos
         provider?: string;
       }
       const salesMap = new Map<string, UnifiedSale>();
 
-      // Adicionar appointments
+      // Criar mapa de appointments por order_id para obter contexto (provider, service_code)
+      const appointmentsByOrderId = new Map<string, typeof appointments[0]>();
       appointments.forEach(apt => {
-        const key = apt.order_id || `apt-${apt.id}`;
-        if (!salesMap.has(key)) {
-          const sku = apt.service_code || '';
-          salesMap.set(key, {
-            id: apt.id,
-            sku,
-            created_at: apt.created_at,
-            order_id: apt.order_id,
-            source: 'appointment',
-            price: SKU_PRICES[sku] || 0,
-            provider: apt.provider
-          });
+        if (apt.order_id) {
+          appointmentsByOrderId.set(apt.order_id, apt);
         }
       });
 
-      // Adicionar pending_payments que não estão em appointments
+      // Usar APENAS pending_payments aprovados como fonte de receita
       pendingPayments.forEach(pp => {
-        const key = pp.order_id || `pp-${pp.id}`;
+        const key = pp.order_id || pp.payment_id || `pp-${pp.id}`;
         if (!salesMap.has(key)) {
           const sku = pp.sku || '';
-          // Fallback: PostgREST pode retornar 'amount_cents' (cache antigo) ou 'amount' (schema atual)
           const amount = pp.amount ?? (pp as any).amount_cents;
+          
+          // Buscar contexto do appointment se existir
+          const apt = pp.order_id ? appointmentsByOrderId.get(pp.order_id) : null;
+          
           salesMap.set(key, {
             id: pp.id,
-            sku,
+            sku: sku || apt?.service_code || '',
             created_at: pp.created_at || new Date().toISOString(),
             order_id: pp.order_id,
             source: 'pending_payment',
-            price: amount ? Number(amount) : SKU_PRICES[sku] || 0
+            price: normalizeAmount(amount),
+            provider: apt?.provider
           });
         }
       });
 
-      // Adicionar planos pagos (não empresariais e não manuais)
-      // Fallback: 'activated_by' pode não existir no cache antigo
-      const paidPlans = plans.filter(p => !p.plan_code?.startsWith('EMP_') && (p.activated_by || (p as any).activated_by) !== 'admin_manual');
-      paidPlans.forEach(plan => {
-        const key = `plan-${plan.id}`;
-        if (!salesMap.has(key)) {
-          salesMap.set(key, {
-            id: plan.id,
-            sku: plan.plan_code,
-            created_at: plan.created_at || new Date().toISOString(),
-            order_id: null,
-            source: 'plan',
-            price: SKU_PRICES[plan.plan_code] || 0
-          });
-        }
-      });
       const allSales = Array.from(salesMap.values());
       const totalSales = allSales.length;
       const totalRevenue = allSales.reduce((sum, sale) => sum + sale.price, 0);
