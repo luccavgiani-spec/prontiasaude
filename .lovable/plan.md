@@ -1,93 +1,90 @@
 
 
-# Correção: Erro 42703 - `is_active` no Frontend (PaymentModal.tsx)
+# Plano: Corrigir Feedback Visual de Sucesso na Ativação ClickLife
 
 ## Diagnóstico
 
-O erro agora vem do **frontend**, não da Edge Function:
+O toast de sucesso não aparece porque:
 
-```
-Request URL: https://ploqujuhpwutpcibedbr.supabase.co/rest/v1/services?...&is_active=eq.true
-```
-
-Isso significa que o `PaymentModal.tsx` está consultando diretamente o banco de Produção via `supabaseProduction.from("services")`, e o filtro `.eq("is_active", true)` falha porque a coluna em Produção se chama `active`.
-
-### Locais Afetados
-
-| Arquivo | Linha | Código Problemático |
-|---------|-------|---------------------|
-| `src/components/payment/PaymentModal.tsx` | 1479 | `.eq("is_active", true)` |
-| `src/components/payment/PaymentModal.tsx` | 2024 | `.eq("is_active", true)` |
+1. **Posição não configurada**: O componente `Sonner` não tem uma prop `position` definida, o que pode fazer o toast aparecer fora da área visível ou atrás de outros elementos
+2. **Z-index baixo**: O toast do Sonner pode estar renderizando atrás do modal de ativação que tem `z-index` alto
+3. **Dois sistemas de toast**: O projeto usa tanto `@/components/ui/toaster` (shadcn/radix) quanto `sonner`, o que pode causar conflitos
 
 ---
 
-## Correção Aprovada
+## Correção Proposta
 
-**Estratégia:** Remover o filtro de `is_active`/`active` completamente.
+### 1. Configurar o Sonner com posição e z-index adequados
 
-Isso simplifica a consulta e evita problemas de divergência de schema entre ambientes.
+**Arquivo**: `src/components/ui/sonner.tsx`
 
-**Risco:** Um serviço inativo poderia ser comprado. Para mitigar, a Edge Function `mp-create-payment` já valida se o serviço está ativo antes de processar o pagamento.
+Adicionar props de configuração para garantir visibilidade:
+- `position="top-right"` - Posiciona no canto superior direito, mais visível
+- `richColors` - Cores mais vibrantes para sucesso/erro
+- `duration` - Tempo de exibição adequado (5s)
+- Aumentar o z-index via CSS para ficar acima de modais
 
----
-
-## Alterações Técnicas
-
-### Arquivo: `src/components/payment/PaymentModal.tsx`
-
-**Linha 1477-1480 (antes):**
 ```typescript
-const { data: service, error: serviceError } = await (supabaseProduction
-  .from("services") as any)
-  .select("price_cents, name")
-  .eq("sku", sku)
-  .eq("is_active", true)
-  .maybeSingle();
+<Sonner
+  theme={theme as ToasterProps["theme"]}
+  className="toaster group"
+  position="top-right"
+  richColors
+  duration={5000}
+  style={{ zIndex: 99999 }}
+  toastOptions={{
+    classNames: {
+      toast:
+        "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
+      // ...
+    },
+  }}
+  {...props}
+/>
 ```
 
-**Depois:**
-```typescript
-const { data: service, error: serviceError } = await (supabaseProduction
-  .from("services") as any)
-  .select("price_cents, name")
-  .eq("sku", sku)
-  .maybeSingle();
-```
+### 2. Adicionar feedback visual adicional no componente
 
-**Linha 2020-2025 (antes):**
-```typescript
-const { data: service, error: serviceError } = await (supabaseProduction
-  .from("services") as any)
-  .select("price_cents, name")
-  .eq("sku", sku)
-  .eq("is_active", true)
-  .maybeSingle();
-```
+**Arquivo**: `src/components/admin/UserRegistrationsTab.tsx`
 
-**Depois:**
+Melhorar o feedback visual com:
+- Log de console mais detalhado para debug
+- Toast com detalhes da ativação (nome, plataforma)
+- Adicionar ícone de sucesso no toast
+
 ```typescript
-const { data: service, error: serviceError } = await (supabaseProduction
-  .from("services") as any)
-  .select("price_cents, name")
-  .eq("sku", sku)
-  .maybeSingle();
+if (data?.success) {
+  console.log('[PlatformActivation] ✅ Ativação bem-sucedida:', data);
+  
+  const platformName = selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare';
+  const patientName = platformActivationUser.patient?.first_name || platformActivationUser.email;
+  
+  toast.success(`${patientName} ativado na ${platformName}!`, {
+    description: `Paciente cadastrado e ativado com sucesso.`,
+    duration: 6000,
+  });
+  
+  setPlatformActivationUser(null);
+}
 ```
 
 ---
 
-## Resumo
+## Resumo das Alterações
 
-| # | Arquivo | Linha | Alteração |
-|---|---------|-------|-----------|
-| 1 | `src/components/payment/PaymentModal.tsx` | 1479 | Remover `.eq("is_active", true)` |
-| 2 | `src/components/payment/PaymentModal.tsx` | 2024 | Remover `.eq("is_active", true)` |
+| # | Arquivo | Alteração |
+|---|---------|-----------|
+| 1 | `src/components/ui/sonner.tsx` | Adicionar `position`, `richColors`, `duration` e z-index alto |
+| 2 | `src/components/admin/UserRegistrationsTab.tsx` | Melhorar toast de sucesso com nome do paciente e descrição |
 
 ---
 
-## Pós-Correção
+## Resultado Esperado
 
-1. O build será atualizado automaticamente
-2. Faça um hard refresh (Ctrl+Shift+R)
-3. Teste novamente "Gerar código PIX"
-4. Não será necessário colar nada no Supabase de Produção (é código frontend)
+Após a correção, quando clicar em "Ativar" e receber resposta 200:
+- Toast aparecerá no **canto superior direito** da tela
+- Ficará **acima de qualquer modal** (z-index: 99999)
+- Mostrará mensagem: **"Munique Neyla ativado na ClickLife!"**
+- Permanecerá visível por **6 segundos**
+- Terá **cor verde vibrante** (richColors)
 
