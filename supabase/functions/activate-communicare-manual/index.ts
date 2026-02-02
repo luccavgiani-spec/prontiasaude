@@ -163,11 +163,57 @@ Deno.serve(async (req) => {
     console.log('[activate-communicare-manual] Method:', req.method);
     console.log('[activate-communicare-manual] URL:', req.url);
 
-    const { email, cpf } = await req.json();
+    const { email, cpf, nome, telefone, sexo, birth_date, skip_db_lookup } = await req.json();
 
     console.log('[activate-communicare-manual] Email:', email);
     console.log('[activate-communicare-manual] CPF:', cpf?.substring(0, 3) + '***');
+    console.log('[activate-communicare-manual] skip_db_lookup:', skip_db_lookup);
 
+    // ✅ MODO DIRETO: Se recebeu todos os dados no payload, pular busca no banco
+    if (skip_db_lookup && cpf && nome && telefone) {
+      console.log('[activate-communicare-manual] ✅ Usando dados do payload (skip_db_lookup=true)');
+      console.log('[activate-communicare-manual] Nome:', nome);
+      console.log('[activate-communicare-manual] Telefone:', telefone?.substring(0, 6) + '***');
+      
+      const result = await createCommunicarePatient(
+        cpf,
+        nome,
+        email || '',
+        telefone,
+        sexo || 'F',
+        birth_date
+      );
+      
+      if (result.success) {
+        console.log('[activate-communicare-manual] ✅ Ativação direta concluída com sucesso');
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'Paciente cadastrado na Communicare com sucesso (modo direto)',
+            patient: {
+              email: email,
+              nome: nome,
+              cpf: cpf.replace(/\D/g, '').substring(0, 3) + '.***'
+            },
+            communicare_patient_id: result.patientId,
+            communicare_details: result.details
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.error('[activate-communicare-manual] ❌ Falha na ativação direta:', result.error);
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: result.error,
+            details: result.details
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ✅ MODO LEGADO: Buscar dados no banco de Produção
     if (!email && !cpf) {
       return new Response(
         JSON.stringify({ 
