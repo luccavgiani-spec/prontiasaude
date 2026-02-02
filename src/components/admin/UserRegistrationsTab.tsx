@@ -527,7 +527,16 @@ export default function UserRegistrationsTab() {
       }
 
       if (data?.success) {
-        toast.success(`Paciente ativado na ${selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare'} com sucesso!`);
+        console.log('[PlatformActivation] ✅ Ativação bem-sucedida:', data);
+        
+        const platformName = selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare';
+        const patientName = platformActivationUser.patient?.first_name || platformActivationUser.email;
+        
+        toast.success(`${patientName} ativado na ${platformName}!`, {
+          description: 'Paciente cadastrado e ativado com sucesso.',
+          duration: 6000,
+        });
+        
         setPlatformActivationUser(null);
       } else {
         toast.error('Falha na ativação: ' + (data?.error || 'Erro desconhecido'));
