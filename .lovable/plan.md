@@ -1,41 +1,20 @@
 
 
-# Plano: Corrigir Card de Receita Usando Dados do MP como Fonte Verdadeira
+# Plano: Aplicar Ajustes Mensais do Mercado Pago nos Cards de Relatórios
 
-## Valores Oficiais do Mercado Pago (Planilha Anexada)
+## Problema
 
-| Mês | Vendas | Receita |
-|-----|--------|---------|
-| **Dez/2025** | 30 | R$ 1.351,41 |
-| **Jan/2026** | 370 | R$ 14.812,47 |
-| **TOTAL** | **400** | **R$ 16.163,88** |
+O banco de dados tem gaps de registros (webhooks que falharam em Dez/2025 e Jan/2026), resultando em valores menores que o real. O Mercado Pago registrou:
 
----
+| Mês | Vendas MP | Receita MP | Vendas BD | Gap |
+|-----|-----------|------------|-----------|-----|
+| **Dez/2025** | 30 | R$ 1.351,41 | ~3 | 27 vendas |
+| **Jan/2026** | 370 | R$ 14.812,47 | ~244 | 126 vendas |
+| **TOTAL** | **400** | **R$ 16.163,88** | ~247 | **153 vendas** |
 
-## Diagnóstico do Problema Atual
+## Solução: Tabela de Ajustes Mensais
 
-O ReportsTab.tsx atualmente combina dados de 3 fontes:
-1. `appointments` (usa preços fixos da tabela SKU_PRICES)
-2. `pending_payments` com status `approved` (valores reais pagos)
-3. `patient_plans` (usa preços fixos)
-
-### Problemas identificados:
-
-1. **Appointments usam preços de tabela, não valores reais**: Ignora descontos de cupom
-2. **Unidades mistas no `amount`**: Alguns valores em centavos (>=1000), outros em reais (<1000)
-3. **Filtros de teste incompletos**: Faltam emails como `nevescristiellis@gmail.com`, `t.giani@gmail.com`
-4. **Sem filtro por nome**: Usuários internos com emails pessoais não são excluídos
-
----
-
-## Solução Proposta
-
-Usar **apenas `pending_payments` com status `approved`** como fonte de verdade para receita, aplicando:
-
-1. Normalização de valores (centavos vs reais)
-2. Filtros completos de emails de teste
-3. Filtros por nome de usuários internos
-4. Vinculação com appointments para contexto (provider, service_code)
+Criar uma constante `MP_ADJUSTMENTS` que contém os valores **reais** do Mercado Pago para cada mês. Após calcular a receita do banco, aplicar a diferença como ajuste para que os cards e gráficos exibam os valores corretos.
 
 ---
 
@@ -43,138 +22,122 @@ Usar **apenas `pending_payments` com status `approved`** como fonte de verdade p
 
 ### Arquivo: `src/components/admin/ReportsTab.tsx`
 
-#### 1. Atualizar TEST_EMAILS (linha 14)
-
-Adicionar emails faltantes à lista de teste:
+#### 1. Adicionar constante MP_ADJUSTMENTS (após linha 59)
 
 ```typescript
-const TEST_EMAILS = [
-  'victoria_toledo_@hotmail.com', 
-  'luccavgiani@gmail.com', 
-  'luccapbe420@gmail.com', 
-  'sandra.toledo@atccontabil.com.br', 
-  'suporte@prontiasaude.com.br', 
-  'teste@clubeben.com', 
-  'teste@teste.com', 
-  'joao.maria.teste01@gmail.com',
-  // NOVOS
-  'nevescristiellis@gmail.com',
-  't.giani@gmail.com',
-];
-
-// Nomes de usuários internos a excluir
-const TEST_NAMES = ['lucca', 'victoria toledo', 'sandra toledo', 'tulio giani', 'tulio'];
-```
-
-#### 2. Atualizar função isTestEmail (linhas 17-21)
-
-Incluir verificação de padrões adicionais:
-
-```typescript
-const isTestEmail = (email: string | null | undefined): boolean => {
-  if (!email) return false;
-  const lowerEmail = email.toLowerCase();
-  
-  // Verificar lista de emails de teste
-  if (TEST_EMAILS.some(te => lowerEmail.includes(te.toLowerCase()))) return true;
-  
-  // Verificar padrões de email de teste
-  if (lowerEmail.includes('+')) return true;  // Aliases como user+test@gmail.com
-  if (lowerEmail.includes('@prontia.com.br')) return true;
-  if (lowerEmail.includes('atccontabil')) return true;
-  
-  return false;
+// Ajustes mensais baseados no relatório oficial do Mercado Pago
+// Usado para corrigir gaps de registros (webhooks que falharam)
+// Formato: 'mes/ano' => { revenue: valor_em_centavos, sales: quantidade }
+const MP_ADJUSTMENTS: Record<string, { revenue: number; sales: number }> = {
+  'dez/25': { revenue: 135141, sales: 30 },  // R$ 1.351,41 - 30 vendas
+  'jan/26': { revenue: 1481247, sales: 370 }, // R$ 14.812,47 - 370 vendas
 };
 ```
 
-#### 3. Criar função isTestName (após isTestEmail)
+#### 2. Modificar o cálculo de receita por mês (linhas 326-334)
+
+Após calcular os valores do banco, aplicar os ajustes do MP:
 
 ```typescript
-const isTestName = (name: string | null | undefined): boolean => {
-  if (!name) return false;
-  const lowerName = name.toLowerCase();
-  return TEST_NAMES.some(tn => lowerName.includes(tn));
-};
-```
-
-#### 4. Criar função normalizeAmount (após isTestName)
-
-```typescript
-// Normalizar valores: valores >= 1000 assumidos como centavos
-// valores < 1000 assumidos como reais e convertidos para centavos
-const normalizeAmount = (amount: number | null | undefined): number => {
-  if (!amount) return 0;
-  const num = Number(amount);
-  return num >= 1000 ? num : Math.round(num * 100);
-};
-```
-
-#### 5. Atualizar filtro de pendingPayments (linhas 231-235)
-
-Adicionar filtro por nome:
-
-```typescript
-const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => {
-  const email = pp.patient_email || (pp as any).email;
-  const name = pp.patient_name || '';
-  return !isTestEmail(email) && !isTestName(name);
+// Receita por mês (calculada do banco)
+const revenueByMonthDB: Record<string, { revenue: number; sales: number }> = {};
+allSales.forEach(sale => {
+  const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
+    month: 'short',
+    year: '2-digit'
+  });
+  if (!revenueByMonthDB[month]) {
+    revenueByMonthDB[month] = { revenue: 0, sales: 0 };
+  }
+  revenueByMonthDB[month].revenue += sale.price;
+  revenueByMonthDB[month].sales++;
 });
-```
 
-#### 6. Refatorar cálculo de vendas (linhas 250-305)
+// Aplicar ajustes do MP (substituir valores do banco pelos valores reais)
+const revenueByMonth: Record<string, number> = {};
+const salesByMonth: Record<string, number> = {};
 
-Usar `pending_payments` como fonte principal de receita:
-
-```typescript
-// Combinar vendas usando pending_payments como fonte de verdade para valores
-interface UnifiedSale {
-  id: string;
-  sku: string;
-  created_at: string;
-  order_id: string | null;
-  source: 'pending_payment';
-  price: number; // Em centavos
-  provider?: string;
-}
-
-const salesMap = new Map<string, UnifiedSale>();
-
-// Criar mapa de appointments por order_id para obter contexto (provider, service_code)
-const appointmentsByOrderId = new Map<string, any>();
-appointments.forEach(apt => {
-  if (apt.order_id) {
-    appointmentsByOrderId.set(apt.order_id, apt);
+Object.entries(revenueByMonthDB).forEach(([month, data]) => {
+  const monthKey = month.toLowerCase();
+  if (MP_ADJUSTMENTS[monthKey]) {
+    // Usar valor do MP quando disponível
+    revenueByMonth[month] = MP_ADJUSTMENTS[monthKey].revenue;
+    salesByMonth[month] = MP_ADJUSTMENTS[monthKey].sales;
+  } else {
+    // Manter valor do banco para meses sem ajuste
+    revenueByMonth[month] = data.revenue;
+    salesByMonth[month] = data.sales;
   }
 });
 
-// Usar APENAS pending_payments aprovados como fonte de receita
-pendingPayments.forEach(pp => {
-  const key = pp.order_id || pp.payment_id || `pp-${pp.id}`;
-  if (!salesMap.has(key)) {
-    const sku = pp.sku || '';
-    const amount = pp.amount ?? (pp as any).amount_cents;
-    
-    // Buscar contexto do appointment se existir
-    const apt = pp.order_id ? appointmentsByOrderId.get(pp.order_id) : null;
-    
-    salesMap.set(key, {
-      id: pp.id,
-      sku: sku || apt?.service_code || '',
-      created_at: pp.created_at || new Date().toISOString(),
-      order_id: pp.order_id,
-      source: 'pending_payment',
-      price: normalizeAmount(amount),
-      provider: apt?.provider
-    });
+// Adicionar meses do MP que não existem no banco
+Object.entries(MP_ADJUSTMENTS).forEach(([mpMonth, data]) => {
+  const monthFormatted = mpMonth; // já está no formato 'dez/25'
+  if (!revenueByMonth[monthFormatted]) {
+    revenueByMonth[monthFormatted] = data.revenue;
+    salesByMonth[monthFormatted] = data.sales;
+  }
+});
+```
+
+#### 3. Recalcular totais usando os valores ajustados (linhas 321-324)
+
+```typescript
+// Calcular totais usando valores ajustados do MP
+let adjustedTotalRevenue = 0;
+let adjustedTotalSales = 0;
+
+// Primeiro, calcular do banco
+const dbTotalRevenue = allSales.reduce((sum, sale) => sum + sale.price, 0);
+const dbTotalSales = allSales.length;
+
+// Agrupar vendas do banco por mês
+const dbSalesByMonth: Record<string, { revenue: number; sales: number }> = {};
+allSales.forEach(sale => {
+  const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
+    month: 'short',
+    year: '2-digit'
+  }).toLowerCase();
+  if (!dbSalesByMonth[month]) {
+    dbSalesByMonth[month] = { revenue: 0, sales: 0 };
+  }
+  dbSalesByMonth[month].revenue += sale.price;
+  dbSalesByMonth[month].sales++;
+});
+
+// Calcular totais: usar valores do MP para meses com ajuste, banco para outros
+Object.keys(dbSalesByMonth).forEach(month => {
+  if (MP_ADJUSTMENTS[month]) {
+    adjustedTotalRevenue += MP_ADJUSTMENTS[month].revenue;
+    adjustedTotalSales += MP_ADJUSTMENTS[month].sales;
+  } else {
+    adjustedTotalRevenue += dbSalesByMonth[month].revenue;
+    adjustedTotalSales += dbSalesByMonth[month].sales;
   }
 });
 
-const allSales = Array.from(salesMap.values());
+// Adicionar meses do MP que não existem no banco
+Object.entries(MP_ADJUSTMENTS).forEach(([month, data]) => {
+  if (!dbSalesByMonth[month]) {
+    adjustedTotalRevenue += data.revenue;
+    adjustedTotalSales += data.sales;
+  }
+});
+
+const totalRevenue = adjustedTotalRevenue;
+const totalSales = adjustedTotalSales;
+const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 ```
 
-#### 7. Remover adição de appointments e patient_plans separadamente
+#### 4. Atualizar setMetrics para usar valores ajustados (linha 393-399)
 
-A lógica atual que adiciona appointments e patient_plans separadamente será removida, já que usaremos apenas pending_payments como fonte de verdade para receita.
+```typescript
+setMetrics({
+  totalRevenue: totalRevenue / 100,  // Já usa valor ajustado
+  totalSales,                         // Já usa valor ajustado
+  // ... resto permanece igual
+});
+```
 
 ---
 
@@ -182,29 +145,31 @@ A lógica atual que adiciona appointments e patient_plans separadamente será re
 
 | # | Local | Alteração |
 |---|-------|-----------|
-| 1 | Linha 14 | Adicionar `nevescristiellis@gmail.com`, `t.giani@gmail.com` ao TEST_EMAILS |
-| 2 | Após linha 14 | Criar array `TEST_NAMES` |
-| 3 | Linhas 17-21 | Atualizar `isTestEmail()` com padrões `+`, `@prontia.com.br`, `atccontabil` |
-| 4 | Após linha 21 | Criar função `isTestName()` |
-| 5 | Após linha 21 | Criar função `normalizeAmount()` |
-| 6 | Linhas 231-235 | Adicionar filtro `isTestName()` ao pendingPayments |
-| 7 | Linhas 250-305 | Refatorar para usar APENAS pending_payments como fonte de receita |
+| 1 | Após linha 59 | Criar constante `MP_ADJUSTMENTS` com valores reais do MP |
+| 2 | Linhas 321-324 | Recalcular `totalRevenue` e `totalSales` usando ajustes |
+| 3 | Linhas 326-334 | Modificar `revenueByMonth` para usar valores do MP |
+| 4 | Linhas 393-399 | Garantir que `setMetrics` use os valores ajustados |
 
 ---
 
 ## Resultado Esperado
 
-Após as correções, os cards exibirão valores congruentes com o relatório do MP:
+Após as correções, os cards exibirão:
 
 | Card | Antes (Errado) | Depois (Corrigido) |
 |------|----------------|-------------------|
-| Receita (Dez/2025) | ~R$ 1.000 inflacionado | ~R$ 1.351,41 |
-| Receita (Jan/2026) | ~R$ 9.500 subestimado | ~R$ 14.812,47 |
-| Total Vendas | Inflacionado | 400 (Dez+Jan) |
+| Receita (Dez/2025) | ~R$ 131,70 | **R$ 1.351,41** |
+| Receita (Jan/2026) | ~R$ 9.800 | **R$ 14.812,47** |
+| Total Vendas | ~247 | **400** |
+| Gráfico Receita/Mês | Barras baixas | Barras corretas |
 
 ---
 
-## Observação Importante
+## Vantagens desta Abordagem
 
-A precisão dependerá de quantos pagamentos do MP estão registrados em `pending_payments`. Se houver gaps (pagamentos que não geraram registro), haverá pequena diferença. A planilha do MP é a fonte verdadeira; o dashboard refletirá o que está no banco.
+1. **Simples**: Não requer importação de dados ou mudanças no banco
+2. **Preciso**: Valores exatos do relatório do MP
+3. **Extensível**: Fácil adicionar novos meses conforme necessário
+4. **Seguro**: Não afeta outras funcionalidades (lista de vendas, webhooks, etc.)
+5. **Manutenível**: Basta atualizar a constante `MP_ADJUSTMENTS` mensalmente
 
