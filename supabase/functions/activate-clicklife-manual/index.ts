@@ -169,13 +169,61 @@ Deno.serve(async (req) => {
     console.log('[activate-clicklife-manual] Method:', req.method);
     console.log('[activate-clicklife-manual] URL:', req.url);
 
-    const { email, cpf, plan_id } = await req.json();
+    const { email, cpf, plan_id, nome, telefone, sexo, birth_date, skip_db_lookup } = await req.json();
 
     console.log('[activate-clicklife-manual] 📥 Requisição recebida');
     console.log('[activate-clicklife-manual] Email:', email);
     console.log('[activate-clicklife-manual] CPF:', cpf?.substring(0, 3) + '***');
     console.log('[activate-clicklife-manual] Plan ID:', plan_id || 864);
+    console.log('[activate-clicklife-manual] skip_db_lookup:', skip_db_lookup);
 
+    // ✅ MODO DIRETO: Se recebeu todos os dados no payload, pular busca no banco
+    if (skip_db_lookup && cpf && nome && telefone) {
+      console.log('[activate-clicklife-manual] ✅ Usando dados do payload (skip_db_lookup=true)');
+      console.log('[activate-clicklife-manual] Nome:', nome);
+      console.log('[activate-clicklife-manual] Telefone:', telefone?.substring(0, 6) + '***');
+      
+      const planoId = plan_id || 864;
+      
+      const result = await registerClickLifePatient(
+        cpf,
+        nome,
+        email || '',
+        telefone,
+        planoId,
+        sexo || 'F',
+        birth_date
+      );
+      
+      if (result.success) {
+        console.log('[activate-clicklife-manual] ✅ Ativação direta concluída com sucesso');
+        return new Response(
+          JSON.stringify({ 
+            success: true,
+            message: 'Paciente cadastrado e ativado na ClickLife com sucesso (modo direto)',
+            patient: {
+              email: email,
+              nome: nome,
+              cpf: cpf.replace(/\D/g, '').substring(0, 3) + '.***'
+            },
+            clicklife_details: result.details
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        console.error('[activate-clicklife-manual] ❌ Falha na ativação direta:', result.error);
+        return new Response(
+          JSON.stringify({ 
+            success: false,
+            error: result.error,
+            details: result.details
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ✅ MODO LEGADO: Buscar dados no banco de Produção
     if (!email && !cpf) {
       return new Response(
         JSON.stringify({ 

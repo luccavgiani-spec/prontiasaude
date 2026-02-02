@@ -480,8 +480,13 @@ export default function UserRegistrationsTab() {
   const handlePlatformActivation = async () => {
     if (!platformActivationUser) return;
     
+    // Validar dados obrigatórios
     if (!platformActivationUser.patient?.cpf) {
       toast.error('Paciente não possui CPF cadastrado');
+      return;
+    }
+    if (!platformActivationUser.patient?.phone_e164) {
+      toast.error('Paciente não possui telefone cadastrado');
       return;
     }
 
@@ -492,13 +497,27 @@ export default function UserRegistrationsTab() {
         ? 'activate-clicklife-manual' 
         : 'activate-communicare-manual';
       
-      console.log(`[PlatformActivation] Ativando na ${selectedPlatform}:`, platformActivationUser.email);
+      // ✅ CORREÇÃO: Enviar todos os dados no payload para não depender do banco de Produção
+      const payload = {
+        email: platformActivationUser.email,
+        cpf: platformActivationUser.patient?.cpf,
+        nome: `${platformActivationUser.patient?.first_name || ''} ${platformActivationUser.patient?.last_name || ''}`.trim(),
+        telefone: platformActivationUser.patient?.phone_e164,
+        sexo: platformActivationUser.patient?.gender || 'F',
+        birth_date: platformActivationUser.patient?.birth_date,
+        skip_db_lookup: true  // Flag para pular busca no banco
+      };
       
-      // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
+      console.log(`[PlatformActivation] Ativando na ${selectedPlatform}:`, {
+        email: payload.email,
+        cpf: payload.cpf?.substring(0, 3) + '***',
+        nome: payload.nome,
+        skip_db_lookup: payload.skip_db_lookup
+      });
+      
+      // Chamar Edge Function em Produção
       const { data, error } = await invokeEdgeFunction(functionName, {
-        body: {
-          email: platformActivationUser.email
-        }
+        body: payload
       });
 
       if (error) {
