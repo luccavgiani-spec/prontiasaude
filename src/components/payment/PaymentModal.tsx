@@ -868,11 +868,22 @@ export function PaymentModal({
                   return;
                 }
 
+                // ✅ CORREÇÃO: Capturar deviceId novamente AQUI para evitar race condition do state
+                const freshDeviceId = await (async () => {
+                  try {
+                    const id = await cardPaymentBrick.getDeviceId();
+                    console.log("[Device ID] ✅ Re-capturado antes do submit:", id);
+                    return id;
+                  } catch {
+                    return null;
+                  }
+                })();
+
                 await handleCardSubmit({
                   token: cardData.token,
                   payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
                   installments: cardData.installments || 1,
-                  deviceId: deviceId || undefined,
+                  deviceId: freshDeviceId || deviceId || undefined, // ✅ Usa valor recém-capturado
                   payerOverride: isThirdPartyCard
                     ? {
                         first_name: payerData.name.split(" ")[0],
@@ -1570,6 +1581,8 @@ export function PaymentModal({
               zip_code: patientAddress.cep.replace(/\D/g, ""),
               street_name: patientAddress.street_name,
               street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
+              city: patientAddress.city, // ✅ ADICIONADO: cidade para antifraude
+              state: patientAddress.state, // ✅ ADICIONADO: estado para antifraude
             };
           })(),
         },
@@ -1590,8 +1603,10 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key
           })
         },
-        // Device ID: usar capturado ou indicar que SDK envia automaticamente
-        device_id: deviceId || "mp_sdk_auto",
+        // ✅ CORREÇÃO: Usar deviceId do cardFormData (que agora tem valor recém-capturado)
+        device_id: cardFormData.deviceId || deviceId || "mp_sdk_auto",
+        // ✅ ADICIONADO: Enviar payerOverride para titular de terceiro
+        payerOverride: cardFormData.payerOverride,
       };
 
       // ✅ DETECTAR SE É PLANO RECORRENTE (SKUs IND_* ou FAM_*)

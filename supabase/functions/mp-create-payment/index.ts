@@ -413,16 +413,22 @@ Deno.serve(async (req) => {
           address: {
             zip_code: finalPayer.address?.zip_code,
             street_name: finalPayer.address?.street_name,
-            street_number: finalPayer.address?.street_number
+            street_number: finalPayer.address?.street_number,
+            // ✅ ADICIONADO: Cidade e estado para melhor análise antifraude
+            city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
+            federal_unit: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
           },
-          registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString() // ✅ FASE 2.2: Usar data real do metadata
+          registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
         },
-        // ✅ Informações sobre o negócio/envio (sem city/state que causam bad_request)
+        // ✅ Informações sobre o negócio/envio
         shipments: {
           receiver_address: {
             zip_code: finalPayer.address?.zip_code,
             street_name: finalPayer.address?.street_name,
-            street_number: finalPayer.address?.street_number
+            street_number: finalPayer.address?.street_number,
+            // ✅ ADICIONADO: Cidade e estado para antifraude
+            city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
+            state_name: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
           }
         },
         // ✅ IP do cliente para análise antifraude
