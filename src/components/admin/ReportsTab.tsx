@@ -50,12 +50,27 @@ const isTestName = (name: string | null | undefined): boolean => {
   return TEST_NAMES.some(tn => lowerName.includes(tn));
 };
 
-// Normalizar valores: valores >= 1000 assumidos como centavos
-// valores < 1000 assumidos como reais e convertidos para centavos
-const normalizeAmount = (amount: number | null | undefined): number => {
-  if (!amount) return 0;
-  const num = Number(amount);
-  return num >= 1000 ? num : Math.round(num * 100);
+// Ajustes mensais baseados no relatório oficial do Mercado Pago
+// Usado para corrigir gaps de registros (webhooks que falharam)
+// Formato: 'mes/ano' => { revenue: valor_em_centavos, sales: quantidade }
+const MP_ADJUSTMENTS: Record<string, { revenue: number; sales: number }> = {
+  'dez./25': { revenue: 135141, sales: 30 },   // R$ 1.351,41 - 30 vendas
+  'jan./26': { revenue: 1481247, sales: 370 }, // R$ 14.812,47 - 370 vendas
+};
+
+// Normalizar valores: Produção usa amount_cents (já em centavos)
+// Cloud usa amount (em reais, precisa converter)
+const normalizeAmountFromSource = (amountCents: number | undefined, amountReais: number | undefined): number => {
+  // Priorizar amount_cents (já em centavos) sobre amount (em reais)
+  if (amountCents !== undefined && amountCents !== null) {
+    return amountCents;
+  }
+  if (amountReais !== undefined && amountReais !== null) {
+    // Assumir que valores < 1000 são em reais
+    const num = Number(amountReais);
+    return num >= 1000 ? num : Math.round(num * 100);
+  }
+  return 0;
 };
 interface MetricsData {
   totalRevenue: number;
@@ -301,7 +316,9 @@ export default function ReportsTab() {
         const key = pp.order_id || pp.payment_id || `pp-${pp.id}`;
         if (!salesMap.has(key)) {
           const sku = pp.sku || '';
-          const amount = pp.amount ?? (pp as any).amount_cents;
+          // Produção usa 'amount_cents', Cloud usa 'amount'
+          const amountCents = (pp as any).amount_cents;
+          const amountReais = pp.amount;
           
           // Buscar contexto do appointment se existir
           const apt = pp.order_id ? appointmentsByOrderId.get(pp.order_id) : null;
@@ -312,25 +329,81 @@ export default function ReportsTab() {
             created_at: pp.created_at || new Date().toISOString(),
             order_id: pp.order_id,
             source: 'pending_payment',
-            price: normalizeAmount(amount),
+            price: normalizeAmountFromSource(amountCents, amountReais),
             provider: apt?.provider
           });
         }
       });
 
       const allSales = Array.from(salesMap.values());
-      const totalSales = allSales.length;
-      const totalRevenue = allSales.reduce((sum, sale) => sum + sale.price, 0);
+      
+      // Agrupar vendas do banco por mês para aplicar ajustes do MP
+      const dbSalesByMonth: Record<string, { revenue: number; sales: number }> = {};
+      allSales.forEach(sale => {
+        const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
+          month: 'short',
+          year: '2-digit'
+        }).toLowerCase();
+        if (!dbSalesByMonth[month]) {
+          dbSalesByMonth[month] = { revenue: 0, sales: 0 };
+        }
+        dbSalesByMonth[month].revenue += sale.price;
+        dbSalesByMonth[month].sales++;
+      });
+
+      // Calcular totais com ajustes do MP
+      let adjustedTotalRevenue = 0;
+      let adjustedTotalSales = 0;
+
+      // Para cada mês no banco, usar valor do MP se disponível
+      Object.entries(dbSalesByMonth).forEach(([month, data]) => {
+        if (MP_ADJUSTMENTS[month]) {
+          adjustedTotalRevenue += MP_ADJUSTMENTS[month].revenue;
+          adjustedTotalSales += MP_ADJUSTMENTS[month].sales;
+        } else {
+          adjustedTotalRevenue += data.revenue;
+          adjustedTotalSales += data.sales;
+        }
+      });
+
+      // Adicionar meses do MP que não existem no banco
+      Object.entries(MP_ADJUSTMENTS).forEach(([month, data]) => {
+        if (!dbSalesByMonth[month]) {
+          adjustedTotalRevenue += data.revenue;
+          adjustedTotalSales += data.sales;
+        }
+      });
+
+      const totalRevenue = adjustedTotalRevenue;
+      const totalSales = adjustedTotalSales;
       const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
 
-      // Receita por mês
+      // Receita por mês (aplicando ajustes do MP)
       const revenueByMonth: Record<string, number> = {};
+      
+      // Primeiro, popular com dados do banco
       allSales.forEach(sale => {
         const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
           month: 'short',
           year: '2-digit'
         });
         revenueByMonth[month] = (revenueByMonth[month] || 0) + sale.price;
+      });
+      
+      // Aplicar ajustes do MP (substituir valores do banco pelos valores reais)
+      Object.entries(MP_ADJUSTMENTS).forEach(([mpMonth, data]) => {
+        // Encontrar o mês correspondente no formato do banco (ex: 'dez./25' -> 'Dez./25')
+        const monthCapitalized = mpMonth.charAt(0).toUpperCase() + mpMonth.slice(1);
+        
+        // Substituir ou adicionar o valor do MP
+        if (revenueByMonth[monthCapitalized] !== undefined) {
+          revenueByMonth[monthCapitalized] = data.revenue;
+        } else if (revenueByMonth[mpMonth] !== undefined) {
+          revenueByMonth[mpMonth] = data.revenue;
+        } else {
+          // Adicionar mês que não existe no banco
+          revenueByMonth[monthCapitalized] = data.revenue;
+        }
       });
 
       // Vendas por tipo (Consultas vs Planos)
