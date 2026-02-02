@@ -1,141 +1,255 @@
 
+# Plano: Corrigir Recusas de Cartão de Crédito no Mercado Pago
 
-# Plano: Aplicar Ajustes Mensais do Mercado Pago nos Cards de Relatórios
+## Problema Identificado
 
-## Problema
+Nos últimos dias, houve aumento significativo de recusas de pagamentos com cartão, com erros como:
+- `cc_rejected_high_risk` (compra suspeita)
+- Bancos bloqueando transações
+- Logs indicando "dados incorretos do cartão"
 
-O banco de dados tem gaps de registros (webhooks que falharam em Dez/2025 e Jan/2026), resultando em valores menores que o real. O Mercado Pago registrou:
-
-| Mês | Vendas MP | Receita MP | Vendas BD | Gap |
-|-----|-----------|------------|-----------|-----|
-| **Dez/2025** | 30 | R$ 1.351,41 | ~3 | 27 vendas |
-| **Jan/2026** | 370 | R$ 14.812,47 | ~244 | 126 vendas |
-| **TOTAL** | **400** | **R$ 16.163,88** | ~247 | **153 vendas** |
-
-## Solução: Tabela de Ajustes Mensais
-
-Criar uma constante `MP_ADJUSTMENTS` que contém os valores **reais** do Mercado Pago para cada mês. Após calcular a receita do banco, aplicar a diferença como ajuste para que os cards e gráficos exibam os valores corretos.
+A imagem enviada mostra um erro genérico "Pagamento não aprovado" para uma compra de R$ 23,99.
 
 ---
 
-## Alterações Técnicas
+## Diagnóstico Técnico
 
-### Arquivo: `src/components/admin/ReportsTab.tsx`
+Após análise detalhada de `mp-create-payment/index.ts` e `PaymentModal.tsx`, identifiquei **5 problemas principais**:
 
-#### 1. Adicionar constante MP_ADJUSTMENTS (após linha 59)
+### 1. Race Condition no Device ID (CRÍTICO)
+
+**Localização:** `PaymentModal.tsx` linhas 821-877
+
+O Device ID é capturado via `getDeviceId()` e armazenado no state (`setDeviceId(capturedDeviceId)`), mas o estado React é assíncrono. Na linha seguinte, `handleCardSubmit` usa o valor **antigo** do state (`deviceId`), não o recém-capturado.
 
 ```typescript
-// Ajustes mensais baseados no relatório oficial do Mercado Pago
-// Usado para corrigir gaps de registros (webhooks que falharam)
-// Formato: 'mes/ano' => { revenue: valor_em_centavos, sales: quantidade }
-const MP_ADJUSTMENTS: Record<string, { revenue: number; sales: number }> = {
-  'dez/25': { revenue: 135141, sales: 30 },  // R$ 1.351,41 - 30 vendas
-  'jan/26': { revenue: 1481247, sales: 370 }, // R$ 14.812,47 - 370 vendas
+// PROBLEMA:
+const capturedDeviceId = await cardPaymentBrick.getDeviceId();
+setDeviceId(capturedDeviceId); // ❌ State update é assíncrono!
+
+await handleCardSubmit({
+  ...
+  deviceId: deviceId || undefined, // ❌ Usa valor antigo (possivelmente null)
+});
+```
+
+**Impacto:** Sem Device ID, o Mercado Pago classifica a transação como alto risco.
+
+---
+
+### 2. `payerOverride` Não Está Sendo Enviado ao Backend (CRÍTICO)
+
+**Localização:** `PaymentModal.tsx` linhas 1498-1595
+
+O payload `paymentRequest` é construído, mas o campo `payerOverride` (dados do titular do cartão quando é terceiro) **não está sendo incluído**:
+
+```typescript
+const paymentRequest: any = {
+  items: [...],
+  payer: {...},
+  token: cardFormData.token,
+  payment_method_id: cardFormData.payment_method_id,
+  installments: cardFormData.installments || 1,
+  metadata: {...},
+  device_id: deviceId || "mp_sdk_auto",
+  // ❌ FALTANDO: payerOverride: cardFormData.payerOverride
 };
 ```
 
-#### 2. Modificar o cálculo de receita por mês (linhas 326-334)
+**Impacto:** Quando o cartão é de terceiro, o MP recebe CPF do paciente (não do titular), causando `cc_rejected_high_risk`.
 
-Após calcular os valores do banco, aplicar os ajustes do MP:
+---
+
+### 3. Dados de Cidade/Estado Não Enviados no `additional_info` (IMPORTANTE)
+
+**Localização:** `mp-create-payment/index.ts` linhas 413-426
+
+O objeto `additional_info.payer.address` não inclui `city` e `federal_unit` (estado), que são campos importantes para análise antifraude:
 
 ```typescript
-// Receita por mês (calculada do banco)
-const revenueByMonthDB: Record<string, { revenue: number; sales: number }> = {};
-allSales.forEach(sale => {
-  const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
-    month: 'short',
-    year: '2-digit'
-  });
-  if (!revenueByMonthDB[month]) {
-    revenueByMonthDB[month] = { revenue: 0, sales: 0 };
+additional_info: {
+  payer: {
+    address: {
+      zip_code: finalPayer.address?.zip_code,
+      street_name: finalPayer.address?.street_name,
+      street_number: finalPayer.address?.street_number,
+      // ❌ FALTANDO: city, federal_unit
+    }
   }
-  revenueByMonthDB[month].revenue += sale.price;
-  revenueByMonthDB[month].sales++;
-});
+}
+```
 
-// Aplicar ajustes do MP (substituir valores do banco pelos valores reais)
-const revenueByMonth: Record<string, number> = {};
-const salesByMonth: Record<string, number> = {};
+---
 
-Object.entries(revenueByMonthDB).forEach(([month, data]) => {
-  const monthKey = month.toLowerCase();
-  if (MP_ADJUSTMENTS[monthKey]) {
-    // Usar valor do MP quando disponível
-    revenueByMonth[month] = MP_ADJUSTMENTS[monthKey].revenue;
-    salesByMonth[month] = MP_ADJUSTMENTS[monthKey].sales;
-  } else {
-    // Manter valor do banco para meses sem ajuste
-    revenueByMonth[month] = data.revenue;
-    salesByMonth[month] = data.sales;
-  }
-});
+### 4. Header `X-meli-session-id` Ausente em Subscriptions (MODERADO)
 
-// Adicionar meses do MP que não existem no banco
-Object.entries(MP_ADJUSTMENTS).forEach(([mpMonth, data]) => {
-  const monthFormatted = mpMonth; // já está no formato 'dez/25'
-  if (!revenueByMonth[monthFormatted]) {
-    revenueByMonth[monthFormatted] = data.revenue;
-    salesByMonth[monthFormatted] = data.sales;
+**Localização:** `mp-create-subscription/index.ts` linhas 175-183
+
+A API de assinaturas não recebe o header de sessão para análise antifraude:
+
+```typescript
+const mpResponse = await fetch('https://api.mercadopago.com/preapproval', {
+  headers: {
+    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+    'Content-Type': 'application/json',
+    'X-Idempotency-Key': request.order_id,
+    // ❌ FALTANDO: 'X-meli-session-id': request.device_id
   }
 });
 ```
 
-#### 3. Recalcular totais usando os valores ajustados (linhas 321-324)
+---
+
+### 5. Campos de Endereço Não Passados para Pagamentos de Cartão
+
+**Localização:** `PaymentModal.tsx` linhas 1560-1574 e `mp-create-payment/index.ts`
+
+O frontend valida o endereço mas não envia `city` e `state` na estrutura `payer.address`:
 
 ```typescript
-// Calcular totais usando valores ajustados do MP
-let adjustedTotalRevenue = 0;
-let adjustedTotalSales = 0;
-
-// Primeiro, calcular do banco
-const dbTotalRevenue = allSales.reduce((sum, sale) => sum + sale.price, 0);
-const dbTotalSales = allSales.length;
-
-// Agrupar vendas do banco por mês
-const dbSalesByMonth: Record<string, { revenue: number; sales: number }> = {};
-allSales.forEach(sale => {
-  const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
-    month: 'short',
-    year: '2-digit'
-  }).toLowerCase();
-  if (!dbSalesByMonth[month]) {
-    dbSalesByMonth[month] = { revenue: 0, sales: 0 };
-  }
-  dbSalesByMonth[month].revenue += sale.price;
-  dbSalesByMonth[month].sales++;
-});
-
-// Calcular totais: usar valores do MP para meses com ajuste, banco para outros
-Object.keys(dbSalesByMonth).forEach(month => {
-  if (MP_ADJUSTMENTS[month]) {
-    adjustedTotalRevenue += MP_ADJUSTMENTS[month].revenue;
-    adjustedTotalSales += MP_ADJUSTMENTS[month].sales;
-  } else {
-    adjustedTotalRevenue += dbSalesByMonth[month].revenue;
-    adjustedTotalSales += dbSalesByMonth[month].sales;
-  }
-});
-
-// Adicionar meses do MP que não existem no banco
-Object.entries(MP_ADJUSTMENTS).forEach(([month, data]) => {
-  if (!dbSalesByMonth[month]) {
-    adjustedTotalRevenue += data.revenue;
-    adjustedTotalSales += data.sales;
-  }
-});
-
-const totalRevenue = adjustedTotalRevenue;
-const totalSales = adjustedTotalSales;
-const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
+address: {
+  zip_code: patientAddress.cep.replace(/\D/g, ""),
+  street_name: patientAddress.street_name,
+  street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
+  // ❌ FALTANDO: city, state
+}
 ```
 
-#### 4. Atualizar setMetrics para usar valores ajustados (linha 393-399)
+---
+
+## Plano de Correções
+
+### Arquivo 1: `src/components/payment/PaymentModal.tsx`
+
+#### Correção 1.1: Device ID (linhas 871-877)
+
+Passar o valor capturado **diretamente** para `handleCardSubmit`, sem depender do state:
 
 ```typescript
-setMetrics({
-  totalRevenue: totalRevenue / 100,  // Já usa valor ajustado
-  totalSales,                         // Já usa valor ajustado
-  // ... resto permanece igual
+// DE:
+await handleCardSubmit({
+  token: cardData.token,
+  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
+  installments: cardData.installments || 1,
+  deviceId: deviceId || undefined, // ❌ Usa state antigo
+  payerOverride: isThirdPartyCard ? {...} : undefined,
+});
+
+// PARA:
+const capturedDeviceId = await cardPaymentBrick.getDeviceId();
+await handleCardSubmit({
+  token: cardData.token,
+  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
+  installments: cardData.installments || 1,
+  deviceId: capturedDeviceId || deviceId || undefined, // ✅ Usa valor recém-capturado
+  payerOverride: isThirdPartyCard ? {...} : undefined,
+});
+```
+
+#### Correção 1.2: Incluir `payerOverride` no payload (linhas 1593-1595)
+
+```typescript
+const paymentRequest: any = {
+  items: [...],
+  payer: {...},
+  token: cardFormData.token,
+  payment_method_id: cardFormData.payment_method_id,
+  installments: cardFormData.installments || 1,
+  metadata: {...},
+  device_id: cardFormData.deviceId || deviceId || "mp_sdk_auto",
+  payerOverride: cardFormData.payerOverride, // ✅ ADICIONAR
+};
+```
+
+#### Correção 1.3: Incluir `city` e `state` no endereço (linhas 1568-1574)
+
+```typescript
+address: {
+  zip_code: patientAddress.cep.replace(/\D/g, ""),
+  street_name: patientAddress.street_name,
+  street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
+  city: patientAddress.city, // ✅ ADICIONAR
+  state: patientAddress.state, // ✅ ADICIONAR
+}
+```
+
+---
+
+### Arquivo 2: `supabase/functions/mp-create-payment/index.ts`
+
+#### Correção 2.1: Enriquecer `additional_info` com cidade/estado (linhas 409-430)
+
+```typescript
+additional_info: {
+  items: [...],
+  payer: {
+    first_name: finalPayer.first_name || '',
+    last_name: finalPayer.last_name || '',
+    phone: finalPayer.phone || {},
+    address: {
+      zip_code: finalPayer.address?.zip_code,
+      street_name: finalPayer.address?.street_name,
+      street_number: finalPayer.address?.street_number,
+      // ✅ ADICIONAR:
+      city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
+      federal_unit: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
+    },
+    registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
+  },
+  shipments: {
+    receiver_address: {
+      zip_code: finalPayer.address?.zip_code,
+      street_name: finalPayer.address?.street_name,
+      street_number: finalPayer.address?.street_number,
+      // ✅ ADICIONAR:
+      city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
+      state_name: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
+    }
+  },
+  ip_address: clientIp
+}
+```
+
+#### Correção 2.2: Atualizar interface `PayerOverride` (linhas 36-52)
+
+Garantir que a interface aceita `city` e `state`:
+
+```typescript
+interface PayerOverride {
+  first_name: string;
+  last_name: string;
+  cpf: string;
+  phone: {
+    area_code: string;
+    number: string;
+  };
+  address: {
+    zip_code: string;
+    street_name: string;
+    street_number?: string;
+    neighborhood?: string;
+    city: string;      // ✅ Já existe
+    state: string;     // ✅ Já existe
+  };
+}
+```
+
+---
+
+### Arquivo 3: `supabase/functions/mp-create-subscription/index.ts`
+
+#### Correção 3.1: Adicionar header de sessão (linhas 175-183)
+
+```typescript
+const mpResponse = await fetch('https://api.mercadopago.com/preapproval', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+    'Content-Type': 'application/json',
+    'X-Idempotency-Key': request.order_id,
+    'X-meli-session-id': request.device_id || '' // ✅ ADICIONAR
+  },
+  body: JSON.stringify(subscriptionPayload)
 });
 ```
 
@@ -143,33 +257,70 @@ setMetrics({
 
 ## Resumo das Alterações
 
-| # | Local | Alteração |
-|---|-------|-----------|
-| 1 | Após linha 59 | Criar constante `MP_ADJUSTMENTS` com valores reais do MP |
-| 2 | Linhas 321-324 | Recalcular `totalRevenue` e `totalSales` usando ajustes |
-| 3 | Linhas 326-334 | Modificar `revenueByMonth` para usar valores do MP |
-| 4 | Linhas 393-399 | Garantir que `setMetrics` use os valores ajustados |
+| # | Arquivo | Linha(s) | Correção | Impacto |
+|---|---------|----------|----------|---------|
+| 1 | PaymentModal.tsx | 871-877 | Usar `capturedDeviceId` diretamente | CRÍTICO |
+| 2 | PaymentModal.tsx | 1593-1595 | Adicionar `payerOverride` ao payload | CRÍTICO |
+| 3 | PaymentModal.tsx | 1568-1574 | Adicionar `city` e `state` ao endereço | IMPORTANTE |
+| 4 | mp-create-payment/index.ts | 409-430 | Enriquecer `additional_info` | IMPORTANTE |
+| 5 | mp-create-subscription/index.ts | 175-183 | Adicionar `X-meli-session-id` | MODERADO |
 
 ---
 
 ## Resultado Esperado
 
-Após as correções, os cards exibirão:
-
-| Card | Antes (Errado) | Depois (Corrigido) |
-|------|----------------|-------------------|
-| Receita (Dez/2025) | ~R$ 131,70 | **R$ 1.351,41** |
-| Receita (Jan/2026) | ~R$ 9.800 | **R$ 14.812,47** |
-| Total Vendas | ~247 | **400** |
-| Gráfico Receita/Mês | Barras baixas | Barras corretas |
+Após as correções:
+- Redução de 50-70% nas recusas por `cc_rejected_high_risk`
+- Device ID será enviado corretamente em 100% das transações
+- Pagamentos com cartão de terceiro terão dados de titular corretos
+- Melhor score de análise antifraude com dados de endereço completos
 
 ---
 
-## Vantagens desta Abordagem
+## Seção Técnica: Fluxo de Dados Corrigido
 
-1. **Simples**: Não requer importação de dados ou mudanças no banco
-2. **Preciso**: Valores exatos do relatório do MP
-3. **Extensível**: Fácil adicionar novos meses conforme necessário
-4. **Seguro**: Não afeta outras funcionalidades (lista de vendas, webhooks, etc.)
-5. **Manutenível**: Basta atualizar a constante `MP_ADJUSTMENTS` mensalmente
-
+```text
+[Frontend - Brick]
+       │
+       ▼
+  getDeviceId() ────► capturedDeviceId
+       │
+       ▼
+  handleCardSubmit({
+    token: "...",
+    deviceId: capturedDeviceId,  ◄── Passa valor recém-capturado
+    payerOverride: {...}         ◄── Inclui dados do titular
+  })
+       │
+       ▼
+  paymentRequest = {
+    ...
+    device_id: cardFormData.deviceId,  ◄── Agora tem valor correto
+    payerOverride: cardFormData.payerOverride  ◄── Agora é enviado
+  }
+       │
+       ▼
+[Backend - mp-create-payment]
+       │
+       ▼
+  paymentData = {
+    payer: {
+      ...payerOverride (se existir)  ◄── Usa dados do titular
+    },
+    additional_info: {
+      payer: {
+        address: {
+          city: "...",          ◄── Agora incluído
+          federal_unit: "..."   ◄── Agora incluído
+        }
+      }
+    }
+  }
+       │
+       ▼
+  [Mercado Pago API]
+  - Device ID ✓
+  - Titular correto ✓
+  - Endereço completo ✓
+  → Score de risco REDUZIDO
+```
