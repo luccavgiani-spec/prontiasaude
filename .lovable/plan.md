@@ -1,90 +1,210 @@
 
 
-# Plano: Corrigir Feedback Visual de Sucesso na Ativação ClickLife
+# Plano: Corrigir Card de Receita Usando Dados do MP como Fonte Verdadeira
 
-## Diagnóstico
+## Valores Oficiais do Mercado Pago (Planilha Anexada)
 
-O toast de sucesso não aparece porque:
-
-1. **Posição não configurada**: O componente `Sonner` não tem uma prop `position` definida, o que pode fazer o toast aparecer fora da área visível ou atrás de outros elementos
-2. **Z-index baixo**: O toast do Sonner pode estar renderizando atrás do modal de ativação que tem `z-index` alto
-3. **Dois sistemas de toast**: O projeto usa tanto `@/components/ui/toaster` (shadcn/radix) quanto `sonner`, o que pode causar conflitos
+| Mês | Vendas | Receita |
+|-----|--------|---------|
+| **Dez/2025** | 30 | R$ 1.351,41 |
+| **Jan/2026** | 370 | R$ 14.812,47 |
+| **TOTAL** | **400** | **R$ 16.163,88** |
 
 ---
 
-## Correção Proposta
+## Diagnóstico do Problema Atual
 
-### 1. Configurar o Sonner com posição e z-index adequados
+O ReportsTab.tsx atualmente combina dados de 3 fontes:
+1. `appointments` (usa preços fixos da tabela SKU_PRICES)
+2. `pending_payments` com status `approved` (valores reais pagos)
+3. `patient_plans` (usa preços fixos)
 
-**Arquivo**: `src/components/ui/sonner.tsx`
+### Problemas identificados:
 
-Adicionar props de configuração para garantir visibilidade:
-- `position="top-right"` - Posiciona no canto superior direito, mais visível
-- `richColors` - Cores mais vibrantes para sucesso/erro
-- `duration` - Tempo de exibição adequado (5s)
-- Aumentar o z-index via CSS para ficar acima de modais
+1. **Appointments usam preços de tabela, não valores reais**: Ignora descontos de cupom
+2. **Unidades mistas no `amount`**: Alguns valores em centavos (>=1000), outros em reais (<1000)
+3. **Filtros de teste incompletos**: Faltam emails como `nevescristiellis@gmail.com`, `t.giani@gmail.com`
+4. **Sem filtro por nome**: Usuários internos com emails pessoais não são excluídos
+
+---
+
+## Solução Proposta
+
+Usar **apenas `pending_payments` com status `approved`** como fonte de verdade para receita, aplicando:
+
+1. Normalização de valores (centavos vs reais)
+2. Filtros completos de emails de teste
+3. Filtros por nome de usuários internos
+4. Vinculação com appointments para contexto (provider, service_code)
+
+---
+
+## Alterações Técnicas
+
+### Arquivo: `src/components/admin/ReportsTab.tsx`
+
+#### 1. Atualizar TEST_EMAILS (linha 14)
+
+Adicionar emails faltantes à lista de teste:
 
 ```typescript
-<Sonner
-  theme={theme as ToasterProps["theme"]}
-  className="toaster group"
-  position="top-right"
-  richColors
-  duration={5000}
-  style={{ zIndex: 99999 }}
-  toastOptions={{
-    classNames: {
-      toast:
-        "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-      // ...
-    },
-  }}
-  {...props}
-/>
+const TEST_EMAILS = [
+  'victoria_toledo_@hotmail.com', 
+  'luccavgiani@gmail.com', 
+  'luccapbe420@gmail.com', 
+  'sandra.toledo@atccontabil.com.br', 
+  'suporte@prontiasaude.com.br', 
+  'teste@clubeben.com', 
+  'teste@teste.com', 
+  'joao.maria.teste01@gmail.com',
+  // NOVOS
+  'nevescristiellis@gmail.com',
+  't.giani@gmail.com',
+];
+
+// Nomes de usuários internos a excluir
+const TEST_NAMES = ['lucca', 'victoria toledo', 'sandra toledo', 'tulio giani', 'tulio'];
 ```
 
-### 2. Adicionar feedback visual adicional no componente
+#### 2. Atualizar função isTestEmail (linhas 17-21)
 
-**Arquivo**: `src/components/admin/UserRegistrationsTab.tsx`
-
-Melhorar o feedback visual com:
-- Log de console mais detalhado para debug
-- Toast com detalhes da ativação (nome, plataforma)
-- Adicionar ícone de sucesso no toast
+Incluir verificação de padrões adicionais:
 
 ```typescript
-if (data?.success) {
-  console.log('[PlatformActivation] ✅ Ativação bem-sucedida:', data);
+const isTestEmail = (email: string | null | undefined): boolean => {
+  if (!email) return false;
+  const lowerEmail = email.toLowerCase();
   
-  const platformName = selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare';
-  const patientName = platformActivationUser.patient?.first_name || platformActivationUser.email;
+  // Verificar lista de emails de teste
+  if (TEST_EMAILS.some(te => lowerEmail.includes(te.toLowerCase()))) return true;
   
-  toast.success(`${patientName} ativado na ${platformName}!`, {
-    description: `Paciente cadastrado e ativado com sucesso.`,
-    duration: 6000,
-  });
+  // Verificar padrões de email de teste
+  if (lowerEmail.includes('+')) return true;  // Aliases como user+test@gmail.com
+  if (lowerEmail.includes('@prontia.com.br')) return true;
+  if (lowerEmail.includes('atccontabil')) return true;
   
-  setPlatformActivationUser(null);
+  return false;
+};
+```
+
+#### 3. Criar função isTestName (após isTestEmail)
+
+```typescript
+const isTestName = (name: string | null | undefined): boolean => {
+  if (!name) return false;
+  const lowerName = name.toLowerCase();
+  return TEST_NAMES.some(tn => lowerName.includes(tn));
+};
+```
+
+#### 4. Criar função normalizeAmount (após isTestName)
+
+```typescript
+// Normalizar valores: valores >= 1000 assumidos como centavos
+// valores < 1000 assumidos como reais e convertidos para centavos
+const normalizeAmount = (amount: number | null | undefined): number => {
+  if (!amount) return 0;
+  const num = Number(amount);
+  return num >= 1000 ? num : Math.round(num * 100);
+};
+```
+
+#### 5. Atualizar filtro de pendingPayments (linhas 231-235)
+
+Adicionar filtro por nome:
+
+```typescript
+const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => {
+  const email = pp.patient_email || (pp as any).email;
+  const name = pp.patient_name || '';
+  return !isTestEmail(email) && !isTestName(name);
+});
+```
+
+#### 6. Refatorar cálculo de vendas (linhas 250-305)
+
+Usar `pending_payments` como fonte principal de receita:
+
+```typescript
+// Combinar vendas usando pending_payments como fonte de verdade para valores
+interface UnifiedSale {
+  id: string;
+  sku: string;
+  created_at: string;
+  order_id: string | null;
+  source: 'pending_payment';
+  price: number; // Em centavos
+  provider?: string;
 }
+
+const salesMap = new Map<string, UnifiedSale>();
+
+// Criar mapa de appointments por order_id para obter contexto (provider, service_code)
+const appointmentsByOrderId = new Map<string, any>();
+appointments.forEach(apt => {
+  if (apt.order_id) {
+    appointmentsByOrderId.set(apt.order_id, apt);
+  }
+});
+
+// Usar APENAS pending_payments aprovados como fonte de receita
+pendingPayments.forEach(pp => {
+  const key = pp.order_id || pp.payment_id || `pp-${pp.id}`;
+  if (!salesMap.has(key)) {
+    const sku = pp.sku || '';
+    const amount = pp.amount ?? (pp as any).amount_cents;
+    
+    // Buscar contexto do appointment se existir
+    const apt = pp.order_id ? appointmentsByOrderId.get(pp.order_id) : null;
+    
+    salesMap.set(key, {
+      id: pp.id,
+      sku: sku || apt?.service_code || '',
+      created_at: pp.created_at || new Date().toISOString(),
+      order_id: pp.order_id,
+      source: 'pending_payment',
+      price: normalizeAmount(amount),
+      provider: apt?.provider
+    });
+  }
+});
+
+const allSales = Array.from(salesMap.values());
 ```
+
+#### 7. Remover adição de appointments e patient_plans separadamente
+
+A lógica atual que adiciona appointments e patient_plans separadamente será removida, já que usaremos apenas pending_payments como fonte de verdade para receita.
 
 ---
 
 ## Resumo das Alterações
 
-| # | Arquivo | Alteração |
-|---|---------|-----------|
-| 1 | `src/components/ui/sonner.tsx` | Adicionar `position`, `richColors`, `duration` e z-index alto |
-| 2 | `src/components/admin/UserRegistrationsTab.tsx` | Melhorar toast de sucesso com nome do paciente e descrição |
+| # | Local | Alteração |
+|---|-------|-----------|
+| 1 | Linha 14 | Adicionar `nevescristiellis@gmail.com`, `t.giani@gmail.com` ao TEST_EMAILS |
+| 2 | Após linha 14 | Criar array `TEST_NAMES` |
+| 3 | Linhas 17-21 | Atualizar `isTestEmail()` com padrões `+`, `@prontia.com.br`, `atccontabil` |
+| 4 | Após linha 21 | Criar função `isTestName()` |
+| 5 | Após linha 21 | Criar função `normalizeAmount()` |
+| 6 | Linhas 231-235 | Adicionar filtro `isTestName()` ao pendingPayments |
+| 7 | Linhas 250-305 | Refatorar para usar APENAS pending_payments como fonte de receita |
 
 ---
 
 ## Resultado Esperado
 
-Após a correção, quando clicar em "Ativar" e receber resposta 200:
-- Toast aparecerá no **canto superior direito** da tela
-- Ficará **acima de qualquer modal** (z-index: 99999)
-- Mostrará mensagem: **"Munique Neyla ativado na ClickLife!"**
-- Permanecerá visível por **6 segundos**
-- Terá **cor verde vibrante** (richColors)
+Após as correções, os cards exibirão valores congruentes com o relatório do MP:
+
+| Card | Antes (Errado) | Depois (Corrigido) |
+|------|----------------|-------------------|
+| Receita (Dez/2025) | ~R$ 1.000 inflacionado | ~R$ 1.351,41 |
+| Receita (Jan/2026) | ~R$ 9.500 subestimado | ~R$ 14.812,47 |
+| Total Vendas | Inflacionado | 400 (Dez+Jan) |
+
+---
+
+## Observação Importante
+
+A precisão dependerá de quantos pagamentos do MP estão registrados em `pending_payments`. Se houver gaps (pagamentos que não geraram registro), haverá pequena diferença. A planilha do MP é a fonte verdadeira; o dashboard refletirá o que está no banco.
 
