@@ -177,7 +177,9 @@ Deno.serve(async (req) => {
       headers: {
         'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
-        'X-Idempotency-Key': request.order_id
+        'X-Idempotency-Key': request.order_id,
+        // ✅ ADICIONADO: Header de sessão para análise antifraude
+        'X-meli-session-id': request.device_id || ''
       },
       body: JSON.stringify(subscriptionPayload)
     });
