@@ -2,6 +2,11 @@
 // Cria pagamentos no Mercado Pago usando ACCESS_TOKEN server-side
 // ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
 
+// ============================================================
+// ✅ BUILD_ID: Identificador de versão para debug de deploy
+// ============================================================
+const BUILD_ID = 'mp-create-payment@2026-02-03T14:30:00Z-v3';
+
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 // ✅ ETAPA 2: SDK oficial do Mercado Pago (+5 pontos no dashboard)
 import { MercadoPagoConfig, Payment } from 'npm:mercadopago@2.0.15';
@@ -378,12 +383,91 @@ Deno.serve(async (req) => {
       } : undefined
     };
 
+    // ============================================================
+    // ✅ DETERMINAR isPix ANTES de construir additional_info
+    // Regra: PIX explícito OU ausência de token+payment_method
+    // ============================================================
+    const isPix = paymentRequest.payment_method_id === 'pix' || 
+                  (!paymentRequest.token && !paymentRequest.payment_method_id);
+    
+    console.log('[mp-create-payment] Flow detection:', {
+      build_id: BUILD_ID,
+      isPix,
+      has_token: !!paymentRequest.token,
+      payment_method_id: paymentRequest.payment_method_id
+    });
+
+    // ============================================================
+    // ✅ CONSTRUIR additional_info CONDICIONAL
+    // PIX: apenas items + ip_address (NUNCA payer/shipments)
+    // Cartão: completo para antifraude
+    // ============================================================
+    const minimalAdditionalInfo = {
+      items: [
+        {
+          id: sku,
+          title: service.name,
+          description: hasCoupon 
+            ? `${service.name} (${paymentRequest.metadata.discount_percentage}% desconto)` 
+            : service.name,
+          picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`,
+          category_id: getCategoryIdBySKU(sku),
+          quantity: 1,
+          unit_price: hasCoupon 
+            ? (paymentRequest.metadata.amount_discounted! / 100) 
+            : expectedAmount
+        }
+      ],
+      ...(clientIp ? { ip_address: clientIp } : {})
+    };
+
+    const fullAdditionalInfo = {
+      items: [
+        {
+          id: sku,
+          title: service.name,
+          description: hasCoupon 
+            ? `${service.name} (${paymentRequest.metadata.discount_percentage}% desconto)` 
+            : service.name,
+          picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`,
+          category_id: getCategoryIdBySKU(sku),
+          quantity: 1,
+          unit_price: hasCoupon 
+            ? (paymentRequest.metadata.amount_discounted! / 100) 
+            : expectedAmount
+        }
+      ],
+      payer: {
+        first_name: finalPayer.first_name || '',
+        last_name: finalPayer.last_name || '',
+        phone: finalPayer.phone || {},
+        address: {
+          zip_code: finalPayer.address?.zip_code,
+          street_name: finalPayer.address?.street_name,
+          street_number: finalPayer.address?.street_number,
+          city: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
+          federal_unit: paymentRequest.payerOverride?.address?.state || (paymentRequest.payer?.address as any)?.state || ''
+        },
+        registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
+      },
+      shipments: {
+        receiver_address: {
+          zip_code: finalPayer.address?.zip_code,
+          street_name: finalPayer.address?.street_name,
+          street_number: finalPayer.address?.street_number,
+          city: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
+          state_name: paymentRequest.payerOverride?.address?.state || (paymentRequest.payer?.address as any)?.state || ''
+        }
+      },
+      ip_address: clientIp
+    };
+
     const paymentData: any = {
       transaction_amount: hasCoupon 
         ? (paymentRequest.metadata.amount_discounted! / 100) 
         : expectedAmount,
       description: service.name,
-      external_reference: paymentRequest.metadata.order_id, // ✅ CRÍTICO: Reconciliação financeira (+14 pontos)
+      external_reference: paymentRequest.metadata.order_id,
       payer: finalPayer,
       metadata: {
         ...paymentRequest.metadata,
@@ -395,51 +479,8 @@ Deno.serve(async (req) => {
         is_third_party_card: !!paymentRequest.payerOverride
       },
       notification_url: MP_NOTIFICATION_URL,
-      // ✅ ETAPA 2: Additional Info COMPLETO com todos os campos
-      additional_info: {
-        items: [
-          {
-            id: sku,
-            title: service.name,
-            description: hasCoupon 
-              ? `${service.name} (${paymentRequest.metadata.discount_percentage}% desconto)` 
-              : service.name,
-            picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`, // ✅ FASE 5.1: URL específica do serviço
-            category_id: getCategoryIdBySKU(sku),
-            quantity: 1,
-            unit_price: hasCoupon 
-              ? (paymentRequest.metadata.amount_discounted! / 100) 
-              : expectedAmount
-          }
-        ],
-        payer: {
-          first_name: finalPayer.first_name || '',
-          last_name: finalPayer.last_name || '',
-          phone: finalPayer.phone || {},
-          address: {
-            zip_code: finalPayer.address?.zip_code,
-            street_name: finalPayer.address?.street_name,
-            street_number: finalPayer.address?.street_number,
-            // ✅ ADICIONADO: Cidade e estado para melhor análise antifraude
-            city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
-            federal_unit: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
-          },
-          registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
-        },
-        // ✅ Informações sobre o negócio/envio
-        shipments: {
-          receiver_address: {
-            zip_code: finalPayer.address?.zip_code,
-            street_name: finalPayer.address?.street_name,
-            street_number: finalPayer.address?.street_number,
-            // ✅ ADICIONADO: Cidade e estado para antifraude
-            city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
-            state_name: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
-          }
-        },
-        // ✅ IP do cliente para análise antifraude
-        ip_address: clientIp
-      }
+      // ✅ CRÍTICO: additional_info condicional - PIX minimal, cartão full
+      additional_info: isPix ? minimalAdditionalInfo : fullAdditionalInfo
     };
 
     // Log de confirmação de cupom aplicado
@@ -454,39 +495,36 @@ Deno.serve(async (req) => {
     }
 
     // ✅ Determinar método de pagamento sem fallback silencioso
-    if (paymentRequest.payment_method_id === 'pix' || (!paymentRequest.token && !paymentRequest.payment_method_id)) {
+    if (isPix) {
       // PIX payment (explícito ou quando não há dados de cartão)
       paymentData.payment_method_id = 'pix';
       
-      // ✅ CRÍTICO: Para PIX, remover campos não aceitos pela API do MP
+      // ✅ CRÍTICO: Para PIX, payer mínimo (email + identification)
       paymentData.payer = {
         email: finalPayer.email,
         identification: finalPayer.identification
       };
       
-      // ✅ SANITIZAÇÃO ROBUSTA PIX: Reconstruir additional_info apenas com campos permitidos
-      // A API do MP para PIX NÃO aceita payer.address.city, payer.address.federal_unit, 
-      // shipments.receiver_address.city - então removemos TUDO de payer e shipments
+      // ✅ SANITIZAÇÃO REDUNDANTE (segunda barreira, já que additional_info foi construído mínimo)
+      // Garantir que não há vazamento mesmo se algo mudar no futuro
       if (paymentData.additional_info) {
         const sanitizedItems = paymentData.additional_info.items;
-        const sanitizedIp = (paymentData.additional_info as any).ip_address;
+        const sanitizedIp = paymentData.additional_info.ip_address;
         
-        // Reconstruir objeto limpo - só items e ip_address (se existir)
+        // Forçar reconstrução limpa
         paymentData.additional_info = {
           items: sanitizedItems,
           ...(sanitizedIp ? { ip_address: sanitizedIp } : {})
         };
-        
-        // Log de diagnóstico (sem PII)
-        console.log('[mp-create-payment] PIX additional_info SANITIZADO:', {
-          has_payer: false,
-          has_shipments: false,
-          keys: Object.keys(paymentData.additional_info),
-          items_count: sanitizedItems?.length || 0
-        });
-      } else {
-        console.log('[mp-create-payment] PIX sem additional_info para sanitizar');
       }
+      
+      console.log('[mp-create-payment] PIX configured:', {
+        build_id: BUILD_ID,
+        payer_keys: Object.keys(paymentData.payer),
+        additional_info_keys: Object.keys(paymentData.additional_info || {}),
+        has_payer_in_additional_info: !!(paymentData.additional_info?.payer),
+        has_shipments_in_additional_info: !!(paymentData.additional_info?.shipments)
+      });
     } else if (paymentRequest.token && paymentRequest.payment_method_id) {
       // Card payment (PRECISA ter token E payment_method_id)
       paymentData.token = paymentRequest.token;
@@ -598,8 +636,44 @@ Deno.serve(async (req) => {
 
     console.log('[mp-create-payment] 🚀 Using official Mercado Pago SDK (Etapa 1+2 implemented)');
 
+    // ============================================================
+    // ✅ DEBUG_CONTEXT: Snapshot antes de chamar o SDK (sem PII)
+    // ============================================================
+    const debug_context = {
+      build_id: BUILD_ID,
+      selected_flow: isPix ? 'pix' : 'card',
+      has_token: !!paymentRequest.token,
+      payment_method_id_final: paymentData.payment_method_id,
+      additional_info_keys: Object.keys(paymentData.additional_info || {}),
+      has_additional_info_payer: !!(paymentData.additional_info?.payer),
+      has_additional_info_shipments: !!(paymentData.additional_info?.shipments)
+    };
+    
+    console.log('[mp-create-payment] PRE-SDK debug_context:', debug_context);
+    
+    // ============================================================
+    // ✅ ASSERÇÃO ANTI-VAZAMENTO: Se PIX contiver payer/shipments, falhar antes do SDK
+    // ============================================================
+    if (paymentData.payment_method_id === 'pix') {
+      if (debug_context.has_additional_info_payer || debug_context.has_additional_info_shipments) {
+        const leakError = `PIX additional_info LEAK detected! keys=${debug_context.additional_info_keys.join(',')}, has_payer=${debug_context.has_additional_info_payer}, has_shipments=${debug_context.has_additional_info_shipments}`;
+        console.error('[mp-create-payment] 🚨 ASSERTION FAILED:', leakError);
+        
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'Erro interno de sanitização PIX. Contate suporte.',
+            error_code: 'PIX_SANITIZATION_LEAK',
+            error_detail: leakError,
+            build_id: BUILD_ID,
+            debug_context
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+        );
+      }
+    }
+
     // ✅ CRÍTICO: Usar SDK v2 com headers corretos via customHeaders
-    // ✅ CORREÇÃO: Envolver em try-catch específico para capturar erros do SDK
     let mpResponse;
     try {
       mpResponse = await payment.create({
@@ -615,10 +689,12 @@ Deno.serve(async (req) => {
       });
     } catch (sdkError: any) {
       console.error('[mp-create-payment] SDK Exception:', {
+        build_id: BUILD_ID,
         message: sdkError.message,
         name: sdkError.name,
         stack: sdkError.stack?.substring(0, 500),
-        cause: sdkError.cause
+        cause: sdkError.cause,
+        debug_context
       });
       
       // Mensagem amigável baseada no tipo de erro
@@ -637,7 +713,9 @@ Deno.serve(async (req) => {
           success: false,
           error: userMessage,
           error_code: 'SDK_EXCEPTION',
-          error_detail: sdkError.message
+          error_detail: sdkError.message,
+          build_id: BUILD_ID,
+          debug_context
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
@@ -781,6 +859,7 @@ Deno.serve(async (req) => {
         qr_code_base64: responseData.point_of_interaction?.transaction_data?.qr_code_base64,
         ticket_url: responseData.point_of_interaction?.transaction_data?.ticket_url,
         order_id: paymentRequest.metadata?.order_id,
+        build_id: BUILD_ID
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -822,7 +901,8 @@ Deno.serve(async (req) => {
         success: false, 
         error: userMessage,
         error_code: errorCode,
-        error_detail: error.message
+        error_detail: error.message,
+        build_id: BUILD_ID
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
