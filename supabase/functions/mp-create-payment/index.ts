@@ -464,21 +464,29 @@ Deno.serve(async (req) => {
         identification: finalPayer.identification
       };
       
-      // ✅ NOVO: Também limpar additional_info para PIX (API não aceita city/federal_unit)
+      // ✅ SANITIZAÇÃO ROBUSTA PIX: Reconstruir additional_info apenas com campos permitidos
+      // A API do MP para PIX NÃO aceita payer.address.city, payer.address.federal_unit, 
+      // shipments.receiver_address.city - então removemos TUDO de payer e shipments
       if (paymentData.additional_info) {
-        // Remover campos inválidos do payer.address
-        if (paymentData.additional_info.payer?.address) {
-          delete (paymentData.additional_info.payer.address as any).city;
-          delete (paymentData.additional_info.payer.address as any).federal_unit;
-        }
-        // Remover campos inválidos do shipments.receiver_address  
-        if (paymentData.additional_info.shipments?.receiver_address) {
-          delete (paymentData.additional_info.shipments.receiver_address as any).city;
-          delete (paymentData.additional_info.shipments.receiver_address as any).state_name;
-        }
+        const sanitizedItems = paymentData.additional_info.items;
+        const sanitizedIp = (paymentData.additional_info as any).ip_address;
+        
+        // Reconstruir objeto limpo - só items e ip_address (se existir)
+        paymentData.additional_info = {
+          items: sanitizedItems,
+          ...(sanitizedIp ? { ip_address: sanitizedIp } : {})
+        };
+        
+        // Log de diagnóstico (sem PII)
+        console.log('[mp-create-payment] PIX additional_info SANITIZADO:', {
+          has_payer: false,
+          has_shipments: false,
+          keys: Object.keys(paymentData.additional_info),
+          items_count: sanitizedItems?.length || 0
+        });
+      } else {
+        console.log('[mp-create-payment] PIX sem additional_info para sanitizar');
       }
-      
-      console.log('[mp-create-payment] PIX payment - removidos campos inválidos do additional_info');
     } else if (paymentRequest.token && paymentRequest.payment_method_id) {
       // Card payment (PRECISA ter token E payment_method_id)
       paymentData.token = paymentRequest.token;
