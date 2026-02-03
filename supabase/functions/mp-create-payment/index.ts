@@ -571,17 +571,49 @@ Deno.serve(async (req) => {
     console.log('[mp-create-payment] 🚀 Using official Mercado Pago SDK (Etapa 1+2 implemented)');
 
     // ✅ CRÍTICO: Usar SDK v2 com headers corretos via customHeaders
-    const mpResponse = await payment.create({
-      body: paymentData,
-      requestOptions: {
-        idempotencyKey: idempotencyKey,
-        customHeaders: {
-          'X-meli-session-id': paymentRequest.device_id || '',
-          'X-Forwarded-For': clientIp ?? '',
-          'User-Agent': req.headers.get('user-agent') ?? ''
+    // ✅ CORREÇÃO: Envolver em try-catch específico para capturar erros do SDK
+    let mpResponse;
+    try {
+      mpResponse = await payment.create({
+        body: paymentData,
+        requestOptions: {
+          idempotencyKey: idempotencyKey,
+          customHeaders: {
+            'X-meli-session-id': paymentRequest.device_id || '',
+            'X-Forwarded-For': clientIp ?? '',
+            'User-Agent': req.headers.get('user-agent') ?? ''
+          }
         }
+      });
+    } catch (sdkError: any) {
+      console.error('[mp-create-payment] SDK Exception:', {
+        message: sdkError.message,
+        name: sdkError.name,
+        stack: sdkError.stack?.substring(0, 500),
+        cause: sdkError.cause
+      });
+      
+      // Mensagem amigável baseada no tipo de erro
+      let userMessage = 'Erro ao processar pagamento. Tente novamente.';
+      
+      if (sdkError.message?.includes('timeout') || sdkError.message?.includes('ETIMEDOUT')) {
+        userMessage = 'Timeout ao conectar com gateway de pagamento. Tente novamente em alguns segundos.';
+      } else if (sdkError.message?.includes('fetch') || sdkError.message?.includes('network')) {
+        userMessage = 'Erro de conexão com gateway de pagamento. Verifique sua internet e tente novamente.';
+      } else if (sdkError.message?.includes('400') || sdkError.message?.includes('bad request')) {
+        userMessage = 'Dados de pagamento inválidos. Verifique CPF, email e telefone.';
       }
-    });
+      
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: userMessage,
+          error_code: 'SDK_EXCEPTION',
+          error_detail: sdkError.message
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
 
     console.log('[mp-create-payment] ✅ Headers set via SDK requestOptions (idempotencyKey + customHeaders)');
 
@@ -619,8 +651,20 @@ Deno.serve(async (req) => {
     
     // Erros técnicos reais (não pagamento rejeitado)
     if (mpResponse.error) {
-      console.error('[mp-create-payment] MP API technical error:', responseData);
-      throw new Error(`Mercado Pago API error: ${responseData.error?.message || 'Unknown error'}`);
+      console.error('[mp-create-payment] MP API technical error:', {
+        responseData,
+        errorObject: mpResponse.error,
+        errorType: typeof mpResponse.error
+      });
+      
+      // Extrair mensagem do erro de múltiplas fontes possíveis
+      const errorMessage = 
+        responseData.error?.message || 
+        responseData.error?.cause?.message ||
+        (typeof responseData.error === 'string' ? responseData.error : null) ||
+        'Erro inesperado do gateway de pagamento';
+        
+      throw new Error(`Mercado Pago API error: ${errorMessage}`);
     }
 
     // ✅ ETAPA 7: Logs detalhados de validação de segurança
@@ -717,16 +761,40 @@ Deno.serve(async (req) => {
     );
 
   } catch (error: any) {
-    console.error('[mp-create-payment] Error:', error);
+    console.error('[mp-create-payment] Error:', {
+      message: error.message,
+      stack: error.stack?.substring(0, 500),
+      name: error.name
+    });
     
     // ✅ CORS: Obter origin da requisição para resposta de erro
     const requestOrigin = req.headers.get('origin');
     const corsHeaders = getCorsHeaders(requestOrigin);
     
+    // Mapear erros conhecidos para mensagens amigáveis
+    let userMessage = 'Erro ao criar pagamento. Tente novamente.';
+    let errorCode = 'INTERNAL_ERROR';
+    
+    if (error.message?.includes('Invalid or inactive service SKU')) {
+      userMessage = 'Serviço temporariamente indisponível. Atualize a página e tente novamente.';
+      errorCode = 'INVALID_SKU';
+    } else if (error.message?.includes('Price validation failed')) {
+      userMessage = 'Erro de validação de preço. Atualize a página e tente novamente.';
+      errorCode = 'PRICE_MISMATCH';
+    } else if (error.message?.includes('Missing card token')) {
+      userMessage = 'Dados do cartão incompletos. Preencha novamente.';
+      errorCode = 'MISSING_TOKEN';
+    } else if (error.message?.includes('Mercado Pago API')) {
+      userMessage = 'Gateway de pagamento indisponível. Tente novamente em alguns segundos.';
+      errorCode = 'MP_API_ERROR';
+    }
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message || 'Internal server error' 
+        error: userMessage,
+        error_code: errorCode,
+        error_detail: error.message
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
