@@ -33,6 +33,10 @@ function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
 }
 // ============================================================
 
+// ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
+// Isso evita o problema de split-brain onde a função roda em um projeto diferente
+const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
+
 interface PayerOverride {
   first_name: string;
   last_name: string;
@@ -131,9 +135,11 @@ Deno.serve(async (req) => {
     const paymentRequest: PaymentRequest = await req.json();
     
     // ✅ PERSISTIR CONTACT_ID DO MANYCHAT (ETAPA 2 do plano)
+    // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original para evitar split-brain
+    const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      ORIGINAL_SUPABASE_URL,
+      ORIGINAL_SERVICE_ROLE_KEY
     );
 
     const schedulePayload = paymentRequest.metadata?.schedulePayload;
