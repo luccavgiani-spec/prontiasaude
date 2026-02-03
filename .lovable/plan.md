@@ -1,326 +1,247 @@
 
-# Plano: Corrigir Recusas de Cartão de Crédito no Mercado Pago
+# Plano: Corrigir Erro "Unknown error" na Geração de PIX
 
-## Problema Identificado
+## Problema
 
-Nos últimos dias, houve aumento significativo de recusas de pagamentos com cartão, com erros como:
-- `cc_rejected_high_risk` (compra suspeita)
-- Bancos bloqueando transações
-- Logs indicando "dados incorretos do cartão"
+Quando uma paciente tenta gerar um PIX, o modal fecha e aparece o pop-up "Unknown error". Este erro ocorre porque:
 
-A imagem enviada mostra um erro genérico "Pagamento não aprovado" para uma compra de R$ 23,99.
+1. O SDK do Mercado Pago pode lançar exceções não tratadas adequadamente
+2. Quando o SDK falha (timeout, erro de rede, resposta HTML do gateway), a exceção é capturada pelo catch genérico
+3. Se `mpResponse.error?.message` é undefined, o código retorna "Unknown error"
 
 ---
 
 ## Diagnóstico Técnico
 
-Após análise detalhada de `mp-create-payment/index.ts` e `PaymentModal.tsx`, identifiquei **5 problemas principais**:
+### Localização do Problema
 
-### 1. Race Condition no Device ID (CRÍTICO)
+**Arquivo:** `supabase/functions/mp-create-payment/index.ts`
 
-**Localização:** `PaymentModal.tsx` linhas 821-877
+1. **Linha 574-584**: Chamada ao SDK `payment.create()` não tem try-catch próprio
+2. **Linha 623**: Gera "Unknown error" quando `responseData.error?.message` é undefined:
+   ```typescript
+   throw new Error(`Mercado Pago API error: ${responseData.error?.message || 'Unknown error'}`);
+   ```
+3. **Linha 729**: Catch genérico pode retornar erro genérico se `error.message` estiver vazio
 
-O Device ID é capturado via `getDeviceId()` e armazenado no state (`setDeviceId(capturedDeviceId)`), mas o estado React é assíncrono. Na linha seguinte, `handleCardSubmit` usa o valor **antigo** do state (`deviceId`), não o recém-capturado.
+### Fluxo do Erro
+
+```text
+[Frontend: handlePixSubmit]
+         │
+         ▼
+[invokeEdgeFunction → ploqujuhpwutpcibedbr/mp-create-payment]
+         │
+         ▼
+[SDK MP: payment.create()] ──► EXCEÇÃO (ex: timeout, API down, HTML response)
+         │
+         ▼
+[Catch genérico: error.message || 'Internal server error']
+         │
+         ▼
+[Frontend recebe: { success: false, error: "..." }]
+         │
+         ▼
+[Toast: "Unknown error" + Modal fecha]
+```
+
+---
+
+## Correções Necessárias
+
+### Correção 1: Tratamento robusto do SDK (CRÍTICO)
+
+**Arquivo:** `supabase/functions/mp-create-payment/index.ts`
+
+Envolver a chamada `payment.create()` em try-catch específico para capturar erros do SDK com mais detalhes:
 
 ```typescript
-// PROBLEMA:
-const capturedDeviceId = await cardPaymentBrick.getDeviceId();
-setDeviceId(capturedDeviceId); // ❌ State update é assíncrono!
+// ANTES (linha 574):
+const mpResponse = await payment.create({...});
 
-await handleCardSubmit({
+// DEPOIS:
+let mpResponse;
+try {
+  mpResponse = await payment.create({
+    body: paymentData,
+    requestOptions: {
+      idempotencyKey: idempotencyKey,
+      customHeaders: {
+        'X-meli-session-id': paymentRequest.device_id || '',
+        'X-Forwarded-For': clientIp ?? '',
+        'User-Agent': req.headers.get('user-agent') ?? ''
+      }
+    }
+  });
+} catch (sdkError: any) {
+  console.error('[mp-create-payment] SDK Exception:', {
+    message: sdkError.message,
+    name: sdkError.name,
+    stack: sdkError.stack?.substring(0, 500),
+    cause: sdkError.cause
+  });
+  
+  // Mensagem amigável baseada no tipo de erro
+  let userMessage = 'Erro ao processar pagamento. Tente novamente.';
+  
+  if (sdkError.message?.includes('timeout') || sdkError.message?.includes('ETIMEDOUT')) {
+    userMessage = 'Timeout ao conectar com gateway de pagamento. Tente novamente em alguns segundos.';
+  } else if (sdkError.message?.includes('fetch') || sdkError.message?.includes('network')) {
+    userMessage = 'Erro de conexão com gateway de pagamento. Verifique sua internet e tente novamente.';
+  } else if (sdkError.message?.includes('400') || sdkError.message?.includes('bad request')) {
+    userMessage = 'Dados de pagamento inválidos. Verifique CPF, email e telefone.';
+  }
+  
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: userMessage,
+      error_code: 'SDK_EXCEPTION',
+      error_detail: sdkError.message
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+  );
+}
+```
+
+### Correção 2: Melhorar mensagem de erro técnico (IMPORTANTE)
+
+**Arquivo:** `supabase/functions/mp-create-payment/index.ts` (linha 620-624)
+
+Melhorar a mensagem quando `mpResponse.error` existe mas não tem `message`:
+
+```typescript
+// ANTES:
+if (mpResponse.error) {
+  console.error('[mp-create-payment] MP API technical error:', responseData);
+  throw new Error(`Mercado Pago API error: ${responseData.error?.message || 'Unknown error'}`);
+}
+
+// DEPOIS:
+if (mpResponse.error) {
+  console.error('[mp-create-payment] MP API technical error:', {
+    responseData,
+    errorObject: mpResponse.error,
+    errorType: typeof mpResponse.error
+  });
+  
+  // Extrair mensagem do erro de múltiplas fontes possíveis
+  const errorMessage = 
+    responseData.error?.message || 
+    responseData.error?.cause?.message ||
+    (typeof responseData.error === 'string' ? responseData.error : null) ||
+    'Erro inesperado do gateway de pagamento';
+    
+  throw new Error(`Mercado Pago API error: ${errorMessage}`);
+}
+```
+
+### Correção 3: Catch genérico com mensagem amigável (IMPORTANTE)
+
+**Arquivo:** `supabase/functions/mp-create-payment/index.ts` (linhas 719-735)
+
+Melhorar o catch genérico para retornar mensagens mais específicas:
+
+```typescript
+} catch (error: any) {
+  console.error('[mp-create-payment] Error:', {
+    message: error.message,
+    stack: error.stack?.substring(0, 500),
+    name: error.name
+  });
+  
+  const requestOrigin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(requestOrigin);
+  
+  // Mapear erros conhecidos para mensagens amigáveis
+  let userMessage = 'Erro ao criar pagamento. Tente novamente.';
+  let errorCode = 'INTERNAL_ERROR';
+  
+  if (error.message?.includes('Invalid or inactive service SKU')) {
+    userMessage = 'Serviço temporariamente indisponível. Atualize a página e tente novamente.';
+    errorCode = 'INVALID_SKU';
+  } else if (error.message?.includes('Price validation failed')) {
+    userMessage = 'Erro de validação de preço. Atualize a página e tente novamente.';
+    errorCode = 'PRICE_MISMATCH';
+  } else if (error.message?.includes('Missing card token')) {
+    userMessage = 'Dados do cartão incompletos. Preencha novamente.';
+    errorCode = 'MISSING_TOKEN';
+  } else if (error.message?.includes('Mercado Pago API')) {
+    userMessage = 'Gateway de pagamento indisponível. Tente novamente em alguns segundos.';
+    errorCode = 'MP_API_ERROR';
+  }
+  
+  return new Response(
+    JSON.stringify({ 
+      success: false, 
+      error: userMessage,
+      error_code: errorCode,
+      error_detail: error.message
+    }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+  );
+}
+```
+
+### Correção 4: Frontend - Exibir mensagem do backend (IMPORTANTE)
+
+**Arquivo:** `src/components/payment/PaymentModal.tsx` (linhas 2099-2107)
+
+Melhorar tratamento de erro para exibir mensagem específica do backend:
+
+```typescript
+// ANTES:
+if (error || !data) {
+  console.error("[handlePixSubmit] invoke error:", error);
+  toast.dismiss();
+  toast.error("Erro ao gerar código PIX", { description: "Tente novamente." });
   ...
-  deviceId: deviceId || undefined, // ❌ Usa valor antigo (possivelmente null)
-});
-```
-
-**Impacto:** Sem Device ID, o Mercado Pago classifica a transação como alto risco.
-
----
-
-### 2. `payerOverride` Não Está Sendo Enviado ao Backend (CRÍTICO)
-
-**Localização:** `PaymentModal.tsx` linhas 1498-1595
-
-O payload `paymentRequest` é construído, mas o campo `payerOverride` (dados do titular do cartão quando é terceiro) **não está sendo incluído**:
-
-```typescript
-const paymentRequest: any = {
-  items: [...],
-  payer: {...},
-  token: cardFormData.token,
-  payment_method_id: cardFormData.payment_method_id,
-  installments: cardFormData.installments || 1,
-  metadata: {...},
-  device_id: deviceId || "mp_sdk_auto",
-  // ❌ FALTANDO: payerOverride: cardFormData.payerOverride
-};
-```
-
-**Impacto:** Quando o cartão é de terceiro, o MP recebe CPF do paciente (não do titular), causando `cc_rejected_high_risk`.
-
----
-
-### 3. Dados de Cidade/Estado Não Enviados no `additional_info` (IMPORTANTE)
-
-**Localização:** `mp-create-payment/index.ts` linhas 413-426
-
-O objeto `additional_info.payer.address` não inclui `city` e `federal_unit` (estado), que são campos importantes para análise antifraude:
-
-```typescript
-additional_info: {
-  payer: {
-    address: {
-      zip_code: finalPayer.address?.zip_code,
-      street_name: finalPayer.address?.street_name,
-      street_number: finalPayer.address?.street_number,
-      // ❌ FALTANDO: city, federal_unit
-    }
-  }
 }
-```
 
----
-
-### 4. Header `X-meli-session-id` Ausente em Subscriptions (MODERADO)
-
-**Localização:** `mp-create-subscription/index.ts` linhas 175-183
-
-A API de assinaturas não recebe o header de sessão para análise antifraude:
-
-```typescript
-const mpResponse = await fetch('https://api.mercadopago.com/preapproval', {
-  headers: {
-    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-    'Content-Type': 'application/json',
-    'X-Idempotency-Key': request.order_id,
-    // ❌ FALTANDO: 'X-meli-session-id': request.device_id
-  }
-});
-```
-
----
-
-### 5. Campos de Endereço Não Passados para Pagamentos de Cartão
-
-**Localização:** `PaymentModal.tsx` linhas 1560-1574 e `mp-create-payment/index.ts`
-
-O frontend valida o endereço mas não envia `city` e `state` na estrutura `payer.address`:
-
-```typescript
-address: {
-  zip_code: patientAddress.cep.replace(/\D/g, ""),
-  street_name: patientAddress.street_name,
-  street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
-  // ❌ FALTANDO: city, state
+// DEPOIS:
+if (error || !data) {
+  console.error("[handlePixSubmit] invoke error:", error);
+  toast.dismiss();
+  
+  // Extrair mensagem específica do erro
+  const errorMessage = error?.message || data?.error || "Erro ao gerar código PIX";
+  const errorDescription = error?.error_detail || "Tente novamente em alguns instantes.";
+  
+  toast.error(errorMessage, { description: errorDescription });
+  setPaymentStatus("idle");
+  setShowErrorOverlay(true);
+  setErrorOverlayMessage(errorMessage);
+  return;
 }
-```
-
----
-
-## Plano de Correções
-
-### Arquivo 1: `src/components/payment/PaymentModal.tsx`
-
-#### Correção 1.1: Device ID (linhas 871-877)
-
-Passar o valor capturado **diretamente** para `handleCardSubmit`, sem depender do state:
-
-```typescript
-// DE:
-await handleCardSubmit({
-  token: cardData.token,
-  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
-  installments: cardData.installments || 1,
-  deviceId: deviceId || undefined, // ❌ Usa state antigo
-  payerOverride: isThirdPartyCard ? {...} : undefined,
-});
-
-// PARA:
-const capturedDeviceId = await cardPaymentBrick.getDeviceId();
-await handleCardSubmit({
-  token: cardData.token,
-  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
-  installments: cardData.installments || 1,
-  deviceId: capturedDeviceId || deviceId || undefined, // ✅ Usa valor recém-capturado
-  payerOverride: isThirdPartyCard ? {...} : undefined,
-});
-```
-
-#### Correção 1.2: Incluir `payerOverride` no payload (linhas 1593-1595)
-
-```typescript
-const paymentRequest: any = {
-  items: [...],
-  payer: {...},
-  token: cardFormData.token,
-  payment_method_id: cardFormData.payment_method_id,
-  installments: cardFormData.installments || 1,
-  metadata: {...},
-  device_id: cardFormData.deviceId || deviceId || "mp_sdk_auto",
-  payerOverride: cardFormData.payerOverride, // ✅ ADICIONAR
-};
-```
-
-#### Correção 1.3: Incluir `city` e `state` no endereço (linhas 1568-1574)
-
-```typescript
-address: {
-  zip_code: patientAddress.cep.replace(/\D/g, ""),
-  street_name: patientAddress.street_name,
-  street_number: patientAddress.street_number ? parseInt(patientAddress.street_number) : undefined,
-  city: patientAddress.city, // ✅ ADICIONAR
-  state: patientAddress.state, // ✅ ADICIONAR
-}
-```
-
----
-
-### Arquivo 2: `supabase/functions/mp-create-payment/index.ts`
-
-#### Correção 2.1: Enriquecer `additional_info` com cidade/estado (linhas 409-430)
-
-```typescript
-additional_info: {
-  items: [...],
-  payer: {
-    first_name: finalPayer.first_name || '',
-    last_name: finalPayer.last_name || '',
-    phone: finalPayer.phone || {},
-    address: {
-      zip_code: finalPayer.address?.zip_code,
-      street_name: finalPayer.address?.street_name,
-      street_number: finalPayer.address?.street_number,
-      // ✅ ADICIONAR:
-      city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
-      federal_unit: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
-    },
-    registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
-  },
-  shipments: {
-    receiver_address: {
-      zip_code: finalPayer.address?.zip_code,
-      street_name: finalPayer.address?.street_name,
-      street_number: finalPayer.address?.street_number,
-      // ✅ ADICIONAR:
-      city: paymentRequest.payerOverride?.address?.city || paymentRequest.payer?.address?.city || '',
-      state_name: paymentRequest.payerOverride?.address?.state || paymentRequest.payer?.address?.state || ''
-    }
-  },
-  ip_address: clientIp
-}
-```
-
-#### Correção 2.2: Atualizar interface `PayerOverride` (linhas 36-52)
-
-Garantir que a interface aceita `city` e `state`:
-
-```typescript
-interface PayerOverride {
-  first_name: string;
-  last_name: string;
-  cpf: string;
-  phone: {
-    area_code: string;
-    number: string;
-  };
-  address: {
-    zip_code: string;
-    street_name: string;
-    street_number?: string;
-    neighborhood?: string;
-    city: string;      // ✅ Já existe
-    state: string;     // ✅ Já existe
-  };
-}
-```
-
----
-
-### Arquivo 3: `supabase/functions/mp-create-subscription/index.ts`
-
-#### Correção 3.1: Adicionar header de sessão (linhas 175-183)
-
-```typescript
-const mpResponse = await fetch('https://api.mercadopago.com/preapproval', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
-    'Content-Type': 'application/json',
-    'X-Idempotency-Key': request.order_id,
-    'X-meli-session-id': request.device_id || '' // ✅ ADICIONAR
-  },
-  body: JSON.stringify(subscriptionPayload)
-});
 ```
 
 ---
 
 ## Resumo das Alterações
 
-| # | Arquivo | Linha(s) | Correção | Impacto |
-|---|---------|----------|----------|---------|
-| 1 | PaymentModal.tsx | 871-877 | Usar `capturedDeviceId` diretamente | CRÍTICO |
-| 2 | PaymentModal.tsx | 1593-1595 | Adicionar `payerOverride` ao payload | CRÍTICO |
-| 3 | PaymentModal.tsx | 1568-1574 | Adicionar `city` e `state` ao endereço | IMPORTANTE |
-| 4 | mp-create-payment/index.ts | 409-430 | Enriquecer `additional_info` | IMPORTANTE |
-| 5 | mp-create-subscription/index.ts | 175-183 | Adicionar `X-meli-session-id` | MODERADO |
+| # | Arquivo | Linhas | Alteração | Impacto |
+|---|---------|--------|-----------|---------|
+| 1 | mp-create-payment/index.ts | 574-584 | Envolver SDK em try-catch com mensagens específicas | CRÍTICO |
+| 2 | mp-create-payment/index.ts | 620-624 | Melhorar extração de mensagem de erro | IMPORTANTE |
+| 3 | mp-create-payment/index.ts | 719-735 | Catch genérico com mensagens amigáveis | IMPORTANTE |
+| 4 | PaymentModal.tsx | 2099-2107 | Exibir mensagem específica do backend | IMPORTANTE |
 
 ---
 
 ## Resultado Esperado
 
 Após as correções:
-- Redução de 50-70% nas recusas por `cc_rejected_high_risk`
-- Device ID será enviado corretamente em 100% das transações
-- Pagamentos com cartão de terceiro terão dados de titular corretos
-- Melhor score de análise antifraude com dados de endereço completos
+- Erros do SDK serão capturados com mensagens específicas (timeout, rede, dados inválidos)
+- "Unknown error" será substituído por mensagens claras e acionáveis
+- O modal NÃO fechará silenciosamente - mostrará mensagem explicativa
+- Logs detalhados facilitarão debug de problemas futuros
 
 ---
 
-## Seção Técnica: Fluxo de Dados Corrigido
+## IMPORTANTE: Deploy para Produção
 
-```text
-[Frontend - Brick]
-       │
-       ▼
-  getDeviceId() ────► capturedDeviceId
-       │
-       ▼
-  handleCardSubmit({
-    token: "...",
-    deviceId: capturedDeviceId,  ◄── Passa valor recém-capturado
-    payerOverride: {...}         ◄── Inclui dados do titular
-  })
-       │
-       ▼
-  paymentRequest = {
-    ...
-    device_id: cardFormData.deviceId,  ◄── Agora tem valor correto
-    payerOverride: cardFormData.payerOverride  ◄── Agora é enviado
-  }
-       │
-       ▼
-[Backend - mp-create-payment]
-       │
-       ▼
-  paymentData = {
-    payer: {
-      ...payerOverride (se existir)  ◄── Usa dados do titular
-    },
-    additional_info: {
-      payer: {
-        address: {
-          city: "...",          ◄── Agora incluído
-          federal_unit: "..."   ◄── Agora incluído
-        }
-      }
-    }
-  }
-       │
-       ▼
-  [Mercado Pago API]
-  - Device ID ✓
-  - Titular correto ✓
-  - Endereço completo ✓
-  → Score de risco REDUZIDO
-```
+Como a edge function está no Supabase de Produção (ploqujuhpwutpcibedbr) e NÃO no Lovable Cloud:
+
+1. Após aprovar este plano, farei as alterações no código
+2. Você precisará copiar o código da edge function atualizada
+3. E deployar manualmente no dashboard do Supabase de Produção
