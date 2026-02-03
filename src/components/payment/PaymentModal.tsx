@@ -2098,12 +2098,20 @@ export function PaymentModal({
 
       // --- PATCH DE TRATAMENTO ROBUSTO PARA PIX ---
       if (error || !data) {
-        console.error("[handlePixSubmit] invoke error:", error);
+        console.error("[handlePixSubmit] invoke error:", error, "data:", data);
         toast.dismiss();
-        toast.error("Erro ao gerar código PIX", { description: "Tente novamente." });
+        
+        // ✅ CORREÇÃO: Extrair mensagem específica do erro do backend
+        const errorMessage = data?.error || error?.message || "Erro ao gerar código PIX";
+        const errorDescription = data?.error_detail || "Tente novamente em alguns instantes.";
+        const errorCode = data?.error_code || "UNKNOWN";
+        
+        console.error("[handlePixSubmit] Error details:", { errorMessage, errorDescription, errorCode });
+        
+        toast.error(errorMessage, { description: errorDescription });
         setPaymentStatus("idle");
         setShowErrorOverlay(true);
-        setErrorOverlayMessage("Não foi possível gerar o código PIX. Tente novamente em alguns instantes.");
+        setErrorOverlayMessage(errorMessage);
         return;
       }
 
