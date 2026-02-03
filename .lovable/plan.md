@@ -1,89 +1,77 @@
 
-# Plano: Corrigir Split-Brain na Edge Function mp-create-payment
+Objetivo: eliminar definitivamente, para pagamentos PIX, quaisquer campos em `additional_info` que a API do Mercado Pago rejeita (especialmente `additional_info.payer.address.city`, `additional_info.payer.address.federal_unit`, `additional_info.shipments.receiver_address.city`). Apesar do bloco de `delete` já existir, o erro indica que esses campos ainda estão chegando no payload final enviado ao MP; então vamos aplicar uma sanitização mais “à prova de falhas”: para PIX, remover por completo `additional_info.payer` e `additional_info.shipments` (mantendo apenas o essencial).
 
-## Problema Identificado
+────────────────────────────────────────────────────────────
+1) ARQUIVOS QUE SERÃO MODIFICADOS
+────────────────────────────────────────────────────────────
+- supabase/functions/mp-create-payment/index.ts
 
-A edge function `mp-create-payment` está usando `Deno.env.get('SUPABASE_URL')` para criar o cliente Supabase, o que pode apontar para o projeto errado dependendo de como os secrets estão configurados.
+────────────────────────────────────────────────────────────
+2) MOTIVO (baseado no seu relato)
+────────────────────────────────────────────────────────────
+Mesmo após deploy, o MP continua retornando:
+- `SDK_EXCEPTION` com detalhe: parâmetros inválidos em `additional_info.*` (city/federal_unit).
+Isso só acontece se esses campos ainda estiverem presentes no body enviado ao Mercado Pago para PIX.
 
-### Código Atual (Problemático)
+────────────────────────────────────────────────────────────
+3) ESCOPO (exatamente o que será alterado)
+────────────────────────────────────────────────────────────
+A) Ajuste na sanitização do PIX
+- Onde: dentro do bloco PIX (começa na linha ~457: `if (paymentRequest.payment_method_id === 'pix' ... )`)
+- O que mudar: substituir/fortalecer o trecho atual que faz `delete city/federal_unit/state_name` por uma abordagem mais robusta:
+  - Para PIX, remover completamente:
+    - `paymentData.additional_info.payer`
+    - `paymentData.additional_info.shipments`
+  - Manter somente:
+    - `paymentData.additional_info.items`
+    - `paymentData.additional_info.ip_address` (se existir)
 
-```typescript
-// Linha 134-137 de mp-create-payment/index.ts
-const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',      // ❌ Pode ser Lovable Cloud!
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-```
+Isso garante que nenhum campo “proibido” sobreviva por variação de estrutura/serialização.
 
-### Código Correto (mp-create-subscription como referência)
+B) Log de diagnóstico sem PII (para você validar no log do backend)
+- Adicionar um `console.log` logo após a sanitização do PIX informando:
+  - se `additional_info` ainda contém `payer` e/ou `shipments`
+  - quais chaves existem em `additional_info` após a limpeza
+Importante: logar somente chaves/booleanos, não valores (não expor CPF/endereço/email).
 
-```typescript
-// mp-create-subscription usa URL FIXA:
-const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabaseAdmin = createClient(ORIGINAL_SUPABASE_URL, ORIGINAL_SERVICE_ROLE_KEY);
-```
+────────────────────────────────────────────────────────────
+4) DETALHE TÉCNICO (o que exatamente implementar)
+────────────────────────────────────────────────────────────
+No bloco PIX, após definir `paymentData.payer = { email, identification }`, ajustar a limpeza para algo nesse estilo:
 
----
+- Se `paymentData.additional_info` existir:
+  1) capturar `items` e `ip_address`
+  2) reatribuir `paymentData.additional_info` para um novo objeto contendo só esses campos
+     (assim, mesmo que existam referências antigas, o objeto final enviado ao SDK fica limpo)
 
-## Correções Necessárias
+Exemplo (conceitual):
+- `const items = paymentData.additional_info.items;`
+- `const ip = paymentData.additional_info.ip_address;`
+- `paymentData.additional_info = { items, ...(ip ? { ip_address: ip } : {}) };`
 
-### Correção 1: Adicionar URL fixa do Supabase original
+E então logar:
+- `has_additional_info_payer: false`
+- `has_additional_info_shipments: false`
+- `additional_info_keys: ['items','ip_address']` (exemplo)
 
-**Arquivo:** `supabase/functions/mp-create-payment/index.ts`
+────────────────────────────────────────────────────────────
+5) CRITÉRIO DE ACEITE (como saber que resolveu)
+────────────────────────────────────────────────────────────
+Após novo deploy em Produção, ao tentar gerar PIX:
+- Não deve mais ocorrer o erro “wrong parameters name … additional_info.payer.address.city …”.
+- Nos logs da função deve aparecer o log de diagnóstico indicando que, para PIX:
+  - `additional_info.payer` não existe
+  - `additional_info.shipments` não existe
+  - e o PIX deve criar o pagamento e retornar o `point_of_interaction` com dados do QR Code.
 
-Após a linha 33 (após os comentários CORS), adicionar:
+────────────────────────────────────────────────────────────
+6) RISCOS / OBSERVAÇÕES
+────────────────────────────────────────────────────────────
+- Este ajuste é restrito ao fluxo PIX; cartão permanece com `additional_info` completo (antifraude).
+- Se após isso o mesmo erro persistir, o cenário mais provável passa a ser “deploy não está atingindo a função correta/versão correta”. O log de diagnóstico serve exatamente para confirmar se o código novo está rodando.
 
-```typescript
-// ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
-// Isso evita o problema de split-brain onde a função roda em um projeto diferente
-const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
-```
-
-### Correção 2: Usar URL e KEY fixa no createClient
-
-**Arquivo:** `supabase/functions/mp-create-payment/index.ts`
-
-Modificar linhas 134-137:
-
-```typescript
-// DE (atual):
-const supabaseAdmin = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-);
-
-// PARA (correto):
-const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabaseAdmin = createClient(
-  ORIGINAL_SUPABASE_URL,
-  ORIGINAL_SERVICE_ROLE_KEY
-);
-```
-
----
-
-## Resumo das Alterações
-
-| Arquivo | Linha | Alteração |
-|---------|-------|-----------|
-| mp-create-payment/index.ts | ~34 | Adicionar constante `ORIGINAL_SUPABASE_URL` |
-| mp-create-payment/index.ts | 134-137 | Usar URL e KEY fixa no `createClient` |
-
----
-
-## Resultado Esperado
-
-Após a correção:
-- A edge function buscará serviços no banco de dados correto (ploqujuhpwutpcibedbr)
-- O SKU ITC6534 será encontrado com `active = true`
-- Pagamentos PIX e Cartão funcionarão corretamente
-
----
-
-## IMPORTANTE: Deploy Manual
-
-Após eu fazer a alteração no código aqui:
-1. Copie o código completo da edge function
-2. Deploy manualmente no Dashboard do Supabase de Produção
-3. Teste novamente a geração de PIX
+────────────────────────────────────────────────────────────
+7) CONFIRMAÇÃO (regra absoluta)
+────────────────────────────────────────────────────────────
+Estas alterações estão explicitamente solicitadas? SIM
+- Você reportou erro no PIX e o arquivo alvo é o mesmo `mp-create-payment`, que você já está editando e fazendo deploy.
