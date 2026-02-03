@@ -458,7 +458,21 @@ Deno.serve(async (req) => {
         identification: finalPayer.identification
       };
       
-      console.log('[mp-create-payment] PIX payment - usando apenas email e CPF no payer');
+      // ✅ NOVO: Também limpar additional_info para PIX (API não aceita city/federal_unit)
+      if (paymentData.additional_info) {
+        // Remover campos inválidos do payer.address
+        if (paymentData.additional_info.payer?.address) {
+          delete (paymentData.additional_info.payer.address as any).city;
+          delete (paymentData.additional_info.payer.address as any).federal_unit;
+        }
+        // Remover campos inválidos do shipments.receiver_address  
+        if (paymentData.additional_info.shipments?.receiver_address) {
+          delete (paymentData.additional_info.shipments.receiver_address as any).city;
+          delete (paymentData.additional_info.shipments.receiver_address as any).state_name;
+        }
+      }
+      
+      console.log('[mp-create-payment] PIX payment - removidos campos inválidos do additional_info');
     } else if (paymentRequest.token && paymentRequest.payment_method_id) {
       // Card payment (PRECISA ter token E payment_method_id)
       paymentData.token = paymentRequest.token;
