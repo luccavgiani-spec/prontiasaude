@@ -63,13 +63,7 @@ function persistMpDeviceSessionId(id: string) {
   }
 }
 // ✅ SDK React do Mercado Pago é inicializado globalmente em main.tsx
-
-// Declaração global para uso legado (fallback caso SDK React falhe)
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
+// ✅ Window.MercadoPago já declarado em src/main.tsx
 
 interface PaymentModalProps {
   open: boolean;

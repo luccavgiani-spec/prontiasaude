@@ -5,11 +5,7 @@ import "./index.css";
 import "./lib/gtag-events";
 import { initializeMercadoPago } from "./lib/mercadopago-init";
 
-declare global {
-  interface Window {
-    MercadoPago?: any;
-  }
-}
+// MercadoPago já declarado em src/types/global.d.ts
 
 async function ensureMercadoPagoSdkLoaded(): Promise<void> {
   if (window.MercadoPago) return;
