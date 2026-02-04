@@ -2023,7 +2023,49 @@ Deno.serve(async (req) => {
     console.log('[mp-webhook] ✅ Métrica de venda gravada');
 
     // ✅ CUPOM: Criar registro em coupon_uses se houver cupom aplicado
-    if (payment.metadata?.coupon_id && payment.metadata?.coupon_code) {
+    // ✅ CORREÇÃO: Buscar dados do cupom em pending_payments como fallback quando metadata está incompleto
+    let couponData = {
+      coupon_id: payment.metadata?.coupon_id,
+      coupon_code: payment.metadata?.coupon_code,
+      amount_original: payment.metadata?.amount_original,
+      discount_percentage: payment.metadata?.discount_percentage,
+      owner_email: payment.metadata?.owner_email
+    };
+
+    // Se não tiver coupon_id no metadata, buscar no pending_payments
+    if (!couponData.coupon_id && payment.metadata?.order_id) {
+      console.log('[mp-webhook] 🔍 Buscando dados do cupom em pending_payments...');
+      
+      const { data: pending } = await supabaseAdmin
+        .from('pending_payments')
+        .select('coupon_code, coupon_owner_id, amount_original, discount_percent')
+        .eq('order_id', payment.metadata.order_id)
+        .maybeSingle();
+      
+      if (pending?.coupon_code) {
+        console.log('[mp-webhook] ✅ Cupom encontrado em pending_payments:', pending.coupon_code);
+        
+        // Buscar coupon_id pelo código
+        const { data: couponByCode } = await supabaseAdmin
+          .from('user_coupons')
+          .select('id, owner_user_id, pix_key')
+          .eq('code', pending.coupon_code)
+          .single();
+        
+        if (couponByCode) {
+          couponData = {
+            coupon_id: couponByCode.id,
+            coupon_code: pending.coupon_code,
+            amount_original: pending.amount_original,
+            discount_percentage: pending.discount_percent,
+            owner_email: '' // Será buscado abaixo
+          };
+          console.log('[mp-webhook] ✅ Dados do cupom recuperados do pending_payments');
+        }
+      }
+    }
+
+    if (couponData.coupon_id && couponData.coupon_code) {
       try {
         console.log('[mp-webhook] 🎟️ Cupom detectado, criando registro de uso...');
         
@@ -2031,7 +2073,7 @@ Deno.serve(async (req) => {
         const { data: coupon } = await supabaseAdmin
           .from('user_coupons')
           .select('*')
-          .eq('id', payment.metadata.coupon_id)
+          .eq('id', couponData.coupon_id)
           .single();
 
         if (coupon) {
@@ -2047,29 +2089,40 @@ Deno.serve(async (req) => {
             : schedulePayload.nome || 'Usuário';
 
           // Criar registro de uso do cupom
-          const amountOriginalCents = payment.metadata.amount_original || Math.round(payment.transaction_amount * 100);
-          const amountFinalCents = payment.metadata.amount_discounted || Math.round(payment.transaction_amount * 100);
+          const amountOriginalCents = couponData.amount_original || Math.round(payment.transaction_amount * 100);
+          const amountFinalCents = payment.metadata?.amount_discounted || Math.round(payment.transaction_amount * 100);
           const discountAmountCents = amountOriginalCents - amountFinalCents;
+          
+          // Buscar email do owner se não estiver nos metadados
+          let ownerEmail = couponData.owner_email || '';
+          if (!ownerEmail && coupon.owner_user_id) {
+            const { data: ownerPatient } = await supabaseAdmin
+              .from('patients')
+              .select('email')
+              .eq('id', coupon.owner_user_id)
+              .maybeSingle();
+            ownerEmail = ownerPatient?.email || '';
+          }
           
           const { error: couponUseError } = await supabaseAdmin
             .from('coupon_uses')
             .insert({
-              coupon_id: payment.metadata.coupon_id,
-              coupon_code: payment.metadata.coupon_code,
+              coupon_id: couponData.coupon_id,
+              coupon_code: couponData.coupon_code,
               used_by_user_id: userId || null,
               used_by_name: buyerName,
               used_by_email: schedulePayload.email,
               service_sku: schedulePayload.sku,
               service_or_plan_name: mapSkuToName(schedulePayload.sku),
               owner_id: coupon.owner_user_id,
-              owner_email: payment.metadata.owner_email || '',
+              owner_email: ownerEmail,
               owner_pix_key: coupon.pix_key,
               payment_id: String(payment.id),
-              order_id: payment.metadata.order_id || null,
+              order_id: payment.metadata?.order_id || null,
               original_amount: amountOriginalCents / 100,
               discount_amount: discountAmountCents / 100,
               final_amount: amountFinalCents / 100,
-              discount_percent: payment.metadata.discount_percentage || 0
+              discount_percent: couponData.discount_percentage || 0
             });
 
           if (couponUseError) {
