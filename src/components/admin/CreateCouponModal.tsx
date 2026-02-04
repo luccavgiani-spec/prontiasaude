@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -22,6 +23,7 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
     discountPercentage: "",
     ownerEmail: "",
     pixKey: "",
+    isSingleUse: true,
   });
 
   const generateRandomCode = () => {
@@ -59,6 +61,7 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
           discount_percentage: discount,
           owner_email: formData.ownerEmail.trim() || null,
           pix_key: formData.pixKey.trim() || null,
+          is_single_use: formData.isSingleUse,
         }
       });
 
@@ -84,6 +87,7 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
         discountPercentage: "",
         ownerEmail: "",
         pixKey: "",
+        isSingleUse: true,
       });
 
       onSuccess();
@@ -215,6 +219,23 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
             <p className="text-xs text-muted-foreground">
               Para rastreamento de comissões (se aplicável)
             </p>
+          </div>
+
+          {/* Uso Único */}
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label htmlFor="singleUse">Uso Único</Label>
+              <p className="text-xs text-muted-foreground">
+                Se ativado, cada usuário só pode usar este cupom uma vez
+              </p>
+            </div>
+            <Switch
+              id="singleUse"
+              checked={formData.isSingleUse}
+              onCheckedChange={(checked) => 
+                setFormData(prev => ({ ...prev, isSingleUse: checked }))
+              }
+            />
           </div>
 
           <DialogFooter>
