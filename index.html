@@ -76,35 +76,25 @@
     <link rel="dns-prefetch" href="https://www.mercadopago.com" />
     <link rel="dns-prefetch" href="https://analytics.tiktok.com" />
 
-    <!-- CSS Crítico Inline - Otimizado para LCP/FCP Mobile e CLS ≤ 0.05 -->
+    <!-- CSS Crítico Inline -->
     <style>
-      /* CRITICAL CSS OTIMIZADO - Apenas estilos above-the-fold */
       *,::before,::after{box-sizing:border-box;border-width:0;border-style:solid;border-color:currentColor}
       html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:system-ui,sans-serif;font-size-adjust:0.5}
       body{margin:0;line-height:inherit;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
       :root{--background:0 0% 100%;--foreground:222.2 84% 4.9%;--primary:172 100% 23%;--primary-foreground:0 0% 100%;--muted:32 43% 89%;--radius:0.75rem;--gradient-primary:linear-gradient(135deg,hsl(172,100%,23%) 0%,hsl(172,80%,30%) 100%)}
-
-      /* Font-face com métricas ajustadas para CLS zero */
       @font-face{font-family:'Nunito Fallback';src:local('Arial');ascent-override:105%;descent-override:35%;line-gap-override:0%;size-adjust:95%}
       @font-face{font-family:'Poppins Fallback';src:local('Arial');ascent-override:100%;descent-override:30%;line-gap-override:0%;size-adjust:100%}
-
       body{background:hsl(var(--background));color:hsl(var(--foreground));font-family:'Nunito','Nunito Fallback',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
       #root{min-height:100vh;width:100%;contain:layout style paint}
       h1,h2,h3,h4,h5,h6,button{font-family:'Poppins','Poppins Fallback',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-weight:600}
-
-      /* Estrutura crítica - Hero com altura fixa */
       nav{min-height:64px;will-change:transform;contain:layout style}
       .hero-section{min-height:600px;display:flex;align-items:center;contain:layout style}
       .hero-picture{display:block;width:100%;height:auto}
       .hero-picture img{aspect-ratio:16/9;object-fit:cover;width:100%;height:auto;display:block}
       .hero-button{height:56px!important;min-width:220px!important}
-
-      /* Base */
       .container{width:100%;max-width:1280px;margin:0 auto;padding:0 1rem}
       button,a[role="button"]{min-height:48px;min-width:48px;touch-action:manipulation}
       img,picture{content-visibility:auto;max-width:100%;height:auto;display:block}
-
-      /* Mobile */
       @media(max-width:768px){
         html{font-size:14px}
         .hero-section{min-height:500px}
@@ -112,7 +102,7 @@
       }
     </style>
 
-    <!-- Meta Pixel Code - Lazy Load on User Interaction -->
+    <!-- Meta Pixel Code - Lazy Load -->
     <script>
       let fbqLoaded = false;
       function loadFBQ() {
@@ -131,12 +121,10 @@
         fbq('track', 'PageView');
       }
 
-      // Load on first scroll, click, or touch
       window.addEventListener('scroll', loadFBQ, { once: true, passive: true });
       window.addEventListener('click', loadFBQ, { once: true });
       window.addEventListener('touchstart', loadFBQ, { once: true, passive: true });
     </script>
-    <!-- End Meta Pixel Code -->
 
     <!-- Google Tag Manager -->
     <script>
@@ -146,9 +134,8 @@
       'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
       })(window,document,'script','dataLayer','GTM-NWKDM9X2');
     </script>
-    <!-- End Google Tag Manager -->
 
-    <!-- TikTok Pixel Code - Lazy Load on User Interaction -->
+    <!-- TikTok Pixel Code - Lazy Load -->
     <script>
       let ttqLoaded = false;
       function loadTTQ() {
@@ -162,39 +149,38 @@
           ttq.page();
         }(window, document, 'ttq');
       }
-      // Load on first scroll, click, or touch - same pattern as Meta Pixel
       window.addEventListener('scroll', loadTTQ, { once: true, passive: true });
       window.addEventListener('click', loadTTQ, { once: true });
       window.addEventListener('touchstart', loadTTQ, { once: true, passive: true });
     </script>
-    <!-- TikTok Pixel Code End -->
 
-    <!-- Mercado Pago Security Script - Device Fingerprint para melhorar aprovação -->
+    <!-- ✅ Mercado Pago SDK V2 (FRONTEND) - melhora pontuação “SDK do frontend” + PCI -->
+    <script src="https://sdk.mercadopago.com/js/v2" defer></script>
+
+    <!-- Mercado Pago Security Script - Device Fingerprint -->
     <script src="https://www.mercadopago.com/v2/security.js" view="checkout" defer></script>
   </head>
 
   <body>
-    <!-- Meta Pixel noscript (must be in body) -->
-    <noscript
-      ><img
+    <noscript>
+      <img
         height="1"
         width="1"
         style="display:none"
         src="https://www.facebook.com/tr?id=1489396668966676&ev=PageView&noscript=1"
-    /></noscript>
+      />
+    </noscript>
 
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- Google Tag Manager (noscript) -->
-    <noscript
-      ><iframe
+    <noscript>
+      <iframe
         src="https://www.googletagmanager.com/ns.html?id=GTM-NWKDM9X2"
         height="0"
         width="0"
         style="display:none;visibility:hidden"
-      ></iframe
-    ></noscript>
-    <!-- End Google Tag Manager (noscript) -->
+      ></iframe>
+    </noscript>
   </body>
 </html>
