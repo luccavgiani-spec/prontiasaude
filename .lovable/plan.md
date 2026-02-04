@@ -1,134 +1,167 @@
 
-# Plano: Correção dos Alertas do Mercado Pago
 
-## Diagnóstico dos Problemas
+# Plano: Corrigir Testes no Preview (Edge Functions)
 
-Com base nas imagens enviadas, identifiquei os seguintes alertas do painel de monitoramento do Mercado Pago:
+## Diagnóstico do Problema
 
-| Categoria | Alerta | Status | Impacto |
-|-----------|--------|--------|---------|
-| **Segurança** | Formulário de Cartões - PCI Compliance (Secure Fields) | ⚠️ Pendente | 8 pontos |
-| **Experiência de compra** | Descrição - Fatura do cartão (statement_descriptor) | ⚠️ Pendente | 10 pontos |
-| **Escalabilidade** | SDK do frontend MercadoPago.JS V2 | ⚠️ Pendente | 10 pontos |
-| **Aprovação dos pagamentos** | Identificador do dispositivo (Device ID) | ⚠️ Pendente | 2 pontos |
+O erro "Failed to fetch" ocorre porque:
 
-### Erros de API (400/404)
-- **POST /payments** com código 400: 65 ocorrências (73.03%)
-- **GET /payments** com código 404: 24 ocorrências (26.97%)
+1. **Você está no preview do Lovable** (`9bc3ce56...lovableproject.com`)
+2. **O código tenta chamar Edge Functions no Supabase de Produção** (`ploqujuhpwutpcibedbr.supabase.co`)
+3. **O CORS do Supabase de Produção não permite requisições do domínio do preview**
 
----
+### Fluxo Atual (Problema)
 
-## Análise do Código Atual
+```text
+┌───────────────────────┐
+│ Preview Lovable       │
+│ *.lovableproject.com  │
+└───────────┬───────────┘
+            │
+            ▼ (invokeEdgeFunction)
+┌───────────────────────┐
+│ Supabase Produção     │
+│ ploqujuhpwutpcibedbr  │
+│ CORS: ❌ Bloqueado    │
+└───────────────────────┘
+```
 
-### O que já está implementado corretamente:
+### Funções Afetadas
 
-1. **SDK v2 carregando corretamente** (`sdk.mercadopago.com/js/v2`)
-2. **statement_descriptor** já está sendo enviado (`PRONTIA SAUDE`) na edge function
-3. **Device ID** está sendo capturado via `cardPaymentBrick.getDeviceId()`
-4. **SDK oficial no backend** (`npm:mercadopago@2.0.15`)
-
-### Problemas identificados:
-
-1. **SDK React não está sendo usado** - O código carrega o SDK via script tag em vez de usar `@mercadopago/sdk-react` que já está instalado no projeto
-2. **Secure Fields (PCI Compliance)** - O CardPaymentBrick atual usa o método tradicional. O MP recomenda usar componentes React nativos do SDK
-3. **Device ID pode ter race condition** - Está sendo capturado no `onSubmit` mas pode falhar silenciosamente
-4. **Erros 400 em POST /payments** - Provavelmente dados malformados ou validação falhando
+| Função | Chamada via | Status no Preview |
+|--------|-------------|-------------------|
+| patient-operations | invokeEdgeFunction (Produção) | ❌ Bloqueado |
+| check-user-exists | invokeCloudEdgeFunction (Cloud) | ✅ Funciona |
+| create-user-both-envs | invokeCloudEdgeFunction (Cloud) | ✅ Funciona |
 
 ---
 
 ## Solução Proposta
 
-### Etapa 1: Migrar para SDK React Oficial
+### Modificar `ensurePatientRow` para usar ambiente correto
 
-Substituir o carregamento manual do SDK por componentes nativos do `@mercadopago/sdk-react`:
-
-```typescript
-// Antes (atual)
-const script = document.createElement("script");
-script.src = "https://sdk.mercadopago.com/js/v2";
-
-// Depois (recomendado)
-import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
-
-initMercadoPago(MP_PUBLIC_KEY, { locale: 'pt-BR' });
-```
-
-### Etapa 2: Usar CardPayment Component Nativo
-
-O pacote `@mercadopago/sdk-react` já está instalado (versão ^1.0.6). Usar o componente React nativo:
-
-```tsx
-import { CardPayment } from '@mercadopago/sdk-react';
-
-<CardPayment
-  initialization={{
-    amount: amount / 100,
-    payer: {
-      email: formData.email,
-      identification: { type: 'CPF', number: formData.cpf }
-    }
-  }}
-  onSubmit={handleCardPayment}
-  onReady={handleBrickReady}
-  onError={handleBrickError}
-/>
-```
-
-### Etapa 3: Garantir Device ID via SDK
-
-O SDK React gerencia automaticamente o Device ID quando usado corretamente. Manter fallback explícito:
+Atualizar `src/lib/patients.ts` para detectar o ambiente e usar a função Cloud quando apropriado:
 
 ```typescript
-// No onSubmit do CardPayment
-const handleCardPayment = async (formData, additionalData) => {
-  // additionalData.deviceId já vem preenchido pelo SDK
-  const deviceId = additionalData?.deviceId || 'sdk_managed';
+// src/lib/patients.ts - linha 32
+
+// ✅ CORREÇÃO: Usar invokeCloudEdgeFunction quando ambiente = cloud
+const invokeFunction = environment === 'cloud' ? invokeCloudEdgeFunction : invokeEdgeFunction;
+
+const { data, error } = await invokeFunction('patient-operations', {
+  body: {
+    operation: 'ensure_patient',
+    user_id: userId,
+    email: userEmail
+  },
+  headers
+});
+```
+
+### Problema: A função precisa saber o ambiente
+
+A função `ensurePatientRow` recebe um `dbClient` mas não sabe qual ambiente está sendo usado. Precisamos adicionar essa informação.
+
+---
+
+## Alterações Necessárias
+
+### Arquivo 1: `src/lib/patients.ts`
+
+Modificar `ensurePatientRow` para receber o ambiente como parâmetro:
+
+```typescript
+export async function ensurePatientRow(
+  userId: string, 
+  dbClient: SupabaseClient = supabase,
+  environment: 'cloud' | 'production' = 'cloud' // novo parâmetro
+) {
+  console.log('[ensurePatientRow] Chamando edge function para user_id:', userId, 'ambiente:', environment);
   
-  // Enviar para backend
-  await invokeEdgeFunction('mp-create-payment', {
-    body: { ...paymentRequest, device_id: deviceId }
+  const { data: sessionData } = await dbClient.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  const userEmail = sessionData?.session?.user?.email;
+  
+  const headers: Record<string, string> = {};
+  if (accessToken) {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+  
+  // ✅ CORREÇÃO: Usar função correta baseado no ambiente
+  const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
+  
+  const { data, error } = await invokeFunction('patient-operations', {
+    body: {
+      operation: 'ensure_patient',
+      user_id: userId,
+      email: userEmail
+    },
+    headers
   });
-};
+  
+  if (error) {
+    console.error('[ensurePatientRow] Edge function error:', error);
+    throw new Error(error.message || 'Falha ao garantir registro do paciente');
+  }
+  
+  return true;
+}
 ```
 
-### Etapa 4: Validar statement_descriptor no Backend
+### Arquivo 2: `src/pages/auth/Callback.tsx`
 
-Já está implementado na edge function (`paymentData.statement_descriptor = 'PRONTIA SAUDE'`), mas precisa garantir que só é enviado para pagamentos com cartão (não PIX).
+Passar o ambiente para `ensurePatientRow`:
 
----
+```typescript
+// Linha 76-77
+const patientDbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
+await ensurePatientRow(session.user.id, patientDbClient, authEnvironment || 'cloud');
+```
 
-## Arquivos a Modificar
+### Arquivo 3: `src/pages/CompletarPerfil.tsx`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/payment/PaymentModal.tsx` | Migrar para SDK React nativo |
-| `src/main.tsx` ou `src/App.tsx` | Inicializar `initMercadoPago()` globalmente |
-| `supabase/functions/mp-create-payment/index.ts` | Validar campos obrigatórios antes de enviar |
-
----
-
-## Benefícios Esperados
-
-1. **+8 pontos** - PCI Compliance com Secure Fields automático
-2. **+10 pontos** - SDK oficial reconhecido
-3. **+2 pontos** - Device ID gerenciado automaticamente
-4. **Redução de erros 400** - Validação mais robusta
-5. **Melhor taxa de aprovação** - Dados antifraude completos
+Atualizar todas as chamadas de `ensurePatientRow` para passar o ambiente.
 
 ---
 
-## Considerações Importantes
+## Alternativa: Testar no Site Publicado
 
-- Esta é uma mudança significativa no fluxo de pagamento
-- Recomendo testar extensivamente em ambiente de desenvolvimento antes de publicar
-- O statement_descriptor já está implementado corretamente no backend
-- Os erros 404 em GET /payments são provavelmente do polling de status (não crítico)
+Se você não quiser modificar o código, pode simplesmente **publicar as alterações** e testar diretamente no site de produção (`prontiasaude.lovable.app` ou `prontiasaude.com.br`).
+
+As Edge Functions de Produção já estão configuradas com CORS correto para esses domínios.
 
 ---
 
-## Próximos Passos
+## Detalhes Técnicos
 
-1. Aprovar este plano para implementação
-2. Modificar o PaymentModal para usar SDK React
-3. Testar fluxo completo de cartão e PIX
-4. Monitorar métricas no painel do MP
+### Por que funciona em Produção mas não no Preview?
+
+O arquivo `supabase/functions/common/cors.ts` no Supabase de Produção permite apenas:
+- `https://prontiasaude.com.br`
+- `https://www.prontiasaude.com.br`
+- `https://prontiasaude.lovable.app`
+- `http://localhost:5173`
+
+Os domínios de preview (`*.lovableproject.com`) **não estão na lista**.
+
+### Solução CORS (se preferir manter tudo em Produção)
+
+Alternativamente, você poderia atualizar o CORS no Supabase de Produção para incluir previews:
+
+```typescript
+// Em supabase/functions/common/cors.ts (Produção)
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/[a-f0-9-]+\.lovableproject\.com$/.test(origin);
+}
+```
+
+Mas isso exigiria deploy manual no Supabase de Produção.
+
+---
+
+## Recomendação
+
+A solução mais rápida é **publicar as alterações** e testar no site publicado. As funções de Produção já funcionam corretamente.
+
+Se você precisar testar no preview com frequência, eu implemento a Solução 1 (detectar ambiente e usar Cloud Functions quando apropriado).
+
