@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { getHybridSession } from "@/lib/auth-hybrid";
-import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { invokeEdgeFunction, invokeCloudEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -10,10 +10,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * ✅ CORREÇÃO: Usar Edge Function (service_role) para evitar violação de RLS
  * em ambientes híbridos (Cloud + Produção) onde o JWT não é reconhecido.
  * 
- * IMPORTANTE: Agora envia o token correto do dbClient para autenticação.
+ * IMPORTANTE: Agora detecta o ambiente e usa a função correta (Cloud ou Produção).
+ * Isso permite que testes no preview do Lovable funcionem corretamente.
  */
-export async function ensurePatientRow(userId: string, dbClient: SupabaseClient = supabase) {
-  console.log('[ensurePatientRow] Chamando edge function para user_id:', userId);
+export async function ensurePatientRow(
+  userId: string, 
+  dbClient: SupabaseClient = supabase,
+  environment: 'cloud' | 'production' = 'cloud'
+) {
+  console.log('[ensurePatientRow] Chamando edge function para user_id:', userId, 'ambiente:', environment);
   
   // ✅ Buscar session/token do cliente correto (Cloud ou Produção)
   const { data: sessionData } = await dbClient.auth.getSession();
@@ -28,8 +33,11 @@ export async function ensurePatientRow(userId: string, dbClient: SupabaseClient 
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
   
-  // ✅ Usar Edge Function que roda com service_role (ignora RLS)
-  const { data, error } = await invokeEdgeFunction('patient-operations', {
+  // ✅ CORREÇÃO: Usar função correta baseado no ambiente
+  // Cloud = preview do Lovable / Produção = site publicado
+  const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
+  
+  const { data, error } = await invokeFunction('patient-operations', {
     body: {
       operation: 'ensure_patient',
       user_id: userId,
