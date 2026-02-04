@@ -2087,7 +2087,7 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key
           })
         },
-        device_id: deviceId || "mp_sdk_auto",
+        device_id: deviceId || undefined,
       };
 
       // Adicionar auto_recurring se for assinatura

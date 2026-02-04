@@ -5,7 +5,7 @@
 // ============================================================
 // ✅ BUILD_ID: Identificador de versão para debug de deploy
 // ============================================================
-const BUILD_ID = 'mp-create-payment@2026-02-03T14:30:00Z-v3';
+const BUILD_ID = 'mp-create-payment@2026-02-04T21:00:00Z-v5';
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 // ✅ ETAPA 2: SDK oficial do Mercado Pago (+5 pontos no dashboard)
@@ -88,6 +88,7 @@ interface PaymentRequest {
   payment_method_id?: string;
   token?: string;
   installments?: number;
+  issuer_id?: string; // ✅ NOVO: Código do banco emissor (+2 pontos qualidade MP)
   metadata: {
     order_id: string;
     schedulePayload?: any;
@@ -227,6 +228,7 @@ Deno.serve(async (req) => {
     // ✅ FASE 6.1: Log detalhado PRE-VALIDAÇÃO
     console.log('[mp-create-payment] 🔒 SECURITY CHECKLIST PRE-VALIDATION:', {
       has_device_id: !!paymentRequest.device_id,
+      has_issuer_id: !!paymentRequest.issuer_id, // ✅ NOVO: Log issuer_id
       has_ip_address: !!clientIp,
       has_payer_email: !!paymentRequest.payer?.email,
       has_payer_cpf: !!paymentRequest.payer?.identification?.number,
@@ -241,9 +243,8 @@ Deno.serve(async (req) => {
     });
 
     // Device ID: avisar se não foi capturado explicitamente, mas não bloquear
-    if (!paymentRequest.device_id || paymentRequest.device_id === 'mp_sdk_auto') {
-      console.warn('[mp-create-payment] ⚠️ Device ID não capturado explicitamente. SDK do MP deve enviar automaticamente.');
-      // Não bloquear - o SDK do MP já está enviando o Device ID nos headers automaticamente
+    if (!paymentRequest.device_id) {
+      console.warn('[mp-create-payment] ⚠️ Device ID não capturado. Antifraude pode recusar.');
     }
     
     // ✅ NOVO: Validar preço usando supabaseAdmin já instanciado acima
@@ -421,6 +422,8 @@ Deno.serve(async (req) => {
       ...(clientIp ? { ip_address: clientIp } : {})
     };
 
+    // ✅ CORREÇÃO v5: Remover city e federal_unit do payer.address
+    // API espera códigos IBGE numéricos, não strings
     const fullAdditionalInfo = {
       items: [
         {
@@ -444,9 +447,8 @@ Deno.serve(async (req) => {
         address: {
           zip_code: finalPayer.address?.zip_code,
           street_name: finalPayer.address?.street_name,
-          street_number: finalPayer.address?.street_number,
-          city: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
-          federal_unit: paymentRequest.payerOverride?.address?.state || (paymentRequest.payer?.address as any)?.state || ''
+          street_number: finalPayer.address?.street_number
+          // ✅ REMOVIDO: city e federal_unit (API espera códigos IBGE numéricos)
         },
         registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
       },
@@ -455,7 +457,8 @@ Deno.serve(async (req) => {
           zip_code: finalPayer.address?.zip_code,
           street_name: finalPayer.address?.street_name,
           street_number: finalPayer.address?.street_number,
-          city: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
+          // ✅ CORREÇÃO v5: Usar city_name ao invés de city
+          city_name: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
           state_name: paymentRequest.payerOverride?.address?.state || (paymentRequest.payer?.address as any)?.state || ''
         }
       },
@@ -530,7 +533,11 @@ Deno.serve(async (req) => {
       paymentData.token = paymentRequest.token;
       paymentData.payment_method_id = paymentRequest.payment_method_id;
       paymentData.installments = paymentRequest.installments || 1;
-      paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ RECOMENDADO: Nome na fatura (+10 pontos)
+      // ✅ CORREÇÃO v5: Adicionar issuer_id (+2 pontos qualidade MP)
+      if (paymentRequest.issuer_id) {
+        paymentData.issuer_id = paymentRequest.issuer_id;
+      }
+      paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ OBRIGATÓRIO: Nome na fatura (+10 pontos)
       
       // ✅ NOVO: Normalização server-side para cartão (apenas se NÃO for override)
       // Declarar variáveis no escopo correto ANTES do if
@@ -596,7 +603,8 @@ Deno.serve(async (req) => {
       console.log('[mp-create-payment] Card payment config:', {
         binary_mode: paymentData.binary_mode,
         three_d_secure_mode: 'optional',
-        is_third_party: !!paymentRequest.payerOverride
+        is_third_party: !!paymentRequest.payerOverride,
+        has_issuer_id: !!paymentRequest.issuer_id // ✅ NOVO: Log issuer_id
       });
     } else {
       // ✅ BLOQUEAR fallback silencioso: cartão sem token é ERRO
@@ -620,8 +628,8 @@ Deno.serve(async (req) => {
     });
 
     // Device ID: avisar se ausente, mas não bloquear (SDK envia automaticamente)
-    if (!paymentRequest.device_id || paymentRequest.device_id === 'mp_sdk_auto') {
-      console.warn('[mp-create-payment] ⚠️ Device ID não explícito. SDK do MP envia automaticamente.');
+    if (!paymentRequest.device_id) {
+      console.warn('[mp-create-payment] ⚠️ Device ID não explícito. Antifraude pode recusar.');
     }
 
     // ✅ ETAPA 2: Inicializar SDK oficial do Mercado Pago
@@ -637,12 +645,14 @@ Deno.serve(async (req) => {
     console.log('[mp-create-payment] 🚀 Using official Mercado Pago SDK (Etapa 1+2 implemented)');
 
     // ============================================================
-    // ✅ DEBUG_CONTEXT: Snapshot antes de chamar o SDK (sem PII)
+    // ✅ DEBUG_CONTEXT v5: Snapshot antes de chamar o SDK (sem PII)
     // ============================================================
     const debug_context = {
       build_id: BUILD_ID,
       selected_flow: isPix ? 'pix' : 'card',
       has_token: !!paymentRequest.token,
+      has_device_id: !!paymentRequest.device_id, // ✅ NOVO v5: Log se device_id existe
+      has_issuer_id: !!paymentRequest.issuer_id, // ✅ NOVO v5: Log se issuer_id existe
       payment_method_id_final: paymentData.payment_method_id,
       additional_info_keys: Object.keys(paymentData.additional_info || {}),
       has_additional_info_payer: !!(paymentData.additional_info?.payer),
@@ -673,7 +683,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ✅ CRÍTICO: Usar SDK v2 com headers corretos via customHeaders
+    // ✅ CORREÇÃO v5: Headers condicionais - só enviar X-meli-session-id se device_id existir
     let mpResponse;
     try {
       mpResponse = await payment.create({
@@ -681,8 +691,9 @@ Deno.serve(async (req) => {
         requestOptions: {
           idempotencyKey: idempotencyKey,
           customHeaders: {
-            'X-meli-session-id': paymentRequest.device_id || '',
-            'X-Forwarded-For': clientIp ?? '',
+            // ✅ CRÍTICO v5: Só enviar X-meli-session-id se device_id existir e for válido
+            ...(paymentRequest.device_id ? { 'X-meli-session-id': paymentRequest.device_id } : {}),
+            ...(clientIp ? { 'X-Forwarded-For': clientIp } : {}),
             'User-Agent': req.headers.get('user-agent') ?? ''
           }
         }
@@ -780,6 +791,7 @@ Deno.serve(async (req) => {
       status_detail: responseData.status_detail,
       '🔒 SECURITY CHECKLIST': {
         '✅ Device ID': !!paymentRequest.device_id ? 'SENT ✓' : '❌ MISSING - HIGH RISK!',
+        '✅ Issuer ID': !!paymentRequest.issuer_id ? 'SENT ✓' : '⚠️ NOT SENT',
         '✅ IP Address': !!clientIp ? `SENT ✓ (${clientIp})` : '⚠️ NOT CAPTURED',
         '✅ Additional Info': !!paymentData.additional_info ? 'COMPLETE ✓' : '⚠️ INCOMPLETE',
         '✅ 3DS Mode': paymentData.three_d_secure_mode || 'NOT SET',
@@ -797,6 +809,7 @@ Deno.serve(async (req) => {
       },
       '⚠️ RISK FACTORS': {
         missing_device_id: !paymentRequest.device_id ? '🔴 YES - CRITICAL' : '✅ NO',
+        missing_issuer_id: !paymentRequest.issuer_id ? '🟡 YES - RECOMMENDED' : '✅ NO',
         missing_ip: !clientIp ? '🟡 YES - MEDIUM RISK' : '✅ NO',
         missing_address: !paymentRequest.payer.address?.zip_code ? '🟡 YES - HIGH RISK' : '✅ NO',
         incomplete_phone: !(paymentData.payer?.phone?.area_code && paymentData.payer?.phone?.number) ? '🟡 YES' : '✅ NO',
@@ -859,7 +872,8 @@ Deno.serve(async (req) => {
         qr_code_base64: responseData.point_of_interaction?.transaction_data?.qr_code_base64,
         ticket_url: responseData.point_of_interaction?.transaction_data?.ticket_url,
         order_id: paymentRequest.metadata?.order_id,
-        build_id: BUILD_ID
+        build_id: BUILD_ID,
+        debug_context // ✅ NOVO v5: Retornar debug_context na resposta
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -873,35 +887,14 @@ Deno.serve(async (req) => {
       stack: error.stack?.substring(0, 500),
       name: error.name
     });
-    
-    // ✅ CORS: Obter origin da requisição para resposta de erro
+
     const requestOrigin = req.headers.get('origin');
     const corsHeaders = getCorsHeaders(requestOrigin);
-    
-    // Mapear erros conhecidos para mensagens amigáveis
-    let userMessage = 'Erro ao criar pagamento. Tente novamente.';
-    let errorCode = 'INTERNAL_ERROR';
-    
-    if (error.message?.includes('Invalid or inactive service SKU')) {
-      userMessage = 'Serviço temporariamente indisponível. Atualize a página e tente novamente.';
-      errorCode = 'INVALID_SKU';
-    } else if (error.message?.includes('Price validation failed')) {
-      userMessage = 'Erro de validação de preço. Atualize a página e tente novamente.';
-      errorCode = 'PRICE_MISMATCH';
-    } else if (error.message?.includes('Missing card token')) {
-      userMessage = 'Dados do cartão incompletos. Preencha novamente.';
-      errorCode = 'MISSING_TOKEN';
-    } else if (error.message?.includes('Mercado Pago API')) {
-      userMessage = 'Gateway de pagamento indisponível. Tente novamente em alguns segundos.';
-      errorCode = 'MP_API_ERROR';
-    }
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: userMessage,
-        error_code: errorCode,
-        error_detail: error.message,
+      JSON.stringify({
+        success: false,
+        error: error.message || 'Internal server error',
         build_id: BUILD_ID
       }),
       { 
