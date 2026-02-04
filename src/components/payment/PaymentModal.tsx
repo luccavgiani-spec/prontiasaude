@@ -15,9 +15,13 @@ import { getAppointments } from "@/lib/appointments";
 import { toast } from "sonner";
 import { PixPaymentForm } from "./PixPaymentForm";
 import { PaymentSummary } from "./PaymentSummary";
+import { MercadoPagoCardForm, type CardFormSubmitData } from "./MercadoPagoCardForm";
 import { MP_PUBLIC_KEY } from "@/lib/constants";
 import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-tracking";
 
+// ✅ SDK React do Mercado Pago é inicializado globalmente em main.tsx
+
+// Declaração global para uso legado (fallback caso SDK React falhe)
 declare global {
   interface Window {
     MercadoPago: any;
@@ -158,6 +162,8 @@ export function PaymentModal({
     state: "",
   });
 
+  // ✅ SDK React do MP agora é inicializado globalmente em main.tsx
+  // Refs mantidas para compatibilidade com lógica legada (serão removidas em refactor futuro)
   const mpInstanceRef = useRef<any>(null);
   const cardPaymentBrickRef = useRef<any>(null);
   const cardPaymentBrickController = useRef<any>(null);
@@ -169,6 +175,10 @@ export function PaymentModal({
   const isMountingRef = useRef(false);
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
+  const [isBrickReady, setIsBrickReady] = useState(false);
+  
+  // ✅ Flag para usar novo componente React SDK vs legado
+  const useNewReactSdk = true;
 
   // ✅ FUNÇÃO: Verificar se o plano foi criado no backend após pagamento
   const verifyPlanCreation = async (
@@ -2785,11 +2795,37 @@ export function PaymentModal({
                         12/25) e que o cartão não esteja vencido.
                       </p>
                     </div>
-                    <div
-                      key={`brick-${paymentMethod}`}
-                      id="cardPaymentBrick"
-                      className="mp-brick-container min-h-[400px]"
-                    ></div>
+                    {/* ✅ NOVO: Usando SDK React oficial do Mercado Pago */}
+                    {useNewReactSdk ? (
+                      <MercadoPagoCardForm
+                        amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                        payerEmail={formData.email}
+                        payerCPF={formData.cpf}
+                        onSubmit={async (data: CardFormSubmitData) => {
+                          await handleCardSubmit({
+                            token: data.token,
+                            payment_method_id: data.payment_method_id,
+                            installments: data.installments,
+                            deviceId: data.deviceId,
+                            payerOverride: data.payerOverride,
+                          });
+                        }}
+                        onReady={() => setIsBrickReady(true)}
+                        onError={(error) => {
+                          console.error("[PaymentModal] Card form error:", error);
+                          setShowBrickRetryButton(true);
+                        }}
+                        isThirdPartyCard={isThirdPartyCard}
+                        payerOverrideData={isThirdPartyCard ? payerData : undefined}
+                        isProcessing={isSubmittingRef.current}
+                      />
+                    ) : (
+                      <div
+                        key={`brick-${paymentMethod}`}
+                        id="cardPaymentBrick"
+                        className="mp-brick-container min-h-[400px]"
+                      ></div>
+                    )}
 
                     {/* Botão de retry quando Brick apresentar erro de validação */}
                     {showBrickRetryButton && (
@@ -3040,11 +3076,37 @@ export function PaymentModal({
                         12/25) e que o cartão não esteja vencido.
                       </p>
                     </div>
-                    <div
-                      key={`brick-${paymentMethod}`}
-                      id="cardPaymentBrick"
-                      className="mp-brick-container min-h-[400px]"
-                    ></div>
+                    {/* ✅ NOVO: Usando SDK React oficial do Mercado Pago */}
+                    {useNewReactSdk ? (
+                      <MercadoPagoCardForm
+                        amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                        payerEmail={formData.email}
+                        payerCPF={formData.cpf}
+                        onSubmit={async (data: CardFormSubmitData) => {
+                          await handleCardSubmit({
+                            token: data.token,
+                            payment_method_id: data.payment_method_id,
+                            installments: data.installments,
+                            deviceId: data.deviceId,
+                            payerOverride: data.payerOverride,
+                          });
+                        }}
+                        onReady={() => setIsBrickReady(true)}
+                        onError={(error) => {
+                          console.error("[PaymentModal] Card form error:", error);
+                          setShowBrickRetryButton(true);
+                        }}
+                        isThirdPartyCard={isThirdPartyCard}
+                        payerOverrideData={isThirdPartyCard ? payerData : undefined}
+                        isProcessing={isSubmittingRef.current}
+                      />
+                    ) : (
+                      <div
+                        key={`brick-${paymentMethod}`}
+                        id="cardPaymentBrick"
+                        className="mp-brick-container min-h-[400px]"
+                      ></div>
+                    )}
 
                     {/* Botão de retry quando Brick apresentar erro de validação */}
                     {showBrickRetryButton && (
