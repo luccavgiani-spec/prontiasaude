@@ -1,6 +1,7 @@
 {
   "imports": {
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.56.1",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.49.1",
+    "@supabase/gotrue-js": "npm:@supabase/gotrue-js@2.64.2",
     "zod": "npm:zod@3.22.4"
   }
 }
