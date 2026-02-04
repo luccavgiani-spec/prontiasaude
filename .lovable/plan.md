@@ -1,93 +1,153 @@
 
-Contexto e diagnóstico (o que está acontecendo)
-- O código atual do mp-create-payment (no repositório) faz a sanitização do PIX corretamente: ele reconstrói paymentData.additional_info para conter apenas items e ip_address antes de chamar payment.create().
-- Mesmo assim, o Mercado Pago ainda acusa parâmetros inválidos dentro de additional_info.* (payer.address.city / federal_unit / shipments.receiver_address.city).
-- Isso só pode acontecer em 2 cenários:
-  1) O código “novo” não é o que está realmente executando (deploy não está refletindo na função chamada), ou
-  2) A execução está indo por um caminho diferente do esperado (ex.: fluxo de cartão por causa de token presente), ou algum ponto do código ainda está enviando um body diferente do paymentData sanitizado.
+# Plano de Correção: Redirecionamento Incorreto + Renomeação de Especialidades
 
-Objetivo deste ajuste
-- Provar, sem depender de logs do servidor, qual versão do código está rodando e qual payload efetivamente está sendo enviado ao SDK no momento do erro.
-- Garantir “à prova de falhas” que, para PIX, additional_info jamais contenha payer/shipments (nem por construção inicial).
+## Problema 1: Redirecionamento Incorreto para Área do Paciente
 
-1) ARQUIVOS QUE SERÃO MODIFICADOS
-- supabase/functions/mp-create-payment/index.ts
+### Diagnóstico
+O bug ocorre porque o componente `MedicosEspecialistas.tsx` usa **apenas o cliente Cloud** (`supabase`) para verificar a sessão do usuário:
 
-2) MOTIVO (baseado no seu relato)
-- Você está fazendo copy/paste + deploy em Produção e o comportamento “não muda”.
-- Precisamos de um “selo de versão” retornando no JSON de erro/sucesso para confirmar que a versão nova está em execução e, ao mesmo tempo, registrar (sem PII) quais chaves existem em additional_info imediatamente antes do SDK.
+```typescript
+// Linha 93 - PROBLEMA: Usa apenas cliente Cloud
+const { data: { user } } = await supabase.auth.getUser();
+```
 
-3) ESCOPO (exatamente o que será alterado)
-A) Adicionar um identificador fixo de build/versão (BUILD_ID)
-- Criar uma constante (ex.: BUILD_ID = "mp-create-payment@2026-02-03Txx:xxZ") no topo do arquivo.
-- Incluir build_id em todas as respostas JSON (sucesso e erro), incluindo o bloco de erro SDK_EXCEPTION (status 500).
-Resultado: quando você testar e receber o erro no frontend, você verá build_id no response e confirmará instantaneamente se o código que você colou está rodando.
+Usuários autenticados na **Produção** (a maioria dos usuários reais) não são encontrados pelo cliente Cloud, fazendo com que `user` seja `null` e o fluxo caia na condição de "não logado" (linha 95-106), redirecionando erroneamente para `/area-do-paciente`.
 
-B) Determinar “isPix” antes de montar additional_info
-- Hoje o código monta additional_info completo (com payer.address.city etc) e depois tenta sanitizar no bloco PIX.
-- Vamos tornar impossível “escapar” campo proibido:
-  - Definir isPix logo antes da construção de paymentData (com a mesma regra atual):
-    - isPix = paymentRequest.payment_method_id === 'pix' || (!paymentRequest.token && !paymentRequest.payment_method_id)
-  - Ao construir paymentData.additional_info:
-    - Se isPix: criar additional_info mínimo desde o início: { items: [...], ...(clientIp? { ip_address: clientIp } : {}) }
-    - Se não for PIX: manter o additional_info completo atual (com payer/shipments/city/federal_unit etc) para antifraude no cartão
-Resultado: para PIX, nem existe payer/shipments dentro de additional_info em nenhum momento.
+O mesmo problema existe no componente `ServicoCard.tsx` (linhas 81, 96, 142, 160, 185, 235, 253, 277).
 
-C) “Asserção” final antes de chamar o SDK (debug sem PII)
-- Logo antes de payment.create({ body: paymentData, ... }):
-  - Computar um snapshot de debug (sem valores sensíveis), por exemplo:
-    - selected_flow: 'pix' | 'card'
-    - has_token: boolean
-    - payment_method_id_final: paymentData.payment_method_id
-    - additional_info_keys: Object.keys(paymentData.additional_info || {})
-    - has_additional_info_payer: !!paymentData.additional_info?.payer
-    - has_additional_info_shipments: !!paymentData.additional_info?.shipments
-  - Se paymentData.payment_method_id === 'pix' e (has_additional_info_payer || has_additional_info_shipments):
-    - lançar um Error com mensagem clara do tipo:
-      "PIX additional_info leak: keys=..., has_payer=true, has_shipments=true"
-Resultado: se por algum motivo impossível o payload estiver “vazando”, o erro vira nosso (com debug), e não um erro misterioso do MP.
+### Solução
+Implementar a mesma estratégia híbrida usada em `HeroSection.tsx` e `ConsultNowFloatButton.tsx`:
 
-D) Incluir debug_context no retorno de erro do SDK_EXCEPTION (sem PII)
-- No catch (sdkError) que retorna status 500:
-  - Retornar também:
-    - build_id
-    - debug_context (as chaves/booleans acima)
-Resultado: mesmo sem acessar logs do servidor, você verá no response exatamente:
-- qual build está rodando
-- se o fluxo foi pix ou card
-- quais chaves existiam em additional_info ao chamar o SDK
+1. Usar `getHybridSession()` para detectar o ambiente correto (Cloud ou Produção)
+2. Usar o cliente de banco de dados correto baseado no ambiente detectado
 
-4) Passo-a-passo de implementação (dentro do mp-create-payment/index.ts)
-1. Adicionar no topo:
-   - const BUILD_ID = 'mp-create-payment@...'
-2. Criar const isPix antes de montar paymentData (perto de onde hoje você monta paymentData).
-3. Alterar a construção do paymentData.additional_info para:
-   - isPix ? minimalAdditionalInfo : fullAdditionalInfo
-4. Manter a sanitização PIX atual como “segunda barreira” (opcional, mas recomendado):
-   - Mesmo com additional_info mínimo, manter uma sanitização final simples (reconstruir para items/ip) para redundância.
-5. Antes de payment.create:
-   - criar debug_context
-   - console.log do debug_context (sem PII)
-   - asserção anti-vazamento (throw) se PIX contiver payer/shipments
-6. Incluir build_id + debug_context no JSON do SDK_EXCEPTION e também no catch geral de erro (INTERNAL_ERROR etc).
-7. Incluir build_id no response de sucesso (200) também.
+### Arquivos a Modificar
+1. **`src/pages/servicos/MedicosEspecialistas.tsx`**
+   - Importar `getHybridSession` e `supabaseProductionAuth`
+   - Substituir `supabase.auth.getUser()` por `getHybridSession()`
+   - Usar cliente correto para queries de paciente
 
-5) Critérios de aceite
-- Após você colar + fazer deploy em Produção:
-  1) No response do erro (se ainda ocorrer), deve aparecer build_id diferente do anterior.
-     - Se build_id não mudar: o deploy não está atingindo a função que o site está chamando.
-  2) O debug_context deve mostrar:
-     - selected_flow = 'pix'
-     - has_additional_info_payer = false
-     - has_additional_info_shipments = false
-     - additional_info_keys = ['items'] ou ['items','ip_address']
-  3) Com isso, o erro do Mercado Pago sobre additional_info.payer/shipment deve desaparecer e o PIX deve retornar point_of_interaction/qr_code.
+2. **`src/components/home/ServicoCard.tsx`**
+   - Mesmo padrão: usar sessão híbrida em todas as verificações de auth
 
-6) Riscos / Observações
-- Mudança é restrita ao fluxo PIX para reduzir risco: cartão permanece com additional_info completo (antifraude).
-- O retorno de debug_context será “sem PII” (somente chaves e booleanos), seguro para diagnóstico.
-- Se mesmo com build_id atualizado o MP continuar reclamando e debug_context confirmar additional_info mínimo, então o problema estará fora do additional_info (ex.: algum mapeamento do SDK), e teremos evidência concreta para o próximo passo.
+---
 
-7) Confirmação (regra absoluta)
-- Arquivos que serão modificados: apenas supabase/functions/mp-create-payment/index.ts
-- Estas alterações estão explicitamente solicitadas? SIM (você reportou erro PIX persistente e pediu correção no mp-create-payment com efeito verificável)
+## Problema 2: Renomeação de Especialidades
+
+### Requisito
+Trocar nomes de profissionais para áreas da medicina:
+- "Neurologista" → "Neurologia"
+- "Urologista" → "Urologia"
+- "Cardiologista" → "Cardiologia"
+- "Dermatologista" → "Dermatologia"
+- "Endocrinologista" → "Endocrinologia"
+- "Gastroenterologista" → "Gastroenterologia"
+- "Ginecologista" → "Ginecologia"
+- "Oftalmologista" → "Oftalmologia"
+- "Ortopedista" → "Ortopedia"
+- "Otorrinolaringologista" → "Otorrinolaringologia"
+- "Reumatologista" → "Reumatologia"
+- "Infectologista" → "Infectologia"
+- "Psiquiatra" → "Psiquiatria"
+- "Nutrólogo" → "Nutrologia"
+- "Geriatria" → já está correto
+- "Personal Trainer" → manter (não é especialidade médica)
+- "Nutricionista" → "Nutrição"
+- "Pediatra" → "Pediatria"
+- "Médico da Família" → "Medicina da Família"
+
+### Arquivos a Modificar
+1. **`src/lib/constants.ts`** - Fonte principal (variantes de `medicos_especialistas` e lista `inclui`)
+2. **`src/lib/specialties-config.ts`** - Lista `ALL_SPECIALTIES` usada para roteamento
+
+---
+
+## Detalhamento Técnico
+
+### Correção do MedicosEspecialistas.tsx
+
+**Antes (bugado):**
+```typescript
+const { data: { user } } = await supabase.auth.getUser();
+
+if (!user) {
+  // Redireciona para login - BUG: usuários Produção caem aqui
+}
+
+const { data: patient } = await supabase
+  .from('patients')
+  .select('profile_complete')
+  .eq('user_id', user.id)
+  .maybeSingle();
+```
+
+**Depois (corrigido):**
+```typescript
+import { getHybridSession, supabaseProductionAuth } from '@/lib/auth-hybrid';
+import { supabaseProduction } from '@/lib/supabase-production';
+
+// Na função handleAgendar:
+const { session, environment } = await getHybridSession();
+const user = session?.user;
+
+if (!user) {
+  // Agora só cai aqui se realmente não estiver logado em nenhum ambiente
+}
+
+// Usar cliente correto baseado no ambiente
+const client = environment === 'production' ? supabaseProduction : supabase;
+
+const { data: patient } = await client
+  .from('patients')
+  .select('profile_complete')
+  .eq('user_id', user.id)
+  .maybeSingle();
+```
+
+### Correção do ServicoCard.tsx
+
+Mesma lógica: substituir todas as chamadas `supabase.auth.getUser()` por `getHybridSession()` e usar o cliente correto para queries.
+
+### Renomeação em constants.ts
+
+```typescript
+variantes: [
+  { valor: 54.99, nome: "Personal Trainer", sku: "BIR7668" },
+  { valor: 59.90, nome: "Nutrição", sku: "VPN5132" },           // Era "Nutricionista"
+  { valor: 129.90, nome: "Reumatologia", sku: "UDH3250" },      // Era "Reumatologista"
+  { valor: 129.90, nome: "Neurologia", sku: "PKS9388" },        // Era "Neurologista"
+  { valor: 129.90, nome: "Infectologia", sku: "MYX5186" },      // Era "Infectologista"
+  { valor: 119.90, nome: "Nutrologia", sku: "LZF3879" },        // Era "Nutrólogo"
+  { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },         // Já estava correto
+  { valor: 109.90, nome: "Urologia", sku: "URO1099" },          // Era "Urologista"
+  { valor: 89.90, nome: "Cardiologia", sku: "TQP5720" },        // Era "Cardiologista"
+  { valor: 89.90, nome: "Dermatologia", sku: "HGG3503" },       // Era "Dermatologista"
+  { valor: 89.90, nome: "Endocrinologia", sku: "VHH8883" },     // Era "Endocrinologista"
+  { valor: 89.90, nome: "Gastroenterologia", sku: "TSB0751" },  // Era "Gastroenterologista"
+  { valor: 89.90, nome: "Ginecologia", sku: "CCP1566" },        // Era "Ginecologista"
+  { valor: 89.90, nome: "Oftalmologia", sku: "FKS5964" },       // Era "Oftalmologista"
+  { valor: 89.90, nome: "Ortopedia", sku: "TVQ5046" },          // Era "Ortopedista"
+  { valor: 89.90, nome: "Pediatria", sku: "HMG9544" },          // Era "Pediatra"
+  { valor: 89.90, nome: "Otorrinolaringologia", sku: "HME8366" },// Era "Otorrinolaringologista"
+  { valor: 89.90, nome: "Medicina da Família", sku: "DYY8522" },// Era "Médico da Família"
+  { valor: 89.90, nome: "Psiquiatria", sku: "QOP1101" }         // Era "Psiquiatra"
+]
+```
+
+---
+
+## Resumo das Alterações
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/servicos/MedicosEspecialistas.tsx` | Usar `getHybridSession()` + cliente correto |
+| `src/components/home/ServicoCard.tsx` | Usar `getHybridSession()` + cliente correto |
+| `src/lib/constants.ts` | Renomear especialidades nas `variantes` e `inclui` |
+| `src/lib/specialties-config.ts` | Renomear especialidades em `ALL_SPECIALTIES` |
+
+---
+
+## Impacto
+
+- **Bug de redirecionamento**: Usuários logados na Produção agora serão corretamente identificados e poderão prosseguir para o checkout
+- **Nomenclatura**: O dropdown de especialidades e todos os textos relacionados exibirão os nomes das áreas médicas ao invés dos profissionais
