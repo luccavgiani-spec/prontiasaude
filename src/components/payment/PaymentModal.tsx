@@ -39,18 +39,56 @@ function sanitizeMpDeviceId(raw: unknown): string | null {
   return value;
 }
 
+function readCookie(name: string): string | null {
+  try {
+    const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+    return match ? decodeURIComponent(match[2]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findInStorage(keys: string[]): string | null {
+  const storages: Storage[] = [];
+  try {
+    storages.push(localStorage);
+  } catch {}
+  try {
+    storages.push(sessionStorage);
+  } catch {}
+
+  for (const st of storages) {
+    for (const k of keys) {
+      const v = st.getItem(k);
+      const s = sanitizeMpDeviceId(v);
+      if (s) return s;
+    }
+  }
+  return null;
+}
+
 function getMpDeviceSessionId(): string | null {
-  // 1) Preferir o ID atual injetado pelo script de segurança
+  // 1) Variável global (quando existir)
   const fromWindow = sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
   if (fromWindow) return fromWindow;
 
-  // 2) Fallback: última captura persistida localmente
-  try {
-    const fromStorage = sanitizeMpDeviceId(localStorage.getItem("mp_device_session_id"));
-    if (fromStorage) return fromStorage;
-  } catch {
-    // ignore
+  // 2) Alguns ambientes gravam em cookie
+  const cookieKeys = ["MP_DEVICE_SESSION_ID", "mp_device_session_id", "meli_session_id", "x-meli-session-id"];
+  for (const ck of cookieKeys) {
+    const cval = sanitizeMpDeviceId(readCookie(ck));
+    if (cval) return cval;
   }
+
+  // 3) Fallback em storage (persistência)
+  const storageKeys = [
+    "mp_device_session_id",
+    "MP_DEVICE_SESSION_ID",
+    "meli_session_id",
+    "x-meli-session-id",
+    "mp_device_id",
+  ];
+  const fromStorage = findInStorage(storageKeys);
+  if (fromStorage) return fromStorage;
 
   return null;
 }
@@ -190,25 +228,29 @@ export function PaymentModal({
   useEffect(() => {
     if (!open) return;
 
-    const tryCapture = () => {
+    const tryCapture = (source: string) => {
       const id = getMpDeviceSessionId();
       if (id) {
         setDeviceId(id);
         persistMpDeviceSessionId(id);
+        console.log("[PaymentModal] ✅ MP device_id capturado:", { source, id });
         return true;
       }
       return false;
     };
 
     // 1) tentativa imediata
-    if (tryCapture()) return;
+    if (tryCapture("immediate")) return;
 
-    // 2) fallback: aguardar o script carregar (até ~5s)
+    // 2) fallback: aguardar security.js e/ou escrita em cookie/storage (até ~10s)
     let attempts = 0;
     const interval = setInterval(() => {
       attempts += 1;
-      if (tryCapture() || attempts >= 20) {
+      if (tryCapture("interval") || attempts >= 40) {
         clearInterval(interval);
+        if (attempts >= 40) {
+          console.warn("[PaymentModal] ⚠️ MP device_id não encontrado após 10s (security.js/cookies).");
+        }
       }
     }, 250);
 
