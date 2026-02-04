@@ -1598,6 +1598,7 @@ export function PaymentModal({
         },
         token: cardFormData.token,
         payment_method_id: cardFormData.payment_method_id,
+        issuer_id: cardFormData.issuer_id, // ✅ NOVO: Enviar código do emissor (+2 pontos qualidade)
         installments: cardFormData.installments || 1,
         metadata: {
           order_id: orderId,
@@ -1613,8 +1614,8 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key
           })
         },
-        // ✅ CORREÇÃO: Usar deviceId do cardFormData (que agora tem valor recém-capturado)
-        device_id: cardFormData.deviceId || deviceId || "mp_sdk_auto",
+        // ✅ CORREÇÃO: Usar deviceId do cardFormData real, sem fallback inválido
+        device_id: cardFormData.deviceId || deviceId || undefined,
         // ✅ ADICIONADO: Enviar payerOverride para titular de terceiro
         payerOverride: cardFormData.payerOverride,
       };

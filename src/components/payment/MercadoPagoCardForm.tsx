@@ -48,6 +48,7 @@ export interface CardFormSubmitData {
   token: string;
   payment_method_id: string;
   installments: number;
+  issuer_id?: string; // ✅ NOVO: Código do banco emissor (+2 pontos qualidade MP)
   deviceId?: string;
   additionalData?: IAdditionalData;
   payerOverride?: {
@@ -68,6 +69,17 @@ export interface CardFormSubmitData {
     };
   };
 }
+
+// ✅ CORREÇÃO: Capturar Device ID da variável global do SDK
+const getDeviceId = (): string | undefined => {
+  if (typeof window !== 'undefined') {
+    // O SDK React do Mercado Pago cria estas variáveis globais automaticamente
+    return (window as any).MP_DEVICE_SESSION_ID || 
+           (window as any).deviceId ||
+           undefined;
+  }
+  return undefined;
+};
 
 interface MercadoPagoCardFormProps {
   amount: number; // em centavos
@@ -164,7 +176,8 @@ export function MercadoPagoCardForm({
           token: formData.token,
           payment_method_id: formData.payment_method_id,
           installments: formData.installments,
-          deviceId: undefined, // SDK gerencia automaticamente
+          issuer_id: formData.issuer_id, // ✅ NOVO: Enviar código do emissor (+2 pontos)
+          deviceId: getDeviceId(), // ✅ CORREÇÃO: Capturar Device ID real da variável global
           additionalData,
           payerOverride,
         });
