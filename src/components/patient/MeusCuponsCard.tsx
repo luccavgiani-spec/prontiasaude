@@ -6,8 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession } from "@/lib/auth-hybrid";
 import { Copy, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
 interface Coupon {
   id: string;
   code: string;
@@ -26,19 +29,31 @@ export function MeusCuponsCard() {
   useEffect(() => {
     loadCoupons();
   }, []);
+
+  // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
   const loadCoupons = async () => {
     try {
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
-      if (!user) return;
-      const {
-        data,
-        error
-      } = await supabase.from('user_coupons').select('*').eq('owner_user_id', user.id).eq('is_active', true);
+      const { session, environment } = await getHybridSession();
+      const user = session?.user;
+      
+      if (!user) {
+        setIsLoadingCoupons(false);
+        return;
+      }
+      
+      console.log('[MeusCuponsCard] Carregando cupons do ambiente:', environment);
+      
+      // ✅ CORREÇÃO: Usar cliente correto baseado no ambiente
+      const client = environment === 'production' ? supabaseProduction : supabase;
+      
+      const { data, error } = await client
+        .from('user_coupons')
+        .select('*')
+        .eq('owner_user_id', user.id)
+        .eq('is_active', true);
+        
       if (error) throw error;
+      
       if (data) {
         const service = data.find(c => c.coupon_type === 'SERVICE');
         const plan = data.find(c => c.coupon_type === 'PLAN');
@@ -82,45 +97,58 @@ export function MeusCuponsCard() {
       setPendingCouponType(null);
     }
   };
+  // ✅ CORREÇÃO: Usar sessão híbrida e cliente correto para criar cupons
   const createCoupon = async (type: 'SERVICE' | 'PLAN') => {
     try {
       setIsGenerating(true);
-      const {
-        data: {
-          user
-        }
-      } = await supabase.auth.getUser();
+      
+      // ✅ Usar sessão híbrida
+      const { session, environment } = await getHybridSession();
+      const user = session?.user;
+      
       if (!user) {
         toast.error("Você precisa estar logado");
         return;
       }
 
+      // ✅ Usar cliente correto baseado no ambiente
+      const client = environment === 'production' ? supabaseProduction : supabase;
+
       // Buscar nome do paciente
-      const {
-        data: patient
-      } = await supabase.from('patients').select('first_name').eq('user_id', user.id).single();
+      const { data: patient } = await client
+        .from('patients')
+        .select('first_name')
+        .eq('user_id', user.id)
+        .single();
+        
       const userName = patient?.first_name || 'USER';
       const code = generateCouponCode(userName, user.id, type);
       const discountPercentage = 5;
 
       // Tentar criar cupom
-      const {
-        data,
-        error
-      } = await supabase.from('user_coupons').insert({
-        owner_user_id: user.id,
-        code,
-        coupon_type: type,
-        discount_percentage: discountPercentage,
-        pix_key: pixKey,
-        is_active: true
-      }).select().single();
+      const { data, error } = await client
+        .from('user_coupons')
+        .insert({
+          owner_user_id: user.id,
+          code,
+          coupon_type: type,
+          discount_percentage: discountPercentage,
+          pix_key: pixKey,
+          is_active: true
+        })
+        .select()
+        .single();
+        
       if (error) {
         // Se erro de unique constraint, buscar o cupom existente
         if (error.code === '23505') {
-          const {
-            data: existing
-          } = await supabase.from('user_coupons').select('*').eq('owner_user_id', user.id).eq('coupon_type', type).single();
+          const { data: existing } = await client
+            .from('user_coupons')
+            .select('*')
+            .eq('owner_user_id', user.id)
+            .eq('coupon_type', type)
+            .single();
+            
           if (existing) {
             if (type === 'SERVICE') {
               setServiceCoupon(existing);

@@ -2307,13 +2307,20 @@ export function PaymentModal({
       // Determinar tipo de item (SERVICE ou PLAN)
       const itemType = sku.startsWith('IND_') || sku.startsWith('FAM_') ? 'PLAN' : 'SERVICE';
       
+      // ✅ CORREÇÃO: Usar sessão híbrida para obter user_id correto do ambiente certo
+      const { session } = await getHybridSession();
+      const userId = session?.user?.id;
+      
+      console.log('[handleApplyCoupon] Validando cupom:', { couponCode, itemType, userId, email: formData.email });
+      
       // Chamar edge function validate-coupon
       const { data, error } = await invokeEdgeFunction('validate-coupon', {
         body: {
           coupon_code: couponCode,
           item_type: itemType,
           amount_original: amount, // em centavos
-          user_id: (await supabase.auth.getUser()).data.user?.id,
+          user_id: userId, // ✅ Agora vem do ambiente correto
+          user_email: formData.email, // ✅ NOVO: Enviar email como fallback para verificação
           sku: sku // SKU para validação de restrição por serviço
         }
       });

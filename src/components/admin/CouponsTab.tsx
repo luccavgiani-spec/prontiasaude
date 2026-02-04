@@ -281,9 +281,10 @@ export function CouponsTab() {
     }
   };
 
+  // ✅ CORREÇÃO: Usar supabaseProduction para operações de escrita (leitura já usa)
   const handleToggleCoupon = async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
+      const { error } = await supabaseProduction
         .from('user_coupons')
         .update({ is_active: !currentStatus })
         .eq('id', id);
@@ -302,7 +303,8 @@ export function CouponsTab() {
     if (!couponToDelete) return;
 
     try {
-      const { error } = await supabase
+      // ✅ CORREÇÃO: Usar supabaseProduction para escrita
+      const { error } = await supabaseProduction
         .from('user_coupons')
         .delete()
         .eq('id', couponToDelete);
@@ -322,9 +324,11 @@ export function CouponsTab() {
 
   const handleToggleReviewed = async (id: string, currentStatus: boolean) => {
     try {
+      // Pegar user do Cloud para identificação (apenas para log)
       const { data: { user } } = await supabase.auth.getUser();
       
-      const { error } = await supabase
+      // ✅ CORREÇÃO: Usar supabaseProduction para escrita
+      const { error } = await supabaseProduction
         .from('coupon_uses')
         .update({
           reviewed: !currentStatus,

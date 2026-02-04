@@ -20,6 +20,7 @@ const ValidateCouponSchema = z.object({
     .positive('Valor deve ser positivo')
     .max(10000000, 'Valor máximo excedido'), // 100k reais in centavos
   user_id: z.string().uuid('ID de usuário inválido').optional(),
+  user_email: z.string().email('Email inválido').optional(), // ✅ NOVO: Email para verificação de uso duplicado
   sku: z.string().optional(), // SKU do serviço/plano para validação de restrição
 });
 
@@ -76,9 +77,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { coupon_code, item_type, amount_original, user_id, sku } = validationResult.data;
+    const { coupon_code, item_type, amount_original, user_id, user_email, sku } = validationResult.data;
 
-    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id, sku });
+    console.log('[validate-coupon] Request:', { coupon_code, item_type, amount_original, user_id, user_email, sku });
 
     // Buscar cupom no banco
     const { data: coupon, error: couponError } = await supabase
@@ -146,7 +147,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Verificar se o usuário já usou este cupom
+    // ✅ CORREÇÃO: Verificar se o usuário já usou este cupom (por user_id OU por email)
     if (user_id) {
       const { data: existingUse, error: useError } = await supabase
         .from('coupon_uses')
@@ -156,15 +157,40 @@ Deno.serve(async (req) => {
         .limit(1);
 
       if (useError) {
-        console.log('[validate-coupon] Erro ao verificar uso anterior:', useError);
+        console.log('[validate-coupon] Erro ao verificar uso anterior por user_id:', useError);
       }
 
       if (existingUse && existingUse.length > 0) {
-        console.log('[validate-coupon] Usuário já usou este cupom');
+        console.log('[validate-coupon] Usuário já usou este cupom (por user_id)');
         return new Response(
           JSON.stringify({
             is_valid: false,
             error_message: 'Você já usou este cupom anteriormente',
+          } as ValidateCouponResponse),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ✅ NOVO: Verificar também por email (fallback para quando user_id é null ou diferente)
+    if (user_email) {
+      const { data: existingUseByEmail, error: emailUseError } = await supabase
+        .from('coupon_uses')
+        .select('id')
+        .eq('coupon_id', coupon.id)
+        .eq('used_by_email', user_email.toLowerCase())
+        .limit(1);
+
+      if (emailUseError) {
+        console.log('[validate-coupon] Erro ao verificar uso anterior por email:', emailUseError);
+      }
+
+      if (existingUseByEmail && existingUseByEmail.length > 0) {
+        console.log('[validate-coupon] Email já usou este cupom:', user_email);
+        return new Response(
+          JSON.stringify({
+            is_valid: false,
+            error_message: 'Este email já usou este cupom anteriormente',
           } as ValidateCouponResponse),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );

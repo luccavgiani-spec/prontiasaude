@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabaseProduction } from "@/lib/supabase-production";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
@@ -50,8 +51,9 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
     setIsLoading(true);
 
     try {
+      // ✅ CORREÇÃO: Usar supabaseProduction para verificar e criar cupons no banco de produção
       // 1. Verificar se código já existe
-      const { data: existing } = await supabase
+      const { data: existing } = await supabaseProduction
         .from('user_coupons')
         .select('code')
         .eq('code', formData.code.toUpperCase())
@@ -67,8 +69,8 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
       let ownerId: string;
 
       if (formData.ownerEmail.trim()) {
-        // Buscar paciente pelo email
-        const { data: patient } = await supabase
+        // ✅ CORREÇÃO: Buscar paciente no banco de produção
+        const { data: patient } = await supabaseProduction
           .from('patients')
           .select('id')
           .eq('email', formData.ownerEmail.trim())
@@ -83,6 +85,7 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
         ownerId = patient.id;
       } else {
         // Buscar patient.id correspondente ao admin logado
+        // Nota: auth continua no Cloud, mas buscamos patient na Produção
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           toast.error("Erro ao identificar usuário admin!");
@@ -90,8 +93,8 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
           return;
         }
         
-        // Buscar patient.id do admin
-        const { data: adminPatient } = await supabase
+        // ✅ CORREÇÃO: Buscar patient.id do admin no banco de produção
+        const { data: adminPatient } = await supabaseProduction
           .from('patients')
           .select('id')
           .eq('user_id', user.id)
@@ -106,8 +109,8 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
         }
       }
 
-      // 3. Inserir cupom
-      const { error } = await supabase
+      // ✅ CORREÇÃO: Inserir cupom no banco de produção
+      const { error } = await supabaseProduction
         .from('user_coupons')
         .insert({
           owner_user_id: ownerId,
