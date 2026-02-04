@@ -19,6 +19,49 @@ import { MercadoPagoCardForm, type CardFormSubmitData } from "./MercadoPagoCardF
 import { MP_PUBLIC_KEY } from "@/lib/constants";
 import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-tracking";
 
+// ============================================================
+// ✅ Mercado Pago Device Session ID (para pontuação de qualidade e antifraude)
+// - O script de segurança (security.js) define window.MP_DEVICE_SESSION_ID
+// - Mantemos fallback em localStorage para consistência entre páginas
+// ============================================================
+
+declare global {
+  interface Window {
+    MP_DEVICE_SESSION_ID?: string;
+  }
+}
+
+function sanitizeMpDeviceId(raw: unknown): string | null {
+  const value = typeof raw === "string" ? raw.trim() : "";
+  if (!value) return null;
+  // Regra conservadora: aceitar apenas alfanum + "-" "_" "." ":" (evita lixo)
+  if (!/^[A-Za-z0-9._:-]{10,200}$/.test(value)) return null;
+  return value;
+}
+
+function getMpDeviceSessionId(): string | null {
+  // 1) Preferir o ID atual injetado pelo script de segurança
+  const fromWindow = sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
+  if (fromWindow) return fromWindow;
+
+  // 2) Fallback: última captura persistida localmente
+  try {
+    const fromStorage = sanitizeMpDeviceId(localStorage.getItem("mp_device_session_id"));
+    if (fromStorage) return fromStorage;
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+function persistMpDeviceSessionId(id: string) {
+  try {
+    localStorage.setItem("mp_device_session_id", id);
+  } catch {
+    // ignore
+  }
+}
 // ✅ SDK React do Mercado Pago é inicializado globalmente em main.tsx
 
 // Declaração global para uso legado (fallback caso SDK React falhe)
@@ -148,6 +191,36 @@ export function PaymentModal({
     }
   }, [open]);
 
+  // ✅ Captura o Device Session ID do Mercado Pago (security.js) assim que o modal abre.
+  // Isso melhora a pontuação de "Identificador do dispositivo" e reduz recusas por antifraude.
+  useEffect(() => {
+    if (!open) return;
+
+    const tryCapture = () => {
+      const id = getMpDeviceSessionId();
+      if (id) {
+        setDeviceId(id);
+        persistMpDeviceSessionId(id);
+        return true;
+      }
+      return false;
+    };
+
+    // 1) tentativa imediata
+    if (tryCapture()) return;
+
+    // 2) fallback: aguardar o script carregar (até ~5s)
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts += 1;
+      if (tryCapture() || attempts >= 20) {
+        clearInterval(interval);
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [open]);
+
   // Estados para cartão de terceiros
   const [isThirdPartyCard, setIsThirdPartyCard] = useState(false);
   const [payerData, setPayerData] = useState<PayerFormData>({
@@ -176,7 +249,7 @@ export function PaymentModal({
   const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
-  
+
   // ✅ Flag para usar novo componente React SDK vs legado
   const useNewReactSdk = true;
 
@@ -186,58 +259,58 @@ export function PaymentModal({
     orderId: string,
     email: string,
     planSku: string,
-    maxRetries = 5
+    maxRetries = 5,
   ): Promise<boolean> => {
     console.log("[verifyPlanCreation] 🔍 Iniciando verificação de plano:", { paymentId, orderId, email, planSku });
-    
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       console.log(`[verifyPlanCreation] Tentativa ${attempt + 1}/${maxRetries}...`);
-      
+
       // 1. Forçar processamento via check-payment-status (usando produção)
       try {
         // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
-        const { data: checkResult, error: checkError } = await invokeEdgeFunction('check-payment-status', {
-          body: { payment_id: paymentId, order_id: orderId, email }
+        const { data: checkResult, error: checkError } = await invokeEdgeFunction("check-payment-status", {
+          body: { payment_id: paymentId, order_id: orderId, email },
         });
-        
+
         if (checkError) {
-          console.warn('[verifyPlanCreation] Erro no check-payment-status:', checkError);
+          console.warn("[verifyPlanCreation] Erro no check-payment-status:", checkError);
         } else if (checkResult?.is_plan && checkResult?.success) {
-          console.log('[verifyPlanCreation] ✅ Plano confirmado pelo check-payment-status');
+          console.log("[verifyPlanCreation] ✅ Plano confirmado pelo check-payment-status");
           return true;
         }
       } catch (e) {
-        console.warn('[verifyPlanCreation] Exceção no check-payment-status:', e);
+        console.warn("[verifyPlanCreation] Exceção no check-payment-status:", e);
       }
-      
+
       // 2. Verificar diretamente no banco (usando produção)
       try {
         // ✅ CORREÇÃO: Usar supabaseProduction para ler dados reais
         const { data: plan, error: planError } = await supabaseProduction
-          .from('patient_plans')
-          .select('id, plan_code')
-          .eq('email', email.toLowerCase())
-          .eq('plan_code', planSku)
-          .eq('status', 'active')
+          .from("patient_plans")
+          .select("id, plan_code")
+          .eq("email", email.toLowerCase())
+          .eq("plan_code", planSku)
+          .eq("status", "active")
           .maybeSingle();
-        
+
         if (planError) {
-          console.warn('[verifyPlanCreation] Erro ao buscar plano no banco:', planError);
+          console.warn("[verifyPlanCreation] Erro ao buscar plano no banco:", planError);
         } else if (plan) {
-          console.log('[verifyPlanCreation] ✅ Plano encontrado no banco:', plan);
+          console.log("[verifyPlanCreation] ✅ Plano encontrado no banco:", plan);
           return true;
         }
       } catch (e) {
-        console.warn('[verifyPlanCreation] Exceção ao buscar plano:', e);
+        console.warn("[verifyPlanCreation] Exceção ao buscar plano:", e);
       }
-      
+
       // 3. Aguardar antes de tentar novamente (2 segundos)
       if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
-    
-    console.error('[verifyPlanCreation] ❌ Plano não encontrado após', maxRetries, 'tentativas');
+
+    console.error("[verifyPlanCreation] ❌ Plano não encontrado após", maxRetries, "tentativas");
     return false;
   };
 
@@ -351,33 +424,33 @@ export function PaymentModal({
   // ✅ Verificar PIX pendente no localStorage ao montar modal
   useEffect(() => {
     const checkPendingPix = async () => {
-      const pendingOrderId = localStorage.getItem('pendingPixOrderId');
-      const pendingEmail = localStorage.getItem('pendingPixEmail');
-      
+      const pendingOrderId = localStorage.getItem("pendingPixOrderId");
+      const pendingEmail = localStorage.getItem("pendingPixEmail");
+
       if (pendingOrderId && pendingEmail) {
-        console.log('[PaymentModal] 🔍 Verificando PIX pendente:', pendingOrderId);
-        
+        console.log("[PaymentModal] 🔍 Verificando PIX pendente:", pendingOrderId);
+
         try {
           const result = await getAppointments(pendingEmail);
-          const apt = result.appointments?.find(a => a.order_id === pendingOrderId && a.redirect_url);
-          
+          const apt = result.appointments?.find((a) => a.order_id === pendingOrderId && a.redirect_url);
+
           if (apt?.redirect_url) {
-            console.log('[PaymentModal] ✅ PIX pendente encontrado! Redirecionando...');
-            localStorage.removeItem('pendingPixOrderId');
-            localStorage.removeItem('pendingPixEmail');
+            console.log("[PaymentModal] ✅ PIX pendente encontrado! Redirecionando...");
+            localStorage.removeItem("pendingPixOrderId");
+            localStorage.removeItem("pendingPixEmail");
             toast.success("Pagamento confirmado! Redirecionando para sua consulta...");
             setTimeout(() => {
               window.location.href = apt.redirect_url!;
             }, 1500);
           } else {
-            console.log('[PaymentModal] ⏳ PIX pendente ainda não processado');
+            console.log("[PaymentModal] ⏳ PIX pendente ainda não processado");
           }
         } catch (err) {
-          console.error('[PaymentModal] Erro ao verificar PIX pendente:', err);
+          console.error("[PaymentModal] Erro ao verificar PIX pendente:", err);
         }
       }
     };
-    
+
     if (open) {
       checkPendingPix();
     }
@@ -390,9 +463,9 @@ export function PaymentModal({
       // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
       const { session, environment } = await getHybridSession();
       const user = session?.user;
-      
+
       console.log("[loadUserData] Hybrid session:", { hasUser: !!user, environment });
-      
+
       if (!user) {
         console.log("[loadUserData] No user found in any environment");
         setIsUserLoggedIn(false);
@@ -402,11 +475,15 @@ export function PaymentModal({
       setIsUserLoggedIn(true);
 
       // ✅ CORREÇÃO: Usar cliente correto baseado no ambiente da sessão
-      const client = environment === 'production' ? supabaseProduction : supabase;
+      const client = environment === "production" ? supabaseProduction : supabase;
       console.log("[loadUserData] Using client for environment:", environment);
-      
-      const { data: patient, error: patientError } = await client.from("patients").select("*").eq("user_id", user.id).single();
-      
+
+      const { data: patient, error: patientError } = await client
+        .from("patients")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
       if (patientError) {
         console.warn("[loadUserData] Error fetching patient:", patientError);
       }
@@ -466,10 +543,10 @@ export function PaymentModal({
       const planStatus = await checkPatientPlanActive(user.email!);
 
       // ✅ REGRA DE NEGÓCIO: Laudos Psicológicos SEMPRE cobram, mesmo com plano ativo
-      const isLaudo = 
-        sku === 'OVM9892' || 
-        serviceName?.toLowerCase().includes('laudo') || 
-        especialidade?.toLowerCase().includes('laudo');
+      const isLaudo =
+        sku === "OVM9892" ||
+        serviceName?.toLowerCase().includes("laudo") ||
+        especialidade?.toLowerCase().includes("laudo");
 
       if (planStatus.canBypassPayment && !isLaudo) {
         toast.info("Você já tem um plano ativo! Redirecionando...");
@@ -684,18 +761,18 @@ export function PaymentModal({
       console.warn("[mountCardPaymentBrick] Montagem já em andamento, ignorando");
       return;
     }
-    
+
     // ✅ NOVO: Permitir re-montagem se flag forceRemount estiver ativa
     if (isBrickMountedRef.current && !forceRemountRef.current) {
       console.log("[mountCardPaymentBrick] Skipping (already mounted, no force remount)");
       return;
     }
-    
+
     if (!mpInstanceRef.current) {
       console.log("[mountCardPaymentBrick] Skipping (no MP instance)");
       return;
     }
-    
+
     // Resetar flag de force remount
     if (forceRemountRef.current) {
       console.log("[mountCardPaymentBrick] Force remount requested");
@@ -833,6 +910,7 @@ export function PaymentModal({
                 if (capturedDeviceId) {
                   console.log("[Device ID] ✅ Capturado no onSubmit:", capturedDeviceId);
                   setDeviceId(capturedDeviceId);
+                  persistMpDeviceSessionId(capturedDeviceId);
                 } else {
                   console.warn("[Device ID] ⚠️ Vazio no onSubmit, mas continuando (SDK envia automaticamente)");
                 }
@@ -986,11 +1064,11 @@ export function PaymentModal({
             }
 
             // ✅ Detectar erros de validação do Brick que podem "travar" o formulário
-            const isValidationError = 
-              message.toLowerCase().includes('dado obrigatório') ||
-              message.toLowerCase().includes('mandatory') ||
-              message.toLowerCase().includes('required field') ||
-              message.toLowerCase().includes('campo obrigatório') ||
+            const isValidationError =
+              message.toLowerCase().includes("dado obrigatório") ||
+              message.toLowerCase().includes("mandatory") ||
+              message.toLowerCase().includes("required field") ||
+              message.toLowerCase().includes("campo obrigatório") ||
               error?.fieldErrors?.length > 0;
 
             if (isValidationError) {
@@ -1073,29 +1151,25 @@ export function PaymentModal({
     // ✅ Capturar cookies Meta para CAPI server-side
     const getFbp = (): string | undefined => {
       try {
-        const fbpCookie = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('_fbp='));
-        return fbpCookie ? fbpCookie.split('=')[1] : undefined;
+        const fbpCookie = document.cookie.split("; ").find((row) => row.startsWith("_fbp="));
+        return fbpCookie ? fbpCookie.split("=")[1] : undefined;
       } catch {
         return undefined;
       }
     };
-    
+
     const getFbc = (): string | undefined => {
       try {
         // Primeiro tentar pegar fbclid da URL (mais recente)
         const urlParams = new URLSearchParams(window.location.search);
-        const fbclid = urlParams.get('fbclid');
+        const fbclid = urlParams.get("fbclid");
         if (fbclid) {
           return `fb.1.${Math.floor(Date.now() / 1000)}.${fbclid}`;
         }
-        
+
         // Senão, tentar cookie existente
-        const fbcCookie = document.cookie
-          .split('; ')
-          .find(row => row.startsWith('_fbc='));
-        return fbcCookie ? fbcCookie.split('=')[1] : undefined;
+        const fbcCookie = document.cookie.split("; ").find((row) => row.startsWith("_fbc="));
+        return fbcCookie ? fbcCookie.split("=")[1] : undefined;
       } catch {
         return undefined;
       }
@@ -1150,22 +1224,22 @@ export function PaymentModal({
           console.log(`[pollPaymentStatus] 🔄 Tentativa ${attempts}: Executando check-payment-status como fallback...`);
           try {
             // ✅ CORREÇÃO: Usar invokeEdgeFunction para chamar produção
-            const { data: checkData, error: checkError } = await invokeEdgeFunction('check-payment-status', {
-              body: { 
-                payment_id: paymentId, 
-                order_id: orderId, 
-                email: formData.email 
-              }
+            const { data: checkData, error: checkError } = await invokeEdgeFunction("check-payment-status", {
+              body: {
+                payment_id: paymentId,
+                order_id: orderId,
+                email: formData.email,
+              },
             });
-            
+
             if (!checkError && checkData?.approved && checkData?.redirect_url) {
-              console.log('[pollPaymentStatus] ✅ check-payment-status encontrou pagamento aprovado!', checkData);
+              console.log("[pollPaymentStatus] ✅ check-payment-status encontrou pagamento aprovado!", checkData);
               clearInterval(interval);
               setIsPollingPayment(false);
-              
-              localStorage.removeItem('pendingPixOrderId');
-              localStorage.removeItem('pendingPixEmail');
-              
+
+              localStorage.removeItem("pendingPixOrderId");
+              localStorage.removeItem("pendingPixEmail");
+
               // 🎯 Track Purchase event (PIX recuperado via fallback)
               trackPurchase({
                 value: amount / 100,
@@ -1173,14 +1247,20 @@ export function PaymentModal({
                 sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
                 email: formData.email,
                 content_name: serviceName,
-                contents: [{
-                  id: sku,
-                  quantity: 1,
-                  item_price: amount / 100
-                }]
+                contents: [
+                  {
+                    id: sku,
+                    quantity: 1,
+                    item_price: amount / 100,
+                  },
+                ],
               });
-              console.log("[Meta Tracking] 💰 Purchase event disparado (PIX fallback):", { value: amount / 100, order_id: orderId, sku });
-              
+              console.log("[Meta Tracking] 💰 Purchase event disparado (PIX fallback):", {
+                value: amount / 100,
+                order_id: orderId,
+                sku,
+              });
+
               toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
               setTimeout(() => {
                 window.location.href = checkData.redirect_url;
@@ -1190,7 +1270,7 @@ export function PaymentModal({
               console.log(`[pollPaymentStatus] check-payment-status status: ${checkData.status}`);
             }
           } catch (fallbackError) {
-            console.warn('[pollPaymentStatus] ⚠️ Falha no fallback check-payment-status:', fallbackError);
+            console.warn("[pollPaymentStatus] ⚠️ Falha no fallback check-payment-status:", fallbackError);
             // Continuar com o polling normal
           }
         }
@@ -1214,10 +1294,10 @@ export function PaymentModal({
           if (appointment?.redirect_url) {
             clearInterval(interval);
             setIsPollingPayment(false);
-            
+
             // ✅ Limpar localStorage se existir
-            localStorage.removeItem('pendingPixOrderId');
-            localStorage.removeItem('pendingPixEmail');
+            localStorage.removeItem("pendingPixOrderId");
+            localStorage.removeItem("pendingPixEmail");
 
             console.log("[pollPaymentStatus] ✅ Appointment encontrado e confirmado:", {
               order_id: appointment.order_id,
@@ -1234,13 +1314,19 @@ export function PaymentModal({
               sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
               email: formData.email, // ✅ Enhanced Conversions
               content_name: serviceName,
-              contents: [{
-                id: sku,
-                quantity: 1,
-                item_price: amount / 100
-              }]
+              contents: [
+                {
+                  id: sku,
+                  quantity: 1,
+                  item_price: amount / 100,
+                },
+              ],
             });
-            console.log("[Meta Tracking] 💰 Purchase event disparado (PIX):", { value: amount / 100, order_id: orderId, sku });
+            console.log("[Meta Tracking] 💰 Purchase event disparado (PIX):", {
+              value: amount / 100,
+              order_id: orderId,
+              sku,
+            });
 
             toast.success("✅ Pagamento aprovado! Redirecionando para sua consulta...");
 
@@ -1257,22 +1343,22 @@ export function PaymentModal({
           setIsPollingPayment(false);
 
           console.warn("[pollPaymentStatus] ⏱️ Timeout após 32 minutos");
-          
+
           // ✅ Salvar orderId no localStorage para retry posterior
-          localStorage.setItem('pendingPixOrderId', orderId);
-          localStorage.setItem('pendingPixEmail', formData.email);
-          
-          toast.info('Pagamento pode estar sendo processado. Clique para verificar.', {
+          localStorage.setItem("pendingPixOrderId", orderId);
+          localStorage.setItem("pendingPixEmail", formData.email);
+
+          toast.info("Pagamento pode estar sendo processado. Clique para verificar.", {
             duration: 15000,
             action: {
               label: "Verificar Agora",
               onClick: async () => {
                 // Tentar buscar appointment uma última vez
                 const retryResult = await getAppointments(formData.email);
-                const apt = retryResult.appointments?.find(a => a.order_id === orderId && a.redirect_url);
+                const apt = retryResult.appointments?.find((a) => a.order_id === orderId && a.redirect_url);
                 if (apt?.redirect_url) {
-                  localStorage.removeItem('pendingPixOrderId');
-                  localStorage.removeItem('pendingPixEmail');
+                  localStorage.removeItem("pendingPixOrderId");
+                  localStorage.removeItem("pendingPixEmail");
                   window.location.href = apt.redirect_url;
                 } else {
                   window.open("/area-do-paciente", "_blank");
@@ -1339,7 +1425,7 @@ export function PaymentModal({
   // ✅ NOVO: Handler para pedidos gratuitos (cupom 100%)
   const handleFreeOrder = async () => {
     console.log("[handleFreeOrder] Processando pedido gratuito (cupom 100%)");
-    
+
     setPaymentStatus("processing");
     toast.loading("Processando seu pedido gratuito...");
 
@@ -1348,17 +1434,14 @@ export function PaymentModal({
       const schedulePayload = buildSchedulePayload();
 
       // Chamar schedule-redirect diretamente (sem Mercado Pago)
-      const { data: scheduleResult, error: scheduleError } = await invokeEdgeFunction(
-        "schedule-redirect",
-        {
-          body: {
-            ...schedulePayload,
-            orderId,
-            paymentId: `free_${Date.now()}`,
-            isFreeOrder: true
-          },
-        }
-      );
+      const { data: scheduleResult, error: scheduleError } = await invokeEdgeFunction("schedule-redirect", {
+        body: {
+          ...schedulePayload,
+          orderId,
+          paymentId: `free_${Date.now()}`,
+          isFreeOrder: true,
+        },
+      });
 
       if (scheduleError) {
         console.error("[handleFreeOrder] Schedule error:", scheduleError);
@@ -1377,15 +1460,17 @@ export function PaymentModal({
           coupon_code: appliedCoupon?.coupon_code,
           discount_percentage: 100,
           original_amount: appliedCoupon?.amount_original,
-          is_free_order: true
-        }
+          is_free_order: true,
+        },
       });
 
       // Registrar uso do cupom com colunas corretas
       if (appliedCoupon) {
         // Buscar user_id da sessão atual
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
+
         const { error: couponUseError } = await supabase.from("coupon_uses").insert({
           coupon_id: appliedCoupon.coupon_id,
           coupon_code: appliedCoupon.coupon_code,
@@ -1403,9 +1488,9 @@ export function PaymentModal({
           service_sku: sku,
           payment_id: `free_${Date.now()}`,
           order_id: orderId,
-          status: 'approved'
+          status: "approved",
         });
-        
+
         if (couponUseError) {
           console.error("[handleFreeOrder] Erro ao registrar uso do cupom:", couponUseError);
         } else {
@@ -1420,11 +1505,13 @@ export function PaymentModal({
         sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
         email: formData.email, // ✅ Enhanced Conversions
         content_name: serviceName,
-        contents: [{
-          id: sku,
-          quantity: 1,
-          item_price: 0
-        }]
+        contents: [
+          {
+            id: sku,
+            quantity: 1,
+            item_price: 0,
+          },
+        ],
       });
 
       toast.dismiss();
@@ -1442,7 +1529,6 @@ export function PaymentModal({
           window.location.href = "/area-do-paciente";
         }, 1500);
       }
-
     } catch (error) {
       console.error("[handleFreeOrder] Error:", error);
       toast.dismiss();
@@ -1493,8 +1579,7 @@ export function PaymentModal({
       const schedulePayload = buildSchedulePayload();
 
       // ✅ SEMPRE buscar preço do DB de PRODUÇÃO, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await (supabaseProduction
-        .from("services") as any)
+      const { data: service, error: serviceError } = await (supabaseProduction.from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
         .maybeSingle();
@@ -1611,8 +1696,8 @@ export function PaymentModal({
             discount_percentage: appliedCoupon.discount_percentage,
             owner_user_id: appliedCoupon.owner_user_id,
             owner_email: appliedCoupon.owner_email,
-            owner_pix_key: appliedCoupon.owner_pix_key
-          })
+            owner_pix_key: appliedCoupon.owner_pix_key,
+          }),
         },
         // ✅ CORREÇÃO: Usar deviceId do cardFormData real, sem fallback inválido
         device_id: cardFormData.deviceId || deviceId || undefined,
@@ -1621,7 +1706,7 @@ export function PaymentModal({
       };
 
       // ✅ DETECTAR SE É PLANO RECORRENTE (SKUs IND_* ou FAM_*)
-      const isPlanRecurring = recurring && (sku.startsWith('IND_') || sku.startsWith('FAM_'));
+      const isPlanRecurring = recurring && (sku.startsWith("IND_") || sku.startsWith("FAM_"));
 
       // Adicionar auto_recurring se for assinatura (para pagamentos normais)
       if (recurring && frequency && frequencyType && !isPlanRecurring) {
@@ -1655,7 +1740,7 @@ export function PaymentModal({
       // ✅ FLUXO DIFERENCIADO: Planos recorrentes usam mp-create-subscription
       if (isPlanRecurring) {
         console.log("[handleCardSubmit] 🔄 PLANO RECORRENTE - Chamando mp-create-subscription");
-        
+
         const subscriptionRequest = {
           payer_email: formData.email,
           payer_cpf: formData.cpf.replace(/\D/g, ""),
@@ -1669,7 +1754,7 @@ export function PaymentModal({
           frequency: frequency || 1,
           frequency_type: frequencyType || "months",
           order_id: orderId,
-          device_id: deviceId || undefined,
+          device_id: deviceId || getMpDeviceSessionId() || undefined,
         };
 
         console.log("[handleCardSubmit] Subscription request:", subscriptionRequest);
@@ -1677,7 +1762,7 @@ export function PaymentModal({
         const result = await invokeEdgeFunction("mp-create-subscription", {
           body: subscriptionRequest,
         });
-        
+
         data = result.data;
         error = result.error;
       } else {
@@ -1687,7 +1772,7 @@ export function PaymentModal({
         const result = await invokeEdgeFunction("mp-create-payment", {
           body: paymentRequest,
         });
-        
+
         data = result.data;
         error = result.error;
       }
@@ -1722,7 +1807,7 @@ export function PaymentModal({
 
       // ✅ CORREÇÃO: mp-create-subscription retorna "authorized", não "approved"
       const isSubscriptionApproved = data.status === "approved" || data.status === "authorized";
-      
+
       if (isSubscriptionApproved) {
         setPaymentId(data.payment_id || data.subscription_id || data.mp_subscription_id);
         setPaymentStatus("approved");
@@ -1735,18 +1820,24 @@ export function PaymentModal({
           sku: sku, // ✅ CORREÇÃO: Passar SKU para montar items corretamente
           email: formData.email, // ✅ Enhanced Conversions
           content_name: serviceName,
-          contents: [{
-            id: sku,
-            quantity: 1,
-            item_price: dbUnitPrice
-          }]
+          contents: [
+            {
+              id: sku,
+              quantity: 1,
+              item_price: dbUnitPrice,
+            },
+          ],
         });
-        console.log("[Meta Tracking] 💰 Purchase event disparado (Cartão):", { value: dbUnitPrice, order_id: orderId, sku });
+        console.log("[Meta Tracking] 💰 Purchase event disparado (Cartão):", {
+          value: dbUnitPrice,
+          order_id: orderId,
+          sku,
+        });
 
         toast.dismiss();
 
         // ✅ Detectar se é PLANO e verificar criação no backend antes de confirmar
-        const isPlan = sku.match(/^(IND_|FAM_)/) || sku === 'FAMILY';
+        const isPlan = sku.match(/^(IND_|FAM_)/) || sku === "FAMILY";
 
         if (isPlan) {
           console.log("[Card Payment] 🎯 PLANO detectado - Verificando criação no backend...");
@@ -1788,7 +1879,7 @@ export function PaymentModal({
         const { data: scheduleData, error: scheduleError } = await invokeEdgeFunction("schedule-redirect", {
           body: {
             ...schedulePayload,
-            order_id: orderId,  // ✅ CRÍTICO: Permite verificação de duplicação no backend
+            order_id: orderId, // ✅ CRÍTICO: Permite verificação de duplicação no backend
           },
         });
 
@@ -1809,7 +1900,7 @@ export function PaymentModal({
           }, 1500);
         } else {
           // Fallback: URL não veio imediatamente, iniciar polling
-          console.log('[Card Payment] ⚠️ URL não retornada, iniciando polling de fallback');
+          console.log("[Card Payment] ⚠️ URL não retornada, iniciando polling de fallback");
           toast.success("✅ Pagamento aprovado!", {
             description: "Preparando seu atendimento...",
           });
@@ -2042,8 +2133,7 @@ export function PaymentModal({
       };
 
       // ✅ SEMPRE buscar preço do DB de PRODUÇÃO, NUNCA usar fallback de props
-      const { data: service, error: serviceError } = await (supabaseProduction
-        .from("services") as any)
+      const { data: service, error: serviceError } = await (supabaseProduction.from("services") as any)
         .select("price_cents, name")
         .eq("sku", sku)
         .maybeSingle();
@@ -2084,10 +2174,10 @@ export function PaymentModal({
             discount_percentage: appliedCoupon.discount_percentage,
             owner_user_id: appliedCoupon.owner_user_id,
             owner_email: appliedCoupon.owner_email,
-            owner_pix_key: appliedCoupon.owner_pix_key
-          })
+            owner_pix_key: appliedCoupon.owner_pix_key,
+          }),
         },
-        device_id: deviceId || undefined,
+        device_id: deviceId || getMpDeviceSessionId() || undefined,
       };
 
       // Adicionar auto_recurring se for assinatura
@@ -2111,14 +2201,14 @@ export function PaymentModal({
       if (error || !data) {
         console.error("[handlePixSubmit] invoke error:", error, "data:", data);
         toast.dismiss();
-        
+
         // ✅ CORREÇÃO: Extrair mensagem específica do erro do backend
         const errorMessage = data?.error || error?.message || "Erro ao gerar código PIX";
         const errorDescription = data?.error_detail || "Tente novamente em alguns instantes.";
         const errorCode = data?.error_code || "UNKNOWN";
-        
+
         console.error("[handlePixSubmit] Error details:", { errorMessage, errorDescription, errorCode });
-        
+
         toast.error(errorMessage, { description: errorDescription });
         setPaymentStatus("idle");
         setShowErrorOverlay(true);
@@ -2241,7 +2331,7 @@ export function PaymentModal({
 
   const resetPaymentBrick = () => {
     console.log("[Retry] Resetting Payment Brick...");
-    
+
     // Unmount o brick atual se existir
     if (cardPaymentBrickController.current) {
       try {
@@ -2252,7 +2342,7 @@ export function PaymentModal({
       }
       cardPaymentBrickController.current = null;
     }
-    
+
     if (cardPaymentBrickRef.current) {
       try {
         cardPaymentBrickRef.current.unmount();
@@ -2262,13 +2352,13 @@ export function PaymentModal({
       cardPaymentBrickRef.current = null;
       isBrickMountedRef.current = false;
     }
-    
+
     // Limpar o container do brick
     const brickContainer = document.getElementById("cardPaymentBrick");
     if (brickContainer) {
       brickContainer.innerHTML = "";
     }
-    
+
     // Sinalizar que uma remontagem será necessária
     forceRemountRef.current = true;
   };
@@ -2313,41 +2403,40 @@ export function PaymentModal({
   const handleApplyCoupon = async () => {
     setIsValidatingCoupon(true);
     setCouponError("");
-    
+
     try {
       // Determinar tipo de item (SERVICE ou PLAN)
-      const itemType = sku.startsWith('IND_') || sku.startsWith('FAM_') ? 'PLAN' : 'SERVICE';
-      
+      const itemType = sku.startsWith("IND_") || sku.startsWith("FAM_") ? "PLAN" : "SERVICE";
+
       // ✅ CORREÇÃO: Usar sessão híbrida para obter user_id correto do ambiente certo
       const { session } = await getHybridSession();
       const userId = session?.user?.id;
-      
-      console.log('[handleApplyCoupon] Validando cupom:', { couponCode, itemType, userId, email: formData.email });
-      
+
+      console.log("[handleApplyCoupon] Validando cupom:", { couponCode, itemType, userId, email: formData.email });
+
       // Chamar edge function validate-coupon
-      const { data, error } = await invokeEdgeFunction('validate-coupon', {
+      const { data, error } = await invokeEdgeFunction("validate-coupon", {
         body: {
           coupon_code: couponCode,
           item_type: itemType,
           amount_original: amount, // em centavos
           user_id: userId, // ✅ Agora vem do ambiente correto
           user_email: formData.email, // ✅ NOVO: Enviar email como fallback para verificação
-          sku: sku // SKU para validação de restrição por serviço
-        }
+          sku: sku, // SKU para validação de restrição por serviço
+        },
       });
-      
+
       if (error || !data.is_valid) {
         setCouponError(data?.error_message || "Cupom inválido ou não aplicável");
         return;
       }
-      
+
       // Aplicar cupom
       setAppliedCoupon(data);
-      
+
       toast("Cupom aplicado com sucesso!", {
         description: `Desconto de ${data.discount_percentage}% aplicado`,
       });
-      
     } catch (err) {
       console.error("Erro ao validar cupom:", err);
       setCouponError("Erro ao validar cupom. Tente novamente.");
@@ -2647,7 +2736,7 @@ export function PaymentModal({
                     Cartão
                   </Button>
                   {/* PIX só para serviços avulsos, não planos */}
-                  {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                  {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                     <Button
                       type="button"
                       variant={paymentMethod === "pix" ? "default" : "outline"}
@@ -2659,7 +2748,7 @@ export function PaymentModal({
                   )}
                 </div>
                 {/* Aviso quando PIX não está disponível */}
-                {(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                {(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                   <p className="text-xs text-center text-muted-foreground -mt-2 mb-2">
                     ℹ️ Para planos, apenas cartão de crédito está disponível
                   </p>
@@ -2832,18 +2921,15 @@ export function PaymentModal({
                     {showBrickRetryButton && (
                       <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <p className="text-sm text-amber-800 mb-3">
-                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou usar PIX como alternativa.
+                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
+                          usar PIX como alternativa.
                         </p>
                         <div className="flex gap-2 flex-wrap">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => window.location.reload()}
-                          >
+                          <Button variant="default" size="sm" onClick={() => window.location.reload()}>
                             🔄 Recarregar página
                           </Button>
                           {/* Mostrar opção PIX se não for plano */}
-                          {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                          {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -3050,7 +3136,7 @@ export function PaymentModal({
                     Cartão
                   </Button>
                   {/* PIX só para serviços avulsos, não planos */}
-                  {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                  {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                     <Button
                       type="button"
                       variant={paymentMethod === "pix" ? "default" : "outline"}
@@ -3062,7 +3148,7 @@ export function PaymentModal({
                   )}
                 </div>
                 {/* Aviso quando PIX não está disponível */}
-                {(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                {(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                   <p className="text-xs text-center text-muted-foreground -mt-2 mb-2">
                     ℹ️ Para planos, apenas cartão de crédito está disponível
                   </p>
@@ -3113,18 +3199,15 @@ export function PaymentModal({
                     {showBrickRetryButton && (
                       <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <p className="text-sm text-amber-800 mb-3">
-                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou usar PIX como alternativa.
+                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
+                          usar PIX como alternativa.
                         </p>
                         <div className="flex gap-2 flex-wrap">
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => window.location.reload()}
-                          >
+                          <Button variant="default" size="sm" onClick={() => window.location.reload()}>
                             🔄 Recarregar página
                           </Button>
                           {/* Mostrar opção PIX se não for plano */}
-                          {!(sku?.startsWith('IND_') || sku?.startsWith('FAM_') || sku === 'FAMILY' || recurring) && (
+                          {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -3168,10 +3251,9 @@ export function PaymentModal({
   );
 
   // Fallback inline para ambientes de preview ou caso o Dialog tenha problemas
-  const isInlineFallback = typeof window !== "undefined" && (
-    window.location.hostname.includes("lovableproject.com") || 
-    window.location.hostname.includes("lovable.app")
-  );
+  const isInlineFallback =
+    typeof window !== "undefined" &&
+    (window.location.hostname.includes("lovableproject.com") || window.location.hostname.includes("lovable.app"));
 
   if (!open) return null;
 
@@ -3239,23 +3321,23 @@ export function PaymentModal({
                       showSummary,
                       open,
                     });
-                    
+
                     // Fechar o overlay de erro
                     setShowErrorOverlay(false);
                     setErrorOverlayMessage("");
-                    
+
                     // Limpar mensagens de erro
                     setError("");
                     setUserMessage("");
-                    
+
                     // Resetar o status de pagamento
                     setPaymentStatus("idle");
-                    
+
                     // Se estava usando cartão, resetar o Brick
                     if (paymentMethod === "card") {
                       console.log("[Overlay] Resetting card payment Brick");
                       resetPaymentBrick();
-                      
+
                       // Aguardar limpeza e re-montar
                       setTimeout(() => {
                         console.log("[Overlay] Attempting to remount Brick");
@@ -3270,7 +3352,7 @@ export function PaymentModal({
                       setPixPaymentId(null);
                       setIsPollingPayment(false);
                     }
-                    
+
                     console.log("[Overlay] Retry flow completed - modal should remain open");
                   }}
                 >
@@ -3289,7 +3371,7 @@ export function PaymentModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent
-          className={`sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 ${showErrorOverlay ? 'pointer-events-none' : ''}`}
+          className={`sm:max-w-[500px] max-h-[90vh] flex flex-col p-4 sm:p-6 ${showErrorOverlay ? "pointer-events-none" : ""}`}
           aria-describedby="payment-desc"
         >
           {modalBodyRadix}
