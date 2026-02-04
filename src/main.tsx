@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import './lib/gtag-events'; // Registra helper global de eventos do Google
+import { initializeMercadoPago } from './lib/mercadopago-init'; // ✅ SDK React do Mercado Pago
+
+// ✅ Inicializar SDK do Mercado Pago globalmente (antes do render)
+initializeMercadoPago();
 
 createRoot(document.getElementById("root")!).render(<App />);
 
