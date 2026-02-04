@@ -147,54 +147,59 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ✅ CORREÇÃO: Verificar se o usuário já usou este cupom (por user_id OU por email)
-    if (user_id) {
-      const { data: existingUse, error: useError } = await supabase
-        .from('coupon_uses')
-        .select('id')
-        .eq('coupon_id', coupon.id)
-        .eq('used_by_user_id', user_id)
-        .limit(1);
+    // ✅ Só verificar uso duplicado se o cupom for de uso único (is_single_use !== false)
+    if (coupon.is_single_use !== false) {
+      // Verificar por user_id
+      if (user_id) {
+        const { data: existingUse, error: useError } = await supabase
+          .from('coupon_uses')
+          .select('id')
+          .eq('coupon_id', coupon.id)
+          .eq('used_by_user_id', user_id)
+          .limit(1);
 
-      if (useError) {
-        console.log('[validate-coupon] Erro ao verificar uso anterior por user_id:', useError);
+        if (useError) {
+          console.log('[validate-coupon] Erro ao verificar uso anterior por user_id:', useError);
+        }
+
+        if (existingUse && existingUse.length > 0) {
+          console.log('[validate-coupon] Usuário já usou este cupom (por user_id)');
+          return new Response(
+            JSON.stringify({
+              is_valid: false,
+              error_message: 'Você já usou este cupom anteriormente',
+            } as ValidateCouponResponse),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
 
-      if (existingUse && existingUse.length > 0) {
-        console.log('[validate-coupon] Usuário já usou este cupom (por user_id)');
-        return new Response(
-          JSON.stringify({
-            is_valid: false,
-            error_message: 'Você já usou este cupom anteriormente',
-          } as ValidateCouponResponse),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
+      // Verificar por email
+      if (user_email) {
+        const { data: existingUseByEmail, error: emailUseError } = await supabase
+          .from('coupon_uses')
+          .select('id')
+          .eq('coupon_id', coupon.id)
+          .eq('used_by_email', user_email.toLowerCase())
+          .limit(1);
 
-    // ✅ NOVO: Verificar também por email (fallback para quando user_id é null ou diferente)
-    if (user_email) {
-      const { data: existingUseByEmail, error: emailUseError } = await supabase
-        .from('coupon_uses')
-        .select('id')
-        .eq('coupon_id', coupon.id)
-        .eq('used_by_email', user_email.toLowerCase())
-        .limit(1);
+        if (emailUseError) {
+          console.log('[validate-coupon] Erro ao verificar uso anterior por email:', emailUseError);
+        }
 
-      if (emailUseError) {
-        console.log('[validate-coupon] Erro ao verificar uso anterior por email:', emailUseError);
+        if (existingUseByEmail && existingUseByEmail.length > 0) {
+          console.log('[validate-coupon] Email já usou este cupom:', user_email);
+          return new Response(
+            JSON.stringify({
+              is_valid: false,
+              error_message: 'Este email já usou este cupom anteriormente',
+            } as ValidateCouponResponse),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
-
-      if (existingUseByEmail && existingUseByEmail.length > 0) {
-        console.log('[validate-coupon] Email já usou este cupom:', user_email);
-        return new Response(
-          JSON.stringify({
-            is_valid: false,
-            error_message: 'Este email já usou este cupom anteriormente',
-          } as ValidateCouponResponse),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    } else {
+      console.log('[validate-coupon] Cupom de uso múltiplo - pulando verificação de duplicidade');
     }
 
     // Calcular desconto
