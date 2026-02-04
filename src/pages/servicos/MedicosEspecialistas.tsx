@@ -9,6 +9,8 @@ import { ArrowLeft, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
 
 interface Variante {
   valor: number;
@@ -32,11 +34,12 @@ export default function MedicosEspecialistas() {
     }
   }, [servico]);
 
-  // Verificar plano ativo ao carregar a página
+  // Verificar plano ativo ao carregar a página (usa sessão híbrida)
   useEffect(() => {
     const checkPlan = async () => {
       setIsCheckingPlan(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { session } = await getHybridSession();
+      const user = session?.user;
       
       if (user?.email) {
         const { checkPatientPlanActive } = await import('@/lib/patient-plan');
@@ -90,7 +93,9 @@ export default function MedicosEspecialistas() {
       content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
     
     if (!user) {
       const pendingService = {
@@ -105,7 +110,10 @@ export default function MedicosEspecialistas() {
       return;
     }
 
-    const { data: patient } = await supabase
+    // ✅ Usar cliente correto baseado no ambiente detectado
+    const client = environment === 'production' ? supabaseProduction : supabase;
+
+    const { data: patient } = await client
       .from('patients')
       .select('profile_complete')
       .eq('user_id', user.id)

@@ -9,6 +9,8 @@ import { trackLead } from "@/lib/meta-tracking";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { supabaseProduction } from "@/lib/supabase-production";
 interface Servico {
   slug: string;
   nome: string;
@@ -75,11 +77,13 @@ export function ServicoCard({
     }
   };
   const handleAgendar = async () => {
+    // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
+    const client = environment === 'production' ? supabaseProduction : supabase;
+
     // ✅ PARA PSICÓLOGA E MÉDICOS ESPECIALISTAS: Verificar plano ativo ANTES de abrir modal
     if ((servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && servico.variantes) {
-      // Verificar se usuário está logado
-      const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) {
         const returnUrl = window.location.pathname + window.location.search;
         localStorage.setItem('returnUrl', returnUrl);
@@ -92,8 +96,8 @@ export function ServicoCard({
         return;
       }
 
-      // Verificar se perfil está completo
-      const { data: patient } = await supabase
+      // Verificar se perfil está completo usando cliente correto
+      const { data: patient } = await client
         .from('patients')
         .select('profile_complete')
         .eq('user_id', user.id)
@@ -137,10 +141,7 @@ export function ServicoCard({
       setIsPackageModalOpen(true);
       return;
     }
-
-    // Verificar se usuário está logado
-    const { data: { user } } = await supabase.auth.getUser();
-    
+    // Verificar se usuário está logado (já temos user da sessão híbrida)
     if (!user) {
       // Salvar returnUrl no localStorage
       const returnUrl = window.location.pathname + window.location.search;
@@ -156,8 +157,8 @@ export function ServicoCard({
       return;
     }
 
-    // Verificar se perfil está completo
-    const { data: patient } = await supabase
+    // Verificar se perfil está completo usando cliente correto
+    const { data: patient } = await client
       .from('patients')
       .select('profile_complete')
       .eq('user_id', user.id)
@@ -181,14 +182,14 @@ export function ServicoCard({
 
     // ✅ EXCEÇÃO: Laudos psicológicos SEMPRE cobram, mesmo com plano ativo
     if (planStatus.canBypassPayment && servico.slug !== 'laudos_psicologicos') {
-      // Tem plano ativo: buscar dados completos do paciente
-      const { data: patient } = await supabase
+      // Tem plano ativo: buscar dados completos do paciente usando cliente correto
+      const { data: patientData } = await client
         .from('patients')
         .select('cpf, first_name, last_name, phone_e164, gender')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
+      if (!patientData || !patientData.cpf || !patientData.first_name || !patientData.phone_e164 || !patientData.gender) {
         toast('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
         return;
@@ -201,13 +202,13 @@ export function ServicoCard({
       
       const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
-        cpf: patient.cpf,
+        cpf: patientData.cpf,
         email: user.email!,
-        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
-        telefone: patient.phone_e164,
+        nome: `${patientData.first_name} ${patientData.last_name || ''}`.trim(),
+        telefone: patientData.phone_e164,
         sku: servico.sku,
         plano_ativo: true,
-        sexo: mapSexo(patient.gender)
+        sexo: mapSexo(patientData.gender)
       });
 
       if (result.ok && result.url) {
@@ -231,8 +232,10 @@ export function ServicoCard({
   const handlePackageSelect = async (pkg: { sku: string; nome: string; valor: number }) => {
     setSelectedPackage(pkg);
     
-    // Verificar se usuário está logado
-    const { data: { user } } = await supabase.auth.getUser();
+    // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
+    const client = environment === 'production' ? supabaseProduction : supabase;
     
     if (!user) {
       // Salvar returnUrl no localStorage
@@ -249,8 +252,8 @@ export function ServicoCard({
       return;
     }
 
-    // Verificar se perfil está completo
-    const { data: patient } = await supabase
+    // Verificar se perfil está completo usando cliente correto
+    const { data: patient } = await client
       .from('patients')
       .select('profile_complete')
       .eq('user_id', user.id)
@@ -273,14 +276,14 @@ export function ServicoCard({
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados completos do paciente
-      const { data: patient } = await supabase
+      // Tem plano ativo: buscar dados completos do paciente usando cliente correto
+      const { data: patientData } = await client
         .from('patients')
         .select('cpf, first_name, last_name, phone_e164, gender')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
+      if (!patientData || !patientData.cpf || !patientData.first_name || !patientData.phone_e164 || !patientData.gender) {
         toast('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
         return;
@@ -293,13 +296,13 @@ export function ServicoCard({
       
       const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
       const result = await scheduleWithActivePlan({
-        cpf: patient.cpf,
+        cpf: patientData.cpf,
         email: user.email!,
-        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
-        telefone: patient.phone_e164,
+        nome: `${patientData.first_name} ${patientData.last_name || ''}`.trim(),
+        telefone: patientData.phone_e164,
         sku: pkg.sku,
         plano_ativo: true,
-        sexo: mapSexo(patient.gender)
+        sexo: mapSexo(patientData.gender)
       });
 
       if (result.ok && result.url) {
