@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { supabaseProduction } from "@/lib/supabase-production";
-import { supabase } from "@/integrations/supabase/client";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Copy, Loader2, Plus, Power, PowerOff, Trash2, CheckCircle2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -281,15 +280,20 @@ export function CouponsTab() {
     }
   };
 
-  // ✅ CORREÇÃO: Usar supabaseProduction para operações de escrita (leitura já usa)
+  // ✅ Usar edge function com service_role para bypass de RLS
   const handleToggleCoupon = async (id: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabaseProduction
-        .from('user_coupons')
-        .update({ is_active: !currentStatus })
-        .eq('id', id);
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'toggle',
+          id: id,
+          is_active: !currentStatus,
+        }
+      });
 
-      if (error) throw error;
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || 'Erro desconhecido');
+      }
 
       toast.success(`Cupom ${!currentStatus ? 'ativado' : 'desativado'} com sucesso!`);
       loadActiveCoupons();
@@ -303,13 +307,16 @@ export function CouponsTab() {
     if (!couponToDelete) return;
 
     try {
-      // ✅ CORREÇÃO: Usar supabaseProduction para escrita
-      const { error } = await supabaseProduction
-        .from('user_coupons')
-        .delete()
-        .eq('id', couponToDelete);
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'delete',
+          id: couponToDelete,
+        }
+      });
 
-      if (error) throw error;
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || 'Erro desconhecido');
+      }
 
       toast.success("Cupom deletado com sucesso!");
       loadActiveCoupons();
@@ -324,20 +331,17 @@ export function CouponsTab() {
 
   const handleToggleReviewed = async (id: string, currentStatus: boolean) => {
     try {
-      // Pegar user do Cloud para identificação (apenas para log)
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // ✅ CORREÇÃO: Usar supabaseProduction para escrita
-      const { error } = await supabaseProduction
-        .from('coupon_uses')
-        .update({
-          reviewed: !currentStatus,
-          reviewed_at: !currentStatus ? new Date().toISOString() : null,
-          reviewed_by: !currentStatus ? user?.id : null,
-        })
-        .eq('id', id);
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'mark_reviewed',
+          id: id,
+          admin_reviewed: !currentStatus,
+        }
+      });
 
-      if (error) throw error;
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.error || 'Erro desconhecido');
+      }
 
       toast.success(`Cupom marcado como ${!currentStatus ? 'conferido' : 'não conferido'}!`);
       loadCouponUses();

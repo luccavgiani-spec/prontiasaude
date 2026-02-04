@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabaseProduction } from "@/lib/supabase-production";
-import { supabase } from "@/integrations/supabase/client";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 
@@ -51,79 +50,27 @@ export function CreateCouponModal({ open, onOpenChange, onSuccess }: CreateCoupo
     setIsLoading(true);
 
     try {
-      // ✅ CORREÇÃO: Usar supabaseProduction para verificar e criar cupons no banco de produção
-      // 1. Verificar se código já existe
-      const { data: existing } = await supabaseProduction
-        .from('user_coupons')
-        .select('code')
-        .eq('code', formData.code.toUpperCase())
-        .single();
+      // ✅ Usar edge function com service_role para bypass de RLS
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'create',
+          code: formData.code.toUpperCase(),
+          coupon_type: formData.couponType,
+          discount_percentage: discount,
+          owner_email: formData.ownerEmail.trim() || null,
+          pix_key: formData.pixKey.trim() || null,
+        }
+      });
 
-      if (existing) {
-        toast.error("Este código de cupom já existe!");
+      if (error) {
+        console.error("Erro ao criar cupom:", error);
+        toast.error(error.message || "Erro ao criar cupom!");
         setIsLoading(false);
         return;
       }
 
-      // 2. Resolver owner_user_id
-      let ownerId: string;
-
-      if (formData.ownerEmail.trim()) {
-        // ✅ CORREÇÃO: Buscar paciente no banco de produção
-        const { data: patient } = await supabaseProduction
-          .from('patients')
-          .select('id')
-          .eq('email', formData.ownerEmail.trim())
-          .single();
-
-        if (!patient) {
-          toast.error("E-mail do dono não encontrado no sistema!");
-          setIsLoading(false);
-          return;
-        }
-
-        ownerId = patient.id;
-      } else {
-        // Buscar patient.id correspondente ao admin logado
-        // Nota: auth continua no Cloud, mas buscamos patient na Produção
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error("Erro ao identificar usuário admin!");
-          setIsLoading(false);
-          return;
-        }
-        
-        // ✅ CORREÇÃO: Buscar patient.id do admin no banco de produção
-        const { data: adminPatient } = await supabaseProduction
-          .from('patients')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (!adminPatient) {
-          // Se admin não tem registro em patients, criar cupom do sistema (sem owner)
-          // @ts-ignore - null é permitido para cupons do sistema
-          ownerId = null;
-        } else {
-          ownerId = adminPatient.id;
-        }
-      }
-
-      // ✅ CORREÇÃO: Inserir cupom no banco de produção
-      const { error } = await supabaseProduction
-        .from('user_coupons')
-        .insert({
-          owner_user_id: ownerId,
-          code: formData.code.toUpperCase(),
-          coupon_type: formData.couponType,
-          discount_percentage: discount,
-          pix_key: formData.pixKey.trim() || null,
-          is_active: true,
-        });
-
-      if (error) {
-        console.error("Erro ao criar cupom:", error);
-        toast.error("Erro ao criar cupom!");
+      if (!data?.success) {
+        toast.error(data?.error || "Erro ao criar cupom!");
         setIsLoading(false);
         return;
       }
