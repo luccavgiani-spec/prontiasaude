@@ -1,170 +1,162 @@
 
+## 0) Resumo do que está errado (com evidência de código)
 
-# Plano: Correção Definitiva do device_id para PIX
+### A) Admin (suporte@…) não consegue editar no “modo produção”
+**Evidência:** `src/components/admin/EditPatientModal.tsx` faz UPDATE direto via **cliente Cloud**:
+- `import { supabase } from '@/integrations/supabase/client';`
+- `supabase.from('patients').update(...).eq('id', patient.id)` (linhas ~130–134)
 
-## Diagnóstico Confirmado
+No “modo produção”, o painel lista pacientes que podem vir do ambiente de produção (IDs diferentes). Então:
+- o UPDATE vai para o banco Cloud (ou falha por RLS / ou atualiza 0 linhas),
+- e não altera o dado real do ambiente de produção.
 
-Após análise profunda do código, identifiquei que:
+### B) Usuário (em produção) não consegue editar o próprio perfil
+O “Editar perfil” do usuário leva a `/completar-perfil` (confirmado em `src/pages/AreaDoPaciente.tsx` linhas ~448–452). Ao salvar, ele chama `upsertPatientBasic()` (em `src/lib/patients.ts`).
 
-1. **O arquivo correto é `src/components/payment/PaymentModal.tsx`** - é o único que dispara `invokeEdgeFunction("mp-create-payment")` para PIX (linha 2251)
+Há dois problemas concretos no fluxo híbrido:
 
-2. **Não existe outro modal ou handler** - confirmado via busca no projeto
+1) **Bug de parâmetro:** `upsertPatientBasic()` detecta `environment`, mas chama:
+```ts
+await ensurePatientRow(userId, dbClient);
+```
+sem passar o `environment`.  
+**Evidência:** `src/lib/patients.ts` linha ~88.  
+Isso força `ensurePatientRow()` a operar como `cloud` (default), mesmo quando o usuário está em produção.
 
-3. **A função `invokeEdgeFunction` não remove campos** - ela simplesmente faz `JSON.stringify(options.body)`
+2) **Authorization sendo sobrescrito no invokeCloudEdgeFunction:**  
+`ensurePatientRow()` tenta montar headers com o token do `dbClient`, mas quando cai em `invokeCloudEdgeFunction`, ele **sempre** redefine `Authorization` com o token do Cloud (ou anon do Cloud).  
+**Evidência:** `src/lib/edge-functions.ts` linha ~107–109.
 
-4. **O problema está no frontend** - especificamente na captura e validação do device_id
+Resultado prático: em produção, parte do fluxo acaba chamando função/banco “errado”, e o usuário percebe “não salva / não edita”.
+
+### C) Cadastro “signal is aborted without reason”
+Pontos prováveis (e corrigíveis com mudanças mínimas e objetivas):
+
+1) `create-user-both-envs` faz verificação de existência por:
+```ts
+auth.admin.listUsers({ page: 1, perPage: 1000 })
+```
+em dois ambientes (Cloud + Produção).  
+**Evidência:** `supabase/functions/create-user-both-envs/index.ts` linhas ~102–115.  
+Isso pode ficar lento/intermitente e levar a abort em mobile/conexões ruins.
+
+2) `checkUserExists()` no frontend usa fetch com `VITE_SUPABASE_URL` (que hoje aponta pro Cloud), o que é frágil em ambiente híbrido.  
+**Evidência:** `src/lib/auth-hybrid.ts` linhas ~44–54.
 
 ---
 
-## Causa Raiz Identificada
+## 1) O que vou mudar (mínimo e objetivo)
 
-### Problema 1: Regex de Sanitização Muito Restritivo
+### 1.1 Corrigir edição do usuário (produção) no `/completar-perfil`
+- **Arquivo:** `src/lib/patients.ts`
+- **Mudança mínima:**
+  - passar `environment` para `ensurePatientRow(userId, dbClient, environment)`
+  - garantir que, em `production`, o `ensurePatientRow()` invoque a função do ambiente correto e preserve `Authorization` (via `invokeEdgeFunction`, que já respeita `options.headers.Authorization`).
 
-```text
-Linha 38: /^[A-Za-z0-9._:-]{10,200}$/
-```
+**Por que isso resolve:** impede chamadas “cloud por engano” e evita token incompatível / função errada.
 
-O `MP_DEVICE_SESSION_ID` gerado pelo `security.js` do Mercado Pago pode conter caracteres como:
-- `=` (comum em base64)
-- `+` (comum em base64)
-- `/` (comum em base64)
-- Outros caracteres especiais
+### 1.2 Corrigir edição pelo Admin no painel (produção)
+- **Arquivo:** `supabase/functions/patient-operations/index.ts`
+  - adicionar operação **`admin_update_patient`**
+  - adicionar `admin_update_patient` no `AUTH_BYPASS_OPERATIONS` (para não exigir token “da produção”)
+  - **validar o token no Cloud** (mesmo padrão já existente no arquivo para `activate_plan_manual`) e checar role `admin` no `user_roles` do Cloud
+  - atualizar registro `patients` no **ambiente de produção** usando `service_role` (bypass RLS, com validação server-side).
+  - aplicar whitelist dos campos permitidos (somente os campos do modal: first_name, last_name, cpf, phone_e164, birth_date, gender, cep, address_line, address_number, city, state).
 
-**Se o ID real tiver qualquer caractere fora do regex, será rejeitado e retornará `null`.**
+- **Arquivo:** `src/components/admin/EditPatientModal.tsx`
+  - trocar o `.from('patients').update(...)` por `invokeEdgeFunction('patient-operations', { operation:'admin_update_patient', ... })`.
 
-### Problema 2: Timing de Captura
+**Por que isso resolve:** o painel deixa de “editar Cloud” e passa a editar produção com segurança (validação admin server-side).
 
-O `useEffect` captura o device_id quando o modal abre, mas:
-- O `security.js` pode não ter terminado de gerar o ID
-- O estado `deviceId` fica `null`
-- No momento do submit, `deviceId` ainda está `null`
-- O `waitForMPDeviceId()` usa o mesmo regex restritivo
+### 1.3 Tornar o cadastro mais confiável (reduzir abort/timeout)
+- **Arquivo:** `supabase/functions/create-user-both-envs/index.ts`
+  - substituir a verificação por listagem de 1000 users por `auth.admin.getUserByEmail(email)` em ambos os ambientes (mais rápido/estável).
+  - manter fallback/logs claros caso getUserByEmail retorne erro.
 
-### Problema 3: Logs Insuficientes
+- **Arquivo:** `supabase/functions/check-user-exists/index.ts`
+  - substituir paginação/listUsers por `auth.admin.getUserByEmail` (Cloud + Produção) para resposta instantânea.
 
-Não há log no exato momento do submit do PIX mostrando:
-- O valor de `window.MP_DEVICE_SESSION_ID`
-- O valor do estado `deviceId`
-- O valor retornado por `waitForMPDeviceId()`
+- **Arquivo:** `src/lib/auth-hybrid.ts`
+  - trocar o `fetch(${VITE_SUPABASE_URL}/functions/v1/check-user-exists...)` por uma chamada via `invokeEdgeFunction('check-user-exists', ...)`, que já tem URL “de produção” hardcoded e reduz risco de endpoint errado.
+  - manter o comportamento “fail open” (permitir fluxo normal em caso de erro), mas com logs melhores.
 
----
+**Por que isso resolve:** evita chamadas pesadas e reduz chance de abort em mobile.
 
-## Correções Necessárias
+### 1.4 (Opcional, mas altamente recomendado) Preferência de sessão pelo ambiente escolhido
+- **Arquivo:** `src/lib/auth-hybrid.ts`
+  - ajustar `getHybridSession()` para respeitar `sessionStorage.auth_environment` quando existir:
+    - se `auth_environment === 'production'`, checar produção primeiro; se não houver sessão lá, aí checar cloud.
+    - se `auth_environment === 'cloud'`, mantém cloud primeiro.
+  - Isso evita “sessão fantasma Cloud” ganhar prioridade quando o usuário acabou de logar na produção.
 
-### Correção 1: Relaxar o Regex de Sanitização (Linha 38)
-
-**De:**
-```typescript
-if (!/^[A-Za-z0-9._:-]{10,200}$/.test(value)) return null;
-```
-
-**Para:**
-```typescript
-// ✅ CORREÇÃO: Aceitar base64 e outros chars válidos do MP_DEVICE_SESSION_ID
-if (!/^[A-Za-z0-9._:\-=+\/]{10,500}$/.test(value)) return null;
-```
-
-### Correção 2: Adicionar Logs Diagnósticos no Submit do PIX (Linha ~2234)
-
-**Antes de montar o `paymentRequest`:**
-```typescript
-// ✅ DEBUG: Log exato do device_id no momento do submit
-const windowDeviceId = (window as any).MP_DEVICE_SESSION_ID;
-const stateDeviceId = deviceId;
-const waitedDeviceId = await waitForMPDeviceId();
-const finalDeviceId = stateDeviceId || waitedDeviceId || null;
-
-console.log("[handlePixSubmit] 🔍 Device ID Debug:", {
-  window_MP_DEVICE_SESSION_ID: windowDeviceId,
-  window_MP_DEVICE_SESSION_ID_type: typeof windowDeviceId,
-  state_deviceId: stateDeviceId,
-  waited_deviceId: waitedDeviceId,
-  final_device_id: finalDeviceId,
-  localStorage_mp_device_session_id: localStorage.getItem("mp_device_session_id"),
-});
-```
-
-### Correção 3: Captura Direta no Momento do Submit (Linha 2235)
-
-**De:**
-```typescript
-device_id: deviceId || (await waitForMPDeviceId()) || null,
-```
-
-**Para:**
-```typescript
-// ✅ CORREÇÃO: Captura direta + fallback + log
-device_id: finalDeviceId,
-```
-
-E adicionar antes (na estrutura de debug):
-```typescript
-const finalDeviceId = deviceId 
-  || (await waitForMPDeviceId()) 
-  || (window as any).MP_DEVICE_SESSION_ID // ✅ Fallback direto sem sanitização
-  || null;
-```
+**Por que isso resolve:** elimina o caso clássico de “tenho sessão nos dois locais, mas o app escolhe o ambiente errado”.
 
 ---
 
-## Arquivos a Modificar
+## 2) Atualização do contato da Natália (o pedido direto)
+Você pediu:
+- email: `nataliageraldodossantos@gmail.com`
+- nome: `Natália Fernanda Geraldo`
+- sobrenome: `dos Santos`
 
-| Arquivo | Alteração | Impacto |
-|---------|-----------|---------|
-| `src/components/payment/PaymentModal.tsx` | Relaxar regex + adicionar logs + captura direta | Resolve device_id = null |
-
-**NÃO modificar:**
-- Edge Functions (backend)
-- index.html (security.js já funciona)
-- Outros componentes
-
----
-
-## Fluxo Corrigido
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                      FLUXO PIX (Corrigido)                  │
-├─────────────────────────────────────────────────────────────┤
-│ 1. Modal abre → useEffect tenta capturar device_id         │
-│    ↓                                                        │
-│ 2. User preenche dados e clica "Gerar PIX"                 │
-│    ↓                                                        │
-│ 3. handlePixSubmit executa:                                │
-│    a) Log exato de window.MP_DEVICE_SESSION_ID             │
-│    b) Log do estado deviceId                               │
-│    c) Captura direta sem regex restritivo                  │
-│    d) Monta paymentRequest com device_id real              │
-│    ↓                                                        │
-│ 4. invokeEdgeFunction envia JSON.stringify(body)           │
-│    ↓                                                        │
-│ 5. Backend recebe device_id e envia X-meli-session-id      │
-│    ↓                                                        │
-│ 6. Mercado Pago detecta device fingerprint → Qualidade 100 │
-└─────────────────────────────────────────────────────────────┘
-```
+Como eu não posso executar UPDATE direto via SQL daqui, vou fazer de forma segura assim que o fluxo de edição estiver corrigido:
+1) Após implementar `admin_update_patient`, você entra no painel com `suporte@prontiasaude.com.br`.
+2) Abre “Pacientes” → busca a Natália → edita e salva.
+3) Se preferir, após publicar as mudanças você me avisa “estou logado como suporte no preview”, e eu disparo a chamada pela função usando a própria sessão do seu navegador.
 
 ---
 
-## Validação Pós-Implementação
+## 3) Arquivos que serão modificados (lista objetiva)
 
-1. **Abrir console do navegador**
-2. **Executar pagamento PIX**
-3. **Verificar log:** `[handlePixSubmit] 🔍 Device ID Debug:`
-   - `window_MP_DEVICE_SESSION_ID`: deve mostrar string válida
-   - `final_device_id`: deve ser a mesma string
-4. **Verificar Network:** payload deve ter `"device_id": "arm0r.xxxxx..."`
-5. **Rodar medição MP:** Qualidade deve subir para 90-100
+1) `src/lib/patients.ts`  
+2) `src/components/admin/EditPatientModal.tsx`  
+3) `supabase/functions/patient-operations/index.ts`  
+4) `supabase/functions/create-user-both-envs/index.ts`  
+5) `supabase/functions/check-user-exists/index.ts`  
+6) `src/lib/auth-hybrid.ts`  
 
 ---
 
-## Resumo da Correção
+## 4) MOTIVO (baseado no seu pedido)
+- Você relatou falhas em produção para:
+  - admin editar manualmente paciente,
+  - usuário editar o próprio perfil,
+  - novos cadastros falhando com erro de abort.
+- A evidência no código mostra escrita no ambiente errado (Cloud vs produção) e validações/auth incompatíveis em modo híbrido.
 
-| O que fazer | Onde | Por que |
-|-------------|------|---------|
-| Relaxar regex | Linha 38 | Aceitar chars do security.js |
-| Adicionar logs | Linhas ~2230-2234 | Diagnosticar valor exato |
-| Captura direta fallback | Linha 2235 | Garantir que device_id chegue |
+---
 
-**Total: 1 arquivo modificado, ~20 linhas alteradas**
+## 5) ESCOPO (exatamente o que será alterado)
+- Somente:
+  - roteamento correto de ambiente (Cloud/produção) em `ensurePatientRow`/`getHybridSession`
+  - troca do UPDATE do Admin para uma chamada backend segura (`admin_update_patient`)
+  - otimização objetiva de “check user exists / create user” (trocar listUsers pesado por getUserByEmail)
+- Não vou alterar:
+  - integrações de pagamento (Mercado Pago),
+  - regras de redirecionamento Clicklife/Communicare,
+  - conteúdo/serviços/FAQ/home sections.
+
+---
+
+## 6) CONFIRMAÇÃO (regra do projeto)
+**Estas alterações estão explicitamente solicitadas?**  
+- **SIM** quanto ao objetivo (corrigir edição e cadastro em produção)  
+- **NÃO** quanto aos caminhos de arquivo (você não citou os paths nesta última mensagem), porém **são estritamente necessárias** para atender o problema.
+
+Ao aprovar este plano, você autoriza as mudanças apenas nos arquivos listados acima, dentro do escopo descrito.
+
+---
+
+## 7) Como vamos validar (checklist E2E)
+1) Produção (usuário comum):
+   - Login
+   - Área do paciente → “Editar perfil” → salvar
+   - Recarregar página → confirmar dados persistidos
+2) Produção (admin suporte):
+   - Login admin → abrir paciente → editar nome/telefone → salvar → conferir persistência
+3) Cadastro:
+   - Criar conta com email novo em mobile/desktop
+   - Confirmar que não aparece “signal is aborted without reason”
+4) Logs:
+   - Edge function `create-user-both-envs` e `check-user-exists` com logs claros e execução rápida
 
