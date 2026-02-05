@@ -54,6 +54,9 @@ verify_jwt = false
 [functions.appointments-manager]
 verify_jwt = false
 
+[functions.company-operations]
+verify_jwt = false
+
 [functions.patient-operations]
 verify_jwt = false
 
