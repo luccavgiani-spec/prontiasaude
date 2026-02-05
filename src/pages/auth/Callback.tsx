@@ -72,9 +72,8 @@ const AuthCallback = () => {
       }
       
       try {
-        // ✅ HÍBRIDO: Usar cliente e ambiente correto
-        const patientDbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
-        await ensurePatientRow(session.user.id, patientDbClient, authEnvironment || 'cloud');
+        // ✅ SIMPLIFICADO: ensurePatientRow sempre chama Produção internamente
+        await ensurePatientRow(session.user.id);
       } catch (e) {
         console.error('ensurePatientRow error:', e);
       }

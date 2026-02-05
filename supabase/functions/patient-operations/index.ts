@@ -2043,9 +2043,11 @@ serve(async (req) => {
         
         // Criar novo registro
         console.log('[ensure_patient] 📝 Criando novo registro para user_id:', user_id);
+        const newPatientId = crypto.randomUUID();
         const { data: newPatient, error: insertError } = await supabase
           .from('patients')
           .insert({
+            id: newPatientId,  // ✅ CORREÇÃO: Gerar UUID explicitamente
             user_id,
             email: email || null,
             profile_complete: false
