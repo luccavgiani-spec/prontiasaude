@@ -85,7 +85,8 @@ export async function upsertPatientBasic(payload: {
   const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
   console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
 
-  await ensurePatientRow(userId, dbClient);
+  // ✅ CORREÇÃO: Passar environment para ensurePatientRow
+  await ensurePatientRow(userId, dbClient, environment);
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');

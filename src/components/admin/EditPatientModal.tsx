@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 import { validateCPF, cleanCPF, formatCPF } from '@/lib/cpf-validator';
@@ -112,7 +112,8 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
       const cleanedCep = formData.cep ? formData.cep.replace(/\D/g, '') : null;
 
       // Prepare update data - remove empty strings, convert to null
-      const updateData: Record<string, unknown> = {
+      // ✅ Whitelist de campos permitidos para edição
+      const updates: Record<string, unknown> = {
         first_name: formData.first_name || null,
         last_name: formData.last_name || null,
         cpf: cleanedCpf && cleanedCpf !== '00000000000' ? cleanedCpf : null,
@@ -124,22 +125,35 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
         address_number: formData.address_number || null,
         city: formData.city || null,
         state: formData.state || null,
-        updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('patients')
-        .update(updateData)
-        .eq('id', patient.id);
+      // ✅ CORREÇÃO: Usar Edge Function para bypass RLS em ambiente híbrido
+      console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
+      
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
+        body: {
+          operation: 'admin_update_patient',
+          patient_id: patient.id,
+          email: patient.email,
+          updates
+        }
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('[EditPatientModal] Edge function error:', error);
+        throw new Error(error.message || 'Erro ao atualizar paciente');
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Falha ao atualizar paciente');
+      }
 
       toast.success('Paciente atualizado com sucesso!');
       onSuccess();
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating patient:', error);
-      toast.error('Erro ao atualizar paciente');
+      toast.error(error.message || 'Erro ao atualizar paciente');
     } finally {
       setLoading(false);
     }

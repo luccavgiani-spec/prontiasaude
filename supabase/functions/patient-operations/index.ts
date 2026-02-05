@@ -537,7 +537,7 @@ serve(async (req) => {
     // - ensure_patient: usa service_role no backend, não precisa validar JWT do usuário
     //   (a própria lógica do ensure_patient valida que user_id foi passado)
     // ============================================================
-    const AUTH_BYPASS_OPERATIONS = ['upsert_patient', 'activate_plan_manual', 'ensure_patient'];
+    const AUTH_BYPASS_OPERATIONS = ['upsert_patient', 'activate_plan_manual', 'ensure_patient', 'admin_update_patient'];
     
     if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
       if (!authHeader) {
@@ -2032,6 +2032,188 @@ serve(async (req) => {
             already_existed: false 
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      case 'admin_update_patient': {
+        // ============================================================
+        // ✅ ATUALIZAR PACIENTE VIA ADMIN
+        // Arquitetura cross-project:
+        // 1. Validar token no LOVABLE CLOUD (onde admin fez login)
+        // 2. Verificar role admin no LOVABLE CLOUD
+        // 3. Executar UPDATE no BANCO DE PRODUÇÃO usando service_role
+        // ============================================================
+        
+        const token = authHeader?.replace('Bearer ', '');
+        
+        if (!token) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Token de autenticação não fornecido' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // ✅ PASSO 1: Criar client do LOVABLE CLOUD para validar o JWT
+        const LOVABLE_CLOUD_URL = 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+        const LOVABLE_CLOUD_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY';
+        
+        const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_ANON_KEY, {
+          global: { headers: { Authorization: `Bearer ${token}` } }
+        });
+
+        // ✅ PASSO 2: Validar token no Lovable Cloud
+        console.log('[admin_update_patient] Validando token no Lovable Cloud...');
+        const { data: authData, error: authError } = await authClient.auth.getUser(token);
+        
+        if (authError || !authData?.user) {
+          console.error('[admin_update_patient] Token inválido:', authError?.message);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Sessão inválida - faça login novamente',
+              details: authError?.message 
+            }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const adminUserId = authData.user.id;
+        const adminEmail = authData.user.email;
+        console.log('[admin_update_patient] ✅ Token válido. Admin:', adminEmail);
+
+        // ✅ PASSO 3: Verificar role admin no Lovable Cloud
+        console.log('[admin_update_patient] Verificando role admin...');
+        const { data: roles, error: rolesError } = await authClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', adminUserId);
+        
+        if (rolesError) {
+          console.error('[admin_update_patient] Erro ao verificar roles:', rolesError.message);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Falha ao verificar permissões' }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const isAdmin = roles?.some((r: any) => r.role === 'admin');
+        if (!isAdmin) {
+          console.warn('[admin_update_patient] Usuário não é admin:', adminEmail);
+          return new Response(
+            JSON.stringify({ success: false, error: 'Permissão negada - apenas administradores' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[admin_update_patient] ✅ Admin confirmado! Executando atualização...');
+
+        // ✅ PASSO 4: Validar dados e executar UPDATE no banco de PRODUÇÃO
+        const { patient_id, email: patientEmail, updates } = body;
+        
+        if (!patient_id && !patientEmail) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'patient_id ou email é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (!updates || typeof updates !== 'object') {
+          return new Response(
+            JSON.stringify({ success: false, error: 'updates é obrigatório' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // ✅ Whitelist de campos permitidos para edição
+        const ALLOWED_FIELDS = [
+          'first_name', 'last_name', 'cpf', 'phone_e164', 'birth_date',
+          'gender', 'cep', 'address_line', 'address_number', 'city', 'state',
+          'complement', 'neighborhood'
+        ];
+
+        const sanitizedUpdates: Record<string, any> = {};
+        for (const key of Object.keys(updates)) {
+          if (ALLOWED_FIELDS.includes(key)) {
+            sanitizedUpdates[key] = updates[key];
+          } else {
+            console.warn('[admin_update_patient] Campo não permitido ignorado:', key);
+          }
+        }
+
+        if (Object.keys(sanitizedUpdates).length === 0) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Nenhum campo válido para atualização' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // Adicionar timestamp de atualização
+        sanitizedUpdates.updated_at = new Date().toISOString();
+
+        console.log('[admin_update_patient] Campos a atualizar:', Object.keys(sanitizedUpdates));
+
+        // Executar UPDATE usando service_role (bypass RLS)
+        let updateError = null;
+        let updateCount = 0;
+
+        if (patient_id) {
+          const { error, count } = await supabase
+            .from('patients')
+            .update(sanitizedUpdates)
+            .eq('id', patient_id);
+          updateError = error;
+          updateCount = count || 0;
+        } else if (patientEmail) {
+          const { error, count } = await supabase
+            .from('patients')
+            .update(sanitizedUpdates)
+            .eq('email', patientEmail.toLowerCase().trim());
+          updateError = error;
+          updateCount = count || 0;
+        }
+
+        if (updateError) {
+          console.error('[admin_update_patient] Erro no UPDATE:', updateError.message);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Falha ao atualizar paciente',
+              details: updateError.message 
+            }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[admin_update_patient] ✅ Paciente atualizado com sucesso!', {
+          patient_id: patient_id || '(por email)',
+          email: patientEmail,
+          fields_updated: Object.keys(sanitizedUpdates),
+          admin: adminEmail
+        });
+
+        // Gravar métrica de auditoria
+        try {
+          await supabase.from('metrics').insert({
+            metric_type: 'admin_patient_update',
+            metadata: {
+              patient_id,
+              patient_email: patientEmail,
+              fields_updated: Object.keys(sanitizedUpdates),
+              updated_by: adminEmail,
+              timestamp: new Date().toISOString()
+            }
+          });
+        } catch (metricErr) {
+          console.warn('[admin_update_patient] Erro ao gravar métrica (não crítico):', metricErr);
+        }
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            message: 'Paciente atualizado com sucesso',
+            updated_fields: Object.keys(sanitizedUpdates)
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
