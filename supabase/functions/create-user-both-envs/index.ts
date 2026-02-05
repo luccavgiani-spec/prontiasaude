@@ -92,25 +92,33 @@ serve(async (req: Request): Promise<Response> => {
     
     // =============================================
     // VERIFICAR SE EMAIL JÁ EXISTE EM QUALQUER AMBIENTE
+    // ✅ OTIMIZADO: Usar getUserByEmail ao invés de listUsers (muito mais rápido)
     // =============================================
     console.log("[create-user-both-envs] Verificando se email já existe...");
     
-    // Buscar em ambos os ambientes
+    // Buscar em ambos os ambientes usando getUserByEmail (instantâneo)
     let existsInCloud = false;
     let existsInProd = false;
     
     try {
-      const { data: cloudUsers } = await cloudClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      existsInCloud = cloudUsers?.users?.some(u => u.email?.toLowerCase() === normalizedEmail) || false;
+      const { data: cloudUser, error: cloudErr } = await cloudClient.auth.admin.getUserByEmail(normalizedEmail);
+      // Se não há erro e retornou user, então existe
+      existsInCloud = !cloudErr && !!cloudUser?.user;
+      if (cloudErr && !cloudErr.message?.includes('not found')) {
+        console.warn("[create-user-both-envs] Erro ao verificar Cloud:", cloudErr.message);
+      }
     } catch (err) {
-      console.error("[create-user-both-envs] Erro ao verificar Cloud:", err);
+      console.error("[create-user-both-envs] Exceção ao verificar Cloud:", err);
     }
     
     try {
-      const { data: prodUsers } = await prodClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      existsInProd = prodUsers?.users?.some(u => u.email?.toLowerCase() === normalizedEmail) || false;
+      const { data: prodUser, error: prodErr } = await prodClient.auth.admin.getUserByEmail(normalizedEmail);
+      existsInProd = !prodErr && !!prodUser?.user;
+      if (prodErr && !prodErr.message?.includes('not found')) {
+        console.warn("[create-user-both-envs] Erro ao verificar Produção:", prodErr.message);
+      }
     } catch (err) {
-      console.error("[create-user-both-envs] Erro ao verificar Produção:", err);
+      console.error("[create-user-both-envs] Exceção ao verificar Produção:", err);
     }
     
     if (existsInCloud || existsInProd) {

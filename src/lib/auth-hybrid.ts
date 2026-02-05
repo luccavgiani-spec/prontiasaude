@@ -38,23 +38,18 @@ export type UserCheckResult = {
 
 /**
  * Verifica em qual ambiente o email existe
+ * ✅ OTIMIZADO: Usa invokeCloudEdgeFunction para endpoint correto e timeout menor
  */
 export const checkUserExists = async (email: string): Promise<UserCheckResult> => {
   try {
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/check-user-exists`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ email: email.toLowerCase().trim() }),
-      }
-    );
+    console.log('[checkUserExists] Verificando email:', email.toLowerCase().trim());
+    
+    const { data, error } = await invokeCloudEdgeFunction('check-user-exists', {
+      body: { email: email.toLowerCase().trim() }
+    });
 
-    if (!response.ok) {
-      console.error('[checkUserExists] HTTP error:', response.status);
+    if (error) {
+      console.error('[checkUserExists] Error:', error);
       // Em caso de erro, permitir fluxo normal (tentar Cloud primeiro)
       return {
         existsInCloud: false,
@@ -64,11 +59,10 @@ export const checkUserExists = async (email: string): Promise<UserCheckResult> =
       };
     }
 
-    const result = await response.json();
-    console.log('[checkUserExists] Result:', result);
-    return result;
+    console.log('[checkUserExists] Result:', data);
+    return data as UserCheckResult;
   } catch (error) {
-    console.error('[checkUserExists] Error:', error);
+    console.error('[checkUserExists] Exception:', error);
     // Em caso de erro, permitir fluxo normal
     return {
       existsInCloud: false,
@@ -283,12 +277,45 @@ export const hybridSignOut = async () => {
 
 /**
  * Verifica sessão em ambos os ambientes
+ * ✅ CORREÇÃO: Respeita sessionStorage.auth_environment para evitar "sessão fantasma"
  */
 export const getHybridSession = async (): Promise<{
   session: any | null;
   environment: 'cloud' | 'production' | null;
 }> => {
-  // Verificar Cloud primeiro
+  // Verificar se há preferência de ambiente salva
+  const savedEnvironment = typeof window !== 'undefined' 
+    ? sessionStorage.getItem('auth_environment') 
+    : null;
+  
+  // Se temos preferência de ambiente, verificar esse primeiro
+  if (savedEnvironment === 'production') {
+    const { data: prodData } = await supabaseProductionAuth.auth.getSession();
+    if (prodData.session) {
+      return { session: prodData.session, environment: 'production' };
+    }
+    // Fallback para Cloud se não houver sessão na Produção
+    const { data: cloudData } = await supabase.auth.getSession();
+    if (cloudData.session) {
+      return { session: cloudData.session, environment: 'cloud' };
+    }
+    return { session: null, environment: null };
+  }
+  
+  if (savedEnvironment === 'cloud') {
+    const { data: cloudData } = await supabase.auth.getSession();
+    if (cloudData.session) {
+      return { session: cloudData.session, environment: 'cloud' };
+    }
+    // Fallback para Produção se não houver sessão no Cloud
+    const { data: prodData } = await supabaseProductionAuth.auth.getSession();
+    if (prodData.session) {
+      return { session: prodData.session, environment: 'production' };
+    }
+    return { session: null, environment: null };
+  }
+
+  // Sem preferência: verificar Cloud primeiro (comportamento padrão)
   const { data: cloudData } = await supabase.auth.getSession();
   if (cloudData.session) {
     return { session: cloudData.session, environment: 'cloud' };
