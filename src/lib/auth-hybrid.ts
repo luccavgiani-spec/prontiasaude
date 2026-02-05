@@ -38,7 +38,7 @@ export type UserCheckResult = {
 
 /**
  * Verifica em qual ambiente o email existe
- * ✅ OTIMIZADO: Usa invokeCloudEdgeFunction para endpoint correto e timeout menor
+ * ✅ OTIMIZADO: Usa invokeCloudEdgeFunction para endpoint correto
  */
 export const checkUserExists = async (email: string): Promise<UserCheckResult> => {
   try {
@@ -50,7 +50,7 @@ export const checkUserExists = async (email: string): Promise<UserCheckResult> =
 
     if (error) {
       console.error('[checkUserExists] Error:', error);
-      // Em caso de erro, permitir fluxo normal (tentar Cloud primeiro)
+      // Em caso de erro, retornar resultado que permite fallback
       return {
         existsInCloud: false,
         existsInProduction: false,
@@ -63,7 +63,7 @@ export const checkUserExists = async (email: string): Promise<UserCheckResult> =
     return data as UserCheckResult;
   } catch (error) {
     console.error('[checkUserExists] Exception:', error);
-    // Em caso de erro, permitir fluxo normal
+    // Em caso de erro, retornar resultado que permite fallback
     return {
       existsInCloud: false,
       existsInProduction: false,
@@ -75,6 +75,7 @@ export const checkUserExists = async (email: string): Promise<UserCheckResult> =
 
 /**
  * Login híbrido - usa o ambiente correto baseado na verificação
+ * ✅ CORREÇÃO: Adiciona fallback direto se checkUserExists falhar
  */
 export const hybridSignIn = async (
   email: string, 
@@ -91,15 +92,98 @@ export const hybridSignIn = async (
   const userCheck = await checkUserExists(normalizedEmail);
   console.log('[hybridSignIn] User check:', userCheck);
 
-  // Se não existe em nenhum lugar
+  // ✅ CORREÇÃO: Se checkUserExists falhou (loginEnvironment: 'none'), tentar login direto
   if (userCheck.loginEnvironment === 'none') {
-    return { 
-      success: false, 
-      error: 'Email não encontrado. Verifique o email ou crie uma conta.' 
-    };
+    console.log('[hybridSignIn] checkUserExists retornou none, tentando login direto...');
+    
+    // Tentar Cloud primeiro
+    console.log('[hybridSignIn] Tentando Cloud...');
+    const { data: cloudData, error: cloudError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+    
+    if (!cloudError && cloudData?.session) {
+      console.log('[hybridSignIn] ✅ Login Cloud bem-sucedido!');
+      // Salvar ambiente no sessionStorage
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth_environment', 'cloud');
+      }
+      return { 
+        success: true, 
+        environment: 'cloud',
+        session: cloudData.session
+      };
+    }
+    
+    // Se Cloud falhou com "Invalid login credentials", tentar Produção
+    if (cloudError?.message === 'Invalid login credentials') {
+      console.log('[hybridSignIn] Cloud retornou credenciais inválidas, tentando Produção...');
+      const { data: prodData, error: prodError } = await supabaseProductionAuth.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      
+      if (!prodError && prodData?.session) {
+        console.log('[hybridSignIn] ✅ Login Produção bem-sucedido!');
+        // Salvar ambiente no sessionStorage
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('auth_environment', 'production');
+        }
+        return { 
+          success: true, 
+          environment: 'production',
+          session: prodData.session
+        };
+      }
+      
+      // Se ambos falharam com credenciais inválidas
+      if (prodError?.message === 'Invalid login credentials') {
+        return { 
+          success: false, 
+          error: 'Email ou senha incorretos.' 
+        };
+      }
+      
+      // Outro erro da Produção
+      if (prodError) {
+        return { 
+          success: false, 
+          error: prodError.message 
+        };
+      }
+    }
+    
+    // Outro erro do Cloud (não credenciais inválidas)
+    if (cloudError) {
+      // Ainda tentar Produção como última chance
+      console.log('[hybridSignIn] Erro Cloud, tentando Produção como fallback...');
+      const { data: prodData, error: prodError } = await supabaseProductionAuth.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+      
+      if (!prodError && prodData?.session) {
+        console.log('[hybridSignIn] ✅ Login Produção bem-sucedido (fallback)!');
+        if (typeof window !== 'undefined') {
+          sessionStorage.setItem('auth_environment', 'production');
+        }
+        return { 
+          success: true, 
+          environment: 'production',
+          session: prodData.session
+        };
+      }
+      
+      // Ambos falharam - retornar erro mais específico
+      return { 
+        success: false, 
+        error: 'Email não encontrado. Verifique o email ou crie uma conta.' 
+      };
+    }
   }
 
-  // Tentar login no ambiente correto
+  // Tentar login no ambiente correto (comportamento original)
   if (userCheck.loginEnvironment === 'cloud') {
     console.log('[hybridSignIn] Trying Cloud login...');
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -115,6 +199,11 @@ export const hybridSignIn = async (
           ? 'Email ou senha incorretos.' 
           : error.message 
       };
+    }
+
+    // Salvar ambiente no sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('auth_environment', 'cloud');
     }
 
     return { 
@@ -139,6 +228,11 @@ export const hybridSignIn = async (
           ? 'Email ou senha incorretos.' 
           : error.message 
       };
+    }
+
+    // Salvar ambiente no sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('auth_environment', 'production');
     }
 
     return { 
@@ -232,6 +326,11 @@ export const hybridSignUp = async (
       };
     }
 
+    // Salvar ambiente no sessionStorage
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('auth_environment', 'production');
+    }
+
     console.log('[hybridSignUp] ✅ Cadastro completo! ProdID:', result.prodUserId, 'CloudID:', result.cloudUserId);
     
     return {
@@ -272,6 +371,11 @@ export const hybridSignOut = async () => {
     await supabaseProductionAuth.auth.signOut();
   } catch (e) {
     console.error('[hybridSignOut] Production signOut error:', e);
+  }
+
+  // Limpar ambiente do sessionStorage
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('auth_environment');
   }
 };
 
