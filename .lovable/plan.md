@@ -1,138 +1,191 @@
 
+# Plano: Reescrever patient-operations e Eliminar Chamadas ao Cloud
 
-## Versão Auto-Contida do patient-operations/index.ts
+## Diagnóstico Confirmado
 
-Vou gerar para você uma versão completa e auto-contida do arquivo `patient-operations/index.ts` que inclui:
+### Problema 1: Erro 500 `null value in column "id"`
+**Localização:** `supabase/functions/patient-operations/index.ts` linha 2048
+**Causa:** O `INSERT` não gera UUID para a coluna `id`:
+```ts
+.insert({
+  user_id,
+  email: email || null,
+  profile_complete: false
+  // ❌ FALTA: id: crypto.randomUUID()
+})
+```
 
-1. **CORS headers inline** - substitui `import { getCorsHeaders } from '../common/cors.ts'`
-2. **CPF validator inline** - substitui `import { validateCPF, cleanCPF } from '../common/cpf-validator.ts'`
+### Problema 2: Chamadas ao Cloud em vez de Produção
+**Localização:** `src/lib/patients.ts` linha 29
+```ts
+const invokeFunction = environment === 'production' 
+  ? invokeEdgeFunction 
+  : invokeCloudEdgeFunction;  // ❌ Chama Cloud quando ambiente = 'cloud'
+```
 
-### O que muda:
-- Remove as 2 linhas de import externo (linhas 3-4)
-- Adiciona funções `getCorsHeaders()` e `validateCPFChecksum()` diretamente no início do arquivo
-- Todo o resto do código permanece **100% igual**
-
-### Como usar:
-1. Abra o Supabase Dashboard → Edge Functions → `patient-operations`
-2. Apague **todo** o conteúdo atual
-3. Cole o código abaixo (será muito longo ~2300 linhas)
-4. Clique em **Deploy**
+O Network confirma: `Sb-Project-Ref: yrsjluhhnhxogdgnbnya` (Cloud)
 
 ---
 
-## Código Completo (copiar tudo abaixo)
+## Arquivos que Serão Modificados
 
-```typescript
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+| # | Arquivo | Motivo |
+|---|---------|--------|
+| 1 | `supabase/functions/patient-operations/index.ts` | Adicionar `id: crypto.randomUUID()` no INSERT |
+| 2 | `src/lib/patients.ts` | Forçar **SEMPRE** usar `invokeEdgeFunction` (Produção) |
+| 3 | `src/lib/edge-functions.ts` | Adicionar origins do Preview na lista de CORS do header |
 
-// ============================================================
-// ✅ CORS HEADERS INLINE (substitui ../common/cors.ts)
-// ============================================================
-const ALLOWED_ORIGINS = [
-  'https://prontiasaude.com.br',
-  'https://www.prontiasaude.com.br',
-  'https://prontiasaude.lovable.app',
-  'http://localhost:5173',
-];
+---
 
-function isLovablePreviewOrigin(origin: string): boolean {
-  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
-}
+## Alterações Detalhadas
 
-function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
-  const origin = requestOrigin || '';
-  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
-  const allowedOrigin = isAllowed ? origin : '';
-  
-  return {
-    'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0],
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-  };
-}
+### 1. patient-operations/index.ts (Backend)
 
-// ============================================================
-// ✅ CPF VALIDATOR INLINE (substitui ../common/cpf-validator.ts)
-// ============================================================
-function cleanCPF(cpf: string): string {
-  return cpf.replace(/\D/g, '');
-}
+**Linhas 2046-2052** - Adicionar geração explícita de UUID:
 
-function validateCPFChecksum(cpf: string): boolean {
-  if (!cpf) return false;
-  
-  const cleanedCPF = cpf.replace(/\D/g, '');
-  
-  if (cleanedCPF.length !== 11) return false;
-  
-  const invalidPatterns = [
-    '00000000000', '11111111111', '22222222222', '33333333333',
-    '44444444444', '55555555555', '66666666666', '77777777777',
-    '88888888888', '99999999999'
-  ];
-  
-  if (invalidPatterns.includes(cleanedCPF)) return false;
-  
-  // Validar dígitos verificadores
-  let sum = 0;
-  let remainder;
-  
-  for (let i = 1; i <= 9; i++) {
-    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (11 - i);
-  }
-  
-  remainder = (sum * 10) % 11;
-  if (remainder === 10 || remainder === 11) remainder = 0;
-  if (remainder !== parseInt(cleanedCPF.substring(9, 10))) return false;
-  
-  sum = 0;
-  for (let i = 1; i <= 10; i++) {
-    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (12 - i);
-  }
-  
-  remainder = (sum * 10) % 11;
-  if (remainder === 10 || remainder === 11) remainder = 0;
-  if (remainder !== parseInt(cleanedCPF.substring(10, 11))) return false;
-  
-  return true;
-}
+```ts
+// ANTES
+.insert({
+  user_id,
+  email: email || null,
+  profile_complete: false
+})
 
-const corsHeaders = getCorsHeaders();
-
-// ============================================================
-// ✅ CONSTANTES E HELPERS PARA SYNC CLICKLIFE DE DEPENDENTES
-// ============================================================
-
-// Planos FAMILIARES que incluem especialistas → planoid 1238 na ClickLife
-const PLANOS_FAMILIARES_COM_ESPECIALISTAS = [
-  'FAM_COM_ESP_1M',
-  'FAM_COM_ESP_3M',
-  'FAM_COM_ESP_6M',
-  'FAM_COM_ESP_12M',
-];
-
-// Planos FAMILIARES sem especialistas → planoid 1237 na ClickLife
-const PLANOS_FAMILIARES_SEM_ESPECIALISTAS = [
-  'FAM_SEM_ESP_1M',
-  'FAM_SEM_ESP_3M',
-  'FAM_SEM_ESP_6M',
-  'FAM_SEM_ESP_12M',
-  'FAMILY',
-  'FAM_BASIC',
-];
-
-// ... [TODO: O restante do código continua EXATAMENTE igual a partir da linha 31 do arquivo original]
+// DEPOIS
+.insert({
+  id: crypto.randomUUID(),  // ✅ Gerar UUID explicitamente
+  user_id,
+  email: email || null,
+  profile_complete: false
+})
 ```
 
 ---
 
-## ⚠️ IMPORTANTE
+### 2. src/lib/patients.ts (Frontend)
 
-O arquivo completo tem **~2250 linhas**. Devido ao tamanho, vou gerar o arquivo completo pronto para deploy quando você aprovar este plano.
+**Objetivo:** Eliminar toda lógica de roteamento Cloud/Produção. SEMPRE chamar Produção.
 
-### Ao aprovar:
-- Gerarei o arquivo `.ts` completo e auto-contido
-- Você poderá copiar diretamente para o Dashboard do Supabase
-- Não precisará mexer em `cors.ts` nem `cpf-validator.ts`
+**Alterações principais:**
 
+```ts
+// ANTES (linha 29)
+const invokeFunction = environment === 'production' 
+  ? invokeEdgeFunction 
+  : invokeCloudEdgeFunction;
+
+// DEPOIS - Remover completamente essa lógica
+// SEMPRE usar invokeEdgeFunction (que aponta para Produção)
+```
+
+**Nova versão simplificada de `ensurePatientRow`:**
+```ts
+export async function ensurePatientRow(userId: string) {
+  console.log('[ensurePatientRow] Chamando PRODUÇÃO para user_id:', userId);
+  
+  const { session } = await getHybridSession();
+  const userEmail = session?.user?.email;
+  
+  const { data, error } = await invokeEdgeFunction('patient-operations', {
+    body: {
+      operation: 'ensure_patient',
+      user_id: userId,
+      email: userEmail
+    }
+  });
+  
+  if (error) {
+    console.error('[ensurePatientRow] Edge function error:', error);
+    throw new Error(error.message || 'Falha ao garantir registro do paciente');
+  }
+  
+  return true;
+}
+```
+
+**Simplificar `upsertPatientBasic`:**
+- Remover parâmetro `environment` do `ensurePatientRow`
+- Manter apenas `invokeEdgeFunction` (nunca `invokeCloudEdgeFunction`)
+- Manter lógica de `getHybridSession` apenas para obter o `userId` e `email`
+
+---
+
+### 3. src/lib/edge-functions.ts (Frontend)
+
+Adicionar os origins do Preview na lista de headers permitidos (para debug):
+
+```ts
+// Linha 57 - Adicionar log do origin para debug
+console.log(`[invokeEdgeFunction] target=production function=${functionName} origin=${window?.location?.origin}`);
+```
+
+---
+
+## Fluxo Após as Alterações
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                    FLUXO SIMPLIFICADO                           │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Frontend (Preview/Publicado)                                   │
+│       │                                                         │
+│       ▼                                                         │
+│  src/lib/patients.ts                                            │
+│       │                                                         │
+│       ▼                                                         │
+│  invokeEdgeFunction()  ────────────────────────────────►        │
+│       │                                                         │
+│       ▼                                                         │
+│  https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/         │
+│  patient-operations                                             │
+│       │                                                         │
+│       ▼                                                         │
+│  Supabase PRODUÇÃO (banco real)                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Verificação de CORS (já corrigido anteriormente)
+
+O arquivo `patient-operations/index.ts` já tem CORS dinâmico corrigido:
+- Linha 14-16: `isLovablePreviewOrigin()` aceita `https://id-preview--*.lovable.app`
+- Linha 18-28: `getCorsHeaders()` retorna origin correto baseado na requisição
+
+---
+
+## Passos de Implementação
+
+1. **Atualizar `src/lib/patients.ts`**
+   - Remover import de `invokeCloudEdgeFunction`
+   - Simplificar `ensurePatientRow` para usar apenas `invokeEdgeFunction`
+   - Simplificar `upsertPatientBasic` para usar apenas `invokeEdgeFunction`
+
+2. **Atualizar `supabase/functions/patient-operations/index.ts`**
+   - Adicionar `id: crypto.randomUUID()` na linha 2048
+
+3. **Após as alterações:**
+   - Copiar o arquivo `patient-operations/index.ts` completo
+   - Fazer deploy manual no Supabase Dashboard → Edge Functions → patient-operations
+   - Testar edição de perfil na Área do Paciente
+
+---
+
+## Critérios de Sucesso
+
+1. ✅ Network mostra requisições para `ploqujuhpwutpcibedbr` (não `yrsjluhhnhxogdgnbnya`)
+2. ✅ Erro 500 `null value in column "id"` desaparece
+3. ✅ Edição de perfil salva com sucesso (status 200)
+4. ✅ Logs da função aparecem no Supabase Dashboard
+
+---
+
+## Não Será Alterado
+
+- Lógica de autenticação (`auth-hybrid.ts`)
+- Integrações ClickLife, Communicare, Mercado Pago
+- Regras de redirecionamento (`schedule-redirect`)
+- Componentes de UI
+- Qualquer outro arquivo não listado acima
