@@ -1,93 +1,138 @@
 
-## ARQUIVOS QUE SERÃO MODIFICADOS
-1) `supabase/functions/check-user-exists/index.ts`  
-2) `src/lib/auth-hybrid.ts`  
-3) `src/lib/patients.ts`  
-4) `src/components/admin/EditPatientModal.tsx`
 
-## MOTIVO (baseado no seu pedido)
-- Login “quebrado / usuário não existe” (ex.: `t.gaini@gmail.com`) passou a depender da Edge Function `check-user-exists`. Ela está falhando em runtime e, por causa disso, o frontend interpreta como “não existe em nenhum lugar”.
-- Edição de perfil e edição pelo painel admin ainda retornam erro de token (o anexo mostra `{"error":"Token inválido"}`), típico de token do ambiente errado sendo validado no backend errado.
+## Versão Auto-Contida do patient-operations/index.ts
 
-## DIAGNÓSTICO (o que está errado de fato)
-### 1) Login quebrado (“usuário não existe”)
-- Logs da função `check-user-exists` mostram:
-  - `TypeError: client.auth.admin.getUserByEmail is not a function`
-- Ou seja: a função está importando uma versão/entry do SDK que não expõe `getUserByEmail`. Isso faz a função falhar e o `checkUserExists()` do frontend cair no fallback que devolve `loginEnvironment: 'none'`, levando ao erro “Email não encontrado”.
+Vou gerar para você uma versão completa e auto-contida do arquivo `patient-operations/index.ts` que inclui:
 
-### 2) Token inválido ao editar pelo painel admin (e ainda ocorre em produção)
-- O request do admin vai para a função do backend de produção, mas o token do admin é do ambiente Cloud (onde o admin fez login).
-- Se a função em produção não está com o bypass/validação cross-project como no seu repositório atual, ela tenta validar esse token Cloud no auth de produção e responde `Token inválido`.
+1. **CORS headers inline** - substitui `import { getCorsHeaders } from '../common/cors.ts'`
+2. **CPF validator inline** - substitui `import { validateCPF, cleanCPF } from '../common/cpf-validator.ts'`
 
-### 3) Token inválido ao salvar o próprio perfil
-- No fluxo de salvar perfil (`upsertPatientBasic`), há chamadas para `patient-operations` que exigem JWT válido.
-- Hoje o helper `invokeEdgeFunction()` pega token do cliente Cloud por padrão; quando o usuário está logado em “produção”, isso pode enviar o token errado (ou anon) para operações que exigem JWT, resultando em `Token inválido`.
+### O que muda:
+- Remove as 2 linhas de import externo (linhas 3-4)
+- Adiciona funções `getCorsHeaders()` e `validateCPFChecksum()` diretamente no início do arquivo
+- Todo o resto do código permanece **100% igual**
+
+### Como usar:
+1. Abra o Supabase Dashboard → Edge Functions → `patient-operations`
+2. Apague **todo** o conteúdo atual
+3. Cole o código abaixo (será muito longo ~2300 linhas)
+4. Clique em **Deploy**
 
 ---
 
-## ESCOPO (exatamente o que será alterado)
-### A) Reverter/estabilizar o login urgentemente (sem depender do `getUserByEmail` quebrado)
-**Arquivo:** `supabase/functions/check-user-exists/index.ts`
-1. Fixar a importação do SDK para uma versão que sabemos que suporta `auth.admin.getUserByEmail` (mesma usada em `create-user-both-envs`, que está funcionando).
-2. Adicionar fallback automático:
-   - Se `getUserByEmail` não existir por qualquer motivo, usar o método anterior (listagem/paginação via `listUsers`) para não derrubar o login.
-3. Garantir que a função retorne 200 com um payload consistente (existsInCloud/existsInProduction/loginEnvironment/canRegister) mesmo em fallback, evitando “fail closed”.
+## Código Completo (copiar tudo abaixo)
 
-**Arquivo:** `src/lib/auth-hybrid.ts`
-4. Adicionar um fallback de login para quando `checkUserExists` falhar/retornar inconsistente:
-   - Se `check-user-exists` der erro (ou `loginEnvironment: none`), tentar login direto:
-     1) tenta Cloud `signInWithPassword`
-     2) se falhar com credencial inválida, tenta Produção `signInWithPassword`
-   - Só exibir “usuário não existe” se ambas as tentativas confirmarem que não há conta (ou se as duas retornarem explicitamente credencial inválida).
-   
-Resultado: mesmo que a função de verificação volte a falhar no futuro, o login não trava o sistema inteiro.
+```typescript
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
+
+// ============================================================
+// ✅ CORS HEADERS INLINE (substitui ../common/cors.ts)
+// ============================================================
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app',
+  'http://localhost:5173',
+];
+
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
+
+function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const origin = requestOrigin || '';
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : '';
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin || ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+}
+
+// ============================================================
+// ✅ CPF VALIDATOR INLINE (substitui ../common/cpf-validator.ts)
+// ============================================================
+function cleanCPF(cpf: string): string {
+  return cpf.replace(/\D/g, '');
+}
+
+function validateCPFChecksum(cpf: string): boolean {
+  if (!cpf) return false;
+  
+  const cleanedCPF = cpf.replace(/\D/g, '');
+  
+  if (cleanedCPF.length !== 11) return false;
+  
+  const invalidPatterns = [
+    '00000000000', '11111111111', '22222222222', '33333333333',
+    '44444444444', '55555555555', '66666666666', '77777777777',
+    '88888888888', '99999999999'
+  ];
+  
+  if (invalidPatterns.includes(cleanedCPF)) return false;
+  
+  // Validar dígitos verificadores
+  let sum = 0;
+  let remainder;
+  
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (11 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanedCPF.substring(9, 10))) return false;
+  
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (12 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanedCPF.substring(10, 11))) return false;
+  
+  return true;
+}
+
+const corsHeaders = getCorsHeaders();
+
+// ============================================================
+// ✅ CONSTANTES E HELPERS PARA SYNC CLICKLIFE DE DEPENDENTES
+// ============================================================
+
+// Planos FAMILIARES que incluem especialistas → planoid 1238 na ClickLife
+const PLANOS_FAMILIARES_COM_ESPECIALISTAS = [
+  'FAM_COM_ESP_1M',
+  'FAM_COM_ESP_3M',
+  'FAM_COM_ESP_6M',
+  'FAM_COM_ESP_12M',
+];
+
+// Planos FAMILIARES sem especialistas → planoid 1237 na ClickLife
+const PLANOS_FAMILIARES_SEM_ESPECIALISTAS = [
+  'FAM_SEM_ESP_1M',
+  'FAM_SEM_ESP_3M',
+  'FAM_SEM_ESP_6M',
+  'FAM_SEM_ESP_12M',
+  'FAMILY',
+  'FAM_BASIC',
+];
+
+// ... [TODO: O restante do código continua EXATAMENTE igual a partir da linha 31 do arquivo original]
+```
 
 ---
 
-### B) Corrigir salvar perfil do próprio usuário (token do ambiente correto)
-**Arquivo:** `src/lib/patients.ts`
-1. Ao detectar `environment === 'production'`, garantir que chamadas para operações que exigem auth (ex.: `complete_profile`) enviem `Authorization: Bearer <access_token da produção>`.
-   - Ou seja: pegar `session.access_token` retornado por `getHybridSession()` e repassar como `headers.Authorization` em `invokeEdgeFunction(...)`.
-2. Manter `ensure_patient` como bypass (sem exigir JWT), mas sem forçar “sempre produção” de forma cega para não quebrar preview:
-   - `ensurePatientRow` volta a ficar “environment-aware”:
-     - produção -> chama backend de produção
-     - cloud -> chama backend cloud
-   - Isso evita repetir o erro de foreign key no cloud com `user_id` de produção, e também evita CORS no preview.
+## ⚠️ IMPORTANTE
 
----
+O arquivo completo tem **~2250 linhas**. Devido ao tamanho, vou gerar o arquivo completo pronto para deploy quando você aprovar este plano.
 
-### C) Corrigir edição pelo painel admin (token inválido) sem depender do auth de produção aceitar token cloud
-**Arquivo:** `src/components/admin/EditPatientModal.tsx`
-1. Trocar a chamada de `invokeEdgeFunction('patient-operations', ...)` para `invokeCloudEdgeFunction('patient-operations', ...)` para o admin update.
-   - Motivo: o admin autentica no Cloud; então a validação do token e checagem de role admin tem que acontecer no Cloud.
-   - A função cloud então executa o UPDATE no banco de produção via service_role (sem depender de validar JWT cloud no auth de produção).
+### Ao aprovar:
+- Gerarei o arquivo `.ts` completo e auto-contido
+- Você poderá copiar diretamente para o Dashboard do Supabase
+- Não precisará mexer em `cors.ts` nem `cpf-validator.ts`
 
-Observação: isso não muda checkout/pagamentos/redirecionamentos; é apenas o caminho de escrita do painel admin.
-
----
-
-## CONFIRMAÇÃO (regra absoluta do projeto)
-Estas alterações estão explicitamente solicitadas? **NÃO** (você não citou paths), mas **são necessárias** para executar exatamente o que você pediu: “reverter o que travou login” + “corrigir token inválido na edição”.
-
-Ao aprovar este plano, você autoriza mudanças **somente** nos 4 arquivos listados acima.
-
----
-
-## PASSO A PASSO DE VALIDAÇÃO (E2E)
-1) Login:
-- Testar login com `t.gaini@gmail.com` e mais 1 usuário conhecido
-- Confirmar que não aparece “usuário não existe” indevidamente
-- Confirmar no Network que `check-user-exists` responde 200 e não dá TypeError
-
-2) Salvar perfil (usuário comum) no modo produção:
-- Entrar como usuário
-- Editar dados e salvar
-- Confirmar que as requisições que exigem auth estão indo com `Authorization` do ambiente correto e não retornam `Token inválido`
-
-3) Editar paciente no Admin:
-- Entrar como `suporte@prontiasaude.com.br`
-- Abrir modal e salvar
-- Confirmar que o request de update do admin vai para o backend Cloud (validação admin) e o UPDATE efetivamente reflete na produção
-
-4) Logs:
-- Verificar logs das funções `check-user-exists` e `patient-operations` (no ambiente Cloud) para confirmar que não há mais exceções e que o token é validado corretamente.
