@@ -1,9 +1,77 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
-import { getCorsHeaders } from '../common/cors.ts';
-import { validateCPF as validateCPFChecksum, cleanCPF } from '../common/cpf-validator.ts';
 
-const corsHeaders = getCorsHeaders();
+// ============================================================
+// ✅ CORS HEADERS INLINE (auto-contido - substitui ../common/cors.ts)
+// ============================================================
+const ALLOWED_ORIGINS = [
+  'https://prontiasaude.com.br',
+  'https://www.prontiasaude.com.br',
+  'https://prontiasaude.lovable.app',
+  'http://localhost:5173',
+];
+
+function isLovablePreviewOrigin(origin: string): boolean {
+  return /^https:\/\/id-preview--[a-f0-9-]+\.lovable\.app$/.test(origin);
+}
+
+function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const origin = requestOrigin || '';
+  const isAllowed = ALLOWED_ORIGINS.includes(origin) || isLovablePreviewOrigin(origin);
+  const allowedOrigin = isAllowed ? origin : ALLOWED_ORIGINS[0];
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  };
+}
+
+// ============================================================
+// ✅ CPF VALIDATOR INLINE (auto-contido - substitui ../common/cpf-validator.ts)
+// ============================================================
+function cleanCPF(cpf: string): string {
+  return cpf.replace(/\D/g, '');
+}
+
+function validateCPFChecksum(cpf: string): boolean {
+  if (!cpf) return false;
+  
+  const cleanedCPF = cpf.replace(/\D/g, '');
+  
+  if (cleanedCPF.length !== 11) return false;
+  
+  const invalidPatterns = [
+    '00000000000', '11111111111', '22222222222', '33333333333',
+    '44444444444', '55555555555', '66666666666', '77777777777',
+    '88888888888', '99999999999'
+  ];
+  
+  if (invalidPatterns.includes(cleanedCPF)) return false;
+  
+  // Validar dígitos verificadores
+  let sum = 0;
+  let remainder;
+  
+  for (let i = 1; i <= 9; i++) {
+    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (11 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanedCPF.substring(9, 10))) return false;
+  
+  sum = 0;
+  for (let i = 1; i <= 10; i++) {
+    sum += parseInt(cleanedCPF.substring(i - 1, i)) * (12 - i);
+  }
+  
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== parseInt(cleanedCPF.substring(10, 11))) return false;
+  
+  return true;
+}
 
 // ============================================================
 // ✅ CONSTANTES E HELPERS PARA SYNC CLICKLIFE DE DEPENDENTES
@@ -148,7 +216,7 @@ async function syncDependenteClickLife(
       
       // Normalizar telefone de forma robusta
       const telefoneLimpo = normalizePhone(dependente.telefone);
-      const numero = telefoneLimpo.substring(2); // Remove DDD
+      const numero = telefoneLimpo ? telefoneLimpo.substring(2) : '999999999'; // Remove DDD
 
       // Normalizar data de nascimento para DD-MM-YYYY
       let birthDateFormatted = '01-01-1990';
@@ -508,6 +576,10 @@ interface ResendFamilyInviteRequest {
 }
 
 serve(async (req) => {
+  // ✅ CORREÇÃO CORS: Calcular headers DINAMICAMENTE com o origin da requisição
+  const requestOrigin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(requestOrigin);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -968,13 +1040,13 @@ serve(async (req) => {
           );
         }
         
-        console.log('[disable_plan] Plan disabled:', { email, plan: updatedPlan[0] });
+        console.log('[disable_plan] Plan disabled:', { email, count: updatedPlan.length });
         
         return new Response(
           JSON.stringify({ 
             success: true,
-            message: `Plano desabilitado com sucesso para ${email}`,
-            plan: updatedPlan[0]
+            message: `${updatedPlan.length} plano(s) desabilitado(s)`,
+            plans: updatedPlan
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -983,9 +1055,9 @@ serve(async (req) => {
       case 'change_plan': {
         const { plan_id, new_plan_code, new_expires_at } = body as ChangePlanRequest;
         
-        if (!plan_id || !new_plan_code) {
+        if (!validateString(plan_id, 255) || !validateString(new_plan_code, 50)) {
           return new Response(
-            JSON.stringify({ error: 'plan_id e new_plan_code são obrigatórios' }),
+            JSON.stringify({ error: 'Dados inválidos' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -1238,7 +1310,7 @@ serve(async (req) => {
         console.log('[activate_plan_manual] 🔍 Buscando paciente:', normalizedPatientEmail);
         console.log('[activate_plan_manual] patient_id recebido:', patient_id || '(não informado)');
         
-        let patient: { id: string; user_id: string | null } | null = null;
+        let patient: { id: string | null; user_id: string | null } | null = null;
         let patientLookupMethod = 'none';
 
         // TENTATIVA 1: Buscar por patient_id (se fornecido como patients.id)
@@ -1412,32 +1484,33 @@ serve(async (req) => {
             const { error: clicklifeError } = await supabase.functions.invoke('activate-clicklife-manual', {
               body: { 
                 email: patient_email,
-                plan_id: clickLifePlanoId
+                cpf: patientFull.cpf,
+                nome: `${patientFull.first_name || ''} ${patientFull.last_name || ''}`.trim(),
+                telefone: patientFull.phone_e164,
+                sexo: patientFull.gender,
+                datanascimento: patientFull.birth_date,
+                planoid: clickLifePlanoId
               }
             });
             
             if (clicklifeError) {
-              console.warn('[activate_plan_manual] ⚠️ ClickLife falhou (não crítico):', clicklifeError);
+              console.warn('[activate_plan_manual] ⚠️ ClickLife sync error (non-blocking):', clicklifeError);
             } else {
-              console.log('[activate_plan_manual] ✅ ClickLife OK, planoId:', clickLifePlanoId);
+              console.log('[activate_plan_manual] ✅ ClickLife sync OK');
             }
           } catch (clicklifeErr) {
-            console.warn('[activate_plan_manual] ⚠️ ClickLife exception (não crítico):', clicklifeErr);
+            console.warn('[activate_plan_manual] ⚠️ ClickLife call failed (non-blocking):', clicklifeErr);
           }
-        }
-
-        // TODO: Enviar email (opcional)
-        if (send_email) {
-          console.log('[activate_plan_manual] Email notification queued for:', patient_email);
         }
 
         return new Response(
           JSON.stringify({ 
             success: true,
-            step: 'complete',
-            message: 'Plan activated successfully',
+            message: 'Plano ativado com sucesso',
+            patient_email,
+            plan_code,
             expires_at: expiresAtDate,
-            patient_id: patient.id
+            patient_lookup_method: patientLookupMethod
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -1456,13 +1529,6 @@ serve(async (req) => {
 
         const { plan_id, email } = body as InviteFamiliarRequest;
 
-        if (!plan_id || !email) {
-          return new Response(
-            JSON.stringify({ error: 'plan_id e email são obrigatórios' }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
         if (!validateEmail(email)) {
           return new Response(
             JSON.stringify({ error: 'Email inválido' }),
@@ -1470,31 +1536,26 @@ serve(async (req) => {
           );
         }
 
-        // Verificar se o plano pertence ao usuário e é familiar
+        // Verificar se o plano pertence ao usuário
         const { data: plan, error: planError } = await supabase
           .from('patient_plans')
-          .select('id, plan_code, user_id, email')
+          .select('*')
           .eq('id', plan_id)
+          .eq('user_id', user.id)
           .eq('status', 'active')
           .single();
 
         if (planError || !plan) {
           return new Response(
-            JSON.stringify({ error: 'Plano não encontrado' }),
+            JSON.stringify({ error: 'Plano não encontrado ou sem permissão' }),
             { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
 
-        if (plan.user_id !== user.id) {
+        // Verificar se é plano familiar
+        if (!plan.plan_code.includes('FAM')) {
           return new Response(
-            JSON.stringify({ error: 'Você não tem permissão para gerenciar este plano' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-
-        if (!plan.plan_code?.startsWith('FAM_') && plan.plan_code !== 'FAMILY') {
-          return new Response(
-            JSON.stringify({ error: 'Este recurso é apenas para planos familiares' }),
+            JSON.stringify({ error: 'Este plano não permite adicionar familiares' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -1952,17 +2013,17 @@ serve(async (req) => {
           );
         }
         
-        // Verificar se já existe registro
-        const { data: existing, error: selectError } = await supabase
+        // Verificar se já existe
+        const { data: existing, error: checkError } = await supabase
           .from('patients')
-          .select('id, email, profile_complete')
+          .select('id, profile_complete')
           .eq('user_id', user_id)
           .maybeSingle();
         
-        if (selectError) {
-          console.error('[ensure_patient] ❌ Erro ao buscar:', selectError);
+        if (checkError) {
+          console.error('[ensure_patient] ❌ Erro ao verificar:', checkError);
           return new Response(
-            JSON.stringify({ error: selectError.message }),
+            JSON.stringify({ error: checkError.message }),
             { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -1980,23 +2041,20 @@ serve(async (req) => {
           );
         }
         
-        // ✅ CORREÇÃO: Gerar id explicitamente para blindar contra problemas de default
-        const newPatientId = crypto.randomUUID();
-        console.log('[ensure_patient] Criando novo registro com id:', newPatientId);
-        
-        // Criar novo registro (service_role ignora RLS)
+        // Criar novo registro
+        console.log('[ensure_patient] 📝 Criando novo registro para user_id:', user_id);
         const { data: newPatient, error: insertError } = await supabase
           .from('patients')
-          .insert({ 
-            id: newPatientId, // ✅ Gerar UUID explicitamente
-            user_id, 
-            email: email || null 
+          .insert({
+            user_id,
+            email: email || null,
+            profile_complete: false
           })
           .select('id, profile_complete')
           .single();
         
         if (insertError) {
-          // Ignorar conflito (registro pode ter sido criado por trigger em paralelo)
+          // Verificar se é erro de duplicata (race condition)
           if (insertError.code === '23505') {
             console.log('[ensure_patient] ⚠️ Conflito detectado, buscando registro existente');
             const { data: conflictPatient } = await supabase
@@ -2236,13 +2294,17 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in patient-operations:', error);
     
+    // ✅ CORREÇÃO: Garantir que erro também usa corsHeaders calculados
+    const requestOrigin = req.headers.get('origin');
+    const errorCorsHeaders = getCorsHeaders(requestOrigin);
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
         error: 'Erro interno do servidor'
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...errorCorsHeaders, 'Content-Type': 'application/json' },
         status: 500,
       },
     );
