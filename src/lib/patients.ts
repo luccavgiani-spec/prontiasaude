@@ -7,11 +7,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** 
  * Garante que exista uma linha em public.patients para o usuário atual.
- * ✅ CORREÇÃO: Usar Edge Function (service_role) para evitar violação de RLS
- * em ambientes híbridos (Cloud + Produção) onde o JWT não é reconhecido.
- * 
- * IMPORTANTE: Agora detecta o ambiente e usa a função correta (Cloud ou Produção).
- * Isso permite que testes no preview do Lovable funcionem corretamente.
+ * ✅ CORREÇÃO: Environment-aware para evitar FK violation e CORS
+ * - Produção → invokeEdgeFunction (produção)
+ * - Cloud → invokeCloudEdgeFunction (cloud)
  */
 export async function ensurePatientRow(
   userId: string, 
@@ -22,27 +20,21 @@ export async function ensurePatientRow(
   
   // ✅ Buscar session/token do cliente correto (Cloud ou Produção)
   const { data: sessionData } = await dbClient.auth.getSession();
-  const accessToken = sessionData?.session?.access_token;
   const userEmail = sessionData?.session?.user?.email;
   
-  console.log('[ensurePatientRow] Token presente:', !!accessToken, 'Email:', userEmail);
+  console.log('[ensurePatientRow] Email:', userEmail);
   
-  // ✅ Construir headers com Authorization do ambiente correto
-  const headers: Record<string, string> = {};
-  if (accessToken) {
-    headers['Authorization'] = `Bearer ${accessToken}`;
-  }
+  // ✅ CORREÇÃO: Rotear para o ambiente correto
+  // ensure_patient usa service_role internamente (bypass RLS), então não precisa de Authorization
+  const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
   
-  // ✅ CORREÇÃO: ensure_patient SEMPRE vai para Produção (via invokeEdgeFunction)
-  // A operação está na AUTH_BYPASS_OPERATIONS e usa service_role internamente (bypass RLS)
-  // Não depende de JWT do usuário, então não precisa de headers de Authorization
-  const { data, error } = await invokeEdgeFunction('patient-operations', {
+  const { data, error } = await invokeFunction('patient-operations', {
     body: {
       operation: 'ensure_patient',
       user_id: userId,
       email: userEmail
     }
-    // ✅ Sem headers - a função usa service_role internamente
+    // ✅ Sem headers de Authorization - a função usa service_role internamente
   });
   
   if (error) {
@@ -75,6 +67,7 @@ export async function upsertPatientBasic(payload: {
   const { session, environment } = await getHybridSession();
   const userId = session?.user?.id;
   const userEmail = session?.user?.email;
+  const accessToken = session?.access_token;
   
   console.log('[patients] Ambiente detectado:', environment, 'userId:', userId);
   
@@ -85,7 +78,7 @@ export async function upsertPatientBasic(payload: {
   console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
 
   // ✅ CORREÇÃO: Passar environment para ensurePatientRow
-  await ensurePatientRow(userId, dbClient, environment);
+  await ensurePatientRow(userId, dbClient, environment || 'cloud');
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');
@@ -152,6 +145,7 @@ export async function upsertPatientBasic(payload: {
   }
 
   // Send to GAS webhook
+  // ✅ CORREÇÃO: Enviar token do ambiente correto no Authorization header
   try {
     // ✅ CORREÇÃO: Verificar plano ATIVO e NÃO EXPIRADO na tabela patient_plans
     const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
@@ -173,6 +167,12 @@ export async function upsertPatientBasic(payload: {
       hasActivePlan
     });
 
+    // ✅ CORREÇÃO: Usar invokeEdgeFunction para produção COM token do ambiente correto
+    const headers: Record<string, string> = {};
+    if (accessToken && environment === 'production') {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+
     await invokeEdgeFunction('patient-operations', {
       body: {
         operation: 'complete_profile',
@@ -190,7 +190,8 @@ export async function upsertPatientBasic(payload: {
         city: payload.city || '',
         state: payload.state || '',
         plano: hasActivePlan
-      }
+      },
+      headers
     });
   } catch (gasError) {
     console.error('GAS webhook error (non-blocking):', gasError);

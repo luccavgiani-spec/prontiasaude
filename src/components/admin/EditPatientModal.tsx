@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
@@ -128,9 +128,9 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
         state: formData.state || null,
       };
 
-      // ✅ CORREÇÃO: Obter token do Cloud e enviá-lo explicitamente
-      // O admin faz login no Cloud, então precisamos enviar o token do Cloud
-      // para que a Edge Function de Produção possa validá-lo
+      // ✅ CORREÇÃO: Obter token do Cloud e usar invokeCloudEdgeFunction
+      // O admin faz login no Cloud, então a validação acontece no Cloud
+      // e a função Cloud executa o UPDATE no banco de produção via service_role
       console.log('[EditPatientModal] Obtendo token do Cloud...');
       const { data: sessionData } = await supabase.auth.getSession();
       const cloudToken = sessionData?.session?.access_token;
@@ -141,7 +141,8 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
 
       console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
       
-      const { data, error } = await invokeEdgeFunction('patient-operations', {
+      // ✅ CORREÇÃO: Usar invokeCloudEdgeFunction (Cloud valida token, executa no banco de produção)
+      const { data, error } = await invokeCloudEdgeFunction('patient-operations', {
         body: {
           operation: 'admin_update_patient',
           patient_id: patient.id,
