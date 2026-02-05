@@ -1,40 +1,28 @@
 import { supabase } from "@/integrations/supabase/client";
 import { supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { getHybridSession } from "@/lib/auth-hybrid";
-import { invokeEdgeFunction, invokeCloudEdgeFunction } from "@/lib/edge-functions";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
-import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** 
  * Garante que exista uma linha em public.patients para o usuário atual.
- * ✅ CORREÇÃO: Environment-aware para evitar FK violation e CORS
- * - Produção → invokeEdgeFunction (produção)
- * - Cloud → invokeCloudEdgeFunction (cloud)
+ * ✅ SIMPLIFICADO: SEMPRE chamar Produção via invokeEdgeFunction
  */
-export async function ensurePatientRow(
-  userId: string, 
-  dbClient: SupabaseClient = supabase,
-  environment: 'cloud' | 'production' = 'cloud'
-) {
-  console.log('[ensurePatientRow] Chamando edge function para user_id:', userId, 'ambiente:', environment);
+export async function ensurePatientRow(userId: string) {
+  console.log('[ensurePatientRow] Chamando PRODUÇÃO para user_id:', userId);
   
-  // ✅ Buscar session/token do cliente correto (Cloud ou Produção)
-  const { data: sessionData } = await dbClient.auth.getSession();
-  const userEmail = sessionData?.session?.user?.email;
+  const { session } = await getHybridSession();
+  const userEmail = session?.user?.email;
   
   console.log('[ensurePatientRow] Email:', userEmail);
   
-  // ✅ CORREÇÃO: Rotear para o ambiente correto
-  // ensure_patient usa service_role internamente (bypass RLS), então não precisa de Authorization
-  const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
-  
-  const { data, error } = await invokeFunction('patient-operations', {
+  // ✅ SEMPRE usar invokeEdgeFunction (Produção)
+  const { data, error } = await invokeEdgeFunction('patient-operations', {
     body: {
       operation: 'ensure_patient',
       user_id: userId,
       email: userEmail
     }
-    // ✅ Sem headers de Authorization - a função usa service_role internamente
   });
   
   if (error) {
@@ -73,12 +61,12 @@ export async function upsertPatientBasic(payload: {
   
   if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
 
-  // ✅ Usar cliente correto baseado no ambiente
+  // ✅ Usar cliente correto baseado no ambiente para operações de banco
   const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
   console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
 
-  // ✅ CORREÇÃO: Passar environment para ensurePatientRow
-  await ensurePatientRow(userId, dbClient, environment || 'cloud');
+  // ✅ SEMPRE chamar Produção para ensurePatientRow
+  await ensurePatientRow(userId);
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');
@@ -167,7 +155,7 @@ export async function upsertPatientBasic(payload: {
       hasActivePlan
     });
 
-    // ✅ CORREÇÃO: Usar invokeEdgeFunction para produção COM token do ambiente correto
+    // ✅ SEMPRE usar invokeEdgeFunction (Produção)
     const headers: Record<string, string> = {};
     if (accessToken && environment === 'production') {
       headers['Authorization'] = `Bearer ${accessToken}`;

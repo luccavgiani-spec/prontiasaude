@@ -1,175 +1,46 @@
 
 # Plano: Reescrever patient-operations e Eliminar Chamadas ao Cloud
 
-## Diagnóstico Confirmado
-
-### Problema 1: Erro 500 `null value in column "id"`
-**Localização:** `supabase/functions/patient-operations/index.ts` linha 2048
-**Causa:** O `INSERT` não gera UUID para a coluna `id`:
-```ts
-.insert({
-  user_id,
-  email: email || null,
-  profile_complete: false
-  // ❌ FALTA: id: crypto.randomUUID()
-})
-```
-
-### Problema 2: Chamadas ao Cloud em vez de Produção
-**Localização:** `src/lib/patients.ts` linha 29
-```ts
-const invokeFunction = environment === 'production' 
-  ? invokeEdgeFunction 
-  : invokeCloudEdgeFunction;  // ❌ Chama Cloud quando ambiente = 'cloud'
-```
-
-O Network confirma: `Sb-Project-Ref: yrsjluhhnhxogdgnbnya` (Cloud)
+## ✅ STATUS: IMPLEMENTADO
 
 ---
 
-## Arquivos que Serão Modificados
+## Alterações Realizadas
 
-| # | Arquivo | Motivo |
-|---|---------|--------|
-| 1 | `supabase/functions/patient-operations/index.ts` | Adicionar `id: crypto.randomUUID()` no INSERT |
-| 2 | `src/lib/patients.ts` | Forçar **SEMPRE** usar `invokeEdgeFunction` (Produção) |
-| 3 | `src/lib/edge-functions.ts` | Adicionar origins do Preview na lista de CORS do header |
-
----
-
-## Alterações Detalhadas
-
-### 1. patient-operations/index.ts (Backend)
-
-**Linhas 2046-2052** - Adicionar geração explícita de UUID:
+### 1. `supabase/functions/patient-operations/index.ts` (Backend)
+**Linha 2046-2055** - Adicionado geração explícita de UUID:
 
 ```ts
-// ANTES
-.insert({
-  user_id,
-  email: email || null,
-  profile_complete: false
-})
-
-// DEPOIS
-.insert({
-  id: crypto.randomUUID(),  // ✅ Gerar UUID explicitamente
-  user_id,
-  email: email || null,
-  profile_complete: false
-})
+const newPatientId = crypto.randomUUID();
+const { data: newPatient, error: insertError } = await supabase
+  .from('patients')
+  .insert({
+    id: newPatientId,  // ✅ CORREÇÃO: Gerar UUID explicitamente
+    user_id,
+    email: email || null,
+    profile_complete: false
+  })
 ```
+
+### 2. `src/lib/patients.ts` (Frontend)
+- ✅ Removido import de `invokeCloudEdgeFunction`
+- ✅ Simplificado `ensurePatientRow` para aceitar apenas `userId`
+- ✅ SEMPRE usar `invokeEdgeFunction` (aponta para Produção `ploqujuhpwutpcibedbr`)
+- ✅ Removida lógica condicional de ambiente para chamadas de Edge Function
+
+### 3. `src/lib/edge-functions.ts` (Frontend)
+- ✅ Adicionado log do origin para debug
+
+### 4. `src/pages/auth/Callback.tsx`
+- ✅ Atualizado chamada de `ensurePatientRow` para nova assinatura simplificada
 
 ---
 
-### 2. src/lib/patients.ts (Frontend)
+## Próximos Passos (Ação do Usuário)
 
-**Objetivo:** Eliminar toda lógica de roteamento Cloud/Produção. SEMPRE chamar Produção.
-
-**Alterações principais:**
-
-```ts
-// ANTES (linha 29)
-const invokeFunction = environment === 'production' 
-  ? invokeEdgeFunction 
-  : invokeCloudEdgeFunction;
-
-// DEPOIS - Remover completamente essa lógica
-// SEMPRE usar invokeEdgeFunction (que aponta para Produção)
-```
-
-**Nova versão simplificada de `ensurePatientRow`:**
-```ts
-export async function ensurePatientRow(userId: string) {
-  console.log('[ensurePatientRow] Chamando PRODUÇÃO para user_id:', userId);
-  
-  const { session } = await getHybridSession();
-  const userEmail = session?.user?.email;
-  
-  const { data, error } = await invokeEdgeFunction('patient-operations', {
-    body: {
-      operation: 'ensure_patient',
-      user_id: userId,
-      email: userEmail
-    }
-  });
-  
-  if (error) {
-    console.error('[ensurePatientRow] Edge function error:', error);
-    throw new Error(error.message || 'Falha ao garantir registro do paciente');
-  }
-  
-  return true;
-}
-```
-
-**Simplificar `upsertPatientBasic`:**
-- Remover parâmetro `environment` do `ensurePatientRow`
-- Manter apenas `invokeEdgeFunction` (nunca `invokeCloudEdgeFunction`)
-- Manter lógica de `getHybridSession` apenas para obter o `userId` e `email`
-
----
-
-### 3. src/lib/edge-functions.ts (Frontend)
-
-Adicionar os origins do Preview na lista de headers permitidos (para debug):
-
-```ts
-// Linha 57 - Adicionar log do origin para debug
-console.log(`[invokeEdgeFunction] target=production function=${functionName} origin=${window?.location?.origin}`);
-```
-
----
-
-## Fluxo Após as Alterações
-
-```text
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO SIMPLIFICADO                           │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Frontend (Preview/Publicado)                                   │
-│       │                                                         │
-│       ▼                                                         │
-│  src/lib/patients.ts                                            │
-│       │                                                         │
-│       ▼                                                         │
-│  invokeEdgeFunction()  ────────────────────────────────►        │
-│       │                                                         │
-│       ▼                                                         │
-│  https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/         │
-│  patient-operations                                             │
-│       │                                                         │
-│       ▼                                                         │
-│  Supabase PRODUÇÃO (banco real)                                 │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Verificação de CORS (já corrigido anteriormente)
-
-O arquivo `patient-operations/index.ts` já tem CORS dinâmico corrigido:
-- Linha 14-16: `isLovablePreviewOrigin()` aceita `https://id-preview--*.lovable.app`
-- Linha 18-28: `getCorsHeaders()` retorna origin correto baseado na requisição
-
----
-
-## Passos de Implementação
-
-1. **Atualizar `src/lib/patients.ts`**
-   - Remover import de `invokeCloudEdgeFunction`
-   - Simplificar `ensurePatientRow` para usar apenas `invokeEdgeFunction`
-   - Simplificar `upsertPatientBasic` para usar apenas `invokeEdgeFunction`
-
-2. **Atualizar `supabase/functions/patient-operations/index.ts`**
-   - Adicionar `id: crypto.randomUUID()` na linha 2048
-
-3. **Após as alterações:**
-   - Copiar o arquivo `patient-operations/index.ts` completo
-   - Fazer deploy manual no Supabase Dashboard → Edge Functions → patient-operations
-   - Testar edição de perfil na Área do Paciente
+1. **Copiar o arquivo `patient-operations/index.ts` completo**
+2. **Fazer deploy manual no Supabase Dashboard → Edge Functions → patient-operations**
+3. **Testar edição de perfil na Área do Paciente**
 
 ---
 
@@ -179,13 +50,3 @@ O arquivo `patient-operations/index.ts` já tem CORS dinâmico corrigido:
 2. ✅ Erro 500 `null value in column "id"` desaparece
 3. ✅ Edição de perfil salva com sucesso (status 200)
 4. ✅ Logs da função aparecem no Supabase Dashboard
-
----
-
-## Não Será Alterado
-
-- Lógica de autenticação (`auth-hybrid.ts`)
-- Integrações ClickLife, Communicare, Mercado Pago
-- Regras de redirecionamento (`schedule-redirect`)
-- Componentes de UI
-- Qualquer outro arquivo não listado acima
