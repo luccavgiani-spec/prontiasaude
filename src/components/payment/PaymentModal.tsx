@@ -71,6 +71,7 @@ function getMpDeviceSessionId(): string | null {
   // 1) Variável global (quando existir)
   const fromWindow =
     sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID) ||
+    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID) ||
     sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
   if (fromWindow) return fromWindow;
 
@@ -98,6 +99,16 @@ function getMpDeviceSessionId(): string | null {
   const fromStorage = findInStorage(storageKeys);
   if (fromStorage) return fromStorage;
 
+  return null;
+}
+
+async function waitForMPDeviceId(timeoutMs: number = 3000): Promise<string | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const id = getMpDeviceSessionId();
+    if (id) return id;
+    await new Promise((res) => setTimeout(res, 100));
+  }
   return null;
 }
 
@@ -1798,7 +1809,7 @@ export function PaymentModal({
           frequency: frequency || 1,
           frequency_type: frequencyType || "months",
           order_id: orderId,
-          device_id: deviceId || getMpDeviceSessionId() || null,
+          device_id: deviceId || (await waitForMPDeviceId()) || null,
         };
 
         console.log("[handleCardSubmit] Subscription request:", subscriptionRequest);
@@ -2221,7 +2232,7 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key,
           }),
         },
-        device_id: deviceId || getMpDeviceSessionId() || null,
+        device_id: deviceId || (await waitForMPDeviceId()) || null,
       };
 
       // Adicionar auto_recurring se for assinatura
