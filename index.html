@@ -154,11 +154,11 @@
       window.addEventListener('touchstart', loadTTQ, { once: true, passive: true });
     </script>
 
-    <!-- ✅ Mercado Pago SDK V2 (FRONTEND) - melhora pontuação “SDK do frontend” + PCI -->
-    <script src="https://sdk.mercadopago.com/js/v2" defer></script>
-
     <!-- Mercado Pago Security Script - Device Fingerprint -->
-    <script src="https://www.mercadopago.com/v2/security.js" view="checkout" defer></script>
+    <script src="https://www.mercadopago.com/v2/security.js" view="checkout" output="MP_DEVICE_SESSION_ID"></script>
+
+    <!-- Mercado Pago SDK V2 (FRONTEND) -->
+    <script src="https://sdk.mercadopago.com/js/v2"></script>
   </head>
 
   <body>
