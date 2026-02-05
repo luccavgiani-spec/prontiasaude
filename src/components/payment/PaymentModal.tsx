@@ -34,8 +34,9 @@ declare global {
 function sanitizeMpDeviceId(raw: unknown): string | null {
   const value = typeof raw === "string" ? raw.trim() : "";
   if (!value) return null;
-  // Regra conservadora: aceitar apenas alfanum + "-" "_" "." ":" (evita lixo)
-  if (!/^[A-Za-z0-9._:-]{10,200}$/.test(value)) return null;
+  // ✅ CORREÇÃO: Aceitar base64 e outros chars válidos do MP_DEVICE_SESSION_ID
+  // O security.js do Mercado Pago pode gerar IDs com =, +, /
+  if (!/^[A-Za-z0-9._:\-=+\/]{10,500}$/.test(value)) return null;
   return value;
 }
 
@@ -2199,6 +2200,22 @@ export function PaymentModal({
 
       const dbUnitPrice = service.price_cents / 100;
 
+      // ✅ DEBUG: Log exato do device_id no momento do submit (PIX)
+      const windowDeviceId = (window as any).MP_DEVICE_SESSION_ID;
+      const stateDeviceId = deviceId;
+      const waitedDeviceId = await waitForMPDeviceId();
+      // ✅ CORREÇÃO: Captura direta + fallback sem sanitização restritiva
+      const finalDeviceId = stateDeviceId || waitedDeviceId || windowDeviceId || null;
+
+      console.log("[handlePixSubmit] 🔍 Device ID Debug:", {
+        window_MP_DEVICE_SESSION_ID: windowDeviceId,
+        window_MP_DEVICE_SESSION_ID_type: typeof windowDeviceId,
+        state_deviceId: stateDeviceId,
+        waited_deviceId: waitedDeviceId,
+        final_device_id: finalDeviceId,
+        localStorage_mp_device_session_id: localStorage.getItem("mp_device_session_id"),
+      });
+
       const paymentRequest: any = {
         items: [
           {
@@ -2232,7 +2249,7 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key,
           }),
         },
-        device_id: deviceId || (await waitForMPDeviceId()) || null,
+        device_id: finalDeviceId,
       };
 
       // Adicionar auto_recurring se for assinatura
