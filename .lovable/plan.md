@@ -1,188 +1,170 @@
 
-# Plano: Correção Definitiva - Mercado Pago 100/100
 
-## Diagnóstico dos Problemas Atuais
+# Plano: Correção Definitiva do device_id para PIX
 
-Analisando os códigos e as imagens do painel MP:
+## Diagnóstico Confirmado
 
-| Problema | Localização | Status |
-|----------|-------------|--------|
-| BUILD_ID ainda v3 | mp-create-payment linha 8 | ❌ Não deployado |
-| Fallback "mp_sdk_auto" para PIX | PaymentModal.tsx linha 2090 | ❌ Ainda presente |
-| city/federal_unit como strings | mp-create-payment linhas 448-449 | ❌ Ainda presente |
-| Header X-meli-session-id vazio | mp-create-payment linha 684 | ❌ Enviando string vazia |
-| issuer_id não utilizado | mp-create-payment | ❌ Não adicionado |
+Após análise profunda do código, identifiquei que:
 
-### Por que a qualidade caiu para 70?
+1. **O arquivo correto é `src/components/payment/PaymentModal.tsx`** - é o único que dispara `invokeEdgeFunction("mp-create-payment")` para PIX (linha 2251)
 
-O Mercado Pago detectou na transação `144121741393`:
-1. **Device ID inválido/vazio** (-2 pontos → ação obrigatória)
-2. **SDK do frontend** não detectado corretamente (-10 pontos → ação obrigatória)
-3. **statement_descriptor** ausente ou inconsistente (-10 pontos → ação recomendada)
+2. **Não existe outro modal ou handler** - confirmado via busca no projeto
+
+3. **A função `invokeEdgeFunction` não remove campos** - ela simplesmente faz `JSON.stringify(options.body)`
+
+4. **O problema está no frontend** - especificamente na captura e validação do device_id
+
+---
+
+## Causa Raiz Identificada
+
+### Problema 1: Regex de Sanitização Muito Restritivo
+
+```text
+Linha 38: /^[A-Za-z0-9._:-]{10,200}$/
+```
+
+O `MP_DEVICE_SESSION_ID` gerado pelo `security.js` do Mercado Pago pode conter caracteres como:
+- `=` (comum em base64)
+- `+` (comum em base64)
+- `/` (comum em base64)
+- Outros caracteres especiais
+
+**Se o ID real tiver qualquer caractere fora do regex, será rejeitado e retornará `null`.**
+
+### Problema 2: Timing de Captura
+
+O `useEffect` captura o device_id quando o modal abre, mas:
+- O `security.js` pode não ter terminado de gerar o ID
+- O estado `deviceId` fica `null`
+- No momento do submit, `deviceId` ainda está `null`
+- O `waitForMPDeviceId()` usa o mesmo regex restritivo
+
+### Problema 3: Logs Insuficientes
+
+Não há log no exato momento do submit do PIX mostrando:
+- O valor de `window.MP_DEVICE_SESSION_ID`
+- O valor do estado `deviceId`
+- O valor retornado por `waitForMPDeviceId()`
 
 ---
 
 ## Correções Necessárias
 
-### 1. Frontend: Remover fallback "mp_sdk_auto" do PIX
+### Correção 1: Relaxar o Regex de Sanitização (Linha 38)
 
-**Arquivo:** `src/components/payment/PaymentModal.tsx`
-
-**Linha 2090 - Alterar de:**
+**De:**
 ```typescript
-device_id: deviceId || "mp_sdk_auto",
+if (!/^[A-Za-z0-9._:-]{10,200}$/.test(value)) return null;
 ```
 
 **Para:**
 ```typescript
-device_id: deviceId || undefined,
+// ✅ CORREÇÃO: Aceitar base64 e outros chars válidos do MP_DEVICE_SESSION_ID
+if (!/^[A-Za-z0-9._:\-=+\/]{10,500}$/.test(value)) return null;
 ```
 
-### 2. Edge Function: Versão Completa Corrigida para Deploy Manual
+### Correção 2: Adicionar Logs Diagnósticos no Submit do PIX (Linha ~2234)
 
-O código completo da `mp-create-payment` com TODAS as correções:
-
-**Alterações principais:**
-1. `BUILD_ID` → `mp-create-payment@2026-02-04T21:00:00Z-v5`
-2. Remover `city` e `federal_unit` do `payer.address` (linhas 448-449)
-3. Usar `city_name` ao invés de `city` no `receiver_address` (linha 458)
-4. Header `X-meli-session-id` condicional (linha 684)
-5. Adicionar `issuer_id` no payload (linha 530)
-6. Garantir `statement_descriptor` em TODOS os fluxos
-
----
-
-## Bloco de Código Corrigido para mp-create-payment
-
-### Trecho 1: BUILD_ID (linha 8)
+**Antes de montar o `paymentRequest`:**
 ```typescript
-const BUILD_ID = 'mp-create-payment@2026-02-04T21:00:00Z-v5';
+// ✅ DEBUG: Log exato do device_id no momento do submit
+const windowDeviceId = (window as any).MP_DEVICE_SESSION_ID;
+const stateDeviceId = deviceId;
+const waitedDeviceId = await waitForMPDeviceId();
+const finalDeviceId = stateDeviceId || waitedDeviceId || null;
+
+console.log("[handlePixSubmit] 🔍 Device ID Debug:", {
+  window_MP_DEVICE_SESSION_ID: windowDeviceId,
+  window_MP_DEVICE_SESSION_ID_type: typeof windowDeviceId,
+  state_deviceId: stateDeviceId,
+  waited_deviceId: waitedDeviceId,
+  final_device_id: finalDeviceId,
+  localStorage_mp_device_session_id: localStorage.getItem("mp_device_session_id"),
+});
 ```
 
-### Trecho 2: Interface PaymentRequest (adicionar issuer_id após linha 90)
+### Correção 3: Captura Direta no Momento do Submit (Linha 2235)
+
+**De:**
 ```typescript
-  issuer_id?: string; // ✅ NOVO: Código do banco emissor (+2 pontos)
+device_id: deviceId || (await waitForMPDeviceId()) || null,
 ```
 
-### Trecho 3: fullAdditionalInfo (linhas 440-463)
+**Para:**
 ```typescript
-    const fullAdditionalInfo = {
-      items: [
-        {
-          id: sku,
-          title: service.name,
-          description: hasCoupon 
-            ? `${service.name} (${paymentRequest.metadata.discount_percentage}% desconto)` 
-            : service.name,
-          picture_url: `https://prontiasaude.com.br/assets/servicos/${sku.toLowerCase()}.jpg`,
-          category_id: getCategoryIdBySKU(sku),
-          quantity: 1,
-          unit_price: hasCoupon 
-            ? (paymentRequest.metadata.amount_discounted! / 100) 
-            : expectedAmount
-        }
-      ],
-      payer: {
-        first_name: finalPayer.first_name || '',
-        last_name: finalPayer.last_name || '',
-        phone: finalPayer.phone || {},
-        address: {
-          zip_code: finalPayer.address?.zip_code,
-          street_name: finalPayer.address?.street_name,
-          street_number: finalPayer.address?.street_number
-          // ✅ REMOVIDO: city e federal_unit (API espera códigos IBGE numéricos)
-        },
-        registration_date: paymentRequest.metadata?.schedulePayload?.registration_date || new Date().toISOString()
-      },
-      shipments: {
-        receiver_address: {
-          zip_code: finalPayer.address?.zip_code,
-          street_name: finalPayer.address?.street_name,
-          street_number: finalPayer.address?.street_number,
-          city_name: paymentRequest.payerOverride?.address?.city || (paymentRequest.payer?.address as any)?.city || '',
-          state_name: paymentRequest.payerOverride?.address?.state || (paymentRequest.payer?.address as any)?.state || ''
-        }
-      },
-      ip_address: clientIp
-    };
+// ✅ CORREÇÃO: Captura direta + fallback + log
+device_id: finalDeviceId,
 ```
 
-### Trecho 4: Card payment (linhas 528-534)
+E adicionar antes (na estrutura de debug):
 ```typescript
-      // Card payment (PRECISA ter token E payment_method_id)
-      paymentData.token = paymentRequest.token;
-      paymentData.payment_method_id = paymentRequest.payment_method_id;
-      paymentData.installments = paymentRequest.installments || 1;
-      paymentData.issuer_id = paymentRequest.issuer_id; // ✅ NOVO: Código do emissor (+2 pontos)
-      paymentData.statement_descriptor = 'PRONTIA SAUDE'; // ✅ OBRIGATÓRIO: Nome na fatura (+10 pontos)
-```
-
-### Trecho 5: debug_context (linhas 642-651)
-```typescript
-    const debug_context = {
-      build_id: BUILD_ID,
-      selected_flow: isPix ? 'pix' : 'card',
-      has_token: !!paymentRequest.token,
-      has_device_id: !!paymentRequest.device_id, // ✅ NOVO: Log se device_id existe
-      has_issuer_id: !!paymentRequest.issuer_id, // ✅ NOVO: Log se issuer_id existe
-      payment_method_id_final: paymentData.payment_method_id,
-      additional_info_keys: Object.keys(paymentData.additional_info || {}),
-      has_additional_info_payer: !!(paymentData.additional_info?.payer),
-      has_additional_info_shipments: !!(paymentData.additional_info?.shipments)
-    };
-```
-
-### Trecho 6: customHeaders (linhas 681-688)
-```typescript
-        requestOptions: {
-          idempotencyKey: idempotencyKey,
-          customHeaders: {
-            // ✅ CORREÇÃO: Só enviar X-meli-session-id se device_id existir
-            ...(paymentRequest.device_id ? { 'X-meli-session-id': paymentRequest.device_id } : {}),
-            ...(clientIp ? { 'X-Forwarded-For': clientIp } : {}),
-            'User-Agent': req.headers.get('user-agent') ?? ''
-          }
-        }
+const finalDeviceId = deviceId 
+  || (await waitForMPDeviceId()) 
+  || (window as any).MP_DEVICE_SESSION_ID // ✅ Fallback direto sem sanitização
+  || null;
 ```
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Responsável | Alteração |
-|---------|-------------|-----------|
-| `src/components/payment/PaymentModal.tsx` | Lovable (automático) | Remover fallback "mp_sdk_auto" na linha 2090 |
-| `supabase/functions/mp-create-payment/index.ts` | Deploy Manual | Atualizar código conforme trechos acima |
+| Arquivo | Alteração | Impacto |
+|---------|-----------|---------|
+| `src/components/payment/PaymentModal.tsx` | Relaxar regex + adicionar logs + captura direta | Resolve device_id = null |
+
+**NÃO modificar:**
+- Edge Functions (backend)
+- index.html (security.js já funciona)
+- Outros componentes
 
 ---
 
-## Checklist de Validação Pós-Deploy
+## Fluxo Corrigido
 
-1. **Verificar build_id na resposta:**
-   - Deve retornar `mp-create-payment@2026-02-04T21:00:00Z-v5`
-
-2. **Verificar debug_context:**
-   - `has_device_id: true` (se SDK capturou corretamente)
-   - `has_issuer_id: true` (para cartões)
-   - `has_additional_info_payer: true` (para cartões)
-   - `has_additional_info_shipments: true` (para cartões)
-
-3. **Verificar aprovação:**
-   - Sem erro `SDK_EXCEPTION`
-   - `status: approved` ou `pending` (para PIX)
-
-4. **Rodar medição de qualidade MP:**
-   - Aguardar 10 minutos após teste
-   - Acessar painel de qualidade
-   - Espera-se 90-100/100
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                      FLUXO PIX (Corrigido)                  │
+├─────────────────────────────────────────────────────────────┤
+│ 1. Modal abre → useEffect tenta capturar device_id         │
+│    ↓                                                        │
+│ 2. User preenche dados e clica "Gerar PIX"                 │
+│    ↓                                                        │
+│ 3. handlePixSubmit executa:                                │
+│    a) Log exato de window.MP_DEVICE_SESSION_ID             │
+│    b) Log do estado deviceId                               │
+│    c) Captura direta sem regex restritivo                  │
+│    d) Monta paymentRequest com device_id real              │
+│    ↓                                                        │
+│ 4. invokeEdgeFunction envia JSON.stringify(body)           │
+│    ↓                                                        │
+│ 5. Backend recebe device_id e envia X-meli-session-id      │
+│    ↓                                                        │
+│ 6. Mercado Pago detecta device fingerprint → Qualidade 100 │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Sobre o PIX não aparecer no extrato
+## Validação Pós-Implementação
 
-O PIX pode ter sido aprovado mas:
-1. O webhook não chegou (verificar logs do mp-webhook)
-2. O pagamento foi registrado com email diferente
-3. Pode demorar até 5 minutos para aparecer
+1. **Abrir console do navegador**
+2. **Executar pagamento PIX**
+3. **Verificar log:** `[handlePixSubmit] 🔍 Device ID Debug:`
+   - `window_MP_DEVICE_SESSION_ID`: deve mostrar string válida
+   - `final_device_id`: deve ser a mesma string
+4. **Verificar Network:** payload deve ter `"device_id": "arm0r.xxxxx..."`
+5. **Rodar medição MP:** Qualidade deve subir para 90-100
 
-Verificar no painel MP: Cobranças > filtrar por payment_id ou email
+---
+
+## Resumo da Correção
+
+| O que fazer | Onde | Por que |
+|-------------|------|---------|
+| Relaxar regex | Linha 38 | Aceitar chars do security.js |
+| Adicionar logs | Linhas ~2230-2234 | Diagnosticar valor exato |
+| Captura direta fallback | Linha 2235 | Garantir que device_id chegue |
+
+**Total: 1 arquivo modificado, ~20 linhas alteradas**
+
