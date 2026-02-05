@@ -1,173 +1,93 @@
 
-# Plano: Correção dos Erros de Edição de Perfil (Usuário e Admin)
+## ARQUIVOS QUE SERÃO MODIFICADOS
+1) `supabase/functions/check-user-exists/index.ts`  
+2) `src/lib/auth-hybrid.ts`  
+3) `src/lib/patients.ts`  
+4) `src/components/admin/EditPatientModal.tsx`
 
-## Diagnóstico Confirmado
+## MOTIVO (baseado no seu pedido)
+- Login “quebrado / usuário não existe” (ex.: `t.gaini@gmail.com`) passou a depender da Edge Function `check-user-exists`. Ela está falhando em runtime e, por causa disso, o frontend interpreta como “não existe em nenhum lugar”.
+- Edição de perfil e edição pelo painel admin ainda retornam erro de token (o anexo mostra `{"error":"Token inválido"}`), típico de token do ambiente errado sendo validado no backend errado.
 
-### Problema 1: Usuário não consegue editar próprio perfil
-**Erro:** `insert or update on table "patients" violates foreign key constraint "patients_user_id_fkey"`  
-**URL da requisição:** `https://yrsjluhhnhxogdgnbnya.supabase.co/functions/v1/patient-operations` (Cloud)
+## DIAGNÓSTICO (o que está errado de fato)
+### 1) Login quebrado (“usuário não existe”)
+- Logs da função `check-user-exists` mostram:
+  - `TypeError: client.auth.admin.getUserByEmail is not a function`
+- Ou seja: a função está importando uma versão/entry do SDK que não expõe `getUserByEmail`. Isso faz a função falhar e o `checkUserExists()` do frontend cair no fallback que devolve `loginEnvironment: 'none'`, levando ao erro “Email não encontrado”.
 
-**Causa raiz identificada:**
-O usuário está logado no ambiente de **Produção**, mas a chamada `ensurePatientRow` está enviando a requisição para o **Lovable Cloud** (via `invokeCloudEdgeFunction`). O problema está em `src/lib/patients.ts` linha 38:
+### 2) Token inválido ao editar pelo painel admin (e ainda ocorre em produção)
+- O request do admin vai para a função do backend de produção, mas o token do admin é do ambiente Cloud (onde o admin fez login).
+- Se a função em produção não está com o bypass/validação cross-project como no seu repositório atual, ela tenta validar esse token Cloud no auth de produção e responde `Token inválido`.
 
-```typescript
-const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
-```
-
-Mesmo detectando `environment === 'production'`, o `user_id` do usuário (que existe em Produção) é enviado para a Edge Function no **Cloud**, que tenta fazer INSERT na tabela `patients` do Cloud. Como esse `user_id` não existe na tabela `auth.users` do Cloud, a foreign key constraint é violada.
-
-**Observação da imagem:** A requisição claramente vai para `yrsjluhhnhxogdgnbnya.supabase.co` (Cloud), confirmando que o roteamento está incorreto.
-
-### Problema 2: Admin não consegue editar paciente
-**Erro:** `{"error":"Token inválido"}`
-
-**Causa raiz identificada:**
-O `EditPatientModal.tsx` usa `invokeEdgeFunction` (linha 133), que:
-1. Obtém o token do cliente **Cloud** (`supabase.auth.getSession()` em `edge-functions.ts` linha 42-43)
-2. Envia a requisição para a URL de **Produção** (`EDGE_FUNCTIONS_URL = https://ploqujuhpwutpcibedbr.supabase.co`)
-
-Na Edge Function `patient-operations` de **Produção**, a operação `admin_update_patient`:
-1. Cria um cliente do **Lovable Cloud** para validar o token (linha 2060)
-2. Tenta validar o token usando `authClient.auth.getUser(token)` (linha 2066)
-
-**O problema**: O token JWT do Cloud enviado pelo frontend não corresponde ao cliente Cloud criado na função, pois o `invokeEdgeFunction` usa a sessão do **Cloud local** (`@/integrations/supabase/client`), mas a Edge Function está rodando em **Produção**.
+### 3) Token inválido ao salvar o próprio perfil
+- No fluxo de salvar perfil (`upsertPatientBasic`), há chamadas para `patient-operations` que exigem JWT válido.
+- Hoje o helper `invokeEdgeFunction()` pega token do cliente Cloud por padrão; quando o usuário está logado em “produção”, isso pode enviar o token errado (ou anon) para operações que exigem JWT, resultando em `Token inválido`.
 
 ---
 
-## Correções Necessárias
+## ESCOPO (exatamente o que será alterado)
+### A) Reverter/estabilizar o login urgentemente (sem depender do `getUserByEmail` quebrado)
+**Arquivo:** `supabase/functions/check-user-exists/index.ts`
+1. Fixar a importação do SDK para uma versão que sabemos que suporta `auth.admin.getUserByEmail` (mesma usada em `create-user-both-envs`, que está funcionando).
+2. Adicionar fallback automático:
+   - Se `getUserByEmail` não existir por qualquer motivo, usar o método anterior (listagem/paginação via `listUsers`) para não derrubar o login.
+3. Garantir que a função retorne 200 com um payload consistente (existsInCloud/existsInProduction/loginEnvironment/canRegister) mesmo em fallback, evitando “fail closed”.
 
-### Correção 1: Rotear `ensure_patient` corretamente para Produção
+**Arquivo:** `src/lib/auth-hybrid.ts`
+4. Adicionar um fallback de login para quando `checkUserExists` falhar/retornar inconsistente:
+   - Se `check-user-exists` der erro (ou `loginEnvironment: none`), tentar login direto:
+     1) tenta Cloud `signInWithPassword`
+     2) se falhar com credencial inválida, tenta Produção `signInWithPassword`
+   - Só exibir “usuário não existe” se ambas as tentativas confirmarem que não há conta (ou se as duas retornarem explicitamente credencial inválida).
+   
+Resultado: mesmo que a função de verificação volte a falhar no futuro, o login não trava o sistema inteiro.
 
+---
+
+### B) Corrigir salvar perfil do próprio usuário (token do ambiente correto)
 **Arquivo:** `src/lib/patients.ts`
+1. Ao detectar `environment === 'production'`, garantir que chamadas para operações que exigem auth (ex.: `complete_profile`) enviem `Authorization: Bearer <access_token da produção>`.
+   - Ou seja: pegar `session.access_token` retornado por `getHybridSession()` e repassar como `headers.Authorization` em `invokeEdgeFunction(...)`.
+2. Manter `ensure_patient` como bypass (sem exigir JWT), mas sem forçar “sempre produção” de forma cega para não quebrar preview:
+   - `ensurePatientRow` volta a ficar “environment-aware”:
+     - produção -> chama backend de produção
+     - cloud -> chama backend cloud
+   - Isso evita repetir o erro de foreign key no cloud com `user_id` de produção, e também evita CORS no preview.
 
-O problema é que mesmo quando `environment === 'production'`, a função está indo para o Cloud. Precisamos garantir que:
-1. Usuários de Produção chamem a Edge Function de Produção
-2. O token correto seja enviado
+---
 
-**Alteração:** Simplificar a lógica para SEMPRE chamar `invokeEdgeFunction` (produção) quando for `ensure_patient`, pois essa operação usa `service_role` e não precisa de validação de JWT do usuário.
-
-```typescript
-// ANTES (linha 38-40):
-const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
-
-// DEPOIS:
-// ✅ CORREÇÃO: ensure_patient SEMPRE vai para Produção pois usa service_role (bypass RLS)
-// A operação está na AUTH_BYPASS_OPERATIONS e não precisa de token válido
-const { data, error } = await invokeEdgeFunction('patient-operations', {
-  body: {
-    operation: 'ensure_patient',
-    user_id: userId,
-    email: userEmail
-  }
-  // ✅ Sem headers de Authorization - a função usa service_role internamente
-});
-```
-
-### Correção 2: Enviar token correto no Admin Edit
-
+### C) Corrigir edição pelo painel admin (token inválido) sem depender do auth de produção aceitar token cloud
 **Arquivo:** `src/components/admin/EditPatientModal.tsx`
+1. Trocar a chamada de `invokeEdgeFunction('patient-operations', ...)` para `invokeCloudEdgeFunction('patient-operations', ...)` para o admin update.
+   - Motivo: o admin autentica no Cloud; então a validação do token e checagem de role admin tem que acontecer no Cloud.
+   - A função cloud então executa o UPDATE no banco de produção via service_role (sem depender de validar JWT cloud no auth de produção).
 
-O admin faz login no **Cloud** (página `/admin`). Quando ele edita um paciente, precisamos:
-1. Obter o token do cliente Cloud
-2. Enviá-lo explicitamente no header Authorization
-
-**Alteração:** Passar explicitamente o token do Cloud no header:
-
-```typescript
-// ANTES (linha 133-140):
-const { data, error } = await invokeEdgeFunction('patient-operations', {
-  body: {
-    operation: 'admin_update_patient',
-    patient_id: patient.id,
-    email: patient.email,
-    updates
-  }
-});
-
-// DEPOIS:
-// ✅ CORREÇÃO: Obter token do Cloud e enviá-lo explicitamente
-const { data: sessionData } = await supabase.auth.getSession();
-const cloudToken = sessionData?.session?.access_token;
-
-if (!cloudToken) {
-  throw new Error('Sessão expirada. Faça login novamente.');
-}
-
-const { data, error } = await invokeEdgeFunction('patient-operations', {
-  body: {
-    operation: 'admin_update_patient',
-    patient_id: patient.id,
-    email: patient.email,
-    updates
-  },
-  headers: {
-    'Authorization': `Bearer ${cloudToken}`
-  }
-});
-```
-
-### Correção 3: Ajustar a Edge Function para aceitar o token do ambiente correto
-
-**Arquivo:** `supabase/functions/patient-operations/index.ts`
-
-O problema é que a Edge Function está deployada em **Produção** e tenta validar o token no **Cloud**, mas o token enviado pode não ser reconhecido. Precisamos usar a secret `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` para criar o cliente de validação.
-
-**Alteração:** Usar as secrets configuradas ao invés de hardcode:
-
-```typescript
-// ANTES (linha 2056-2058):
-const LOVABLE_CLOUD_URL = 'https://yrsjluhhnhxogdgnbnya.supabase.co';
-const LOVABLE_CLOUD_ANON_KEY = 'eyJ...';
-
-// DEPOIS:
-// ✅ CORREÇÃO: Usar secrets configuradas para consistência
-const LOVABLE_CLOUD_URL = Deno.env.get('CLOUD_SUPABASE_URL') || 'https://yrsjluhhnhxogdgnbnya.supabase.co';
-const LOVABLE_CLOUD_SERVICE_KEY = Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY');
-
-// Criar cliente com service_role para poder acessar user_roles
-const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_SERVICE_KEY || LOVABLE_CLOUD_ANON_KEY, {
-  global: { headers: { Authorization: `Bearer ${token}` } }
-});
-```
+Observação: isso não muda checkout/pagamentos/redirecionamentos; é apenas o caminho de escrita do painel admin.
 
 ---
 
-## Resumo das Alterações
+## CONFIRMAÇÃO (regra absoluta do projeto)
+Estas alterações estão explicitamente solicitadas? **NÃO** (você não citou paths), mas **são necessárias** para executar exatamente o que você pediu: “reverter o que travou login” + “corrigir token inválido na edição”.
 
-| Arquivo | Alteração | Impacto |
-|---------|-----------|---------|
-| `src/lib/patients.ts` | Forçar `invokeEdgeFunction` para `ensure_patient` | Corrige FK violation |
-| `src/components/admin/EditPatientModal.tsx` | Enviar token Cloud explicitamente | Corrige "Token inválido" |
-| `supabase/functions/patient-operations/index.ts` | Usar secrets para validação admin | Garante consistência |
+Ao aprovar este plano, você autoriza mudanças **somente** nos 4 arquivos listados acima.
 
 ---
 
-## Arquivos que NÃO serão alterados
+## PASSO A PASSO DE VALIDAÇÃO (E2E)
+1) Login:
+- Testar login com `t.gaini@gmail.com` e mais 1 usuário conhecido
+- Confirmar que não aparece “usuário não existe” indevidamente
+- Confirmar no Network que `check-user-exists` responde 200 e não dá TypeError
 
-- Integrações de pagamento (Mercado Pago)
-- Redirecionamentos Clicklife/Communicare
-- Conteúdo/serviços/FAQ/home sections
-- Fluxo de cadastro (já funcionando)
+2) Salvar perfil (usuário comum) no modo produção:
+- Entrar como usuário
+- Editar dados e salvar
+- Confirmar que as requisições que exigem auth estão indo com `Authorization` do ambiente correto e não retornam `Token inválido`
 
----
+3) Editar paciente no Admin:
+- Entrar como `suporte@prontiasaude.com.br`
+- Abrir modal e salvar
+- Confirmar que o request de update do admin vai para o backend Cloud (validação admin) e o UPDATE efetivamente reflete na produção
 
-## Validação Pós-Implementação
-
-1. **Usuário editando próprio perfil:**
-   - Login em Produção
-   - Acessar `/completar-perfil` ou área do paciente
-   - Editar dados e salvar
-   - Verificar Network: requisição deve ir para `ploqujuhpwutpcibedbr.supabase.co`
-   - Confirmar dados persistidos
-
-2. **Admin editando paciente:**
-   - Login como `suporte@prontiasaude.com.br`
-   - Abrir modal de edição de paciente
-   - Salvar alterações
-   - Confirmar toast de sucesso
-   - Verificar dados atualizados no banco
-
-3. **Atualizar dados da Natália:**
-   - Após correções, editar via painel admin:
-   - Nome: `Natália Fernanda Geraldo`
-   - Sobrenome: `dos Santos`
+4) Logs:
+- Verificar logs das funções `check-user-exists` e `patient-operations` (no ambiente Cloud) para confirmar que não há mais exceções e que o token é validado corretamente.
