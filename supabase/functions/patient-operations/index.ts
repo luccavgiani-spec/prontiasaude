@@ -2054,12 +2054,21 @@ serve(async (req) => {
         }
 
         // ✅ PASSO 1: Criar client do LOVABLE CLOUD para validar o JWT
-        const LOVABLE_CLOUD_URL = 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+        // Usar secrets configuradas para garantir consistência entre ambientes
+        const LOVABLE_CLOUD_URL = Deno.env.get('CLOUD_SUPABASE_URL') || 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+        const LOVABLE_CLOUD_SERVICE_KEY = Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY');
         const LOVABLE_CLOUD_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY';
         
-        const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_ANON_KEY, {
-          global: { headers: { Authorization: `Bearer ${token}` } }
-        });
+        // ✅ Usar service_role se disponível para poder consultar user_roles
+        // Caso contrário, usa anon_key com o token do usuário para autenticação
+        const authClient = createClient(
+          LOVABLE_CLOUD_URL, 
+          LOVABLE_CLOUD_SERVICE_KEY || LOVABLE_CLOUD_ANON_KEY, 
+          { global: { headers: { Authorization: `Bearer ${token}` } } }
+        );
+        
+        console.log('[admin_update_patient] Usando Cloud URL:', LOVABLE_CLOUD_URL);
+        console.log('[admin_update_patient] Service key disponível:', !!LOVABLE_CLOUD_SERVICE_KEY);
 
         // ✅ PASSO 2: Validar token no Lovable Cloud
         console.log('[admin_update_patient] Validando token no Lovable Cloud...');

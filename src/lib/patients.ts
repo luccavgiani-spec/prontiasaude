@@ -33,17 +33,16 @@ export async function ensurePatientRow(
     headers['Authorization'] = `Bearer ${accessToken}`;
   }
   
-  // ✅ CORREÇÃO: Usar função correta baseado no ambiente
-  // Cloud = preview do Lovable / Produção = site publicado
-  const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
-  
-  const { data, error } = await invokeFunction('patient-operations', {
+  // ✅ CORREÇÃO: ensure_patient SEMPRE vai para Produção (via invokeEdgeFunction)
+  // A operação está na AUTH_BYPASS_OPERATIONS e usa service_role internamente (bypass RLS)
+  // Não depende de JWT do usuário, então não precisa de headers de Authorization
+  const { data, error } = await invokeEdgeFunction('patient-operations', {
     body: {
       operation: 'ensure_patient',
       user_id: userId,
       email: userEmail
-    },
-    headers
+    }
+    // ✅ Sem headers - a função usa service_role internamente
   });
   
   if (error) {
