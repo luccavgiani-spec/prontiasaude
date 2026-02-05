@@ -1,162 +1,173 @@
 
-## 0) Resumo do que está errado (com evidência de código)
+# Plano: Correção dos Erros de Edição de Perfil (Usuário e Admin)
 
-### A) Admin (suporte@…) não consegue editar no “modo produção”
-**Evidência:** `src/components/admin/EditPatientModal.tsx` faz UPDATE direto via **cliente Cloud**:
-- `import { supabase } from '@/integrations/supabase/client';`
-- `supabase.from('patients').update(...).eq('id', patient.id)` (linhas ~130–134)
+## Diagnóstico Confirmado
 
-No “modo produção”, o painel lista pacientes que podem vir do ambiente de produção (IDs diferentes). Então:
-- o UPDATE vai para o banco Cloud (ou falha por RLS / ou atualiza 0 linhas),
-- e não altera o dado real do ambiente de produção.
+### Problema 1: Usuário não consegue editar próprio perfil
+**Erro:** `insert or update on table "patients" violates foreign key constraint "patients_user_id_fkey"`  
+**URL da requisição:** `https://yrsjluhhnhxogdgnbnya.supabase.co/functions/v1/patient-operations` (Cloud)
 
-### B) Usuário (em produção) não consegue editar o próprio perfil
-O “Editar perfil” do usuário leva a `/completar-perfil` (confirmado em `src/pages/AreaDoPaciente.tsx` linhas ~448–452). Ao salvar, ele chama `upsertPatientBasic()` (em `src/lib/patients.ts`).
+**Causa raiz identificada:**
+O usuário está logado no ambiente de **Produção**, mas a chamada `ensurePatientRow` está enviando a requisição para o **Lovable Cloud** (via `invokeCloudEdgeFunction`). O problema está em `src/lib/patients.ts` linha 38:
 
-Há dois problemas concretos no fluxo híbrido:
-
-1) **Bug de parâmetro:** `upsertPatientBasic()` detecta `environment`, mas chama:
-```ts
-await ensurePatientRow(userId, dbClient);
+```typescript
+const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
 ```
-sem passar o `environment`.  
-**Evidência:** `src/lib/patients.ts` linha ~88.  
-Isso força `ensurePatientRow()` a operar como `cloud` (default), mesmo quando o usuário está em produção.
 
-2) **Authorization sendo sobrescrito no invokeCloudEdgeFunction:**  
-`ensurePatientRow()` tenta montar headers com o token do `dbClient`, mas quando cai em `invokeCloudEdgeFunction`, ele **sempre** redefine `Authorization` com o token do Cloud (ou anon do Cloud).  
-**Evidência:** `src/lib/edge-functions.ts` linha ~107–109.
+Mesmo detectando `environment === 'production'`, o `user_id` do usuário (que existe em Produção) é enviado para a Edge Function no **Cloud**, que tenta fazer INSERT na tabela `patients` do Cloud. Como esse `user_id` não existe na tabela `auth.users` do Cloud, a foreign key constraint é violada.
 
-Resultado prático: em produção, parte do fluxo acaba chamando função/banco “errado”, e o usuário percebe “não salva / não edita”.
+**Observação da imagem:** A requisição claramente vai para `yrsjluhhnhxogdgnbnya.supabase.co` (Cloud), confirmando que o roteamento está incorreto.
 
-### C) Cadastro “signal is aborted without reason”
-Pontos prováveis (e corrigíveis com mudanças mínimas e objetivas):
+### Problema 2: Admin não consegue editar paciente
+**Erro:** `{"error":"Token inválido"}`
 
-1) `create-user-both-envs` faz verificação de existência por:
-```ts
-auth.admin.listUsers({ page: 1, perPage: 1000 })
+**Causa raiz identificada:**
+O `EditPatientModal.tsx` usa `invokeEdgeFunction` (linha 133), que:
+1. Obtém o token do cliente **Cloud** (`supabase.auth.getSession()` em `edge-functions.ts` linha 42-43)
+2. Envia a requisição para a URL de **Produção** (`EDGE_FUNCTIONS_URL = https://ploqujuhpwutpcibedbr.supabase.co`)
+
+Na Edge Function `patient-operations` de **Produção**, a operação `admin_update_patient`:
+1. Cria um cliente do **Lovable Cloud** para validar o token (linha 2060)
+2. Tenta validar o token usando `authClient.auth.getUser(token)` (linha 2066)
+
+**O problema**: O token JWT do Cloud enviado pelo frontend não corresponde ao cliente Cloud criado na função, pois o `invokeEdgeFunction` usa a sessão do **Cloud local** (`@/integrations/supabase/client`), mas a Edge Function está rodando em **Produção**.
+
+---
+
+## Correções Necessárias
+
+### Correção 1: Rotear `ensure_patient` corretamente para Produção
+
+**Arquivo:** `src/lib/patients.ts`
+
+O problema é que mesmo quando `environment === 'production'`, a função está indo para o Cloud. Precisamos garantir que:
+1. Usuários de Produção chamem a Edge Function de Produção
+2. O token correto seja enviado
+
+**Alteração:** Simplificar a lógica para SEMPRE chamar `invokeEdgeFunction` (produção) quando for `ensure_patient`, pois essa operação usa `service_role` e não precisa de validação de JWT do usuário.
+
+```typescript
+// ANTES (linha 38-40):
+const invokeFunction = environment === 'production' ? invokeEdgeFunction : invokeCloudEdgeFunction;
+
+// DEPOIS:
+// ✅ CORREÇÃO: ensure_patient SEMPRE vai para Produção pois usa service_role (bypass RLS)
+// A operação está na AUTH_BYPASS_OPERATIONS e não precisa de token válido
+const { data, error } = await invokeEdgeFunction('patient-operations', {
+  body: {
+    operation: 'ensure_patient',
+    user_id: userId,
+    email: userEmail
+  }
+  // ✅ Sem headers de Authorization - a função usa service_role internamente
+});
 ```
-em dois ambientes (Cloud + Produção).  
-**Evidência:** `supabase/functions/create-user-both-envs/index.ts` linhas ~102–115.  
-Isso pode ficar lento/intermitente e levar a abort em mobile/conexões ruins.
 
-2) `checkUserExists()` no frontend usa fetch com `VITE_SUPABASE_URL` (que hoje aponta pro Cloud), o que é frágil em ambiente híbrido.  
-**Evidência:** `src/lib/auth-hybrid.ts` linhas ~44–54.
+### Correção 2: Enviar token correto no Admin Edit
 
----
+**Arquivo:** `src/components/admin/EditPatientModal.tsx`
 
-## 1) O que vou mudar (mínimo e objetivo)
+O admin faz login no **Cloud** (página `/admin`). Quando ele edita um paciente, precisamos:
+1. Obter o token do cliente Cloud
+2. Enviá-lo explicitamente no header Authorization
 
-### 1.1 Corrigir edição do usuário (produção) no `/completar-perfil`
-- **Arquivo:** `src/lib/patients.ts`
-- **Mudança mínima:**
-  - passar `environment` para `ensurePatientRow(userId, dbClient, environment)`
-  - garantir que, em `production`, o `ensurePatientRow()` invoque a função do ambiente correto e preserve `Authorization` (via `invokeEdgeFunction`, que já respeita `options.headers.Authorization`).
+**Alteração:** Passar explicitamente o token do Cloud no header:
 
-**Por que isso resolve:** impede chamadas “cloud por engano” e evita token incompatível / função errada.
+```typescript
+// ANTES (linha 133-140):
+const { data, error } = await invokeEdgeFunction('patient-operations', {
+  body: {
+    operation: 'admin_update_patient',
+    patient_id: patient.id,
+    email: patient.email,
+    updates
+  }
+});
 
-### 1.2 Corrigir edição pelo Admin no painel (produção)
-- **Arquivo:** `supabase/functions/patient-operations/index.ts`
-  - adicionar operação **`admin_update_patient`**
-  - adicionar `admin_update_patient` no `AUTH_BYPASS_OPERATIONS` (para não exigir token “da produção”)
-  - **validar o token no Cloud** (mesmo padrão já existente no arquivo para `activate_plan_manual`) e checar role `admin` no `user_roles` do Cloud
-  - atualizar registro `patients` no **ambiente de produção** usando `service_role` (bypass RLS, com validação server-side).
-  - aplicar whitelist dos campos permitidos (somente os campos do modal: first_name, last_name, cpf, phone_e164, birth_date, gender, cep, address_line, address_number, city, state).
+// DEPOIS:
+// ✅ CORREÇÃO: Obter token do Cloud e enviá-lo explicitamente
+const { data: sessionData } = await supabase.auth.getSession();
+const cloudToken = sessionData?.session?.access_token;
 
-- **Arquivo:** `src/components/admin/EditPatientModal.tsx`
-  - trocar o `.from('patients').update(...)` por `invokeEdgeFunction('patient-operations', { operation:'admin_update_patient', ... })`.
+if (!cloudToken) {
+  throw new Error('Sessão expirada. Faça login novamente.');
+}
 
-**Por que isso resolve:** o painel deixa de “editar Cloud” e passa a editar produção com segurança (validação admin server-side).
+const { data, error } = await invokeEdgeFunction('patient-operations', {
+  body: {
+    operation: 'admin_update_patient',
+    patient_id: patient.id,
+    email: patient.email,
+    updates
+  },
+  headers: {
+    'Authorization': `Bearer ${cloudToken}`
+  }
+});
+```
 
-### 1.3 Tornar o cadastro mais confiável (reduzir abort/timeout)
-- **Arquivo:** `supabase/functions/create-user-both-envs/index.ts`
-  - substituir a verificação por listagem de 1000 users por `auth.admin.getUserByEmail(email)` em ambos os ambientes (mais rápido/estável).
-  - manter fallback/logs claros caso getUserByEmail retorne erro.
+### Correção 3: Ajustar a Edge Function para aceitar o token do ambiente correto
 
-- **Arquivo:** `supabase/functions/check-user-exists/index.ts`
-  - substituir paginação/listUsers por `auth.admin.getUserByEmail` (Cloud + Produção) para resposta instantânea.
+**Arquivo:** `supabase/functions/patient-operations/index.ts`
 
-- **Arquivo:** `src/lib/auth-hybrid.ts`
-  - trocar o `fetch(${VITE_SUPABASE_URL}/functions/v1/check-user-exists...)` por uma chamada via `invokeEdgeFunction('check-user-exists', ...)`, que já tem URL “de produção” hardcoded e reduz risco de endpoint errado.
-  - manter o comportamento “fail open” (permitir fluxo normal em caso de erro), mas com logs melhores.
+O problema é que a Edge Function está deployada em **Produção** e tenta validar o token no **Cloud**, mas o token enviado pode não ser reconhecido. Precisamos usar a secret `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` para criar o cliente de validação.
 
-**Por que isso resolve:** evita chamadas pesadas e reduz chance de abort em mobile.
+**Alteração:** Usar as secrets configuradas ao invés de hardcode:
 
-### 1.4 (Opcional, mas altamente recomendado) Preferência de sessão pelo ambiente escolhido
-- **Arquivo:** `src/lib/auth-hybrid.ts`
-  - ajustar `getHybridSession()` para respeitar `sessionStorage.auth_environment` quando existir:
-    - se `auth_environment === 'production'`, checar produção primeiro; se não houver sessão lá, aí checar cloud.
-    - se `auth_environment === 'cloud'`, mantém cloud primeiro.
-  - Isso evita “sessão fantasma Cloud” ganhar prioridade quando o usuário acabou de logar na produção.
+```typescript
+// ANTES (linha 2056-2058):
+const LOVABLE_CLOUD_URL = 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+const LOVABLE_CLOUD_ANON_KEY = 'eyJ...';
 
-**Por que isso resolve:** elimina o caso clássico de “tenho sessão nos dois locais, mas o app escolhe o ambiente errado”.
+// DEPOIS:
+// ✅ CORREÇÃO: Usar secrets configuradas para consistência
+const LOVABLE_CLOUD_URL = Deno.env.get('CLOUD_SUPABASE_URL') || 'https://yrsjluhhnhxogdgnbnya.supabase.co';
+const LOVABLE_CLOUD_SERVICE_KEY = Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY');
 
----
-
-## 2) Atualização do contato da Natália (o pedido direto)
-Você pediu:
-- email: `nataliageraldodossantos@gmail.com`
-- nome: `Natália Fernanda Geraldo`
-- sobrenome: `dos Santos`
-
-Como eu não posso executar UPDATE direto via SQL daqui, vou fazer de forma segura assim que o fluxo de edição estiver corrigido:
-1) Após implementar `admin_update_patient`, você entra no painel com `suporte@prontiasaude.com.br`.
-2) Abre “Pacientes” → busca a Natália → edita e salva.
-3) Se preferir, após publicar as mudanças você me avisa “estou logado como suporte no preview”, e eu disparo a chamada pela função usando a própria sessão do seu navegador.
-
----
-
-## 3) Arquivos que serão modificados (lista objetiva)
-
-1) `src/lib/patients.ts`  
-2) `src/components/admin/EditPatientModal.tsx`  
-3) `supabase/functions/patient-operations/index.ts`  
-4) `supabase/functions/create-user-both-envs/index.ts`  
-5) `supabase/functions/check-user-exists/index.ts`  
-6) `src/lib/auth-hybrid.ts`  
+// Criar cliente com service_role para poder acessar user_roles
+const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_SERVICE_KEY || LOVABLE_CLOUD_ANON_KEY, {
+  global: { headers: { Authorization: `Bearer ${token}` } }
+});
+```
 
 ---
 
-## 4) MOTIVO (baseado no seu pedido)
-- Você relatou falhas em produção para:
-  - admin editar manualmente paciente,
-  - usuário editar o próprio perfil,
-  - novos cadastros falhando com erro de abort.
-- A evidência no código mostra escrita no ambiente errado (Cloud vs produção) e validações/auth incompatíveis em modo híbrido.
+## Resumo das Alterações
+
+| Arquivo | Alteração | Impacto |
+|---------|-----------|---------|
+| `src/lib/patients.ts` | Forçar `invokeEdgeFunction` para `ensure_patient` | Corrige FK violation |
+| `src/components/admin/EditPatientModal.tsx` | Enviar token Cloud explicitamente | Corrige "Token inválido" |
+| `supabase/functions/patient-operations/index.ts` | Usar secrets para validação admin | Garante consistência |
 
 ---
 
-## 5) ESCOPO (exatamente o que será alterado)
-- Somente:
-  - roteamento correto de ambiente (Cloud/produção) em `ensurePatientRow`/`getHybridSession`
-  - troca do UPDATE do Admin para uma chamada backend segura (`admin_update_patient`)
-  - otimização objetiva de “check user exists / create user” (trocar listUsers pesado por getUserByEmail)
-- Não vou alterar:
-  - integrações de pagamento (Mercado Pago),
-  - regras de redirecionamento Clicklife/Communicare,
-  - conteúdo/serviços/FAQ/home sections.
+## Arquivos que NÃO serão alterados
+
+- Integrações de pagamento (Mercado Pago)
+- Redirecionamentos Clicklife/Communicare
+- Conteúdo/serviços/FAQ/home sections
+- Fluxo de cadastro (já funcionando)
 
 ---
 
-## 6) CONFIRMAÇÃO (regra do projeto)
-**Estas alterações estão explicitamente solicitadas?**  
-- **SIM** quanto ao objetivo (corrigir edição e cadastro em produção)  
-- **NÃO** quanto aos caminhos de arquivo (você não citou os paths nesta última mensagem), porém **são estritamente necessárias** para atender o problema.
+## Validação Pós-Implementação
 
-Ao aprovar este plano, você autoriza as mudanças apenas nos arquivos listados acima, dentro do escopo descrito.
+1. **Usuário editando próprio perfil:**
+   - Login em Produção
+   - Acessar `/completar-perfil` ou área do paciente
+   - Editar dados e salvar
+   - Verificar Network: requisição deve ir para `ploqujuhpwutpcibedbr.supabase.co`
+   - Confirmar dados persistidos
 
----
+2. **Admin editando paciente:**
+   - Login como `suporte@prontiasaude.com.br`
+   - Abrir modal de edição de paciente
+   - Salvar alterações
+   - Confirmar toast de sucesso
+   - Verificar dados atualizados no banco
 
-## 7) Como vamos validar (checklist E2E)
-1) Produção (usuário comum):
-   - Login
-   - Área do paciente → “Editar perfil” → salvar
-   - Recarregar página → confirmar dados persistidos
-2) Produção (admin suporte):
-   - Login admin → abrir paciente → editar nome/telefone → salvar → conferir persistência
-3) Cadastro:
-   - Criar conta com email novo em mobile/desktop
-   - Confirmar que não aparece “signal is aborted without reason”
-4) Logs:
-   - Edge function `create-user-both-envs` e `check-user-exists` com logs claros e execução rápida
-
+3. **Atualizar dados da Natália:**
+   - Após correções, editar via painel admin:
+   - Nome: `Natália Fernanda Geraldo`
+   - Sobrenome: `dos Santos`
