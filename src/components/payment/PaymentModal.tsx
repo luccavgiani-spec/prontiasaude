@@ -69,11 +69,19 @@ function findInStorage(keys: string[]): string | null {
 
 function getMpDeviceSessionId(): string | null {
   // 1) Variável global (quando existir)
-  const fromWindow = sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
+  const fromWindow =
+    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID) ||
+    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
   if (fromWindow) return fromWindow;
 
   // 2) Alguns ambientes gravam em cookie
-  const cookieKeys = ["MP_DEVICE_SESSION_ID", "mp_device_session_id", "meli_session_id", "x-meli-session-id"];
+  const cookieKeys = [
+    "MP_DEVICE_SESSION_ID",
+    "MP_DEVICE_SESSION_ID",
+    "mp_device_session_id",
+    "meli_session_id",
+    "x-meli-session-id",
+  ];
   for (const ck of cookieKeys) {
     const cval = sanitizeMpDeviceId(readCookie(ck));
     if (cval) return cval;
@@ -1736,7 +1744,7 @@ export function PaymentModal({
           }),
         },
         // ✅ CORREÇÃO: Usar deviceId do cardFormData real, sem fallback inválido
-        device_id: cardFormData.deviceId || deviceId || undefined,
+        device_id: cardFormData.deviceId || deviceId || null,
         // ✅ ADICIONADO: Enviar payerOverride para titular de terceiro
         payerOverride: cardFormData.payerOverride,
       };
@@ -1790,7 +1798,7 @@ export function PaymentModal({
           frequency: frequency || 1,
           frequency_type: frequencyType || "months",
           order_id: orderId,
-          device_id: deviceId || getMpDeviceSessionId() || undefined,
+          device_id: deviceId || getMpDeviceSessionId() || null,
         };
 
         console.log("[handleCardSubmit] Subscription request:", subscriptionRequest);
@@ -2213,7 +2221,7 @@ export function PaymentModal({
             owner_pix_key: appliedCoupon.owner_pix_key,
           }),
         },
-        device_id: deviceId || getMpDeviceSessionId() || undefined,
+        device_id: deviceId || getMpDeviceSessionId() || null,
       };
 
       // Adicionar auto_recurring se for assinatura
