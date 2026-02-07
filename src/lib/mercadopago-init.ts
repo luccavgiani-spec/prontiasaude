@@ -10,6 +10,7 @@ import { initMercadoPago } from "@mercadopago/sdk-react";
 import { MP_PUBLIC_KEY } from "@/lib/constants";
 
 let isInitialized = false;
+const MP_DEBUG = import.meta.env.DEV;
 
 /**
  * Inicializa o SDK do Mercado Pago globalmente.
@@ -17,7 +18,7 @@ let isInitialized = false;
  */
 export function initializeMercadoPago(): void {
   if (isInitialized) {
-    console.log("[MercadoPago SDK] Already initialized, skipping");
+    if (MP_DEBUG) console.log("[MercadoPago SDK] Already initialized, skipping");
     return;
   }
 
@@ -32,7 +33,7 @@ export function initializeMercadoPago(): void {
     });
     
     isInitialized = true;
-    console.log("[MercadoPago SDK] ✅ Initialized successfully with React SDK");
+    if (MP_DEBUG) console.log("[MercadoPago SDK] ✅ Initialized successfully with React SDK");
   } catch (error) {
     console.error("[MercadoPago SDK] Failed to initialize:", error);
   }
