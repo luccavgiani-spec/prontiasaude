@@ -1,67 +1,78 @@
 
+# Fazer o Medidor MP Reconhecer SDK V2 + Device ID
 
-# Melhorar Qualidade da Integracao Mercado Pago (70 para 90+)
+## Problema
 
-## Diagnostico
+O `@mercadopago/sdk-react` inicializa o SDK internamente mas **nao expoe `window.MercadoPago`** como objeto global. O scanner do Mercado Pago verifica justamente `typeof window.MercadoPago` para validar que o SDK V2 esta presente. Resultado: nota 70.
 
-A integracao ja tem todos os componentes necessarios implementados, mas com **duplicidades e conflitos** que provavelmente derrubam a nota:
+## Solucao
 
-| Item | Status | Problema |
-|------|--------|----------|
-| SDK V2 (MercadoPago.js) | Instalado 2x | Script no HTML + React SDK no npm - conflito |
-| security.js (Device Fingerprint) | OK | Carrega corretamente |
-| Device ID capture | Funcional mas redundante | Leitura triplicada identica na mesma funcao |
-| Secure Fields (PCI) | 2 fluxos coexistindo | CardPayment React SDK + Brick manual no PaymentModal |
-| device_id enviado ao backend | OK | Enviado como body.device_id |
-| declare global Window | Duplicado | PaymentModal.tsx + global.d.ts |
+Carregar o script `https://sdk.mercadopago.com/js/v2` diretamente (alem do React SDK que ja existe), e instanciar `new window.MercadoPago(PUBLIC_KEY)` globalmente. Isso nao conflita com o React SDK pois ambos usam o mesmo SDK por baixo.
 
-## Plano de Correcao
+## Alteracoes
 
-### Tarefa A - Limpar duplicidade do SDK V2
+### 1. Novo arquivo: `src/lib/mercadopago-global.ts`
 
-**index.html**: Remover a linha 161 (`<script src="https://sdk.mercadopago.com/js/v2"></script>`). O React SDK (`@mercadopago/sdk-react`) ja carrega o SDK internamente. Manter apenas o `security.js` (linha 158) que e um script separado para device fingerprint.
+Loader seguro do SDK V2 com as seguintes caracteristicas:
+- Verifica se o script com `id="mp-sdk-v2"` ja existe antes de inserir
+- Cria `<script>` com `src="https://sdk.mercadopago.com/js/v2"` e `id="mp-sdk-v2"`
+- Retorna uma Promise que resolve quando o script carrega
+- Apos carregamento, instancia `window.__mpGlobal = new window.MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' })`
+- Essa instancia NAO e usada no checkout - existe apenas para o scanner detectar
+- Logs apenas em DEV (`import.meta.env.DEV`)
 
-**main.tsx**: Remover a funcao `ensureMercadoPagoSdkLoaded()` e a espera async. O React SDK (`initMercadoPago`) ja gerencia o carregamento. Simplificar para inicializacao sincrona.
+```text
+Funcao exportada: loadMercadoPagoGlobal(): Promise<void>
+  1. Se window.MercadoPago ja existe -> apenas inicializa __mpGlobal e retorna
+  2. Se document.getElementById('mp-sdk-v2') existe -> aguarda load e retorna
+  3. Senao -> cria script, aguarda onload, inicializa __mpGlobal
+  4. Loga em DEV: typeof window.MercadoPago, MP_DEVICE_SESSION_ID
+```
 
-### Tarefa B - Consolidar Device ID
+### 2. `src/main.tsx` (linha 10)
 
-**PaymentModal.tsx**: Corrigir a funcao `getMpDeviceSessionId()` que le `window.MP_DEVICE_SESSION_ID` 3 vezes identicamente (linhas 74-76). Manter apenas 1 leitura. Remover o `declare global` duplicado (linhas 28-32) pois ja existe em `src/types/global.d.ts`.
+Adicionar import e chamada apos `initializeMercadoPago()`:
 
-### Tarefa C - Eliminar fluxo duplicado de cartao (brick manual)
+```text
+import { loadMercadoPagoGlobal } from "./lib/mercadopago-global";
 
-**PaymentModal.tsx**: O arquivo tem ~3455 linhas com dois fluxos de cartao coexistindo:
-- Fluxo 1 (linhas ~870-1050): Brick manual via `bricksBuilder.create("cardPayment")` - **LEGADO**
-- Fluxo 2: Componente `<MercadoPagoCardForm />` que usa `<CardPayment />` do React SDK - **CORRETO**
+initializeMercadoPago();       // React SDK (existente)
+loadMercadoPagoGlobal();       // SDK V2 global para o scanner (novo)
+```
 
-Verificar qual fluxo esta ativo na renderizacao e garantir que apenas o do React SDK (`MercadoPagoCardForm`) seja utilizado. Se o brick manual for codigo morto/unreachable, remove-lo. Se ambos renderizam, desativar o legado.
+### 3. `src/types/global.d.ts` (linha 6)
 
-### Tarefa D - Logs DEV controlados
+Adicionar tipagem para `__mpGlobal` e `MP_DEVICE_SESSION_ID`:
 
-Adicionar uma flag `MP_DEBUG` baseada em `import.meta.env.DEV` para controlar logs verbose do Mercado Pago. Envolver os `console.log` existentes do Device ID e tokenizacao com esta flag para que nao poluam producao.
+```text
+MercadoPago?: any;
+__mpGlobal?: any;
+MP_DEVICE_SESSION_ID?: string;
+```
 
-## Arquivos que serao modificados
+## Arquivos modificados
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `index.html` | Remover script SDK V2 duplicado (linha 161) |
-| `src/main.tsx` | Remover `ensureMercadoPagoSdkLoaded()`, simplificar init |
-| `src/components/payment/PaymentModal.tsx` | Remover `declare global` duplicado, corrigir leitura triplicada do Device ID, avaliar/remover brick manual legado |
-| `src/components/payment/MercadoPagoCardForm.tsx` | Sem alteracoes significativas (ja esta correto) |
+| Arquivo | Acao |
+|---------|------|
+| `src/lib/mercadopago-global.ts` | Novo - loader + init global |
+| `src/main.tsx` | Adicionar 2 linhas (import + chamada) |
+| `src/types/global.d.ts` | Adicionar 2 propriedades ao Window |
 
-## O que NAO sera alterado
+## Arquivos NAO alterados
 
-- Nenhuma Edge Function (mp-create-payment, mp-webhook, etc.)
-- Nenhuma rota ou pagina
-- Nenhum fluxo de PIX existente
-- Nenhuma tabela ou schema
-- Nenhum componente fora do sistema de pagamento
-- `statement_descriptor` e configurado no backend - frontend ja envia todos os dados necessarios
+- `index.html` (security.js permanece, sem novo script tag)
+- `PaymentModal.tsx` (nenhuma alteracao)
+- `MercadoPagoCardForm.tsx` (nenhuma alteracao)
+- `mercadopago-init.ts` (nenhuma alteracao)
+- Edge Functions (nenhuma)
 
-## Resultado esperado
+## Resultado esperado apos deploy
 
-Apos estas correcoes, o Mercado Pago detectara:
-- SDK V2 carregado uma unica vez (sem conflitos)
-- Device ID capturado e enviado corretamente (sem leituras redundantes)
-- Secure Fields (PCI) via um unico fluxo CardPayment
-- Nenhum numero de cartao trafegando no frontend
-
+```text
+typeof window.MercadoPago        -> "function"
+typeof window.__mpGlobal         -> "object"
+window.MP_DEVICE_SESSION_ID      -> "armor..."
+Network: sdk.mercadopago.com/js/v2    -> 200
+Network: mercadopago.com/v2/security.js -> 200
+Checkout PIX e cartao            -> sem regressao
+```
