@@ -25,11 +25,7 @@ import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-tracking";
 // - Mantemos fallback em localStorage para consistência entre páginas
 // ============================================================
 
-declare global {
-  interface Window {
-    MP_DEVICE_SESSION_ID?: string;
-  }
-}
+// ✅ Window.MercadoPago e MP_DEVICE_SESSION_ID declarados em src/types/global.d.ts
 
 function sanitizeMpDeviceId(raw: unknown): string | null {
   const value = typeof raw === "string" ? raw.trim() : "";
@@ -69,16 +65,17 @@ function findInStorage(keys: string[]): string | null {
 }
 
 function getMpDeviceSessionId(): string | null {
-  // 1) Variável global (quando existir)
-  const fromWindow =
-    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID) ||
-    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID) ||
-    sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
-  if (fromWindow) return fromWindow;
+  const MP_DEBUG = import.meta.env.DEV;
+
+  // 1) Variável global (security.js define window.MP_DEVICE_SESSION_ID)
+  const fromWindow = sanitizeMpDeviceId((window as any).MP_DEVICE_SESSION_ID);
+  if (fromWindow) {
+    if (MP_DEBUG) console.log("[MP Device ID] ✅ Capturado de window.MP_DEVICE_SESSION_ID");
+    return fromWindow;
+  }
 
   // 2) Alguns ambientes gravam em cookie
   const cookieKeys = [
-    "MP_DEVICE_SESSION_ID",
     "MP_DEVICE_SESSION_ID",
     "mp_device_session_id",
     "meli_session_id",
@@ -86,7 +83,10 @@ function getMpDeviceSessionId(): string | null {
   ];
   for (const ck of cookieKeys) {
     const cval = sanitizeMpDeviceId(readCookie(ck));
-    if (cval) return cval;
+    if (cval) {
+      if (MP_DEBUG) console.log("[MP Device ID] ✅ Capturado de cookie:", ck);
+      return cval;
+    }
   }
 
   // 3) Fallback em storage (persistência)
@@ -98,8 +98,12 @@ function getMpDeviceSessionId(): string | null {
     "mp_device_id",
   ];
   const fromStorage = findInStorage(storageKeys);
-  if (fromStorage) return fromStorage;
+  if (fromStorage) {
+    if (MP_DEBUG) console.log("[MP Device ID] ✅ Capturado de storage");
+    return fromStorage;
+  }
 
+  if (MP_DEBUG) console.warn("[MP Device ID] ⚠️ Não encontrado em nenhuma fonte");
   return null;
 }
 
@@ -291,23 +295,11 @@ export function PaymentModal({
     state: "",
   });
 
-  // ✅ SDK React do MP agora é inicializado globalmente em main.tsx
-  // Refs mantidas para compatibilidade com lógica legada (serão removidas em refactor futuro)
-  const mpInstanceRef = useRef<any>(null);
-  const cardPaymentBrickRef = useRef<any>(null);
-  const cardPaymentBrickController = useRef<any>(null);
-  const forceRemountRef = useRef(false);
-  const isBrickMountedRef = useRef(false);
+  // ✅ Refs para controle de pagamento (brick legado removido)
   const isSubmittingRef = useRef(false);
   const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const brickRecoverAttemptsRef = useRef(0);
-  const isMountingRef = useRef(false);
-  const mountTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
-
-  // ✅ Flag para usar novo componente React SDK vs legado
-  const useNewReactSdk = true;
 
   // ✅ FUNÇÃO: Verificar se o plano foi criado no backend após pagamento
   const verifyPlanCreation = async (
@@ -435,7 +427,7 @@ export function PaymentModal({
       setPaymentMethod(undefined); // Reset método de pagamento
       isSubmittingRef.current = false; // NOVO: Reset de segurança
       loadUserData();
-      loadMercadoPagoSDK();
+      // SDK V2 já inicializado globalmente em main.tsx
 
       // Google Ads - Track Begin Checkout (apenas uma vez por abertura)
       if (!hasTrackedInitiateCheckoutRef.current) {
@@ -469,11 +461,7 @@ export function PaymentModal({
         validationTimeoutRef.current = null;
       }
 
-      if (cardPaymentBrickRef.current) {
-        cardPaymentBrickRef.current.unmount();
-        cardPaymentBrickRef.current = null;
-        isBrickMountedRef.current = false;
-      }
+      // Brick legado removido - SDK React gerencia ciclo de vida automaticamente
     }
   }, [open, amount, serviceName, especialidade]);
 
@@ -641,24 +629,8 @@ export function PaymentModal({
     }
   };
 
-  const loadMercadoPagoSDK = () => {
-    if (window.MercadoPago) {
-      mpInstanceRef.current = new window.MercadoPago(MP_PUBLIC_KEY, {
-        locale: "pt-BR",
-      });
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://sdk.mercadopago.com/js/v2";
-    script.async = true;
-    script.onload = () => {
-      mpInstanceRef.current = new window.MercadoPago(MP_PUBLIC_KEY, {
-        locale: "pt-BR",
-      });
-    };
-    document.body.appendChild(script);
-  };
+  // ✅ SDK V2 agora é carregado globalmente pelo @mercadopago/sdk-react (initMercadoPago em main.tsx)
+  // loadMercadoPagoSDK removido - não precisa mais de instância manual window.MercadoPago
 
   // Limpar erros ao trocar método de pagamento
   useEffect(() => {
@@ -668,105 +640,7 @@ export function PaymentModal({
     }
   }, [paymentMethod, open, paymentStatus]);
 
-  // ✅ ETAPA 1: Proteger Brick contra desmontagens indevidas
-  useEffect(() => {
-    // Só desmontar se:
-    // 1. Modal está aberto
-    // 2. NÃO está mostrando resumo
-    // 3. Método mudou para algo diferente de 'card'
-    // 4. Método está definido (não é undefined)
-    // 5. Brick está montado
-    if (
-      open &&
-      !showSummary &&
-      paymentMethod !== "card" &&
-      paymentMethod !== undefined &&
-      isBrickMountedRef.current &&
-      cardPaymentBrickRef.current
-    ) {
-      console.log("[Brick Unmount] Desmontando brick (troca de método para:", paymentMethod, ")");
-      console.log("[Brick Unmount] Estado:", {
-        paymentMethod,
-        isBrickMounted: isBrickMountedRef.current,
-        cardPaymentBrickRef: !!cardPaymentBrickRef.current,
-      });
-      try {
-        cardPaymentBrickRef.current.unmount();
-      } catch (err) {
-        console.warn("[PaymentModal] Erro ao desmontar brick:", err);
-      } finally {
-        cardPaymentBrickRef.current = null;
-        cardPaymentBrickController.current = null;
-        isBrickMountedRef.current = false;
-      }
-    }
-  }, [paymentMethod, open, showSummary]);
-
-  // Montar Card Payment Brick APENAS quando tiver dados mínimos válidos E showSummary === false
-  useEffect(() => {
-    console.log("[Brick Mount Effect] Triggered with:", {
-      open,
-      showSummary,
-      paymentMethod,
-      paymentStatus,
-      isLoadingUserData,
-      hasMPInstance: !!mpInstanceRef.current,
-      hasRequiredData,
-      isUserLoggedIn,
-      isBrickMounted: isBrickMountedRef.current,
-    });
-
-    // ✅ Só montar se não estiver mostrando o resumo
-    if (showSummary) {
-      console.log("[Brick Mount Effect] Skipping (showing summary)");
-      return;
-    }
-
-    // Não mexer no Brick durante processamento
-    if (paymentStatus === "processing" || paymentStatus === "in_process" || isSubmittingRef.current) {
-      console.log("[Brick Mount Effect] Skipping (payment in progress or submitting)");
-      return;
-    }
-
-    // Verificar se mpInstanceRef está pronto
-    if (!mpInstanceRef.current) {
-      console.log("[Brick Mount Effect] MP Instance não está pronta ainda");
-      return;
-    }
-
-    if (!open || paymentMethod !== "card" || isLoadingUserData) {
-      return;
-    }
-
-    // Verifica se tem dados mínimos: email válido + CPF com 11 dígitos
-    const emailValid = formData.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
-    const cpfValid = formData.cpf && formData.cpf.replace(/\D/g, "").length === 11;
-    const hasMinimalPayerData = emailValid && cpfValid;
-
-    // ✅ Montar se tiver dados mínimos OU dados completos
-    if (hasRequiredData || hasMinimalPayerData) {
-      if (!isBrickMountedRef.current) {
-        mountCardPaymentBrick();
-      }
-    } else {
-      // Desmontar quando não estiver no método cartão
-      if (isBrickMountedRef.current && cardPaymentBrickRef.current && paymentMethod !== "card") {
-        console.log("[Brick Mount Effect] Unmounting: payment method changed from card");
-        cardPaymentBrickRef.current.unmount();
-        isBrickMountedRef.current = false;
-      }
-    }
-  }, [
-    open,
-    showSummary,
-    paymentMethod,
-    isLoadingUserData,
-    hasRequiredData,
-    isUserLoggedIn,
-    formData.email,
-    formData.cpf,
-    paymentStatus,
-  ]);
+  // ✅ Brick legado removido - SDK React (<MercadoPagoCardForm />) gerencia montagem/desmontagem automaticamente
 
   // Scroll automático para o topo quando erro aparece
   useEffect(() => {
@@ -811,354 +685,7 @@ export function PaymentModal({
     }
   }, [open, paymentStatus, userMessage, errorOverlayMessage]);
 
-  const mountCardPaymentBrick = async () => {
-    // Guard: Prevenir montagens concorrentes
-    if (isMountingRef.current) {
-      console.warn("[mountCardPaymentBrick] Montagem já em andamento, ignorando");
-      return;
-    }
-
-    // ✅ NOVO: Permitir re-montagem se flag forceRemount estiver ativa
-    if (isBrickMountedRef.current && !forceRemountRef.current) {
-      console.log("[mountCardPaymentBrick] Skipping (already mounted, no force remount)");
-      return;
-    }
-
-    if (!mpInstanceRef.current) {
-      console.log("[mountCardPaymentBrick] Skipping (no MP instance)");
-      return;
-    }
-
-    // Resetar flag de force remount
-    if (forceRemountRef.current) {
-      console.log("[mountCardPaymentBrick] Force remount requested");
-      forceRemountRef.current = false;
-    }
-
-    isMountingRef.current = true;
-
-    console.log("[mountCardPaymentBrick] Iniciando montagem. Estado:", {
-      isBrickMounted: isBrickMountedRef.current,
-      hasMPInstance: !!mpInstanceRef.current,
-      hasContainer: !!document.getElementById("cardPaymentBrick"),
-      formData: { email: formData.email, cpf: formData.cpf },
-    });
-
-    // Timeout de segurança para detectar montagens travadas
-    if (mountTimeoutRef.current) {
-      clearTimeout(mountTimeoutRef.current);
-    }
-
-    mountTimeoutRef.current = setTimeout(() => {
-      if (isMountingRef.current) {
-        console.error("[mountCardPaymentBrick] Montagem travada, resetando...");
-        isMountingRef.current = false;
-        isBrickMountedRef.current = false;
-        cardPaymentBrickRef.current = null;
-      }
-    }, 10000);
-
-    // ✅ ETAPA 4: Aguardar DOM estar estável
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    // ✅ ETAPA 4: Verificar múltiplas vezes se container existe
-    let container = document.getElementById("cardPaymentBrick");
-    let attempts = 0;
-
-    while (!container && attempts < 5) {
-      console.log("[mountCardPaymentBrick] Container não encontrado, aguardando... (tentativa", attempts + 1, ")");
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      container = document.getElementById("cardPaymentBrick");
-      attempts++;
-    }
-
-    if (!container) {
-      console.error("[PaymentModal] Container #cardPaymentBrick não encontrado após 5 tentativas");
-      isMountingRef.current = false;
-      if (mountTimeoutRef.current) {
-        clearTimeout(mountTimeoutRef.current);
-      }
-      return;
-    }
-
-    // Limpar container antes de montar
-    container.innerHTML = "";
-
-    console.log("[mountCardPaymentBrick] Container encontrado, montando brick...");
-
-    // CRITICAL: Só usar dados REAIS (não placeholders)
-    const payerEmail = formData.email;
-    const payerCPF = formData.cpf.replace(/\D/g, "");
-
-    // Validação final antes de montar
-    if (!payerEmail || !payerCPF || payerCPF.length !== 11) {
-      console.warn("[PaymentModal] Dados insuficientes para montar Brick:", { payerEmail, payerCPF });
-      isMountingRef.current = false;
-      if (mountTimeoutRef.current) {
-        clearTimeout(mountTimeoutRef.current);
-      }
-      return;
-    }
-
-    try {
-      const bricksBuilder = mpInstanceRef.current.bricks();
-
-      const cardPaymentBrick = await bricksBuilder.create("cardPayment", "cardPaymentBrick", {
-        initialization: {
-          amount: amount / 100,
-          payer: {
-            email: payerEmail,
-            identification: {
-              type: "CPF",
-              number: payerCPF,
-            },
-          },
-        },
-        customization: {
-          visual: {
-            style: {
-              theme: "default",
-            },
-          },
-          // ✅ ETAPA 3: Permitir paste nos campos (pode ser limitado pelo MP)
-          paymentMethods: {
-            creditCard: "all",
-            debitCard: "all",
-          },
-        },
-        callbacks: {
-          onReady: async (controller: any) => {
-            console.log("[Brick onReady] ✅ Card Payment Brick montado com sucesso");
-            console.log("[Brick onReady] Container:", document.getElementById("cardPaymentBrick"));
-            cardPaymentBrickController.current = controller;
-            isBrickMountedRef.current = true;
-            brickRecoverAttemptsRef.current = 0;
-            isMountingRef.current = false;
-            if (mountTimeoutRef.current) {
-              clearTimeout(mountTimeoutRef.current);
-            }
-
-            // Device ID será capturado no onSubmit (não aqui)
-            console.log("[Device ID] ⏳ Aguardando captura no momento do submit");
-          },
-          onSubmit: (brickSubmitData: any) => {
-            console.log("[Brick onSubmit] start");
-            return new Promise<void>(async (resolve) => {
-              // NOVO: Resetar flag primeiro (caso esteja travada de submit anterior)
-              const wasSubmitting = isSubmittingRef.current;
-              if (wasSubmitting) {
-                console.warn("[Brick onSubmit] Flag já estava em true, resetando...");
-              }
-
-              // Prevenir múltiplos submits simultâneos
-              if (isSubmittingRef.current) {
-                console.warn("[Brick onSubmit] Submit already in progress, ignoring");
-                resolve();
-                return;
-              }
-
-              isSubmittingRef.current = true;
-              console.log("[Brick onSubmit] Flag setada, iniciando processamento...");
-
-              // ✅ CAPTURAR Device ID NO MOMENTO DO SUBMIT (não no onReady)
-              try {
-                const capturedDeviceId = await cardPaymentBrick.getDeviceId();
-                if (capturedDeviceId) {
-                  console.log("[Device ID] ✅ Capturado no onSubmit:", capturedDeviceId);
-                  setDeviceId(capturedDeviceId);
-                  persistMpDeviceSessionId(capturedDeviceId);
-                } else {
-                  console.warn("[Device ID] ⚠️ Vazio no onSubmit, mas continuando (SDK envia automaticamente)");
-                }
-              } catch (err) {
-                console.warn("[Device ID] ⚠️ Erro ao capturar, mas continuando:", err);
-              }
-
-              try {
-                console.log("[Brick onSubmit] Received data:", brickSubmitData);
-
-                // Validar dados ANTES de processar
-                if (!validateForm()) {
-                  setError("Preencha todos os campos antes de finalizar o pagamento");
-                  setPaymentStatus("idle");
-                  resolve();
-                  return;
-                }
-
-                // Resolver wrapper do Brick
-                const cardData = brickSubmitData?.getCardFormData
-                  ? await brickSubmitData.getCardFormData()
-                  : brickSubmitData;
-
-                console.log("[Brick onSubmit] Card data resolved:", cardData);
-
-                // ✅ NOVO: Validar data de validade ANTES de processar
-                const expiryValidation = validateCardExpiry(cardData);
-                if (!expiryValidation.valid) {
-                  console.error("[Brick onSubmit] Invalid card expiry:", cardData);
-                  setError(expiryValidation.error || "Data de validade inválida");
-                  setPaymentStatus("idle");
-                  toast.error(expiryValidation.error || "Data de validade inválida");
-                  resolve();
-                  return;
-                }
-
-                if (!cardData || !cardData.token || !cardData.payment_method_id) {
-                  console.error("[Brick onSubmit] Invalid card data:", cardData);
-                  setError("Erro ao processar dados do cartão. Tente novamente.");
-                  setPaymentStatus("idle");
-                  toast.error("Dados do cartão inválidos");
-                  resolve();
-                  return;
-                }
-
-                // ✅ CORREÇÃO: Capturar deviceId novamente AQUI para evitar race condition do state
-                const freshDeviceId = await (async () => {
-                  try {
-                    const id = await cardPaymentBrick.getDeviceId();
-                    console.log("[Device ID] ✅ Re-capturado antes do submit:", id);
-                    return id;
-                  } catch {
-                    return null;
-                  }
-                })();
-
-                await handleCardSubmit({
-                  token: cardData.token,
-                  payment_method_id: cardData.payment_method_id || cardData.paymentMethodId,
-                  installments: cardData.installments || 1,
-                  deviceId: freshDeviceId || deviceId || undefined, // ✅ Usa valor recém-capturado
-                  payerOverride: isThirdPartyCard
-                    ? {
-                        first_name: payerData.name.split(" ")[0],
-                        last_name: payerData.name.split(" ").slice(1).join(" "),
-                        cpf: payerData.cpf.replace(/\D/g, ""),
-                        phone: (() => {
-                          const phoneClean = payerData.phone.replace(/\D/g, "");
-                          const areaCode = phoneClean.startsWith("55")
-                            ? phoneClean.substring(2, 4)
-                            : phoneClean.substring(0, 2);
-                          const number = phoneClean.startsWith("55")
-                            ? phoneClean.substring(4)
-                            : phoneClean.substring(2);
-                          return { area_code: areaCode, number: number };
-                        })(),
-                        address: {
-                          zip_code: payerData.cep.replace(/\D/g, ""),
-                          street_name: payerData.street_name,
-                          street_number: payerData.street_number,
-                          neighborhood: payerData.neighborhood,
-                          city: payerData.city,
-                          state: payerData.state,
-                        },
-                      }
-                    : undefined,
-                });
-              } catch (error) {
-                console.error("[Brick onSubmit] Uncaught error:", error);
-                setError("Erro ao processar pagamento. Tente novamente.");
-                setPaymentStatus("idle");
-                toast.error("Erro ao processar pagamento");
-              } finally {
-                // Liberar flag após 1 segundo (era 2s)
-                setTimeout(() => {
-                  console.log("[Brick onSubmit] Liberando isSubmittingRef");
-                  isSubmittingRef.current = false;
-                }, 1000);
-                console.log("[Brick onSubmit] resolve() called");
-                resolve();
-              }
-            });
-          },
-          onError: (error: any) => {
-            console.error("[Card Payment Brick] Error:", error);
-
-            const cause = error?.cause || error?.cause?.[0]?.code || "";
-            const message: string = error?.message || "";
-            const isSecureFieldsFailure =
-              cause === "fields_setup_failed_after_3_tries" ||
-              cause === "fields_setup_failed" ||
-              message.toLowerCase().includes("secure fields failed") ||
-              message.toLowerCase().includes("fields_setup_failed");
-
-            if (isSecureFieldsFailure) {
-              console.warn("[Card Payment Brick] Secure Fields setup failure detectado");
-
-              if (brickRecoverAttemptsRef.current >= 2) {
-                console.error("[Card Payment Brick] Máximo de tentativas atingido");
-                setError("Não foi possível carregar o formulário de pagamento. Por favor, recarregue a página.");
-                return;
-              }
-
-              brickRecoverAttemptsRef.current += 1;
-
-              // Desmontar completamente
-              try {
-                if (cardPaymentBrickRef.current) {
-                  cardPaymentBrickRef.current.unmount();
-                }
-              } catch (e) {
-                console.warn("[Card Payment Brick] Erro ao desmontar:", e);
-              } finally {
-                cardPaymentBrickRef.current = null;
-                isBrickMountedRef.current = false;
-                isMountingRef.current = false;
-                if (mountTimeoutRef.current) {
-                  clearTimeout(mountTimeoutRef.current);
-                }
-              }
-
-              // Aguardar mais tempo antes de remontar (1.5s em vez de 400ms)
-              setTimeout(() => {
-                if (open && !showSummary && paymentMethod === "card" && mpInstanceRef.current) {
-                  console.log("[Card Payment Brick] Tentando remontagem após espera");
-                  mountCardPaymentBrick();
-                }
-              }, 1500);
-
-              return;
-            }
-
-            // ✅ Detectar erros de validação do Brick que podem "travar" o formulário
-            const isValidationError =
-              message.toLowerCase().includes("dado obrigatório") ||
-              message.toLowerCase().includes("mandatory") ||
-              message.toLowerCase().includes("required field") ||
-              message.toLowerCase().includes("campo obrigatório") ||
-              error?.fieldErrors?.length > 0;
-
-            if (isValidationError) {
-              console.warn("[Card Payment Brick] Erro de validação detectado - mostrando botão retry");
-              setShowBrickRetryButton(true);
-            }
-
-            // ✅ Exibir erros críticos ao usuário
-            if (error?.cause?.[0]?.code === "E301" || message.includes("token")) {
-              setError("Erro ao processar dados do cartão. Verifique as informações e tente novamente.");
-              setPaymentStatus("idle");
-              setShowBrickRetryButton(true);
-            } else if (message.includes("security_code")) {
-              setError("Código de segurança (CVV) inválido.");
-              setPaymentStatus("idle");
-            } else {
-              // Erros não críticos: apenas logar
-              console.warn("[Card Payment Brick] Non-critical error:", error);
-            }
-          },
-        },
-      });
-
-      cardPaymentBrickRef.current = cardPaymentBrick;
-    } catch (err) {
-      console.error("Erro ao montar brick (não crítico):", err);
-      // NÃO exibir mensagem ao usuário - brick pode funcionar mesmo com erros de setup
-    } finally {
-      isMountingRef.current = false;
-      if (mountTimeoutRef.current) {
-        clearTimeout(mountTimeoutRef.current);
-      }
-    }
-  };
+  // ✅ mountCardPaymentBrick removido - SDK React (<MercadoPagoCardForm />) gerencia tudo automaticamente
 
   const validateForm = (): boolean => {
     if (!formData.name || !formData.email || !formData.cpf || !formData.phone) {
@@ -2068,17 +1595,7 @@ export function PaymentModal({
         setPaymentStatus("rejected");
         setPaymentId(data.payment_id || "");
 
-        // ✅ Desmontar Brick para evitar UI bug, mas manter modal aberto
-        try {
-          if (cardPaymentBrickRef.current) {
-            cardPaymentBrickRef.current.unmount();
-          }
-        } catch (e) {
-          console.warn("[PaymentModal] Erro ao desmontar brick após recusa:", e);
-        } finally {
-          cardPaymentBrickRef.current = null;
-          isBrickMountedRef.current = false;
-        }
+        // Brick legado removido - SDK React desmonta automaticamente
 
         // ✅ Ativar overlay de erro global (modal continua aberto)
         setShowErrorOverlay(true);
@@ -2402,37 +1919,11 @@ export function PaymentModal({
   }, [open, paymentStatus, formData.email]);
 
   const resetPaymentBrick = () => {
-    console.log("[Retry] Resetting Payment Brick...");
-
-    // Unmount o brick atual se existir
-    if (cardPaymentBrickController.current) {
-      try {
-        cardPaymentBrickController.current.unmount();
-        console.log("[Retry] Brick unmounted successfully");
-      } catch (error) {
-        console.error("[Retry] Error unmounting brick:", error);
-      }
-      cardPaymentBrickController.current = null;
-    }
-
-    if (cardPaymentBrickRef.current) {
-      try {
-        cardPaymentBrickRef.current.unmount();
-      } catch (error) {
-        console.error("[Retry] Error unmounting brick ref:", error);
-      }
-      cardPaymentBrickRef.current = null;
-      isBrickMountedRef.current = false;
-    }
-
-    // Limpar o container do brick
-    const brickContainer = document.getElementById("cardPaymentBrick");
-    if (brickContainer) {
-      brickContainer.innerHTML = "";
-    }
-
-    // Sinalizar que uma remontagem será necessária
-    forceRemountRef.current = true;
+    console.log("[Retry] Resetting Payment state...");
+    // SDK React gerencia desmontagem automaticamente
+    setShowBrickRetryButton(false);
+    setError("");
+    setPaymentStatus("idle");
   };
 
   const handleTryAgain = () => {
@@ -2442,11 +1933,7 @@ export function PaymentModal({
     setError("");
     setUserMessage("");
     setPixData(null);
-    if (cardPaymentBrickRef.current) {
-      cardPaymentBrickRef.current.unmount();
-      cardPaymentBrickRef.current = null;
-      isBrickMountedRef.current = false;
-    }
+    // SDK React desmonta automaticamente quando componente sai do DOM
   };
 
   const handlePaymentMethodSelect = (method: "card" | "pix") => {
@@ -2459,17 +1946,7 @@ export function PaymentModal({
   const handleBackToSummary = () => {
     setShowSummary(true);
     setPaymentMethod(undefined);
-    // Desmontar Brick se montado
-    if (cardPaymentBrickRef.current) {
-      try {
-        cardPaymentBrickRef.current.unmount();
-      } catch (err) {
-        console.warn("[handleBackToSummary] Erro ao desmontar brick:", err);
-      } finally {
-        cardPaymentBrickRef.current = null;
-        isBrickMountedRef.current = false;
-      }
-    }
+    // SDK React desmonta automaticamente quando componente sai do DOM
   };
 
   const handleApplyCoupon = async () => {
@@ -2957,37 +2434,29 @@ export function PaymentModal({
                         12/25) e que o cartão não esteja vencido.
                       </p>
                     </div>
-                    {/* ✅ NOVO: Usando SDK React oficial do Mercado Pago */}
-                    {useNewReactSdk ? (
-                      <MercadoPagoCardForm
-                        amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
-                        payerEmail={formData.email}
-                        payerCPF={formData.cpf}
-                        onSubmit={async (data: CardFormSubmitData) => {
-                          await handleCardSubmit({
-                            token: data.token,
-                            payment_method_id: data.payment_method_id,
-                            installments: data.installments,
-                            deviceId: data.deviceId,
-                            payerOverride: data.payerOverride,
-                          });
-                        }}
-                        onReady={() => setIsBrickReady(true)}
-                        onError={(error) => {
-                          console.error("[PaymentModal] Card form error:", error);
-                          setShowBrickRetryButton(true);
-                        }}
-                        isThirdPartyCard={isThirdPartyCard}
-                        payerOverrideData={isThirdPartyCard ? payerData : undefined}
-                        isProcessing={isSubmittingRef.current}
-                      />
-                    ) : (
-                      <div
-                        key={`brick-${paymentMethod}`}
-                        id="cardPaymentBrick"
-                        className="mp-brick-container min-h-[400px]"
-                      ></div>
-                    )}
+                    {/* ✅ SDK React oficial do Mercado Pago - Secure Fields */}
+                    <MercadoPagoCardForm
+                      amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                      payerEmail={formData.email}
+                      payerCPF={formData.cpf}
+                      onSubmit={async (data: CardFormSubmitData) => {
+                        await handleCardSubmit({
+                          token: data.token,
+                          payment_method_id: data.payment_method_id,
+                          installments: data.installments,
+                          deviceId: data.deviceId,
+                          payerOverride: data.payerOverride,
+                        });
+                      }}
+                      onReady={() => setIsBrickReady(true)}
+                      onError={(error) => {
+                        console.error("[PaymentModal] Card form error:", error);
+                        setShowBrickRetryButton(true);
+                      }}
+                      isThirdPartyCard={isThirdPartyCard}
+                      payerOverrideData={isThirdPartyCard ? payerData : undefined}
+                      isProcessing={isSubmittingRef.current}
+                    />
 
                     {/* Botão de retry quando Brick apresentar erro de validação */}
                     {showBrickRetryButton && (
@@ -3235,37 +2704,29 @@ export function PaymentModal({
                         12/25) e que o cartão não esteja vencido.
                       </p>
                     </div>
-                    {/* ✅ NOVO: Usando SDK React oficial do Mercado Pago */}
-                    {useNewReactSdk ? (
-                      <MercadoPagoCardForm
-                        amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
-                        payerEmail={formData.email}
-                        payerCPF={formData.cpf}
-                        onSubmit={async (data: CardFormSubmitData) => {
-                          await handleCardSubmit({
-                            token: data.token,
-                            payment_method_id: data.payment_method_id,
-                            installments: data.installments,
-                            deviceId: data.deviceId,
-                            payerOverride: data.payerOverride,
-                          });
-                        }}
-                        onReady={() => setIsBrickReady(true)}
-                        onError={(error) => {
-                          console.error("[PaymentModal] Card form error:", error);
-                          setShowBrickRetryButton(true);
-                        }}
-                        isThirdPartyCard={isThirdPartyCard}
-                        payerOverrideData={isThirdPartyCard ? payerData : undefined}
-                        isProcessing={isSubmittingRef.current}
-                      />
-                    ) : (
-                      <div
-                        key={`brick-${paymentMethod}`}
-                        id="cardPaymentBrick"
-                        className="mp-brick-container min-h-[400px]"
-                      ></div>
-                    )}
+                    {/* ✅ SDK React oficial do Mercado Pago - Secure Fields */}
+                    <MercadoPagoCardForm
+                      amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                      payerEmail={formData.email}
+                      payerCPF={formData.cpf}
+                      onSubmit={async (data: CardFormSubmitData) => {
+                        await handleCardSubmit({
+                          token: data.token,
+                          payment_method_id: data.payment_method_id,
+                          installments: data.installments,
+                          deviceId: data.deviceId,
+                          payerOverride: data.payerOverride,
+                        });
+                      }}
+                      onReady={() => setIsBrickReady(true)}
+                      onError={(error) => {
+                        console.error("[PaymentModal] Card form error:", error);
+                        setShowBrickRetryButton(true);
+                      }}
+                      isThirdPartyCard={isThirdPartyCard}
+                      payerOverrideData={isThirdPartyCard ? payerData : undefined}
+                      isProcessing={isSubmittingRef.current}
+                    />
 
                     {/* Botão de retry quando Brick apresentar erro de validação */}
                     {showBrickRetryButton && (
@@ -3405,18 +2866,11 @@ export function PaymentModal({
                     // Resetar o status de pagamento
                     setPaymentStatus("idle");
 
-                    // Se estava usando cartão, resetar o Brick
+                    // Se estava usando cartão, resetar estado
                     if (paymentMethod === "card") {
-                      console.log("[Overlay] Resetting card payment Brick");
+                      console.log("[Overlay] Resetting card payment state");
                       resetPaymentBrick();
-
-                      // Aguardar limpeza e re-montar
-                      setTimeout(() => {
-                        console.log("[Overlay] Attempting to remount Brick");
-                        if (paymentMethod === "card" && !isBrickMountedRef.current) {
-                          mountCardPaymentBrick();
-                        }
-                      }, 200);
+                      // SDK React remonta automaticamente quando estado volta a idle
                     } else if (paymentMethod === "pix") {
                       console.log("[Overlay] Resetting PIX data");
                       // Para PIX, apenas limpar os dados
