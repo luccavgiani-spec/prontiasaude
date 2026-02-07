@@ -1,106 +1,67 @@
 
-# Plano: Corrigir company-operations para Bypass de JWT
 
-## Diagnóstico Final
+# Melhorar Qualidade da Integracao Mercado Pago (70 para 90+)
 
-### Linha Exata do Problema
-```typescript
-// Linhas 90-92 - Client usando env vars que apontam para projeto errado
-const supabaseClient = createClient(
-  Deno.env.get('SUPABASE_URL') ?? '',      // ❌ Pode ser Lovable Cloud
-  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  ...
-);
+## Diagnostico
 
-// Linhas 106-111 - Validação JWT que falha com token do Cloud
-const token = authHeader.replace('Bearer ', '');
-const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
-if (userError || !user) {
-  throw new Error('Unauthorized');  // ❌ FALHA AQUI
-}
-```
+A integracao ja tem todos os componentes necessarios implementados, mas com **duplicidades e conflitos** que provavelmente derrubam a nota:
 
-## Alterações Necessárias
+| Item | Status | Problema |
+|------|--------|----------|
+| SDK V2 (MercadoPago.js) | Instalado 2x | Script no HTML + React SDK no npm - conflito |
+| security.js (Device Fingerprint) | OK | Carrega corretamente |
+| Device ID capture | Funcional mas redundante | Leitura triplicada identica na mesma funcao |
+| Secure Fields (PCI) | 2 fluxos coexistindo | CardPayment React SDK + Brick manual no PaymentModal |
+| device_id enviado ao backend | OK | Enviado como body.device_id |
+| declare global Window | Duplicado | PaymentModal.tsx + global.d.ts |
 
-### 1. Imports (Linhas 1-3)
-**Remover imports relativos e adicionar funções inline:**
-- Trocar `https://esm.sh/@supabase/supabase-js@2.56.1` por `npm:@supabase/supabase-js@2.94.0`
-- Remover `import { getCorsHeaders } from '../common/cors.ts'`
-- Remover `import { validateCPF, cleanCPF } from '../common/cpf-validator.ts'`
-- Adicionar funções CORS e CPF inline
+## Plano de Correcao
 
-### 2. Cliente Supabase (Linhas 89-99)
-**Usar credenciais fixas de Produção:**
-```typescript
-const supabaseClient = createClient(
-  ORIGINAL_SUPABASE_URL,  // ✅ URL fixa de Produção
-  Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
-```
+### Tarefa A - Limpar duplicidade do SDK V2
 
-### 3. Validação JWT (Linhas 101-111)
-**Bypass temporário - aceitar header sem validar:**
-```typescript
-const authHeader = req.headers.get('Authorization');
-if (!authHeader) {
-  throw new Error('Missing Authorization header');
-}
+**index.html**: Remover a linha 161 (`<script src="https://sdk.mercadopago.com/js/v2"></script>`). O React SDK (`@mercadopago/sdk-react`) ja carrega o SDK internamente. Manter apenas o `security.js` (linha 158) que e um script separado para device fingerprint.
 
-// ✅ BYPASS: Aceitar qualquer token válido (verify_jwt = false no config.toml)
-// A segurança é mantida pela verificação de roles no banco
-console.log(`[${requestId}] ✅ Auth header present, proceeding with service_role...`);
+**main.tsx**: Remover a funcao `ensureMercadoPagoSdkLoaded()` e a espera async. O React SDK (`initMercadoPago`) ja gerencia o carregamento. Simplificar para inicializacao sincrona.
 
-// Usuário "fake" para compatibilidade com código existente
-const user = { id: 'service-role-bypass', email: 'admin@system' };
-```
+### Tarefa B - Consolidar Device ID
 
-### 4. Verificação de Roles (Linhas 137-151)
-**Buscar role pelo email do token ao invés do user.id:**
-```typescript
-// Extrair email do token JWT (sem validar assinatura)
-let tokenEmail: string | null = null;
-try {
-  const tokenPayload = JSON.parse(atob(authHeader.replace('Bearer ', '').split('.')[1]));
-  tokenEmail = tokenPayload.email;
-} catch { /* token inválido */ }
+**PaymentModal.tsx**: Corrigir a funcao `getMpDeviceSessionId()` que le `window.MP_DEVICE_SESSION_ID` 3 vezes identicamente (linhas 74-76). Manter apenas 1 leitura. Remover o `declare global` duplicado (linhas 28-32) pois ja existe em `src/types/global.d.ts`.
 
-// Buscar user_id pelo email no Cloud (ou usar query direta)
-const { data: roleData } = await supabaseClient
-  .from('user_roles')
-  .select('role, user_id')
-  .in('role', ['admin', 'company']);
-// Filtrar por email ou aceitar admin/company existentes
-```
+### Tarefa C - Eliminar fluxo duplicado de cartao (brick manual)
 
-## Arquivo Final
+**PaymentModal.tsx**: O arquivo tem ~3455 linhas com dois fluxos de cartao coexistindo:
+- Fluxo 1 (linhas ~870-1050): Brick manual via `bricksBuilder.create("cardPayment")` - **LEGADO**
+- Fluxo 2: Componente `<MercadoPagoCardForm />` que usa `<CardPayment />` do React SDK - **CORRETO**
 
-O arquivo será totalmente auto-contido com:
+Verificar qual fluxo esta ativo na renderizacao e garantir que apenas o do React SDK (`MercadoPagoCardForm`) seja utilizado. Se o brick manual for codigo morto/unreachable, remove-lo. Se ambos renderizam, desativar o legado.
 
-| Seção | Conteúdo |
-|-------|----------|
-| Linhas 1-50 | Import npm + CORS inline + CPF inline |
-| Linhas 51-68 | Constantes (ORIGINAL_SUPABASE_URL, invokeEdgeFunction) |
-| Linhas 69-130 | Deno.serve + CORS + Client com URL fixa + Bypass JWT |
-| Linhas 131-1462 | Lógica de negócio mantida (operações de empresas) |
+### Tarefa D - Logs DEV controlados
 
-## Modificações
+Adicionar uma flag `MP_DEBUG` baseada em `import.meta.env.DEV` para controlar logs verbose do Mercado Pago. Envolver os `console.log` existentes do Device ID e tokenizacao com esta flag para que nao poluam producao.
 
-| Arquivo | Alteração |
+## Arquivos que serao modificados
+
+| Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/company-operations/index.ts` | Versão auto-contida com bypass JWT |
+| `index.html` | Remover script SDK V2 duplicado (linha 161) |
+| `src/main.tsx` | Remover `ensureMercadoPagoSdkLoaded()`, simplificar init |
+| `src/components/payment/PaymentModal.tsx` | Remover `declare global` duplicado, corrigir leitura triplicada do Device ID, avaliar/remover brick manual legado |
+| `src/components/payment/MercadoPagoCardForm.tsx` | Sem alteracoes significativas (ja esta correto) |
 
-## Segurança Mantida
+## O que NAO sera alterado
 
-Mesmo com bypass de JWT, a função ainda é segura:
-1. **Header Authorization obrigatório** - Requisições sem header são rejeitadas
-2. **Verificação de roles no banco** - Apenas admin/company executam operações
-3. **RLS nas tabelas** - Políticas de segurança em Produção
-4. **config.toml** - `verify_jwt = false` já configurado
+- Nenhuma Edge Function (mp-create-payment, mp-webhook, etc.)
+- Nenhuma rota ou pagina
+- Nenhum fluxo de PIX existente
+- Nenhuma tabela ou schema
+- Nenhum componente fora do sistema de pagamento
+- `statement_descriptor` e configurado no backend - frontend ja envia todos os dados necessarios
 
-## Pós-Edição
+## Resultado esperado
 
-1. Copiar o código do arquivo `supabase/functions/company-operations/index.ts` aqui no Lovable
-2. Colar no Supabase Dashboard → Edge Functions → company-operations
-3. Clicar em Deploy
-4. Testar cadastro de nova empresa
+Apos estas correcoes, o Mercado Pago detectara:
+- SDK V2 carregado uma unica vez (sem conflitos)
+- Device ID capturado e enviado corretamente (sem leituras redundantes)
+- Secure Fields (PCI) via um unico fluxo CardPayment
+- Nenhum numero de cartao trafegando no frontend
+
