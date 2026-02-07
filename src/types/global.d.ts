@@ -4,6 +4,8 @@ declare global {
   interface Window {
     // Mercado Pago SDK global
     MercadoPago?: any;
+    __mpGlobal?: any;
+    MP_DEVICE_SESSION_ID?: string;
     
     // Facebook Pixel native function
     fbq?: (command: string, eventName: string, data?: any) => void;
