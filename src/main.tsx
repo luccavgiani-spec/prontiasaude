@@ -4,10 +4,10 @@ import App from "./App.tsx";
 import "./index.css";
 import "./lib/gtag-events";
 import { initializeMercadoPago } from "./lib/mercadopago-init";
+import { loadMercadoPagoGlobal } from "./lib/mercadopago-global";
 
-// ✅ SDK V2 é carregado automaticamente pelo @mercadopago/sdk-react (initMercadoPago)
-// Não é necessário carregar manualmente via script tag
-initializeMercadoPago();
+initializeMercadoPago();       // React SDK
+loadMercadoPagoGlobal();       // SDK V2 global para o scanner MP
 
 createRoot(document.getElementById("root")!).render(<App />);
 
