@@ -360,6 +360,14 @@ const Cadastrar = () => {
           <CardDescription>
             Preencha seus dados para se cadastrar
           </CardDescription>
+          <div className="text-center mt-2">
+            <p className="text-sm font-bold text-muted-foreground">
+              Já tem uma conta?{" "}
+              <Link to="/entrar" className="text-primary hover:underline font-bold">
+                Fazer login
+              </Link>
+            </p>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Indicador de Progresso */}
@@ -672,14 +680,6 @@ const Cadastrar = () => {
             </Button>
           </form>
           
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">
-              Já tem uma conta?{" "}
-              <Link to="/entrar" className="text-primary hover:underline">
-                Fazer login
-              </Link>
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
