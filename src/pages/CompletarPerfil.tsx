@@ -137,19 +137,21 @@ const CompletarPerfil = () => {
     setIsLoading(true);
     try {
       // ✅ Buscar convite via Edge Function na Produção (onde os convites são criados)
-      const { data: invite, error } = await invokeEdgeFunction('company-operations', {
+      const { data, error } = await invokeEdgeFunction('company-operations', {
         body: { operation: 'validate-invite', token: inviteToken }
       });
         
-      if (error || !invite) {
+      if (error || !data?.valid) {
         toast({
           title: "Convite inválido",
-          description: "Este convite não existe ou já foi utilizado.",
+          description: data?.reason || "Este convite não existe ou já foi utilizado.",
           variant: "destructive",
         });
         navigate('/entrar');
         return;
       }
+
+      const invite = data.invite;
       
       // Verificar expiração
       if (new Date(invite.expires_at) < new Date()) {

@@ -230,14 +230,14 @@ Deno.serve(async (req) => {
 
       if (inviteError || !invite) {
         console.log(`[${requestId}] validate-invite: not found for token`);
-        return new Response(JSON.stringify({ error: "Invite not found", code: "NOT_FOUND" }), {
+        return new Response(JSON.stringify({ valid: false, reason: "Convite não encontrado ou já utilizado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 404,
+          status: 200,
         });
       }
 
       console.log(`[${requestId}] validate-invite: found invite for ${invite.email}`);
-      return new Response(JSON.stringify(invite), {
+      return new Response(JSON.stringify({ valid: true, invite }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
