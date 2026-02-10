@@ -137,8 +137,8 @@ const CompletarPerfil = () => {
     setIsLoading(true);
     try {
       // ✅ Buscar convite via Edge Function na Produção (onde os convites são criados)
-      const { data, error } = await invokeEdgeFunction('company-operations', {
-        body: { operation: 'validate-invite', token: inviteToken }
+      const { data, error } = await invokeEdgeFunction('validate-invite', {
+        body: { token: inviteToken }
       });
         
       if (error || !data?.valid) {
@@ -449,9 +449,9 @@ const CompletarPerfil = () => {
               sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
               localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
           } else {
-              // ✅ Convite empresarial - usar inviteData.token (nome real da coluna no banco)
-              sessionStorage.setItem('pending_invite_token', inviteData.token);
-              localStorage.setItem('pending_invite_token', inviteData.token);
+              // ✅ Convite empresarial - usar inviteData.invite_token
+              sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+              localStorage.setItem('pending_invite_token', inviteData.invite_token);
             }
             
             toast({
@@ -610,7 +610,7 @@ const CompletarPerfil = () => {
           const { data: planResult, error: planError } = await invokeEdgeFunction('company-operations', {
             body: {
               operation: 'activate-employee-plan',
-              invite_token: inviteData.token, // ✅ Usar .token (nome real da coluna no banco)
+              invite_token: inviteData.invite_token,
               employee_data: {
                 nome: `${formData.first_name} ${formData.last_name}`,
                 cpf: formData.cpf.replace(/\D/g, ''),
