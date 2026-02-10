@@ -172,6 +172,64 @@ Deno.serve(async (req) => {
     );
 
     // ============================================
+    // ✅ OPERAÇÕES PÚBLICAS (sem autenticação)
+    // Ler body antes para detectar a operação
+    // ============================================
+    let bodyData: any = {};
+    if (req.method === 'POST' || req.method === 'PUT') {
+      try {
+        const text = await req.text();
+        bodyData = text ? JSON.parse(text) : {};
+      } catch {
+        bodyData = {};
+      }
+    }
+
+    const url = new URL(req.url);
+    const pathSegments = url.pathname.split('/').filter(Boolean);
+    const operation = bodyData.operation || pathSegments[pathSegments.length - 1];
+
+    // ✅ validate-invite: não requer autenticação (token do convite é a validação)
+    if (operation === 'validate-invite') {
+      const token = bodyData.token;
+      if (!token) {
+        return new Response(JSON.stringify({ error: 'Missing token' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 400
+        });
+      }
+
+      const { data: invite, error: inviteError } = await supabaseClient
+        .from('pending_employee_invites')
+        .select(`
+          *,
+          companies (
+            id,
+            razao_social,
+            plano_id_externo,
+            empresa_id_externo
+          )
+        `)
+        .eq('token', token)
+        .eq('status', 'pending')
+        .single();
+
+      if (inviteError || !invite) {
+        console.log(`[${requestId}] validate-invite: not found for token`);
+        return new Response(JSON.stringify({ error: 'Invite not found', code: 'NOT_FOUND' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 404
+        });
+      }
+
+      console.log(`[${requestId}] validate-invite: found invite for ${invite.email}`);
+      return new Response(JSON.stringify(invite), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
+      });
+    }
+
+    // ============================================
     // ✅ BYPASS TEMPORÁRIO DE VALIDAÇÃO JWT
     // Motivo: JWT vem do Lovable Cloud, função está na Produção
     // Segurança: Mantida pela verificação de roles no banco
@@ -201,21 +259,8 @@ Deno.serve(async (req) => {
       email: tokenEmail || 'admin@system' 
     };
 
-    const url = new URL(req.url);
-    const path = url.pathname.split('/').filter(Boolean);
-    
-    // Ler operation do body para suportar invoke()
-    let bodyData: any = {};
-    if (req.method === 'POST' || req.method === 'PUT') {
-      try {
-        const text = await req.text();
-        bodyData = text ? JSON.parse(text) : {};
-      } catch {
-        bodyData = {};
-      }
-    }
-    
-    const operation = bodyData.operation || path[path.length - 1];
+    // url, bodyData, operation já definidos acima (antes do validate-invite)
+    const path = pathSegments;
 
     // Operação ACTIVATE-EMPLOYEE-PLAN não exige role específica, apenas autenticação
     const publicAuthOps = ['activate-employee-plan'];
