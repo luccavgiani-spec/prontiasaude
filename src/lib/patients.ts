@@ -48,17 +48,24 @@ export async function upsertPatientBasic(payload: {
   city: string;             // obrigatório
   state: string;            // obrigatório: UF
   source?: string;          // opcional: origem do cadastro
+  userId?: string;          // opcional: fornecido pelo caller quando não há sessão
+  userEmail?: string;       // opcional: fornecido pelo caller quando não há sessão
 }) {
-  // ✅ HÍBRIDO: Detectar ambiente correto (Cloud ou Produção)
-  const { session, environment } = await getHybridSession();
-  const userId = session?.user?.id;
-  const userEmail = session?.user?.email;
-  const accessToken = session?.access_token;
+  // ✅ Aceitar userId/userEmail explícitos, fallback para sessão híbrida
+  let userId = payload.userId;
+  let userEmail = payload.userEmail;
+  let accessToken: string | undefined;
+  let environment: string | null = null;
   
-  console.log('[patients] Ambiente detectado:', environment, 'userId:', userId);
-
-  // ✅ SEMPRE chamar Produção para ensurePatientRow
-  await ensurePatientRow(userId);
+  if (!userId || !userEmail) {
+    const hybridResult = await getHybridSession();
+    userId = userId || hybridResult.session?.user?.id;
+    userEmail = userEmail || hybridResult.session?.user?.email;
+    accessToken = hybridResult.session?.access_token;
+    environment = hybridResult.environment;
+  }
+  
+  console.log('[patients] userId:', userId, 'userEmail:', userEmail);
 
   const cleanCpf = (payload.cpf || '').replace(/\D/g, '');
   const cleanCep = (payload.cep || '').replace(/\D/g, '');
@@ -77,27 +84,29 @@ export async function upsertPatientBasic(payload: {
   if (!/^\d{8}$/.test(cleanCep)) throw new Error('CEP deve ter 8 dígitos.');
   if (!payload.city || !payload.state) throw new Error('Cidade e UF são obrigatórios.');
 
-  // ✅ Upsert completo via Edge Function (service_role, bypassa FK/RLS)
+  // ✅ Upsert via Edge Function usando operação `upsert_patient`
+  const fullName = `${payload.first_name} ${payload.last_name}`.trim();
+
   const { data: upsertResult, error: upsertError } = await invokeEdgeFunction('patient-operations', {
     body: {
-      operation: 'upsert_profile',
-      user_id: userId,
+      operation: 'upsert_patient',
+      name: fullName,
       email: userEmail,
-      first_name: payload.first_name,
-      last_name: payload.last_name,
-      address_line: payload.address_line,
-      cpf: cleanCpf,
       phone_e164: payload.phone_e164,
+      cpf: cleanCpf,
       birth_date: payload.birth_date,
       gender: payload.gender,
       cep: cleanCep,
+      address_line: payload.address_line,
       address_number: payload.address_number,
       complement: payload.address_complement || null,
       city: payload.city,
       state: payload.state,
       source: payload.source || 'site',
       terms_accepted: payload.termsAccepted,
-      profile_complete: true
+      profile_complete: true,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
     }
   });
 
@@ -106,16 +115,15 @@ export async function upsertPatientBasic(payload: {
     throw new Error(upsertError.message || 'Falha ao salvar seus dados.');
   }
 
-  // Send to GAS webhook
-  // ✅ CORREÇÃO: Enviar token do ambiente correto no Authorization header
+  console.log('[patients] ✅ upsert_patient result:', upsertResult);
+
+  // ✅ Usar user_id retornado pela Edge Function
+  const returnedUserId = upsertResult?.user_id || userId;
+
+  // Send to GAS webhook (complete_profile)
   try {
-    // ✅ CORREÇÃO: Verificar plano ATIVO e NÃO EXPIRADO na tabela patient_plans
     const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
     
-    // Só marcar hasActivePlan=true se:
-    // 1. Tiver plan_code
-    // 2. Status for 'active'
-    // 3. plan_expires_at for maior que agora
     const hasActivePlan = patientPlan?.plan_code && 
                          patientPlan?.status === 'active' && 
                          patientPlan?.plan_expires_at &&
@@ -129,7 +137,6 @@ export async function upsertPatientBasic(payload: {
       hasActivePlan
     });
 
-    // ✅ SEMPRE usar invokeEdgeFunction (Produção)
     const headers: Record<string, string> = {};
     if (accessToken && environment === 'production') {
       headers['Authorization'] = `Bearer ${accessToken}`;
@@ -138,7 +145,7 @@ export async function upsertPatientBasic(payload: {
     await invokeEdgeFunction('patient-operations', {
       body: {
         operation: 'complete_profile',
-        user_id: userId,
+        user_id: returnedUserId,
         first_name: payload.first_name,
         last_name: payload.last_name,
         email: userEmail,
@@ -159,5 +166,5 @@ export async function upsertPatientBasic(payload: {
     console.error('GAS webhook error (non-blocking):', gasError);
   }
 
-  return true;
+  return { success: true, user_id: returnedUserId };
 }
