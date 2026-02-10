@@ -1,180 +1,243 @@
 
-# Diagnostico e Correcao: Login, Reset de Senha e Listagem de Funcionarios
 
-## 3 Problemas Identificados
+# Correcao Completa: Loop de Cadastro, Login e Listagem de Funcionarios
 
-### Problema 1: Senha incorreta ao fazer login
+## Diagnostico dos 4 problemas raiz
 
-**Causa raiz**: O `upsert_patient` (Producao) cria o usuario via `supabase.auth.admin.createUser` **apenas no ambiente de Producao**. Porem, o `hybridSignUp` ja havia sido chamado antes (em `CompletarPerfil.tsx` linha 436) via `create-user-both-envs`, que cria em AMBOS os ambientes. O fluxo esta assim:
+### Problema 1: Loop infinito de "Completar Cadastro"
 
-1. `hybridSignUp` chama `create-user-both-envs` -- cria usuario em Cloud + Producao com a senha correta
-2. Login automatico na Producao funciona -- sessao ativa
-3. `upsertPatientBasic` chama `patient-operations` com `upsert_patient` -- que tenta `createUser` novamente na Producao com uma senha ALEATORIA gerada internamente
+**Causa raiz**: Apos salvar o perfil com sucesso, `CompletarPerfil.tsx` (linha 660) faz `await supabase.auth.signOut()` para "limpar sessao Cloud". Porem, o usuario esta autenticado apenas via **Producao** (`supabaseProductionAuth`). O signOut do Cloud e inofensivo mas nao limpa a sessao de Producao. Em seguida, redireciona para `/area-do-paciente`.
 
-O `upsert_patient` da Edge Function, ao detectar "already exists", nao sobrescreve a senha. Entao a senha original continua valida. **Porem**, os logs do `check-user-exists` mostram que o usuario NAO e encontrado em nenhum ambiente, o que indica que a busca paginada esta falhando.
+Na pagina `/area-do-paciente`, o `requireAuth()` (em `auth.ts` linha 31) chama `getHybridSession()`. Como o `sessionStorage.auth_environment` foi setado como `production`, ele verifica `supabaseProductionAuth.auth.getSession()`. A sessao de Producao **ainda existe** (nunca foi limpa), entao o usuario e autenticado.
 
-O `check-user-exists` usa REST API com `perPage: 50` e ate 50 paginas (2500 usuarios). Se o Supabase de Producao tem mais de 2500 usuarios, o email nao sera encontrado. Com 570+ usuarios (conforme memoria), deveria funcionar, mas os logs sao claros: `existsInCloud: false, existsInProduction: false`.
+Porem, o `AuthCallback.tsx` (linha 105) usa `supabaseProduction` (o cliente SEM sessao, com `persistSession: false`) para consultar `patients.profile_complete`. Este cliente NAO tem sessao autenticada, entao a query com RLS retorna **nenhum dado** (RLS bloqueia leitura anonima). `patientData` fica `null`, e o redirect vai para `/completar-perfil` novamente -- criando o loop.
 
-**Possivel causa adicional**: O usuario foi criado DEPOIS da ultima verificacao, e o login fallback (linhas 97-183 de `auth-hybrid.ts`) tenta Cloud e depois Producao diretamente. Se a senha for diferente entre os ambientes (por exemplo, se `create-user-both-envs` falhou em um deles), o login falha.
+**Nota**: O mesmo problema ocorre no `getPatient()` em `auth.ts` linha 47 -- usa `supabaseProduction` (sem sessao) quando `auth_environment === 'production'`.
 
-**Acao**: Verificar nos logs de Producao se o usuario realmente foi criado. Se nao, o problema esta na `create-user-both-envs`.
+**Solucao**: No `AuthCallback.tsx`, quando `authEnvironment === 'production'`, usar `supabaseProductionAuth` (que TEM sessao persistente) em vez de `supabaseProduction` (que NAO tem sessao). Mesma correcao em `getPatient()`.
 
-### Problema 2: Email de redefinicao de senha nao chega
+### Problema 2: Senha incorreta apos cadastro via convite
 
-**Causa raiz CONFIRMADA pelos logs**: A funcao `send-password-reset` usa `client.auth.admin.listUsers({ perPage: 1000 })` (linha 29). O GoTrue ignora valores acima de 50 e retorna apenas 50 usuarios por pagina. Se o usuario `luccavgiani@gmail.com` esta apos a posicao 50, ele nunca e encontrado.
+**Causa raiz**: O fluxo de convite empresarial faz:
+1. `hybridSignUp` -> chama `create-user-both-envs` -> cria usuario em Cloud + Producao com a senha correta
+2. Login automatico na Producao -> sessao ativa
+3. `upsertPatientBasic` -> chama `patient-operations` com `upsert_patient` -> dentro da Edge Function, `createUser` tenta criar novamente com senha ALEATORIA
 
-Log: `[send-password-reset] Email nao encontrado em nenhum ambiente: luccavgiani@gmail.com`
+Quando `createUser` retorna "already exists", a senha original NAO e sobrescrita. Porem, o usuario so existe em **Producao** (logs confirmam: `existsInCloud: false, existsInProduction: true`).
 
-O mesmo bug existe na funcao `complete-password-reset` (que tambem usa `perPage: 1000`).
+O `hybridSignIn` detecta `loginEnvironment: 'production'` e tenta `supabaseProductionAuth.auth.signInWithPassword`. Se a senha correta foi usada, deveria funcionar.
 
-**Correcao**: Atualizar `send-password-reset` e `complete-password-reset` para usar REST API direta com `perPage: 50` e paginacao, identico ao padrao ja usado em `check-user-exists` e `create-user-both-envs`.
+**Possivel causa**: Apos o `CompletarPerfil.tsx` fazer signOut do Cloud (linha 660), o `sessionStorage.auth_environment` NAO e limpo. Quando o usuario tenta login novamente via `/entrar`, o `handleSuccessfulLogin` navega para `/auth/callback`, que verifica `patients.profile_complete` com `supabaseProduction` (sem sessao), recebe `null`, e redireciona para `/completar-perfil` -- reiniciando o ciclo.
 
-### Problema 3: Funcionario nao aparece na listagem da empresa
+**Solucao**: Corrigir o cliente usado nas queries de paciente (mesmo fix do Problema 1).
 
-**Causa raiz CONFIRMADA**: `Funcionarios.tsx` linha 83 faz `await supabase.from('company_employees')` -- isso consulta o banco do **Lovable Cloud**. Porem, o registro do funcionario foi inserido pela `company-operations` no banco de **Producao**. A tabela `company_employees` no Cloud esta vazia.
+### Problema 3: Completar cadastro 2 vezes
 
-**Correcao**: Trocar a query para usar `invokeEdgeFunction('company-operations')` com uma operacao de listagem, OU usar o cliente de Producao (`supabaseProduction`).
+**Causa raiz**: E consequencia direta do Problema 1. O perfil E salvo corretamente na primeira vez (via Edge Function `upsert_patient`), mas como o `AuthCallback` nao consegue LER o `profile_complete = true` (por usar cliente sem sessao), redireciona de volta para `/completar-perfil`.
+
+**Solucao**: Mesmo fix do Problema 1.
+
+### Problema 4: Funcionarios e convites nao aparecem + "Erro para carregar funcionarios"
+
+**Causa raiz dupla**:
+
+(A) `loadEmployees` e `loadPendingInvites` agora usam `supabaseProduction` corretamente. Porem, `supabaseProduction` tem `persistSession: false` e `autoRefreshToken: false` -- nao tem sessao autenticada. Se as tabelas `company_employees` e `pending_employee_invites` na Producao tem RLS que exige `auth.uid()`, a query retorna erro ou vazio.
+
+(B) O `company.id` vem de `useCompanyAuth`, que consulta a tabela `companies` no **Cloud** via `supabase`. Se o UUID da empresa no Cloud for diferente do UUID na Producao (o que e provavel, ja que sao bancos independentes), a query `.eq('company_id', company.id)` na Producao nao encontra nada.
+
+(C) `handleDelete` (linha 341) ainda usa `supabase` (Cloud) ao inves de `supabaseProduction`.
+
+**Solucao**: Usar Edge Function `company-operations` com operacoes de listagem, OU ajustar `useCompanyAuth` para buscar dados da Producao. A opcao mais segura e criar operacoes `list-employees` e `list-pending-invites` na `company-operations` (que ja usa `service_role` e contorna RLS).
 
 ---
 
-## Alteracoes Necessarias
+## Plano de correcoes
 
-### Arquivo 1: `supabase/functions/send-password-reset/index.ts`
+### Correcao 1: AuthCallback.tsx -- Usar cliente com sessao para queries
 
-Substituir a funcao `findUserByEmail` (linhas 21-59) pela versao que usa REST API direta com `perPage: 50`:
+**Arquivo**: `src/pages/auth/Callback.tsx`
+
+**Linha 105**: Trocar:
+```typescript
+const dbClient = authEnvironment === 'production' ? supabaseProduction : supabase;
+```
+Por:
+```typescript
+const dbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
+```
+
+Isso garante que a query `patients.profile_complete` use um cliente com sessao autenticada e passe pela RLS.
+
+Tambem remover o import de `supabaseProduction` (linha 7) se nao for mais usado, e adicionar ao import de `supabaseProductionAuth` (ja importado na linha 6).
+
+### Correcao 2: auth.ts -- getPatient usar cliente com sessao
+
+**Arquivo**: `src/lib/auth.ts`
+
+**Linha 4**: Adicionar import:
+```typescript
+import { supabaseProductionAuth } from "@/lib/auth-hybrid";
+```
+
+**Linha 47**: Trocar:
+```typescript
+const client = environment === 'production' ? supabaseProduction : supabase;
+```
+Por:
+```typescript
+const client = environment === 'production' ? supabaseProductionAuth : supabase;
+```
+
+**Linha 3**: Remover import de `supabaseProduction` se nao for mais usado em outro lugar do arquivo.
+
+### Correcao 3: Funcionarios.tsx -- Usar Edge Function para listar dados
+
+**Arquivo**: `src/pages/empresa/Funcionarios.tsx`
+
+Trocar `loadEmployees` (linhas 79-97) para usar `invokeEdgeFunction('company-operations')` com operacao `list-employees`:
 
 ```typescript
-async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string, label: string): Promise<boolean> {
-  const normalizedEmail = email.toLowerCase().trim();
-  console.log(`[send-password-reset] Buscando ${email} em ${label}...`);
-  
-  let page = 1;
-  const perPage = 50;
-  const maxPages = 50;
-  
-  while (page <= maxPages) {
-    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${serviceKey}`,
-        'apikey': serviceKey,
-        'Content-Type': 'application/json',
-      },
+const loadEmployees = async () => {
+  if (!company) return;
+  setLoading(true);
+  try {
+    const { data, error } = await invokeEdgeFunction('company-operations', {
+      body: {
+        operation: 'list-employees',
+        company_cnpj: company.cnpj  // Usar CNPJ como identificador universal
+      }
     });
-    
-    if (!response.ok) {
-      console.error(`[send-password-reset] ${label}: REST API error ${response.status}`);
-      return false;
-    }
-    
-    const data = await response.json();
-    const users = data.users || data || [];
-    
-    if (!Array.isArray(users) || users.length === 0) return false;
-    
-    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
-    if (found) {
-      console.log(`[send-password-reset] Usuario encontrado em ${label}: ${found.id}`);
-      return true;
-    }
-    
-    if (users.length < perPage) return false;
-    page++;
+    if (error) throw error;
+    setEmployees((data?.employees || []) as Employee[]);
+  } catch (error) {
+    toast.error('Erro ao carregar funcionários');
+  } finally {
+    setLoading(false);
   }
+};
+```
+
+Trocar `loadPendingInvites` (linhas 99-115) de forma similar:
+
+```typescript
+const loadPendingInvites = async () => {
+  if (!company) return;
+  try {
+    const { data, error } = await invokeEdgeFunction('company-operations', {
+      body: {
+        operation: 'list-pending-invites',
+        company_cnpj: company.cnpj
+      }
+    });
+    if (error) throw error;
+    setPendingInvites(data?.invites || []);
+  } catch (error) {
+    toast.error('Erro ao carregar convites pendentes');
+  }
+};
+```
+
+Trocar `handleDelete` (linhas 337-354) para usar Edge Function:
+
+```typescript
+const handleDelete = async (employeeId: string) => {
+  if (!confirm('Tem certeza que deseja excluir este funcionário?')) return;
+  try {
+    const { data, error } = await invokeEdgeFunction('company-operations', {
+      body: {
+        operation: 'delete-employee',
+        employee_id: employeeId,
+        company_cnpj: company?.cnpj
+      }
+    });
+    if (error) throw error;
+    toast.success('Funcionário excluído');
+    loadEmployees();
+  } catch (error) {
+    toast.error('Erro ao excluir funcionário');
+  }
+};
+```
+
+### Correcao 4: company-operations Edge Function -- Adicionar operacoes de listagem
+
+**Arquivo**: `supabase/functions/company-operations/index.ts` (Producao)
+
+Adicionar 3 novos cases no switch de operacoes:
+
+**`list-employees`**:
+```typescript
+case 'list-employees': {
+  const { company_cnpj } = body;
+  // Buscar company_id pelo CNPJ
+  const { data: comp } = await supabaseClient.from('companies').select('id').eq('cnpj', company_cnpj).single();
+  if (!comp) return new Response(JSON.stringify({ error: 'Empresa nao encontrada' }), { status: 404, headers: corsHeaders });
   
-  return false;
+  const { data: employees, error } = await supabaseClient
+    .from('company_employees')
+    .select('id, cpf, email, first_name, last_name, created_at')
+    .eq('company_id', comp.id)
+    .order('created_at', { ascending: false });
+  
+  return new Response(JSON.stringify({ employees: employees || [] }), { headers: corsHeaders });
 }
 ```
 
-A funcao passa a receber `(supabaseUrl, serviceKey, email, label)` ao inves de `(client, email, label)`.
-
-Atualizar as chamadas (linhas 92-96):
-
+**`list-pending-invites`**:
 ```typescript
-const [existsInCloud, existsInProd] = await Promise.all([
-  findUserByEmail(CLOUD_URL, cloudServiceKey, email, 'Cloud'),
-  findUserByEmail(PRODUCTION_URL, prodServiceKey, email, 'Producao'),
-]);
-```
-
-### Arquivo 2: `supabase/functions/complete-password-reset/index.ts`
-
-Mesma correcao: substituir a funcao `findUserByEmail` (linhas 24-48) pela versao com REST API direta. Atualizar a assinatura e as chamadas (linhas 115-118):
-
-```typescript
-async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string): Promise<string | null> {
-  const normalizedEmail = email.toLowerCase().trim();
-  let page = 1;
-  const perPage = 50;
-  const maxPages = 50;
+case 'list-pending-invites': {
+  const { company_cnpj } = body;
+  const { data: comp } = await supabaseClient.from('companies').select('id').eq('cnpj', company_cnpj).single();
+  if (!comp) return new Response(JSON.stringify({ error: 'Empresa nao encontrada' }), { status: 404, headers: corsHeaders });
   
-  while (page <= maxPages) {
-    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${serviceKey}`,
-        'apikey': serviceKey,
-        'Content-Type': 'application/json',
-      },
-    });
-    
-    if (!response.ok) return null;
-    
-    const data = await response.json();
-    const users = data.users || data || [];
-    
-    if (!Array.isArray(users) || users.length === 0) return null;
-    
-    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
-    if (found) return found.id;
-    
-    if (users.length < perPage) return null;
-    page++;
-  }
+  const { data: invites, error } = await supabaseClient
+    .from('pending_employee_invites')
+    .select('id, email, status, invited_at, expires_at')
+    .eq('company_id', comp.id)
+    .eq('status', 'pending')
+    .order('invited_at', { ascending: false });
   
-  return null;
+  return new Response(JSON.stringify({ invites: invites || [] }), { headers: corsHeaders });
 }
 ```
 
-Atualizar chamadas (linhas 115-118):
-
+**`delete-employee`**:
 ```typescript
-const [cloudUserId, prodUserId] = await Promise.all([
-  findUserByEmail(CLOUD_URL, cloudServiceKey, tokenData.email),
-  findUserByEmail(PRODUCTION_URL, prodServiceKey, tokenData.email)
-]);
+case 'delete-employee': {
+  const { employee_id, company_cnpj } = body;
+  const { data: comp } = await supabaseClient.from('companies').select('id').eq('cnpj', company_cnpj).single();
+  if (!comp) return new Response(JSON.stringify({ error: 'Empresa nao encontrada' }), { status: 404, headers: corsHeaders });
+  
+  const { error } = await supabaseClient
+    .from('company_employees')
+    .delete()
+    .eq('id', employee_id)
+    .eq('company_id', comp.id);
+  
+  return new Response(JSON.stringify({ success: !error }), { headers: corsHeaders });
+}
 ```
-
-### Arquivo 3: `src/pages/empresa/Funcionarios.tsx`
-
-Trocar `loadEmployees` (linhas 78-96) e `loadPendingInvites` (linhas 98-114) para usar `invokeEdgeFunction` apontando para Producao, ou usar o cliente de Producao direto.
-
-Opcao mais simples: importar e usar `supabaseProduction` de `src/lib/supabase-production.ts`:
-
-```typescript
-import { supabaseProduction } from '@/lib/supabase-production';
-```
-
-Linha 83: trocar `supabase.from('company_employees')` por `supabaseProduction.from('company_employees')`
-
-Linha 102: trocar `supabase.from('pending_employee_invites')` por `supabaseProduction.from('pending_employee_invites')`
-
-**Nota**: Isso requer que as tabelas tenham RLS que permita leitura por usuarios autenticados (ou `anon`). Se nao tiverem, sera necessario usar uma Edge Function intermediaria. Preciso verificar a RLS dessas tabelas.
-
-**Alternativa**: Usar `invokeEdgeFunction('company-operations', { body: { operation: 'list-employees' } })` se essa operacao existir.
 
 ---
 
 ## Resumo de arquivos
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `supabase/functions/send-password-reset/index.ts` | Trocar `listUsers` por REST API direta com `perPage: 50` |
-| `supabase/functions/complete-password-reset/index.ts` | Mesma correcao de paginacao |
-| `src/pages/empresa/Funcionarios.tsx` | Trocar `supabase` por `supabaseProduction` nas queries de `company_employees` e `pending_employee_invites` |
+| Arquivo | Alteracao | Deploy |
+|---------|-----------|--------|
+| `src/pages/auth/Callback.tsx` | Trocar `supabaseProduction` por `supabaseProductionAuth` (linha 105) | Automatico (Lovable) |
+| `src/lib/auth.ts` | Trocar `supabaseProduction` por `supabaseProductionAuth` em `getPatient` (linha 47) | Automatico (Lovable) |
+| `src/pages/empresa/Funcionarios.tsx` | Trocar queries diretas por `invokeEdgeFunction` com CNPJ | Automatico (Lovable) |
+| `supabase/functions/company-operations/index.ts` | Adicionar 3 operacoes: `list-employees`, `list-pending-invites`, `delete-employee` | Manual (Supabase Producao) |
 
-## Nenhum outro arquivo alterado
+## Ordem de execucao
+
+1. Correcoes 1 e 2 (AuthCallback + auth.ts) -- resolve o loop de completar cadastro
+2. Correcao 4 (Edge Function) -- voce adiciona os 3 cases e faz deploy manual na Producao
+3. Correcao 3 (Funcionarios.tsx) -- consome as novas operacoes
+
+## Resultado esperado
+
+- Login apos cadastro: usuario vai direto para `/area-do-paciente` (sem loop)
+- Senha definida no cadastro: funciona no primeiro login
+- Funcionarios: aparecem corretamente na listagem da empresa
+- Convites pendentes: aparecem corretamente na listagem
