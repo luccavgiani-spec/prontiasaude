@@ -31,6 +31,62 @@ interface CreateUserRequest {
   };
 }
 
+/**
+ * ✅ CORRIGIDO: Verifica existência de email via REST API direta do GoTrue
+ * Resolve o bug de getUserByEmail não existir no SDK 2.49.1
+ */
+async function checkEmailExists(supabaseUrl: string, serviceKey: string, email: string, envName: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
+  
+  try {
+    let page = 1;
+    const perPage = 50;
+    const maxPages = 50;
+    
+    while (page <= maxPages) {
+      const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${serviceKey}`,
+          'apikey': serviceKey,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        console.error(`[create-user-both-envs] ${envName}: REST API error ${response.status}`);
+        return false;
+      }
+      
+      const data = await response.json();
+      const users = data.users || data || [];
+      
+      if (!Array.isArray(users) || users.length === 0) {
+        return false;
+      }
+      
+      const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+      if (found) {
+        console.log(`[create-user-both-envs] ${envName}: Email já existe! ID: ${found.id}`);
+        return true;
+      }
+      
+      if (users.length < perPage) {
+        return false;
+      }
+      
+      page++;
+    }
+    
+    return false;
+  } catch (err) {
+    console.error(`[create-user-both-envs] ${envName}: Exceção ao verificar email:`, err);
+    return false;
+  }
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -55,9 +111,6 @@ serve(async (req: Request): Promise<Response> => {
     
     // =============================================
     // OBTER SERVICE KEYS
-    // No Lovable Cloud:
-    //   - SUPABASE_SERVICE_ROLE_KEY = chave do Cloud (automático)
-    //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave da Produção (manual)
     // =============================================
     const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
@@ -81,7 +134,7 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
     
-    // Criar clientes
+    // Criar clientes (usados para createUser e operações de banco)
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
@@ -91,35 +144,14 @@ serve(async (req: Request): Promise<Response> => {
     });
     
     // =============================================
-    // VERIFICAR SE EMAIL JÁ EXISTE EM QUALQUER AMBIENTE
-    // ✅ OTIMIZADO: Usar getUserByEmail ao invés de listUsers (muito mais rápido)
+    // ✅ CORRIGIDO: Verificar existência via REST API direta
     // =============================================
     console.log("[create-user-both-envs] Verificando se email já existe...");
     
-    // Buscar em ambos os ambientes usando getUserByEmail (instantâneo)
-    let existsInCloud = false;
-    let existsInProd = false;
-    
-    try {
-      const { data: cloudUser, error: cloudErr } = await cloudClient.auth.admin.getUserByEmail(normalizedEmail);
-      // Se não há erro e retornou user, então existe
-      existsInCloud = !cloudErr && !!cloudUser?.user;
-      if (cloudErr && !cloudErr.message?.includes('not found')) {
-        console.warn("[create-user-both-envs] Erro ao verificar Cloud:", cloudErr.message);
-      }
-    } catch (err) {
-      console.error("[create-user-both-envs] Exceção ao verificar Cloud:", err);
-    }
-    
-    try {
-      const { data: prodUser, error: prodErr } = await prodClient.auth.admin.getUserByEmail(normalizedEmail);
-      existsInProd = !prodErr && !!prodUser?.user;
-      if (prodErr && !prodErr.message?.includes('not found')) {
-        console.warn("[create-user-both-envs] Erro ao verificar Produção:", prodErr.message);
-      }
-    } catch (err) {
-      console.error("[create-user-both-envs] Exceção ao verificar Produção:", err);
-    }
+    const [existsInCloud, existsInProd] = await Promise.all([
+      checkEmailExists(CLOUD_URL, cloudServiceKey, normalizedEmail, "Cloud"),
+      checkEmailExists(PRODUCTION_URL, prodServiceKey, normalizedEmail, "Produção"),
+    ]);
     
     if (existsInCloud || existsInProd) {
       console.log(`[create-user-both-envs] Email já existe: Cloud=${existsInCloud}, Prod=${existsInProd}`);
@@ -145,7 +177,7 @@ serve(async (req: Request): Promise<Response> => {
       const { data: prodData, error: prodError } = await prodClient.auth.admin.createUser({
         email: normalizedEmail,
         password,
-        email_confirm: true, // Auto-confirmar email
+        email_confirm: true,
         user_metadata: metadata,
       });
       
@@ -178,13 +210,12 @@ serve(async (req: Request): Promise<Response> => {
       const { data: cloudData, error: cloudError } = await cloudClient.auth.admin.createUser({
         email: normalizedEmail,
         password,
-        email_confirm: true, // Auto-confirmar email
+        email_confirm: true,
         user_metadata: metadata,
       });
       
       if (cloudError) {
         console.error("[create-user-both-envs] ⚠️ Erro ao criar no Cloud (não crítico):", cloudError.message);
-        // Não falhar - o usuário principal já foi criado na Produção
       } else {
         cloudUserId = cloudData.user?.id || null;
         console.log(`[create-user-both-envs] ✅ Usuário criado no Cloud: ${cloudUserId}`);
@@ -198,7 +229,6 @@ serve(async (req: Request): Promise<Response> => {
     // =============================================
     console.log("[create-user-both-envs] Sincronizando tabela patients...");
     
-    // Dados base SEM colunas problemáticas (complement causa erro de schema cache)
     const patientCoreData = {
       user_id: prodUserId,
       email: normalizedEmail,
@@ -218,9 +248,8 @@ serve(async (req: Request): Promise<Response> => {
       profile_complete: !!(metadata?.cpf && metadata?.phone_e164 && metadata?.birth_date),
     };
     
-    // Inserir na Produção - usar INSERT direto (não upsert) com verificação prévia
+    // Inserir na Produção
     try {
-      // Verificar se já existe patient com este email
       const { data: existingProd } = await prodClient
         .from('patients')
         .select('id')
@@ -228,7 +257,6 @@ serve(async (req: Request): Promise<Response> => {
         .maybeSingle();
       
       if (existingProd) {
-        // Atualizar registro existente
         const { error: updateError } = await prodClient
           .from('patients')
           .update({ ...patientCoreData, user_id: prodUserId })
@@ -240,7 +268,6 @@ serve(async (req: Request): Promise<Response> => {
           console.log("[create-user-both-envs] ✅ Patient atualizado em Produção (id:", existingProd.id, ")");
         }
       } else {
-        // Inserir novo registro
         const { error: insertError } = await prodClient
           .from('patients')
           .insert(patientCoreData);
@@ -255,12 +282,11 @@ serve(async (req: Request): Promise<Response> => {
       console.error("[create-user-both-envs] Exceção ao criar patient em Produção:", err.message);
     }
     
-    // Inserir no Cloud (com user_id do Cloud) - mesma lógica
+    // Inserir no Cloud
     if (cloudUserId) {
       try {
         const cloudPatientData = { ...patientCoreData, user_id: cloudUserId };
         
-        // Verificar se já existe patient com este email no Cloud
         const { data: existingCloud } = await cloudClient
           .from('patients')
           .select('id')
@@ -268,7 +294,6 @@ serve(async (req: Request): Promise<Response> => {
           .maybeSingle();
         
         if (existingCloud) {
-          // Atualizar registro existente
           const { error: updateError } = await cloudClient
             .from('patients')
             .update(cloudPatientData)
@@ -280,7 +305,6 @@ serve(async (req: Request): Promise<Response> => {
             console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud (id:", existingCloud.id, ")");
           }
         } else {
-          // Inserir novo registro
           const { error: insertError } = await cloudClient
             .from('patients')
             .insert(cloudPatientData);

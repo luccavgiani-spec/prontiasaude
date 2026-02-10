@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
+import { getHybridSession, supabaseProductionAuth, hybridSignOut } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
@@ -147,9 +147,8 @@ const AreaDoPaciente = () => {
   }, [navigate, toast]);
 
   const handleLogout = async () => {
-    // ✅ Fazer logout em ambos os ambientes
-    await supabase.auth.signOut();
-    await supabaseProductionAuth.auth.signOut();
+    // ✅ CORRIGIDO: Usar hybridSignOut para limpar sessão em ambos os ambientes com try/catch
+    await hybridSignOut();
     toast({
       title: "Logout realizado",
       description: "Você foi desconectado com sucesso."

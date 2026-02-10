@@ -13,60 +13,42 @@ const PRODUCTION_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 const PRODUCTION_SERVICE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 /**
- * ✅ ROBUSTO: Busca usuário por email com fallback
- * Método primário: getUserByEmail (rápido, direto)
- * Fallback: listUsers com paginação (lento, mas funciona sempre)
+ * ✅ CORRIGIDO: Busca usuário por email via REST API direta do GoTrue
+ * Método único e confiável: GET /auth/v1/admin/users com paginação segura (perPage: 50)
+ * Resolve o bug onde listUsers com perPage:1000 era ignorado pelo GoTrue
  */
-async function findUserByEmail(client: ReturnType<typeof createClient>, email: string, envName: string): Promise<boolean> {
+async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string, envName: string): Promise<boolean> {
   const normalizedEmail = email.toLowerCase().trim();
   
   try {
     console.log(`[check-user-exists] ${envName}: buscando email ${normalizedEmail.substring(0, 5)}***`);
     
-    // ✅ Tentar getUserByEmail primeiro (mais rápido)
-    if (client.auth.admin?.getUserByEmail) {
-      try {
-        const { data, error } = await client.auth.admin.getUserByEmail(normalizedEmail);
-        
-        if (error) {
-          // "User not found" não é erro, significa que não existe
-          if (error.message?.includes('not found') || error.message?.includes('User not found')) {
-            console.log(`[check-user-exists] ${envName}: NÃO encontrado (getUserByEmail)`);
-            return false;
-          }
-          // Outro erro - tentar fallback
-          console.warn(`[check-user-exists] ${envName} getUserByEmail error, tentando fallback:`, error.message);
-        } else if (data?.user) {
-          console.log(`[check-user-exists] ${envName}: ENCONTRADO! ID: ${data.user.id}`);
-          return true;
-        } else {
-          console.log(`[check-user-exists] ${envName}: NÃO encontrado (getUserByEmail)`);
-          return false;
-        }
-      } catch (methodError) {
-        console.warn(`[check-user-exists] ${envName}: getUserByEmail não disponível, usando fallback`);
-      }
-    }
-    
-    // ✅ FALLBACK: listUsers com paginação (compatível com todas as versões)
-    console.log(`[check-user-exists] ${envName}: usando fallback listUsers...`);
+    // ✅ MÉTODO DIRETO: Chamar GoTrue REST API com paginação segura
     let page = 1;
-    const perPage = 1000;
-    const maxPages = 10;
+    const perPage = 50; // Valor que o GoTrue RESPEITA
+    const maxPages = 50; // Suporta até 2500 usuários
     
     while (page <= maxPages) {
-      const { data: listData, error: listError } = await client.auth.admin.listUsers({
-        page,
-        perPage,
+      const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${serviceKey}`,
+          'apikey': serviceKey,
+          'Content-Type': 'application/json',
+        },
       });
       
-      if (listError) {
-        console.error(`[check-user-exists] ${envName} listUsers error:`, listError.message);
+      if (!response.ok) {
+        console.error(`[check-user-exists] ${envName}: REST API error ${response.status}`);
         return false;
       }
       
-      const users = listData?.users || [];
-      if (users.length === 0) {
+      const data = await response.json();
+      const users = data.users || data || [];
+      
+      if (!Array.isArray(users) || users.length === 0) {
         console.log(`[check-user-exists] ${envName}: NÃO encontrado após ${page} páginas`);
         return false;
       }
@@ -77,15 +59,16 @@ async function findUserByEmail(client: ReturnType<typeof createClient>, email: s
         return true;
       }
       
+      // Se retornou menos que perPage, é a última página
       if (users.length < perPage) {
-        console.log(`[check-user-exists] ${envName}: NÃO encontrado (fim da lista)`);
+        console.log(`[check-user-exists] ${envName}: NÃO encontrado (fim da lista, ${page} páginas, total ~${(page-1)*perPage + users.length} users)`);
         return false;
       }
       
       page++;
     }
     
-    console.log(`[check-user-exists] ${envName}: NÃO encontrado (limite de páginas atingido)`);
+    console.log(`[check-user-exists] ${envName}: NÃO encontrado (limite de ${maxPages} páginas atingido)`);
     return false;
     
   } catch (e) {
@@ -113,19 +96,10 @@ Deno.serve(async (req) => {
     console.log('[check-user-exists] ====================================');
     console.log('[check-user-exists] Verificando email:', normalizedEmail);
 
-    // Criar clientes para ambos ambientes
-    const cloudClient = createClient(CLOUD_URL, CLOUD_SERVICE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-
-    const productionClient = createClient(PRODUCTION_URL, PRODUCTION_SERVICE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false }
-    });
-
-    // ✅ Buscar em paralelo com fallback robusto
+    // ✅ Buscar em paralelo usando REST API direta
     const [existsInCloud, existsInProduction] = await Promise.all([
-      findUserByEmail(cloudClient, normalizedEmail, 'Cloud'),
-      findUserByEmail(productionClient, normalizedEmail, 'Produção'),
+      findUserByEmail(CLOUD_URL, CLOUD_SERVICE_KEY, normalizedEmail, 'Cloud'),
+      findUserByEmail(PRODUCTION_URL, PRODUCTION_SERVICE_KEY, normalizedEmail, 'Produção'),
     ]);
 
     // Determinar qual ambiente usar para login
