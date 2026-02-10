@@ -1,67 +1,62 @@
 
 
-# Correção: "Convite expirado/inválido" ao aceitar convite
+# Ajuste pontual: Chamar validate-invite separada + corrigir campo invite_token
 
-## Causa Raiz
+## Resumo
 
-O convite foi criado na **Produção** pela Edge Function `company-operations`. Porém, quando o funcionário clica no link do email e chega em `/completar-perfil?token=XXX`, a página `CompletarPerfil.tsx` busca o convite usando o cliente **Cloud** (`supabase` do Lovable Cloud):
+Alterar `src/pages/CompletarPerfil.tsx` em 3 pontos:
 
-```
-supabase.from('pending_employee_invites').select(...).eq('token', token)
-```
+## Alteracao 1 - Chamar Edge Function correta (linhas 139-154)
 
-Como o registro do convite só existe na **Produção**, a query retorna vazio e o sistema exibe "Convite inválido" ou "Convite expirado".
-
-## Solução
-
-Alterar a função `validateInviteToken` em `CompletarPerfil.tsx` para buscar o convite via **Edge Function** (`invokeEdgeFunction`) que roda na Produção, ao invés de consultar diretamente pelo cliente Cloud.
-
-A Edge Function `company-operations` já roda na Produção. Basta adicionar uma operação `validate-invite` que:
-
-1. Recebe o `token` do convite
-2. Busca em `pending_employee_invites` na Produção
-3. Retorna os dados do convite (incluindo dados da empresa via join)
-
-## Alterações
-
-### 1. `supabase/functions/company-operations/index.ts`
-
-Adicionar nova operação `validate-invite` que:
-- Recebe `{ operation: "validate-invite", token: "xxx" }`
-- Faz a mesma query que o frontend fazia, mas na Produção
-- Retorna os dados do convite com join na tabela `companies`
-- Não requer autenticação (o token do convite é a validação)
-
-### 2. `src/pages/CompletarPerfil.tsx` (apenas a função `validateInviteToken`)
-
-Substituir a query direta ao Cloud:
-```
-supabase.from('pending_employee_invites')...
-```
-
-Por chamada à Edge Function:
-```
-invokeEdgeFunction('company-operations', {
+**Antes:**
+```typescript
+const { data, error } = await invokeEdgeFunction('company-operations', {
   body: { operation: 'validate-invite', token: inviteToken }
-})
+});
 ```
 
-O restante da lógica (verificação de expiração, verificação de sessão, preenchimento de formulário) permanece idêntico.
+**Depois:**
+```typescript
+const { data, error } = await invokeEdgeFunction('validate-invite', {
+  body: { token: inviteToken }
+});
+```
 
-## Arquivos modificados
+A logica de verificacao de `data.valid`, `data.invite` e `data.reason` permanece identica.
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/company-operations/index.ts` | Adicionar operação `validate-invite` |
-| `src/pages/CompletarPerfil.tsx` | Alterar `validateInviteToken` para usar `invokeEdgeFunction` |
+## Alteracao 2 - Corrigir campo do token empresarial (linhas 452-454)
 
-## Arquivos NAO alterados
+**Antes:**
+```typescript
+// Convite empresarial - usar inviteData.token
+sessionStorage.setItem('pending_invite_token', inviteData.token);
+localStorage.setItem('pending_invite_token', inviteData.token);
+```
 
-- `src/components/empresa/BulkInviteModal.tsx`
-- `src/hooks/useCompanyAuth.ts`
-- Nenhuma outra Edge Function
-- Nenhum outro componente
+**Depois:**
+```typescript
+// Convite empresarial - usar inviteData.invite_token
+sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+localStorage.setItem('pending_invite_token', inviteData.invite_token);
+```
 
-## Nota
+## Alteracao 3 - Corrigir campo na ativacao do plano (linha 613)
 
-Como `company-operations` roda na Produção, após a alteração você precisará copiar o código atualizado e fazer deploy manualmente no dashboard do Supabase de Produção.
+**Antes:**
+```typescript
+invite_token: inviteData.token,
+```
+
+**Depois:**
+```typescript
+invite_token: inviteData.invite_token,
+```
+
+## Arquivo modificado
+
+| Arquivo | Linhas |
+|---------|--------|
+| `src/pages/CompletarPerfil.tsx` | 140-141, 452-454, 613 |
+
+## Nenhum outro arquivo alterado
+
