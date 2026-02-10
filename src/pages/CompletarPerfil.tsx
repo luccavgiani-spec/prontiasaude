@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
+import { getHybridSession, supabaseProductionAuth, hybridSignOut } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -94,7 +94,7 @@ const CompletarPerfil = () => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session && session.user.email?.toLowerCase() !== invite.email.toLowerCase()) {
-        await supabase.auth.signOut();
+        try { await supabase.auth.signOut(); } catch (e) { console.warn('[CompletarPerfil] signOut error (family invite):', e); }
         toast({
           title: "Sessão anterior encerrada",
           description: `Complete o cadastro com o email ${invite.email}`,
@@ -189,7 +189,7 @@ const CompletarPerfil = () => {
           });
           
           // Fazer logout silencioso
-          await supabase.auth.signOut();
+          try { await supabase.auth.signOut(); } catch (e) { console.warn('[CompletarPerfil] signOut error (employee invite):', e); }
           
           toast({
             title: "Sessão anterior encerrada",
@@ -416,15 +416,14 @@ const CompletarPerfil = () => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut();
+      // ✅ CORRIGIDO: Usar hybridSignOut para limpar ambos os ambientes
+      await hybridSignOut();
       navigate('/entrar');
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível sair. Tente novamente.",
-        variant: "destructive",
-      });
+      // Forçar limpeza mesmo com erro
+      sessionStorage.removeItem('auth_environment');
+      navigate('/entrar');
     }
   };
 
