@@ -1,101 +1,79 @@
 
-# Correção: Login de Empresas - Sincronização Cloud + Produção
+# Correção: "Forbidden: Can only invite employees for your own company"
 
-## Problema
+## Causa Raiz
 
-A Edge Function `company-operations` (deployada na Produção) cria empresa, Auth user, user_roles e company_credentials **somente na Produção**. Porém, a tela `/empresa/login` usa o cliente Cloud (`supabase` do Lovable Cloud) para autenticar. Como o Auth user não existe no Cloud, o login falha com "Invalid login credentials".
+O fluxo de convite de funcionários está quebrado por **incompatibilidade de IDs entre ambientes**:
 
-## Solução em 2 Partes
+1. A empresa loga no Cloud e o `useCompanyAuth` carrega `company.id` do **Cloud** (ex: `abc-111`)
+2. O `BulkInviteModal` envia `company_id: "abc-111"` para `company-operations` na **Produção**
+3. A Produção busca `company_credentials` pelo `user_id` de Produção e encontra `company_id: "xyz-999"` (ID de Produção)
+4. Compara: `"xyz-999" !== "abc-111"` --> **Forbidden!**
 
-### Parte 1: Correção imediata - Criar dados do CNPJ 01610972000160 no Cloud
+O mesmo problema afeta tanto convites individuais quanto importação em massa.
 
-Criar manualmente no Cloud:
+## Solução
 
-1. **Auth user** via `supabase.auth.admin.createUser` (precisa ser via Edge Function no Cloud)
-2. **Registro na tabela `companies`** com os mesmos dados da Produção
-3. **Registro na tabela `user_roles`** com role = 'company'
-4. **Registro na tabela `company_credentials`** vinculando ao user_id do Cloud
+Alterar a validação de ownership em `company-operations` (Produção) para buscar a empresa pelo **CNPJ** ao invés de comparar UUIDs diretamente. Como o CNPJ é unico e identico em ambos os ambientes, isso resolve a incompatibilidade.
 
-Para isso, criaremos uma Edge Function temporária no Cloud chamada `sync-company-to-cloud` que recebe os dados da empresa e cria tudo de uma vez.
+## Alteracao
 
-### Parte 2: Correção permanente - Atualizar `company-operations`
+**Arquivo:** `supabase/functions/company-operations/index.ts` (linhas 309-324)
 
-Modificar a operação `create` dentro de `supabase/functions/company-operations/index.ts` para, após criar tudo na Produção, fazer uma chamada HTTP ao Cloud para replicar:
+**Logica atual (quebrada):**
+```text
+if (isCompany) {
+  busca company_credentials.company_id pelo user.id
+  compara company_credentials.company_id === bodyData.company_id
+  --> FALHA (IDs de ambientes diferentes)
+}
+```
 
-1. Criar Auth user no Cloud (via REST API direta ao GoTrue do Cloud)
-2. Inserir `companies`, `user_roles` e `company_credentials` no Cloud (via REST API direta ao PostgREST do Cloud)
+**Logica nova (corrigida):**
+```text
+if (isCompany) {
+  busca company_credentials.company_id pelo user.id (Producao)
+  busca companies.cnpj pela company_id de Producao
+  busca companies.cnpj pela company_id do body (Cloud)
+    --> Se a company do body nao existir na Producao, busca pelo CNPJ no Cloud
+        via REST API e resolve o company_id de Producao
+  compara os CNPJs
+  --> Se match, substitui bodyData.company_id pelo ID de Producao
+}
+```
 
-Isso usa as secrets `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` que já existem configuradas.
+Isso garante que:
+- A validacao de ownership funciona independente do ambiente de origem do ID
+- O `company_id` usado nas operacoes subsequentes (inserir convite, etc.) e sempre o ID de Producao
+- Nenhum outro fluxo e afetado
 
----
-
-## Detalhes Técnicos
-
-### Edge Function temporária: `sync-company-to-cloud`
-
-Arquivo: `supabase/functions/sync-company-to-cloud/index.ts`
-
-Esta função recebe por POST:
-- `email`: o email da empresa (ex: `01610972000160@empresa.prontia.com`)
-- `password`: a senha temporária
-- `company_data`: dados da empresa (razao_social, cnpj, cep, etc.)
-- `cnpj`: CNPJ limpo
-
-Fluxo:
-1. Cria Auth user no Cloud com `supabase.auth.admin.createUser`
-2. Insere na tabela `companies`
-3. Insere na tabela `user_roles` com role = 'company'
-4. Insere na tabela `company_credentials` com `must_change_password: true`
-
-### Alteração em `company-operations/index.ts` (operação `create`, linhas 828-987)
-
-Após a criação bem-sucedida na Produção (linha 947, após criar o plano), adicionar um bloco que:
-
-1. Obtém as credenciais do Cloud via `Deno.env.get('CLOUD_SUPABASE_URL')` e `Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY')`
-2. Cria um `cloudClient` com `createClient(CLOUD_URL, cloudServiceKey)`
-3. Executa `cloudClient.auth.admin.createUser(...)` com os mesmos dados
-4. Insere `companies`, `user_roles` e `company_credentials` no Cloud
-5. Todo o bloco é envolvido em try/catch para que uma falha no Cloud NAO afete a criação na Produção (Cloud é secundário)
-
-### Arquivos modificados
+## Arquivos modificados
 
 | Arquivo | Acao |
-|---------|------|
-| `supabase/functions/sync-company-to-cloud/index.ts` | NOVO - Funcao temporaria para sincronizar empresa existente |
-| `supabase/functions/company-operations/index.ts` | Adicionar replicação ao Cloud na operação `create` |
+|---|---|
+| `supabase/functions/company-operations/index.ts` | Alterar validacao de ownership (linhas 309-324) para resolver IDs por CNPJ |
 
-### Arquivos NAO alterados
+## Arquivos NAO alterados
 
-- `src/pages/empresa/Login.tsx` (intocável - funciona corretamente se os dados existirem no Cloud)
-- `src/hooks/useCompanyAuth.ts` (intocável)
-- Qualquer outro componente frontend
-- Edge Functions de pagamento, redirecionamento, ClubeBen
+- `src/components/empresa/BulkInviteModal.tsx` (intocavel)
+- `src/pages/empresa/Funcionarios.tsx` (intocavel)
+- `src/hooks/useCompanyAuth.ts` (intocavel)
+- Nenhum componente frontend
+- Nenhuma outra Edge Function
 
-### Secrets necessárias
+## Detalhes tecnicos da alteracao
 
-A function `company-operations` roda na **Produção** e precisa das seguintes secrets configuradas no dashboard do Supabase de Produção:
+No bloco de validacao de ownership (linhas 309-324 de `company-operations/index.ts`):
 
-- `CLOUD_SUPABASE_URL` = `https://yrsjluhhnhxogdgnbnya.supabase.co`
-- `CLOUD_SUPABASE_SERVICE_ROLE_KEY` = (service role key do projeto Cloud)
+1. Manter a busca de `company_credentials` pelo `user.id` para obter o `company_id` de Producao
+2. Buscar o `cnpj` da empresa de Producao pela `company_id` de Producao
+3. Buscar o `cnpj` da empresa pelo `bodyData.company_id` na Producao
+4. Se nao encontrar na Producao (porque o ID veio do Cloud), buscar no Cloud via REST API (`CLOUD_SUPABASE_URL` + `CLOUD_SUPABASE_SERVICE_ROLE_KEY`) para obter o CNPJ
+5. Comparar os CNPJs: se iguais, a empresa e a mesma -- substituir `bodyData.company_id` pelo ID de Producao
+6. Se CNPJs diferentes, manter o erro "Forbidden"
 
-Essas secrets já devem estar configuradas (usadas por `list-all-users` e `patient-operations`). Se não estiverem, será necessário adicioná-las.
+Esse mesmo padrao de resolucao de `company_id` tambem sera aplicado ao bloco de `create-employee` (se existir validacao similar).
 
-### Fluxo após correção
+## Nota importante
 
-```text
-Admin cria empresa no painel
-       |
-       v
-company-operations (Producao)
-       |
-       +---> Cria Auth user na Producao
-       +---> Cria companies, user_roles, credentials na Producao
-       +---> Cria Auth user no Cloud (NOVO)
-       +---> Cria companies, user_roles, credentials no Cloud (NOVO)
-       |
-       v
-Empresa faz login em /empresa/login
-       |
-       v
-supabase.auth.signInWithPassword (Cloud) --> OK!
-```
+Como `company-operations` roda na **Producao**, apos a alteracao voce precisara copiar o codigo atualizado e fazer deploy manualmente no dashboard do Supabase de Producao.
