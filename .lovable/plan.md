@@ -1,78 +1,101 @@
 
-# Fazer o Medidor MP Reconhecer SDK V2 + Device ID
+# Correção: Login de Empresas - Sincronização Cloud + Produção
 
 ## Problema
 
-O `@mercadopago/sdk-react` inicializa o SDK internamente mas **nao expoe `window.MercadoPago`** como objeto global. O scanner do Mercado Pago verifica justamente `typeof window.MercadoPago` para validar que o SDK V2 esta presente. Resultado: nota 70.
+A Edge Function `company-operations` (deployada na Produção) cria empresa, Auth user, user_roles e company_credentials **somente na Produção**. Porém, a tela `/empresa/login` usa o cliente Cloud (`supabase` do Lovable Cloud) para autenticar. Como o Auth user não existe no Cloud, o login falha com "Invalid login credentials".
 
-## Solucao
+## Solução em 2 Partes
 
-Carregar o script `https://sdk.mercadopago.com/js/v2` diretamente (alem do React SDK que ja existe), e instanciar `new window.MercadoPago(PUBLIC_KEY)` globalmente. Isso nao conflita com o React SDK pois ambos usam o mesmo SDK por baixo.
+### Parte 1: Correção imediata - Criar dados do CNPJ 01610972000160 no Cloud
 
-## Alteracoes
+Criar manualmente no Cloud:
 
-### 1. Novo arquivo: `src/lib/mercadopago-global.ts`
+1. **Auth user** via `supabase.auth.admin.createUser` (precisa ser via Edge Function no Cloud)
+2. **Registro na tabela `companies`** com os mesmos dados da Produção
+3. **Registro na tabela `user_roles`** com role = 'company'
+4. **Registro na tabela `company_credentials`** vinculando ao user_id do Cloud
 
-Loader seguro do SDK V2 com as seguintes caracteristicas:
-- Verifica se o script com `id="mp-sdk-v2"` ja existe antes de inserir
-- Cria `<script>` com `src="https://sdk.mercadopago.com/js/v2"` e `id="mp-sdk-v2"`
-- Retorna uma Promise que resolve quando o script carrega
-- Apos carregamento, instancia `window.__mpGlobal = new window.MercadoPago(PUBLIC_KEY, { locale: 'pt-BR' })`
-- Essa instancia NAO e usada no checkout - existe apenas para o scanner detectar
-- Logs apenas em DEV (`import.meta.env.DEV`)
+Para isso, criaremos uma Edge Function temporária no Cloud chamada `sync-company-to-cloud` que recebe os dados da empresa e cria tudo de uma vez.
 
-```text
-Funcao exportada: loadMercadoPagoGlobal(): Promise<void>
-  1. Se window.MercadoPago ja existe -> apenas inicializa __mpGlobal e retorna
-  2. Se document.getElementById('mp-sdk-v2') existe -> aguarda load e retorna
-  3. Senao -> cria script, aguarda onload, inicializa __mpGlobal
-  4. Loga em DEV: typeof window.MercadoPago, MP_DEVICE_SESSION_ID
-```
+### Parte 2: Correção permanente - Atualizar `company-operations`
 
-### 2. `src/main.tsx` (linha 10)
+Modificar a operação `create` dentro de `supabase/functions/company-operations/index.ts` para, após criar tudo na Produção, fazer uma chamada HTTP ao Cloud para replicar:
 
-Adicionar import e chamada apos `initializeMercadoPago()`:
+1. Criar Auth user no Cloud (via REST API direta ao GoTrue do Cloud)
+2. Inserir `companies`, `user_roles` e `company_credentials` no Cloud (via REST API direta ao PostgREST do Cloud)
 
-```text
-import { loadMercadoPagoGlobal } from "./lib/mercadopago-global";
+Isso usa as secrets `CLOUD_SUPABASE_URL` e `CLOUD_SUPABASE_SERVICE_ROLE_KEY` que já existem configuradas.
 
-initializeMercadoPago();       // React SDK (existente)
-loadMercadoPagoGlobal();       // SDK V2 global para o scanner (novo)
-```
+---
 
-### 3. `src/types/global.d.ts` (linha 6)
+## Detalhes Técnicos
 
-Adicionar tipagem para `__mpGlobal` e `MP_DEVICE_SESSION_ID`:
+### Edge Function temporária: `sync-company-to-cloud`
 
-```text
-MercadoPago?: any;
-__mpGlobal?: any;
-MP_DEVICE_SESSION_ID?: string;
-```
+Arquivo: `supabase/functions/sync-company-to-cloud/index.ts`
 
-## Arquivos modificados
+Esta função recebe por POST:
+- `email`: o email da empresa (ex: `01610972000160@empresa.prontia.com`)
+- `password`: a senha temporária
+- `company_data`: dados da empresa (razao_social, cnpj, cep, etc.)
+- `cnpj`: CNPJ limpo
+
+Fluxo:
+1. Cria Auth user no Cloud com `supabase.auth.admin.createUser`
+2. Insere na tabela `companies`
+3. Insere na tabela `user_roles` com role = 'company'
+4. Insere na tabela `company_credentials` com `must_change_password: true`
+
+### Alteração em `company-operations/index.ts` (operação `create`, linhas 828-987)
+
+Após a criação bem-sucedida na Produção (linha 947, após criar o plano), adicionar um bloco que:
+
+1. Obtém as credenciais do Cloud via `Deno.env.get('CLOUD_SUPABASE_URL')` e `Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY')`
+2. Cria um `cloudClient` com `createClient(CLOUD_URL, cloudServiceKey)`
+3. Executa `cloudClient.auth.admin.createUser(...)` com os mesmos dados
+4. Insere `companies`, `user_roles` e `company_credentials` no Cloud
+5. Todo o bloco é envolvido em try/catch para que uma falha no Cloud NAO afete a criação na Produção (Cloud é secundário)
+
+### Arquivos modificados
 
 | Arquivo | Acao |
 |---------|------|
-| `src/lib/mercadopago-global.ts` | Novo - loader + init global |
-| `src/main.tsx` | Adicionar 2 linhas (import + chamada) |
-| `src/types/global.d.ts` | Adicionar 2 propriedades ao Window |
+| `supabase/functions/sync-company-to-cloud/index.ts` | NOVO - Funcao temporaria para sincronizar empresa existente |
+| `supabase/functions/company-operations/index.ts` | Adicionar replicação ao Cloud na operação `create` |
 
-## Arquivos NAO alterados
+### Arquivos NAO alterados
 
-- `index.html` (security.js permanece, sem novo script tag)
-- `PaymentModal.tsx` (nenhuma alteracao)
-- `MercadoPagoCardForm.tsx` (nenhuma alteracao)
-- `mercadopago-init.ts` (nenhuma alteracao)
-- Edge Functions (nenhuma)
+- `src/pages/empresa/Login.tsx` (intocável - funciona corretamente se os dados existirem no Cloud)
+- `src/hooks/useCompanyAuth.ts` (intocável)
+- Qualquer outro componente frontend
+- Edge Functions de pagamento, redirecionamento, ClubeBen
 
-## Resultado esperado apos deploy
+### Secrets necessárias
+
+A function `company-operations` roda na **Produção** e precisa das seguintes secrets configuradas no dashboard do Supabase de Produção:
+
+- `CLOUD_SUPABASE_URL` = `https://yrsjluhhnhxogdgnbnya.supabase.co`
+- `CLOUD_SUPABASE_SERVICE_ROLE_KEY` = (service role key do projeto Cloud)
+
+Essas secrets já devem estar configuradas (usadas por `list-all-users` e `patient-operations`). Se não estiverem, será necessário adicioná-las.
+
+### Fluxo após correção
 
 ```text
-typeof window.MercadoPago        -> "function"
-typeof window.__mpGlobal         -> "object"
-window.MP_DEVICE_SESSION_ID      -> "armor..."
-Network: sdk.mercadopago.com/js/v2    -> 200
-Network: mercadopago.com/v2/security.js -> 200
-Checkout PIX e cartao            -> sem regressao
+Admin cria empresa no painel
+       |
+       v
+company-operations (Producao)
+       |
+       +---> Cria Auth user na Producao
+       +---> Cria companies, user_roles, credentials na Producao
+       +---> Cria Auth user no Cloud (NOVO)
+       +---> Cria companies, user_roles, credentials no Cloud (NOVO)
+       |
+       v
+Empresa faz login em /empresa/login
+       |
+       v
+supabase.auth.signInWithPassword (Cloud) --> OK!
 ```
