@@ -1,101 +1,180 @@
 
+# Diagnostico e Correcao: Login, Reset de Senha e Listagem de Funcionarios
 
-# Correcao: Usar operacao `upsert_patient` e remover dependencia de sessao
+## 3 Problemas Identificados
 
-## Problema
+### Problema 1: Senha incorreta ao fazer login
 
-1. `patients.ts` chama `operation: 'upsert_profile'` mas a Edge Function so tem `upsert_patient`
-2. `patients.ts` depende de `getHybridSession()` para obter `userId`, mas no fluxo de convite pode nao haver sessao ativa
-3. `CompletarPerfil.tsx` faz SELECT direto em `dbClient.from('patients')` apos o upsert (linhas 568-572) e verificacao de CPF (linhas 523-528), o que tambem falha sem sessao
+**Causa raiz**: O `upsert_patient` (Producao) cria o usuario via `supabase.auth.admin.createUser` **apenas no ambiente de Producao**. Porem, o `hybridSignUp` ja havia sido chamado antes (em `CompletarPerfil.tsx` linha 436) via `create-user-both-envs`, que cria em AMBOS os ambientes. O fluxo esta assim:
 
-## Alteracoes
+1. `hybridSignUp` chama `create-user-both-envs` -- cria usuario em Cloud + Producao com a senha correta
+2. Login automatico na Producao funciona -- sessao ativa
+3. `upsertPatientBasic` chama `patient-operations` com `upsert_patient` -- que tenta `createUser` novamente na Producao com uma senha ALEATORIA gerada internamente
 
-### Arquivo 1: `src/lib/patients.ts`
+O `upsert_patient` da Edge Function, ao detectar "already exists", nao sobrescreve a senha. Entao a senha original continua valida. **Porem**, os logs do `check-user-exists` mostram que o usuario NAO e encontrado em nenhum ambiente, o que indica que a busca paginada esta falhando.
 
-**Mudanca na assinatura**: Adicionar parametros opcionais `userId` e `userEmail` ao payload de `upsertPatientBasic`, para que o caller possa fornecer esses valores quando nao houver sessao.
+O `check-user-exists` usa REST API com `perPage: 50` e ate 50 paginas (2500 usuarios). Se o Supabase de Producao tem mais de 2500 usuarios, o email nao sera encontrado. Com 570+ usuarios (conforme memoria), deveria funcionar, mas os logs sao claros: `existsInCloud: false, existsInProduction: false`.
 
-**Mudanca na operacao (linha 83)**: Trocar `operation: 'upsert_profile'` por `operation: 'upsert_patient'`.
+**Possivel causa adicional**: O usuario foi criado DEPOIS da ultima verificacao, e o login fallback (linhas 97-183 de `auth-hybrid.ts`) tenta Cloud e depois Producao diretamente. Se a senha for diferente entre os ambientes (por exemplo, se `create-user-both-envs` falhou em um deles), o login falha.
 
-**Mudanca no body**: Enviar `name: first_name + ' ' + last_name`, `email`, `phone_e164` conforme formato esperado pela Edge Function. Manter campos adicionais no body (cpf, birth_date, etc.) pois a Edge Function pode ignora-los sem erro.
+**Acao**: Verificar nos logs de Producao se o usuario realmente foi criado. Se nao, o problema esta na `create-user-both-envs`.
 
-**Remover dependencia de sessao para userId**: Se `payload.userId` e `payload.userEmail` forem fornecidos, usar esses valores ao inves de chamar `getHybridSession()`. Isso permite que o fluxo de convite funcione sem sessao.
+### Problema 2: Email de redefinicao de senha nao chega
 
-**Remover chamada `ensurePatientRow`**: A operacao `upsert_patient` ja cria o registro se nao existir.
+**Causa raiz CONFIRMADA pelos logs**: A funcao `send-password-reset` usa `client.auth.admin.listUsers({ perPage: 1000 })` (linha 29). O GoTrue ignora valores acima de 50 e retorna apenas 50 usuarios por pagina. Se o usuario `luccavgiani@gmail.com` esta apos a posicao 50, ele nunca e encontrado.
 
-**Usar `user_id` retornado**: Apos o upsert, usar `upsertResult.user_id` para o webhook GAS ao inves de depender de sessao.
+Log: `[send-password-reset] Email nao encontrado em nenhum ambiente: luccavgiani@gmail.com`
 
-### Arquivo 2: `src/pages/CompletarPerfil.tsx`
+O mesmo bug existe na funcao `complete-password-reset` (que tambem usa `perPage: 1000`).
 
-**Linhas 520-528 (verificacao de CPF via dbClient)**: Substituir por chamada a Edge Function ou remover, ja que o `dbClient` pode nao ter sessao valida. A verificacao de CPF duplicado pode ser feita pela propria Edge Function no backend.
+**Correcao**: Atualizar `send-password-reset` e `complete-password-reset` para usar REST API direta com `perPage: 50` e paginacao, identico ao padrao ja usado em `check-user-exists` e `create-user-both-envs`.
 
-**Linhas 550-565 (chamada upsertPatientBasic)**: Passar `userId` e `userEmail` explicitamente a partir de `activeUser.id` e `activeUser.email` (ou `inviteData.email`).
+### Problema 3: Funcionario nao aparece na listagem da empresa
 
-**Linhas 567-599 (SELECT de verificacao pos-save)**: Remover verificacao direta via `dbClient.from('patients')`. Confiar no retorno da Edge Function (`success: true, user_id`) como confirmacao.
+**Causa raiz CONFIRMADA**: `Funcionarios.tsx` linha 83 faz `await supabase.from('company_employees')` -- isso consulta o banco do **Lovable Cloud**. Porem, o registro do funcionario foi inserido pela `company-operations` no banco de **Producao**. A tabela `company_employees` no Cloud esta vazia.
 
-## Detalhes tecnicos
+**Correcao**: Trocar a query para usar `invokeEdgeFunction('company-operations')` com uma operacao de listagem, OU usar o cliente de Producao (`supabaseProduction`).
 
-### patients.ts - Nova assinatura e logica
+---
+
+## Alteracoes Necessarias
+
+### Arquivo 1: `supabase/functions/send-password-reset/index.ts`
+
+Substituir a funcao `findUserByEmail` (linhas 21-59) pela versao que usa REST API direta com `perPage: 50`:
 
 ```typescript
-export async function upsertPatientBasic(payload: {
-  first_name: string;
-  last_name: string;
-  // ... campos existentes ...
-  userId?: string;    // NOVO: fornecido pelo caller
-  userEmail?: string; // NOVO: fornecido pelo caller
-}) {
-  // Tentar sessao, mas aceitar valores explicitoes
-  let userId = payload.userId;
-  let userEmail = payload.userEmail;
-  let accessToken: string | undefined;
+async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string, label: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
+  console.log(`[send-password-reset] Buscando ${email} em ${label}...`);
   
-  if (!userId || !userEmail) {
-    const { session, environment } = await getHybridSession();
-    userId = userId || session?.user?.id;
-    userEmail = userEmail || session?.user?.email;
-    accessToken = session?.access_token;
-  }
-
-  // Validacoes...
-
-  const fullName = `${payload.first_name} ${payload.last_name}`.trim();
-
-  const { data: upsertResult, error: upsertError } = await invokeEdgeFunction('patient-operations', {
-    body: {
-      operation: 'upsert_patient',
-      name: fullName,
-      email: userEmail,
-      phone_e164: payload.phone_e164,
-      cpf: cleanCpf,
-      birth_date: payload.birth_date,
-      // demais campos...
+  let page = 1;
+  const perPage = 50;
+  const maxPages = 50;
+  
+  while (page <= maxPages) {
+    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[send-password-reset] ${label}: REST API error ${response.status}`);
+      return false;
     }
-  });
-
-  // Usar upsertResult.user_id para o resto do fluxo
+    
+    const data = await response.json();
+    const users = data.users || data || [];
+    
+    if (!Array.isArray(users) || users.length === 0) return false;
+    
+    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+    if (found) {
+      console.log(`[send-password-reset] Usuario encontrado em ${label}: ${found.id}`);
+      return true;
+    }
+    
+    if (users.length < perPage) return false;
+    page++;
+  }
+  
+  return false;
 }
 ```
 
-### CompletarPerfil.tsx - Chamada atualizada
+A funcao passa a receber `(supabaseUrl, serviceKey, email, label)` ao inves de `(client, email, label)`.
+
+Atualizar as chamadas (linhas 92-96):
 
 ```typescript
-await upsertPatientBasic({
-  first_name: formData.first_name,
-  last_name: formData.last_name,
-  // ... demais campos ...
-  userId: activeUser?.id,
-  userEmail: activeUser?.email || inviteData?.email,
-});
+const [existsInCloud, existsInProd] = await Promise.all([
+  findUserByEmail(CLOUD_URL, cloudServiceKey, email, 'Cloud'),
+  findUserByEmail(PRODUCTION_URL, prodServiceKey, email, 'Producao'),
+]);
 ```
 
-Remover o bloco de verificacao pos-save (linhas 567-599) e a verificacao de CPF via dbClient (linhas 522-539), substituindo por logica baseada no retorno da Edge Function.
+### Arquivo 2: `supabase/functions/complete-password-reset/index.ts`
+
+Mesma correcao: substituir a funcao `findUserByEmail` (linhas 24-48) pela versao com REST API direta. Atualizar a assinatura e as chamadas (linhas 115-118):
+
+```typescript
+async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string): Promise<string | null> {
+  const normalizedEmail = email.toLowerCase().trim();
+  let page = 1;
+  const perPage = 50;
+  const maxPages = 50;
+  
+  while (page <= maxPages) {
+    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+      },
+    });
+    
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    const users = data.users || data || [];
+    
+    if (!Array.isArray(users) || users.length === 0) return null;
+    
+    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+    if (found) return found.id;
+    
+    if (users.length < perPage) return null;
+    page++;
+  }
+  
+  return null;
+}
+```
+
+Atualizar chamadas (linhas 115-118):
+
+```typescript
+const [cloudUserId, prodUserId] = await Promise.all([
+  findUserByEmail(CLOUD_URL, cloudServiceKey, tokenData.email),
+  findUserByEmail(PRODUCTION_URL, prodServiceKey, tokenData.email)
+]);
+```
+
+### Arquivo 3: `src/pages/empresa/Funcionarios.tsx`
+
+Trocar `loadEmployees` (linhas 78-96) e `loadPendingInvites` (linhas 98-114) para usar `invokeEdgeFunction` apontando para Producao, ou usar o cliente de Producao direto.
+
+Opcao mais simples: importar e usar `supabaseProduction` de `src/lib/supabase-production.ts`:
+
+```typescript
+import { supabaseProduction } from '@/lib/supabase-production';
+```
+
+Linha 83: trocar `supabase.from('company_employees')` por `supabaseProduction.from('company_employees')`
+
+Linha 102: trocar `supabase.from('pending_employee_invites')` por `supabaseProduction.from('pending_employee_invites')`
+
+**Nota**: Isso requer que as tabelas tenham RLS que permita leitura por usuarios autenticados (ou `anon`). Se nao tiverem, sera necessario usar uma Edge Function intermediaria. Preciso verificar a RLS dessas tabelas.
+
+**Alternativa**: Usar `invokeEdgeFunction('company-operations', { body: { operation: 'list-employees' } })` se essa operacao existir.
+
+---
 
 ## Resumo de arquivos
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/lib/patients.ts` | Trocar operacao para `upsert_patient`, aceitar userId/userEmail como params, remover ensurePatientRow |
-| `src/pages/CompletarPerfil.tsx` | Passar userId/userEmail, remover SELECT direto pos-save e verificacao CPF via dbClient |
+| `supabase/functions/send-password-reset/index.ts` | Trocar `listUsers` por REST API direta com `perPage: 50` |
+| `supabase/functions/complete-password-reset/index.ts` | Mesma correcao de paginacao |
+| `src/pages/empresa/Funcionarios.tsx` | Trocar `supabase` por `supabaseProduction` nas queries de `company_employees` e `pending_employee_invites` |
 
 ## Nenhum outro arquivo alterado
-
