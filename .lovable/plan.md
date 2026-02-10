@@ -1,79 +1,67 @@
 
-# Correção: "Forbidden: Can only invite employees for your own company"
+
+# Correção: "Convite expirado/inválido" ao aceitar convite
 
 ## Causa Raiz
 
-O fluxo de convite de funcionários está quebrado por **incompatibilidade de IDs entre ambientes**:
+O convite foi criado na **Produção** pela Edge Function `company-operations`. Porém, quando o funcionário clica no link do email e chega em `/completar-perfil?token=XXX`, a página `CompletarPerfil.tsx` busca o convite usando o cliente **Cloud** (`supabase` do Lovable Cloud):
 
-1. A empresa loga no Cloud e o `useCompanyAuth` carrega `company.id` do **Cloud** (ex: `abc-111`)
-2. O `BulkInviteModal` envia `company_id: "abc-111"` para `company-operations` na **Produção**
-3. A Produção busca `company_credentials` pelo `user_id` de Produção e encontra `company_id: "xyz-999"` (ID de Produção)
-4. Compara: `"xyz-999" !== "abc-111"` --> **Forbidden!**
+```
+supabase.from('pending_employee_invites').select(...).eq('token', token)
+```
 
-O mesmo problema afeta tanto convites individuais quanto importação em massa.
+Como o registro do convite só existe na **Produção**, a query retorna vazio e o sistema exibe "Convite inválido" ou "Convite expirado".
 
 ## Solução
 
-Alterar a validação de ownership em `company-operations` (Produção) para buscar a empresa pelo **CNPJ** ao invés de comparar UUIDs diretamente. Como o CNPJ é unico e identico em ambos os ambientes, isso resolve a incompatibilidade.
+Alterar a função `validateInviteToken` em `CompletarPerfil.tsx` para buscar o convite via **Edge Function** (`invokeEdgeFunction`) que roda na Produção, ao invés de consultar diretamente pelo cliente Cloud.
 
-## Alteracao
+A Edge Function `company-operations` já roda na Produção. Basta adicionar uma operação `validate-invite` que:
 
-**Arquivo:** `supabase/functions/company-operations/index.ts` (linhas 309-324)
+1. Recebe o `token` do convite
+2. Busca em `pending_employee_invites` na Produção
+3. Retorna os dados do convite (incluindo dados da empresa via join)
 
-**Logica atual (quebrada):**
-```text
-if (isCompany) {
-  busca company_credentials.company_id pelo user.id
-  compara company_credentials.company_id === bodyData.company_id
-  --> FALHA (IDs de ambientes diferentes)
-}
+## Alterações
+
+### 1. `supabase/functions/company-operations/index.ts`
+
+Adicionar nova operação `validate-invite` que:
+- Recebe `{ operation: "validate-invite", token: "xxx" }`
+- Faz a mesma query que o frontend fazia, mas na Produção
+- Retorna os dados do convite com join na tabela `companies`
+- Não requer autenticação (o token do convite é a validação)
+
+### 2. `src/pages/CompletarPerfil.tsx` (apenas a função `validateInviteToken`)
+
+Substituir a query direta ao Cloud:
+```
+supabase.from('pending_employee_invites')...
 ```
 
-**Logica nova (corrigida):**
-```text
-if (isCompany) {
-  busca company_credentials.company_id pelo user.id (Producao)
-  busca companies.cnpj pela company_id de Producao
-  busca companies.cnpj pela company_id do body (Cloud)
-    --> Se a company do body nao existir na Producao, busca pelo CNPJ no Cloud
-        via REST API e resolve o company_id de Producao
-  compara os CNPJs
-  --> Se match, substitui bodyData.company_id pelo ID de Producao
-}
+Por chamada à Edge Function:
+```
+invokeEdgeFunction('company-operations', {
+  body: { operation: 'validate-invite', token: inviteToken }
+})
 ```
 
-Isso garante que:
-- A validacao de ownership funciona independente do ambiente de origem do ID
-- O `company_id` usado nas operacoes subsequentes (inserir convite, etc.) e sempre o ID de Producao
-- Nenhum outro fluxo e afetado
+O restante da lógica (verificação de expiração, verificação de sessão, preenchimento de formulário) permanece idêntico.
 
 ## Arquivos modificados
 
-| Arquivo | Acao |
-|---|---|
-| `supabase/functions/company-operations/index.ts` | Alterar validacao de ownership (linhas 309-324) para resolver IDs por CNPJ |
+| Arquivo | Ação |
+|---------|------|
+| `supabase/functions/company-operations/index.ts` | Adicionar operação `validate-invite` |
+| `src/pages/CompletarPerfil.tsx` | Alterar `validateInviteToken` para usar `invokeEdgeFunction` |
 
 ## Arquivos NAO alterados
 
-- `src/components/empresa/BulkInviteModal.tsx` (intocavel)
-- `src/pages/empresa/Funcionarios.tsx` (intocavel)
-- `src/hooks/useCompanyAuth.ts` (intocavel)
-- Nenhum componente frontend
+- `src/components/empresa/BulkInviteModal.tsx`
+- `src/hooks/useCompanyAuth.ts`
 - Nenhuma outra Edge Function
+- Nenhum outro componente
 
-## Detalhes tecnicos da alteracao
+## Nota
 
-No bloco de validacao de ownership (linhas 309-324 de `company-operations/index.ts`):
-
-1. Manter a busca de `company_credentials` pelo `user.id` para obter o `company_id` de Producao
-2. Buscar o `cnpj` da empresa de Producao pela `company_id` de Producao
-3. Buscar o `cnpj` da empresa pelo `bodyData.company_id` na Producao
-4. Se nao encontrar na Producao (porque o ID veio do Cloud), buscar no Cloud via REST API (`CLOUD_SUPABASE_URL` + `CLOUD_SUPABASE_SERVICE_ROLE_KEY`) para obter o CNPJ
-5. Comparar os CNPJs: se iguais, a empresa e a mesma -- substituir `bodyData.company_id` pelo ID de Producao
-6. Se CNPJs diferentes, manter o erro "Forbidden"
-
-Esse mesmo padrao de resolucao de `company_id` tambem sera aplicado ao bloco de `create-employee` (se existir validacao similar).
-
-## Nota importante
-
-Como `company-operations` roda na **Producao**, apos a alteracao voce precisara copiar o codigo atualizado e fazer deploy manualmente no dashboard do Supabase de Producao.
+Como `company-operations` roda na Produção, após a alteração você precisará copiar o código atualizado e fazer deploy manualmente no dashboard do Supabase de Produção.
