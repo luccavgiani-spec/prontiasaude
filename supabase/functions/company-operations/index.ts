@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
         throw new Error('Forbidden: Admin or Company access required');
       }
       
-      // Se for company, validar que está criando funcionário para sua própria empresa
+      // Se for company, validar ownership via CNPJ (resolve incompatibilidade Cloud vs Produção)
       if (isCompany) {
         const { data: companyCredential, error: credError } = await supabaseClient
           .from('company_credentials')
@@ -318,8 +318,75 @@ Deno.serve(async (req) => {
           throw new Error('Forbidden: Company credentials not found');
         }
         
-        if (companyCredential.company_id !== bodyData.company_id) {
-          throw new Error('Forbidden: Can only invite employees for your own company');
+        const prodCompanyId = companyCredential.company_id;
+        
+        // Se os IDs já batem, tudo ok (mesmo ambiente)
+        if (prodCompanyId !== bodyData.company_id) {
+          console.log('[ownership] ID mismatch detected, resolving via CNPJ...', {
+            prodCompanyId,
+            bodyCompanyId: bodyData.company_id
+          });
+          
+          // Buscar CNPJ da empresa de Produção
+          const { data: prodCompany } = await supabaseClient
+            .from('companies')
+            .select('cnpj')
+            .eq('id', prodCompanyId)
+            .single();
+          
+          if (!prodCompany?.cnpj) {
+            throw new Error('Forbidden: Production company CNPJ not found');
+          }
+          
+          // Tentar buscar CNPJ pelo ID do body na Produção
+          const { data: bodyCompany } = await supabaseClient
+            .from('companies')
+            .select('cnpj')
+            .eq('id', bodyData.company_id)
+            .single();
+          
+          let bodyCnpj = bodyCompany?.cnpj;
+          
+          // Se não encontrou na Produção, o ID veio do Cloud - buscar lá
+          if (!bodyCnpj) {
+            console.log('[ownership] Company not found in Production, checking Cloud...');
+            const cloudUrl = Deno.env.get('CLOUD_SUPABASE_URL');
+            const cloudKey = Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY');
+            
+            if (cloudUrl && cloudKey) {
+              try {
+                const cloudResp = await fetch(
+                  `${cloudUrl}/rest/v1/companies?id=eq.${bodyData.company_id}&select=cnpj`,
+                  {
+                    headers: {
+                      'apikey': cloudKey,
+                      'Authorization': `Bearer ${cloudKey}`,
+                      'Content-Type': 'application/json'
+                    }
+                  }
+                );
+                const cloudData = await cloudResp.json();
+                if (cloudData?.[0]?.cnpj) {
+                  bodyCnpj = cloudData[0].cnpj;
+                  console.log('[ownership] Found CNPJ in Cloud:', bodyCnpj);
+                }
+              } catch (e) {
+                console.error('[ownership] Cloud lookup failed:', e);
+              }
+            }
+          }
+          
+          if (!bodyCnpj || prodCompany.cnpj !== bodyCnpj) {
+            console.error('[ownership] CNPJ mismatch or not found', {
+              prodCnpj: prodCompany.cnpj,
+              bodyCnpj
+            });
+            throw new Error('Forbidden: Can only invite employees for your own company');
+          }
+          
+          // CNPJs batem - substituir o company_id do body pelo ID de Produção
+          console.log('[ownership] CNPJ match! Replacing body company_id with production ID');
+          bodyData.company_id = prodCompanyId;
         }
       }
 
