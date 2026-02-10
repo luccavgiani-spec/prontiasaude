@@ -515,29 +515,6 @@ const CompletarPerfil = () => {
     console.log('[CompletarPerfil] ✅ Sessão ativa confirmada:', activeEnv, activeUser.id);
     
     try {
-      // ✅ HÍBRIDO: Detectar ambiente para usar cliente correto
-      const { environment } = await getHybridSession();
-      const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
-      
-      // ✅ VERIFICAR CPF DUPLICADO (usando cliente híbrido)
-      const { data: existingCPF } = await dbClient
-        .from('patients')
-        .select('id')
-        .eq('cpf', formData.cpf.replace(/\D/g, ''))
-        .neq('user_id', activeUser.id)
-        .maybeSingle();
-
-      if (existingCPF) {
-        toast({
-          title: "⚠️ CPF já cadastrado",
-          description: "Este CPF já está vinculado a outra conta. Entre em contato com o suporte se precisar de ajuda.",
-          variant: "destructive",
-          className: "bg-yellow-50 border-yellow-500 text-yellow-900"
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       // Log antes de salvar perfil
       console.log('[CompletarPerfil] 📋 Salvando perfil:', {
         user_id: activeUser.id,
@@ -547,7 +524,7 @@ const CompletarPerfil = () => {
         cep: formData.cep || 'VAZIO',
       });
       
-      await upsertPatientBasic({
+      const upsertResult = await upsertPatientBasic({
         first_name: formData.first_name,
         last_name: formData.last_name,
         address_line: formData.address_line,
@@ -561,42 +538,12 @@ const CompletarPerfil = () => {
         city: formData.city,
         state: formData.state,
         termsAccepted: formData.terms_accepted,
-        source: inviteData ? 'empresa_invite' : undefined
+        source: inviteData ? 'empresa_invite' : undefined,
+        userId: activeUser?.id,
+        userEmail: activeUser?.email || inviteData?.email,
       });
-      
-      // ✅ Verificar se dados foram salvos corretamente (usando mesmo cliente híbrido)
-      const { data: savedPatient, error: checkError } = await dbClient
-        .from('patients')
-        .select('id, user_id, cpf, phone_e164, cep, first_name, last_name, birth_date, profile_complete')
-        .eq('user_id', activeUser.id)
-        .maybeSingle();
 
-      // Verificação mais completa dos campos críticos
-      const missingFields: string[] = [];
-      if (!savedPatient?.cpf) missingFields.push('CPF');
-      if (!savedPatient?.first_name) missingFields.push('Nome');
-      if (!savedPatient?.last_name) missingFields.push('Sobrenome');
-      if (!savedPatient?.phone_e164) missingFields.push('Telefone');
-      if (!savedPatient?.birth_date) missingFields.push('Data de Nascimento');
-
-      if (checkError || missingFields.length > 0) {
-        console.error('[CompletarPerfil] ❌ Dados não foram salvos corretamente:', { 
-          savedPatient, 
-          checkError,
-          missingFields,
-          expectedUserId: activeUser.id
-        });
-        throw new Error(`Não foi possível salvar seus dados. Campos faltando: ${missingFields.join(', ')}. Tente novamente.`);
-      }
-
-      console.log('[CompletarPerfil] ✅ Perfil salvo com sucesso:', {
-        patient_id: savedPatient.id,
-        user_id: savedPatient.user_id,
-        cpf: '***' + savedPatient.cpf.slice(-4),
-        phone: savedPatient.phone_e164 ? '***' + savedPatient.phone_e164.slice(-4) : null,
-        cep: savedPatient.cep,
-        profile_complete: savedPatient.profile_complete
-      });
+      console.log('[CompletarPerfil] ✅ Perfil salvo com sucesso via Edge Function:', upsertResult);
       
       // SE FOR CONVITE DE EMPRESA, ativar plano via Edge Function segura
       if (inviteData && !inviteData.isFamilyInvite) {
