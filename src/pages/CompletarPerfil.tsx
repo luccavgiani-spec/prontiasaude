@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { getHybridSession, supabaseProductionAuth, hybridSignOut } from "@/lib/auth-hybrid";
+import { getHybridSession, supabaseProductionAuth, hybridSignOut, hybridSignUp, hybridSignIn } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -432,61 +432,60 @@ const CompletarPerfil = () => {
     // Se for convite e não tiver sessão, criar usuário com senha definida
     if (inviteData && !activeUser) {
       try {
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: inviteData.email,
-          password: password,
-          options: {
-            emailRedirectTo: window.location.origin
-          }
-        });
+        // ✅ HÍBRIDO: Criar usuário em AMBOS os ambientes (Cloud + Produção)
+        const signUpResult = await hybridSignUp(inviteData.email, password);
         
-        if (authError) {
-          console.error('[CompletarPerfil] Auth error:', authError);
+        if (!signUpResult.success) {
+          console.error('[CompletarPerfil] hybridSignUp error:', signUpResult.error);
           
-          if (authError.message.includes('already registered') || authError.message.includes('User already registered')) {
-            // ✅ Usuário já existe - salvar token em sessionStorage E localStorage (redundância)
-            if (inviteData.isFamilyInvite) {
-              sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
-              localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
-          } else {
-              // ✅ Convite empresarial - usar inviteData.invite_token
-              sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
-              localStorage.setItem('pending_invite_token', inviteData.invite_token);
+          // Verificar se é erro de "já cadastrado"
+          if (signUpResult.error?.includes('já está cadastrado') || signUpResult.error?.includes('already registered')) {
+            // Tentar login híbrido
+            const loginResult = await hybridSignIn(inviteData.email, password);
+            
+            if (loginResult.success && loginResult.session) {
+              console.log('[CompletarPerfil] ✅ Login híbrido bem-sucedido para usuário existente');
+              setCurrentUser(loginResult.session.user);
+              activeUser = loginResult.session.user;
+            } else {
+              // Login falhou - redirecionar para /entrar com token salvo
+              if (inviteData.isFamilyInvite) {
+                sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
+                localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
+              } else {
+                sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
+                localStorage.setItem('pending_invite_token', inviteData.invite_token);
+              }
+              
+              toast({
+                title: "Você já possui uma conta",
+                description: inviteData.isFamilyInvite 
+                  ? "Faça login e seu plano familiar será ativado automaticamente."
+                  : "Faça login e seu plano empresarial será ativado automaticamente.",
+                variant: "default",
+                duration: 5000
+              });
+              
+              setIsLoading(false);
+              setTimeout(() => {
+                window.location.href = `/entrar?email=${encodeURIComponent(inviteData.email)}`;
+              }, 2000);
+              return;
             }
-            
-            toast({
-              title: "Você já possui uma conta",
-              description: inviteData.isFamilyInvite 
-                ? "Faça login e seu plano familiar será ativado automaticamente."
-                : "Faça login e seu plano empresarial será ativado automaticamente.",
-              variant: "default",
-              duration: 5000
-            });
-            
-            setIsLoading(false);
-            // Usar window.location para forçar reload e preservar tokens
-            setTimeout(() => {
-              window.location.href = `/entrar?email=${encodeURIComponent(inviteData.email)}`;
-            }, 2000);
-            return;
           } else {
             toast({
               title: "Erro ao criar conta",
-              description: authError.message,
+              description: signUpResult.error || "Não foi possível criar sua conta.",
               variant: "destructive",
             });
             setIsLoading(false);
             return;
           }
         } else {
-          // Fazer login automático após signup
-          await supabase.auth.signInWithPassword({
-            email: inviteData.email,
-            password: password
-          });
-          
-          setCurrentUser(authData.user);
-          activeUser = authData.user; // ✅ Atualizar variável local sincronamente
+          // ✅ Cadastro híbrido bem-sucedido - sessão de Produção ativa
+          console.log('[CompletarPerfil] ✅ hybridSignUp OK. ProdID:', signUpResult.prodUserId);
+          setCurrentUser(signUpResult.user);
+          activeUser = signUpResult.user;
         }
       } catch (error: any) {
         console.error('[CompletarPerfil] Exception during auth:', error);
@@ -500,7 +499,9 @@ const CompletarPerfil = () => {
       }
     }
     
-    if (!activeUser) {
+    // ✅ Verificar sessão ativa após autenticação (garante auth.uid() preenchido)
+    const { session: activeSession, environment: activeEnv } = await getHybridSession();
+    if (!activeSession) {
       toast({
         title: "Erro",
         description: "Você precisa estar autenticado para continuar.",
@@ -509,6 +510,9 @@ const CompletarPerfil = () => {
       setIsLoading(false);
       return;
     }
+    // Garantir que activeUser reflete a sessão válida
+    activeUser = activeSession.user;
+    console.log('[CompletarPerfil] ✅ Sessão ativa confirmada:', activeEnv, activeUser.id);
     
     try {
       // ✅ HÍBRIDO: Detectar ambiente para usar cliente correto
