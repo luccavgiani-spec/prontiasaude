@@ -1,5 +1,3 @@
-import { supabase } from "@/integrations/supabase/client";
-import { supabaseProductionAuth } from "@/lib/auth-hybrid";
 import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
@@ -58,12 +56,6 @@ export async function upsertPatientBasic(payload: {
   const accessToken = session?.access_token;
   
   console.log('[patients] Ambiente detectado:', environment, 'userId:', userId);
-  
-  if (!userId) throw new Error('Sessão expirada. Faça login novamente.');
-
-  // ✅ Usar cliente correto baseado no ambiente para operações de banco
-  const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
-  console.log('[patients] Usando cliente:', environment === 'production' ? 'supabaseProduction' : 'supabase');
 
   // ✅ SEMPRE chamar Produção para ensurePatientRow
   await ensurePatientRow(userId);
@@ -85,51 +77,33 @@ export async function upsertPatientBasic(payload: {
   if (!/^\d{8}$/.test(cleanCep)) throw new Error('CEP deve ter 8 dígitos.');
   if (!payload.city || !payload.state) throw new Error('Cidade e UF são obrigatórios.');
 
-  // Buscar patient.id existente pelo user_id
-  const { data: existingPatient } = await dbClient
-    .from('patients')
-    .select('id')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  const updateData = {
-    user_id: userId,
-    email: userEmail,
-    first_name: payload.first_name,
-    last_name: payload.last_name,
-    address_line: payload.address_line,
-    cpf: cleanCpf,
-    phone_e164: payload.phone_e164,
-    birth_date: payload.birth_date,
-    gender: payload.gender,
-    cep: cleanCep,
-    address_number: payload.address_number,
-    complement: payload.address_complement || null,
-    city: payload.city,
-    state: payload.state,
-    source: payload.source || 'site',
-    terms_accepted_at: payload.termsAccepted ? new Date().toISOString() : null,
-    profile_complete: true
-  };
-
-  // Lógica explícita: UPDATE se existe, INSERT se não
-  if (existingPatient?.id) {
-    const { error } = await dbClient
-      .from('patients')
-      .update(updateData)
-      .eq('id', existingPatient.id);
-    if (error) {
-      console.error('Supabase update error (patients):', error);
-      throw new Error(error.message || 'Falha ao salvar seus dados.');
+  // ✅ Upsert completo via Edge Function (service_role, bypassa FK/RLS)
+  const { data: upsertResult, error: upsertError } = await invokeEdgeFunction('patient-operations', {
+    body: {
+      operation: 'upsert_profile',
+      user_id: userId,
+      email: userEmail,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
+      address_line: payload.address_line,
+      cpf: cleanCpf,
+      phone_e164: payload.phone_e164,
+      birth_date: payload.birth_date,
+      gender: payload.gender,
+      cep: cleanCep,
+      address_number: payload.address_number,
+      complement: payload.address_complement || null,
+      city: payload.city,
+      state: payload.state,
+      source: payload.source || 'site',
+      terms_accepted: payload.termsAccepted,
+      profile_complete: true
     }
-  } else {
-    const { error } = await dbClient
-      .from('patients')
-      .insert(updateData);
-    if (error) {
-      console.error('Supabase insert error (patients):', error);
-      throw new Error(error.message || 'Falha ao salvar seus dados.');
-    }
+  });
+
+  if (upsertError) {
+    console.error('Edge function upsert error (patients):', upsertError);
+    throw new Error(upsertError.message || 'Falha ao salvar seus dados.');
   }
 
   // Send to GAS webhook
