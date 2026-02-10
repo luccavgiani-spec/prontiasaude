@@ -952,6 +952,99 @@ Deno.serve(async (req) => {
         expires_at: planExpiryDate.toISOString()
       });
 
+      // ============================================
+      // ✅ REPLICAR EMPRESA NO CLOUD (Lovable Cloud)
+      // Falha no Cloud NÃO afeta criação na Produção
+      // ============================================
+      try {
+        const cloudUrl = Deno.env.get('CLOUD_SUPABASE_URL');
+        const cloudServiceKey = Deno.env.get('CLOUD_SUPABASE_SERVICE_ROLE_KEY');
+
+        if (cloudUrl && cloudServiceKey) {
+          console.log('[company-operations] 🔄 Replicating company to Cloud...');
+          
+          const cloudClient = createClient(cloudUrl, cloudServiceKey, {
+            auth: { autoRefreshToken: false, persistSession: false }
+          });
+
+          // 1. Criar Auth user no Cloud
+          let cloudUserId: string | null = null;
+          const { data: cloudAuth, error: cloudAuthError } = await cloudClient.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              cnpj: company.cnpj,
+              razao_social: company.razao_social,
+            }
+          });
+
+          if (cloudAuthError) {
+            if (cloudAuthError.message?.includes('already been registered') || (cloudAuthError as any).code === 'email_exists') {
+              console.log('[company-operations] Cloud auth user already exists, fetching...');
+              const { data: { users } } = await cloudClient.auth.admin.listUsers();
+              const existing = users?.find((u: any) => u.email === email);
+              if (existing) {
+                cloudUserId = existing.id;
+                await cloudClient.auth.admin.updateUser(cloudUserId, { password });
+              }
+            } else {
+              console.error('[company-operations] Cloud auth error (non-fatal):', cloudAuthError.message);
+            }
+          } else {
+            cloudUserId = cloudAuth.user?.id || null;
+          }
+
+          if (cloudUserId) {
+            // 2. Inserir company no Cloud
+            const { data: cloudCompany, error: cloudCompanyError } = await cloudClient
+              .from('companies')
+              .insert({
+                razao_social: company.razao_social,
+                cnpj: company.cnpj.replace(/\D/g, ''),
+                cep: company.cep || null,
+                logradouro: company.logradouro || null,
+                bairro: company.bairro || null,
+                cidade: company.cidade || null,
+                uf: company.uf || null,
+                numero: company.numero || null,
+                complemento: company.complemento || null,
+                n_funcionarios: company.n_funcionarios || 0,
+                contato_nome: company.contato_nome || null,
+                contato_email: company.contato_email || null,
+                contato_telefone: company.contato_telefone || null,
+                status: company.status || 'ATIVA',
+              })
+              .select('id')
+              .single();
+
+            if (cloudCompanyError) {
+              console.error('[company-operations] Cloud company insert error (non-fatal):', cloudCompanyError.message);
+            } else if (cloudCompany) {
+              // 3. Inserir user_roles no Cloud
+              await cloudClient.from('user_roles').insert({
+                user_id: cloudUserId,
+                role: 'company',
+              });
+
+              // 4. Inserir company_credentials no Cloud
+              await cloudClient.from('company_credentials').insert({
+                company_id: cloudCompany.id,
+                user_id: cloudUserId,
+                cnpj: company.cnpj.replace(/\D/g, ''),
+                must_change_password: true,
+              });
+
+              console.log('[company-operations] ✅ Company replicated to Cloud successfully!');
+            }
+          }
+        } else {
+          console.warn('[company-operations] ⚠️ CLOUD_SUPABASE_URL or CLOUD_SUPABASE_SERVICE_ROLE_KEY not configured, skipping Cloud replication');
+        }
+      } catch (cloudError: any) {
+        console.error('[company-operations] ⚠️ Cloud replication failed (non-fatal):', cloudError.message);
+      }
+
       // Enviar email automático com senha
       try {
         const emailResult = await invokeEdgeFunction('send-form-emails', {
