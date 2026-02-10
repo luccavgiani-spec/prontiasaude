@@ -1,7 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
-import { getHybridSession } from "@/lib/auth-hybrid";
-import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession, supabaseProductionAuth } from "@/lib/auth-hybrid";
 
 export interface Patient {
   id: string;
@@ -51,7 +50,7 @@ export const requireAuth = async (): Promise<{ user: User; session: Session } | 
 export const getPatient = async (userId: string): Promise<Patient | null> => {
   // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente de autenticação
   const environment = sessionStorage.getItem('auth_environment') as 'cloud' | 'production' | null;
-  const client = environment === 'production' ? supabaseProduction : supabase;
+  const client = environment === 'production' ? supabaseProductionAuth : supabase;
   
   const { data, error } = await client
     .from('patients' as any)
