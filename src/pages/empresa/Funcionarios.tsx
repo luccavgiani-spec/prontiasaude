@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
+import { supabaseProduction } from '@/lib/supabase-production';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
@@ -80,7 +81,7 @@ export default function EmpresaFuncionarios() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseProduction
         .from('company_employees')
         .select('id, cpf, email, first_name, last_name, created_at')
         .eq('company_id', company.id)
@@ -99,7 +100,7 @@ export default function EmpresaFuncionarios() {
     if (!company) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseProduction
         .from('pending_employee_invites')
         .select('id, email, status, invited_at, expires_at')
         .eq('company_id', company.id)

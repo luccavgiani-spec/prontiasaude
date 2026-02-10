@@ -16,32 +16,41 @@ interface CompleteResetRequest {
 }
 
 /**
- * Busca usuário por email com paginação em um ambiente
+ * ✅ CORRIGIDO: Busca usuário por email via REST API direta do GoTrue
+ * Retorna o ID do usuário se encontrado, null caso contrário
  */
-async function findUserByEmail(client: ReturnType<typeof createClient>, email: string): Promise<string | null> {
-  const normalizedEmail = email.toLowerCase();
+async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string): Promise<string | null> {
+  const normalizedEmail = email.toLowerCase().trim();
   let page = 1;
-  const perPage = 1000;
+  const perPage = 50;
+  const maxPages = 50;
   
-  while (true) {
-    const { data, error } = await client.auth.admin.listUsers({
-      page,
-      perPage,
+  while (page <= maxPages) {
+    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+      },
     });
     
-    if (error || !data?.users?.length) {
-      break;
+    if (!response.ok) {
+      console.error(`[complete-password-reset] REST API error ${response.status} para ${supabaseUrl}`);
+      return null;
     }
     
-    const found = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
-    if (found) {
-      return found.id;
-    }
+    const data = await response.json();
+    const users = data.users || data || [];
     
-    if (data.users.length < perPage) {
-      break;
-    }
+    if (!Array.isArray(users) || users.length === 0) return null;
     
+    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+    if (found) return found.id;
+    
+    if (users.length < perPage) return null;
     page++;
   }
   
@@ -113,10 +122,10 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log(`[complete-password-reset] Buscando usuário em AMBOS os ambientes: ${tokenData.email}`);
 
-    // ✅ CORREÇÃO: Buscar usuário em AMBOS os ambientes
+    // ✅ CORREÇÃO: Buscar via REST API direta com paginação segura
     const [cloudUserId, prodUserId] = await Promise.all([
-      findUserByEmail(cloudClient, tokenData.email),
-      findUserByEmail(prodClient, tokenData.email)
+      findUserByEmail(CLOUD_URL, cloudServiceKey, tokenData.email),
+      findUserByEmail(PRODUCTION_URL, prodServiceKey, tokenData.email)
     ]);
 
     console.log(`[complete-password-reset] Cloud: ${cloudUserId || 'não encontrado'}, Prod: ${prodUserId || 'não encontrado'}`);

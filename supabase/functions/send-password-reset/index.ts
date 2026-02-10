@@ -16,46 +16,57 @@ interface PasswordResetRequest {
 }
 
 /**
- * Busca usuário por email com paginação em um ambiente
+ * ✅ CORRIGIDO: Busca usuário por email via REST API direta do GoTrue
+ * Usa perPage: 50 (valor que o GoTrue respeita) com paginação manual
  */
-async function findUserByEmail(client: ReturnType<typeof createClient>, email: string, label: string): Promise<boolean> {
-  const normalizedEmail = email.toLowerCase();
-  let page = 1;
-  const perPage = 1000;
-  
+async function findUserByEmail(supabaseUrl: string, serviceKey: string, email: string, label: string): Promise<boolean> {
+  const normalizedEmail = email.toLowerCase().trim();
   console.log(`[send-password-reset] Buscando ${email} em ${label}...`);
   
-  while (true) {
-    const { data, error } = await client.auth.admin.listUsers({
-      page,
-      perPage,
+  let page = 1;
+  const perPage = 50;
+  const maxPages = 50;
+  
+  while (page <= maxPages) {
+    const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${serviceKey}`,
+        'apikey': serviceKey,
+        'Content-Type': 'application/json',
+      },
     });
     
-    if (error) {
-      console.error(`[send-password-reset] Erro ao buscar ${label} página ${page}:`, error);
+    if (!response.ok) {
+      console.error(`[send-password-reset] ${label}: REST API error ${response.status}`);
       return false;
     }
     
-    if (!data?.users?.length) {
-      break;
+    const data = await response.json();
+    const users = data.users || data || [];
+    
+    if (!Array.isArray(users) || users.length === 0) {
+      console.log(`[send-password-reset] Usuário NÃO encontrado em ${label} (página ${page}, lista vazia)`);
+      return false;
     }
     
-    // Buscar manualmente por email
-    const found = data.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+    const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
     if (found) {
       console.log(`[send-password-reset] Usuário encontrado em ${label}: ${found.id}`);
       return true;
     }
     
-    // Se buscamos menos que o limite, não há mais páginas
-    if (data.users.length < perPage) {
-      break;
+    if (users.length < perPage) {
+      console.log(`[send-password-reset] Usuário NÃO encontrado em ${label} (fim da lista, ${page} páginas)`);
+      return false;
     }
     
     page++;
   }
   
-  console.log(`[send-password-reset] Usuário NÃO encontrado em ${label}`);
+  console.log(`[send-password-reset] Usuário NÃO encontrado em ${label} (limite de páginas)`);
   return false;
 }
 
@@ -81,19 +92,16 @@ serve(async (req: Request): Promise<Response> => {
     const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
     const resendApiKey = Deno.env.get("RESEND_API_KEY")!;
 
+    // ✅ CORRIGIDO: Buscar via REST API direta (sem createClient para busca)
+    const [existsInCloud, existsInProd] = await Promise.all([
+      findUserByEmail(CLOUD_URL, cloudServiceKey, email, 'Cloud'),
+      findUserByEmail(PRODUCTION_URL, prodServiceKey, email, 'Produção'),
+    ]);
+
+    // Cliente Cloud ainda necessário para salvar token
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
-    
-    const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
-
-    // Buscar em ambos os ambientes
-    const [existsInCloud, existsInProd] = await Promise.all([
-      findUserByEmail(cloudClient, email, 'Cloud'),
-      findUserByEmail(prodClient, email, 'Produção'),
-    ]);
 
     console.log(`[send-password-reset] Resultado: Cloud=${existsInCloud}, Prod=${existsInProd}`);
 
