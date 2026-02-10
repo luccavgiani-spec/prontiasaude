@@ -1821,6 +1821,94 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============================================
+    // LIST EMPLOYEES (Admin or Company)
+    // ============================================
+    if (operation === "list-employees") {
+      const { company_cnpj } = bodyData;
+      if (!company_cnpj) {
+        return new Response(JSON.stringify({ error: "Missing company_cnpj" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: comp } = await supabaseClient.from("companies").select("id").eq("cnpj", company_cnpj).single();
+      if (!comp) {
+        return new Response(JSON.stringify({ error: "Empresa não encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: employees } = await supabaseClient
+        .from("company_employees")
+        .select("id, cpf, email, first_name, last_name, created_at, status, has_active_plan")
+        .eq("company_id", comp.id)
+        .order("created_at", { ascending: false });
+
+      return new Response(JSON.stringify({ employees: employees || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============================================
+    // LIST PENDING INVITES (Admin or Company)
+    // ============================================
+    if (operation === "list-pending-invites") {
+      const { company_cnpj } = bodyData;
+      if (!company_cnpj) {
+        return new Response(JSON.stringify({ error: "Missing company_cnpj" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: comp } = await supabaseClient.from("companies").select("id").eq("cnpj", company_cnpj).single();
+      if (!comp) {
+        return new Response(JSON.stringify({ error: "Empresa não encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: invites } = await supabaseClient
+        .from("pending_employee_invites")
+        .select("id, email, status, invited_at, expires_at")
+        .eq("company_id", comp.id)
+        .eq("status", "pending")
+        .order("invited_at", { ascending: false });
+
+      return new Response(JSON.stringify({ invites: invites || [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // ============================================
+    // DELETE EMPLOYEE (Admin or Company)
+    // ============================================
+    if (operation === "delete-employee") {
+      const { employee_id, company_cnpj } = bodyData;
+      if (!employee_id || !company_cnpj) {
+        return new Response(JSON.stringify({ error: "Missing employee_id or company_cnpj" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: comp } = await supabaseClient.from("companies").select("id").eq("cnpj", company_cnpj).single();
+      if (!comp) {
+        return new Response(JSON.stringify({ error: "Empresa não encontrada" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: delError } = await supabaseClient
+        .from("company_employees")
+        .delete()
+        .eq("id", employee_id)
+        .eq("company_id", comp.id);
+
+      return new Response(JSON.stringify({ success: !delError }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Invalid operation" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 400,

@@ -4,7 +4,6 @@ import { ensurePatientRow } from '@/lib/patients';
 import { trackPurchase } from '@/lib/meta-tracking';
 import { Loader2 } from "lucide-react";
 import { getHybridSession, supabaseProductionAuth } from '@/lib/auth-hybrid';
-import { supabaseProduction } from '@/lib/supabase-production';
 
 const AuthCallback = () => {
   useEffect(() => {
@@ -102,7 +101,7 @@ const AuthCallback = () => {
       }
 
       // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente de autenticação
-      const dbClient = authEnvironment === 'production' ? supabaseProduction : supabase;
+      const dbClient = authEnvironment === 'production' ? supabaseProductionAuth : supabase;
 
       // ✅ Verificar se é admin de empresa
       const { data: companyCredentials } = await dbClient
@@ -132,7 +131,7 @@ const AuthCallback = () => {
       
       // Se não encontrou, tentar no outro ambiente
       if (!patientData) {
-        const otherClient = authEnvironment === 'production' ? supabase : supabaseProduction;
+        const otherClient = authEnvironment === 'production' ? supabase : supabaseProductionAuth;
         const { data: otherEnvData } = await otherClient
           .from('patients')
           .select('profile_complete')

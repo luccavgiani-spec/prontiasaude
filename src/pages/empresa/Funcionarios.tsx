@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
-import { supabaseProduction } from '@/lib/supabase-production';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { useCompanyAuth } from '@/hooks/useCompanyAuth';
 import { toast } from 'sonner';
@@ -81,14 +80,14 @@ export default function EmpresaFuncionarios() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabaseProduction
-        .from('company_employees')
-        .select('id, cpf, email, first_name, last_name, created_at')
-        .eq('company_id', company.id)
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await invokeEdgeFunction('company-operations', {
+        body: {
+          operation: 'list-employees',
+          company_cnpj: company.cnpj
+        }
+      });
       if (error) throw error;
-      setEmployees((data || []) as Employee[]);
+      setEmployees((data?.employees || []) as Employee[]);
     } catch (error) {
       toast.error('Erro ao carregar funcionários');
     } finally {
@@ -100,15 +99,14 @@ export default function EmpresaFuncionarios() {
     if (!company) return;
 
     try {
-      const { data, error } = await supabaseProduction
-        .from('pending_employee_invites')
-        .select('id, email, status, invited_at, expires_at')
-        .eq('company_id', company.id)
-        .eq('status', 'pending')
-        .order('invited_at', { ascending: false });
-
+      const { data, error } = await invokeEdgeFunction('company-operations', {
+        body: {
+          operation: 'list-pending-invites',
+          company_cnpj: company.cnpj
+        }
+      });
       if (error) throw error;
-      setPendingInvites(data || []);
+      setPendingInvites(data?.invites || []);
     } catch (error) {
       toast.error('Erro ao carregar convites pendentes');
     }
@@ -338,17 +336,18 @@ export default function EmpresaFuncionarios() {
     if (!confirm('Tem certeza que deseja excluir este funcionário?')) return;
 
     try {
-      const { error } = await supabase
-        .from('company_employees')
-        .delete()
-        .eq('id', employeeId);
-
+      const { data, error } = await invokeEdgeFunction('company-operations', {
+        body: {
+          operation: 'delete-employee',
+          employee_id: employeeId,
+          company_cnpj: company?.cnpj
+        }
+      });
       if (error) throw error;
 
       toast.success('Funcionário excluído');
       loadEmployees();
     } catch (error) {
-      // Don't log deletion errors
       toast.error('Erro ao excluir funcionário');
     }
   };
