@@ -136,20 +136,10 @@ const CompletarPerfil = () => {
   const validateInviteToken = async () => {
     setIsLoading(true);
     try {
-      const { data: invite, error } = await (supabase
-        .from('pending_employee_invites') as any)
-        .select(`
-          *,
-          companies (
-            id,
-            razao_social,
-            plano_id_externo,
-            empresa_id_externo
-          )
-        `)
-        .eq('token', inviteToken)
-        .eq('status', 'pending')
-        .single();
+      // ✅ Buscar convite via Edge Function na Produção (onde os convites são criados)
+      const { data: invite, error } = await invokeEdgeFunction('company-operations', {
+        body: { operation: 'validate-invite', token: inviteToken }
+      });
         
       if (error || !invite) {
         toast({
