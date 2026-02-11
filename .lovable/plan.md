@@ -1,179 +1,139 @@
 
-
-# Correção: Cadastro via Convite Empresarial - Criação Apenas na Produção
-
-## Diagnóstico Confirmado por Logs
-
-Os logs do `check-user-exists` comprovam:
-
-```
-luccavicchiattigiani@gmail.com -> existsInCloud: false, existsInProduction: true
-```
-
-O usuário foi criado APENAS na Produção. O Cloud nunca recebeu o registro.
+# Correcao: Dashboard e Funcionarios nao mostram dados
 
 ## Causa Raiz
 
-A função `create-user-both-envs` (linhas 156-167) tem um bug: quando o email já existe em **um** dos ambientes, ela retorna erro e **não cria no outro**:
+O problema e uma **divergencia de ambiente**: os convites e funcionarios sao criados pela Edge Function `company-operations` no banco de **Producao**, mas o frontend consulta o banco do **Cloud**.
 
-```typescript
-if (existsInCloud || existsInProd) {
-  // RETORNA ERRO - nunca cria no ambiente que está faltando
-  return new Response(JSON.stringify({ 
-    success: false, 
-    error: "Este email já está cadastrado..."
-  }));
-}
+### Evidencia direta do banco Cloud:
+
+```
+pending_employee_invites WHERE company_id = '505c987b...' → 0 resultados
+company_employees → tabela completamente vazia
 ```
 
-O fluxo que causa isso:
-1. `patient-operations/upsert_patient` cria o auth user na Produção com senha aleatória
-2. Depois, `hybridSignUp` chama `create-user-both-envs`
-3. `create-user-both-envs` detecta `existsInProd: true` e retorna erro
-4. Cloud NUNCA recebe o usuário
-5. Login híbrido tenta Cloud primeiro, falha, tenta Produção -- mas a senha aleatória do `upsert_patient` pode ter sobrescrito a original
+Os dados existem apenas na Producao (acessivel via Edge Function `company-operations`).
 
-## Correção Necessária
+### Detalhamento por pagina:
 
-### Arquivo: `supabase/functions/create-user-both-envs/index.ts`
+**`/empresa` (Dashboard.tsx):**
+- Renderiza `ConvitesManagement` passando `company.id` do Cloud (`505c987b...`)
+- `ConvitesManagement` faz query direta: `supabase.from('pending_employee_invites').eq('company_id', companyId)`
+- `supabase` aqui e o cliente Cloud -- tabela vazia para este company_id
+- Resultado: 0 convites, contadores zerados
 
-**Linhas 156-167**: Substituir o bloco de "já existe" por lógica que cria no ambiente faltante:
-
-```typescript
-// ANTES (bugado):
-if (existsInCloud || existsInProd) {
-  return new Response(JSON.stringify({ 
-    success: false, 
-    error: "Este email já está cadastrado...",
-    existsInCloud,
-    existsInProd
-  }), { status: 400, ... });
-}
-
-// DEPOIS (corrigido):
-if (existsInCloud && existsInProd) {
-  // Já existe em AMBOS - realmente é duplicado
-  return new Response(JSON.stringify({ 
-    success: false, 
-    error: "Este email já está cadastrado. Faça login ou recupere sua senha.",
-    existsInCloud: true,
-    existsInProd: true
-  }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-// Se existe em apenas um, pular a criação nesse ambiente e criar no outro
-console.log(`[create-user-both-envs] Existe parcialmente: Cloud=${existsInCloud}, Prod=${existsInProd}`);
-```
-
-Além disso, nas seções de criação (linhas 170-210 para Produção e linhas 215-240 para Cloud), envolver cada bloco com um `if (!existsInProd)` e `if (!existsInCloud)` respectivamente:
-
-```typescript
-// =============================================
-// CRIAR USUÁRIO NA PRODUÇÃO (PRINCIPAL)
-// =============================================
-let prodUserId: string | null = null;
-
-if (!existsInProd) {
-  console.log("[create-user-both-envs] Criando usuário na Produção...");
-  // ... código existente de criação na Produção ...
-} else {
-  console.log("[create-user-both-envs] Usuário já existe na Produção, pulando criação");
-  // Buscar o ID existente para uso posterior
-  // (usar REST API para encontrar o user ID)
-}
-
-// =============================================
-// CRIAR USUÁRIO NO CLOUD (SECUNDÁRIO)
-// =============================================
-let cloudUserId: string | null = null;
-
-if (!existsInCloud) {
-  console.log("[create-user-both-envs] Criando usuário no Cloud...");
-  // ... código existente de criação no Cloud ...
-} else {
-  console.log("[create-user-both-envs] Usuário já existe no Cloud, pulando criação");
-}
-```
-
-A resposta final deve retornar `success: true` quando pelo menos um ambiente foi criado com sucesso ou ambos já existiam.
-
-### Sincronização da tabela `patients`
-
-As seções de sync de patients (linhas 250-330) também precisam do mesmo tratamento condicional, o que já fazem parcialmente (checam `existingProd`/`existingCloud` via `maybeSingle`). Isso está correto e não precisa de alteração.
+**`/empresa/funcionarios` (Funcionarios.tsx):**
+- Corretamente usa `invokeEdgeFunction('company-operations')` para listar funcionarios e convites
+- Porem a versao deployada em Producao pode nao ter as operacoes `list-employees` e `list-pending-invites`
+- Mesmo que tenha, a resposta vem corretamente da Producao (usando CNPJ, nao UUID)
 
 ---
 
-## Criação Manual do Usuário no Cloud
+## Correcoes Necessarias
 
-Como não consigo criar via `create-user-both-envs` (ela bloqueia), a outra IA deve executar o seguinte:
+### Arquivo 1: `src/components/empresa/ConvitesManagement.tsx`
 
-1. Criar uma Edge Function temporária `create-cloud-user-only` no Lovable Cloud:
+**Problema:** Faz query direta ao Cloud via `supabase.from(...)`. Precisa usar `invokeEdgeFunction` para buscar dados da Producao.
+
+**Alteracoes:**
+- Substituir `supabase.from('pending_employee_invites')` por `invokeEdgeFunction('company-operations', { body: { operation: 'list-pending-invites', company_cnpj: companyCnpj } })`
+- Adicionar prop `companyCnpj` ao componente (alem de `companyId` e `companyName`)
+- Atualizar `handleCancelInvite` para usar Edge Function ao inves de query direta
+- Atualizar `handleResendInvite` (ja usa Edge Function - OK)
+
+### Arquivo 2: `src/pages/empresa/Dashboard.tsx`
+
+**Alteracao minima:**
+- Passar `companyCnpj={company.cnpj}` para o componente `ConvitesManagement`
+
+---
+
+## Detalhes Tecnicos
+
+### ConvitesManagement - Nova logica de fetch:
 
 ```typescript
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+// ANTES (query Cloud - vazio):
+let query = supabase
+  .from('pending_employee_invites')
+  .select('*')
+  .eq('company_id', companyId)
+  .neq('status', 'cancelled')
+  .order('invited_at', { ascending: false });
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  
-  const { email, password } = await req.json();
-  const cloudUrl = Deno.env.get("SUPABASE_URL")!;
-  const cloudKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  
-  const client = createClient(cloudUrl, cloudKey, {
-    auth: { autoRefreshToken: false, persistSession: false }
-  });
-  
-  const { data, error } = await client.auth.admin.createUser({
-    email: email.toLowerCase().trim(),
-    password,
-    email_confirm: true,
-  });
-  
-  if (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+// DEPOIS (via Edge Function - dados da Producao):
+const { data, error } = await invokeEdgeFunction('company-operations', {
+  body: {
+    operation: 'list-pending-invites',
+    company_cnpj: companyCnpj
   }
-  
-  // Criar patient record também
-  await client.from('patients').upsert({
-    user_id: data.user.id,
-    email: email.toLowerCase().trim(),
-  }, { onConflict: 'email' });
-  
-  return new Response(JSON.stringify({ success: true, userId: data.user.id }), {
-    headers: { ...corsHeaders, "Content-Type": "application/json" }
-  });
+});
+setInvites(data?.invites || []);
+```
+
+### ConvitesManagement - Cancel invite:
+
+```typescript
+// ANTES (deleta no Cloud - nao afeta Producao):
+const { error } = await supabase
+  .from('pending_employee_invites')
+  .delete()
+  .eq('id', inviteId);
+
+// DEPOIS (via Edge Function na Producao):
+const { error } = await invokeEdgeFunction('company-operations', {
+  body: {
+    operation: 'cancel-invite',
+    invite_id: inviteId,
+    company_cnpj: companyCnpj
+  }
 });
 ```
 
-2. Adicionar ao `config.toml`:
-```toml
-[functions.create-cloud-user-only]
-verify_jwt = false
+### ConvitesManagement - Props atualizadas:
+
+```typescript
+interface ConvitesManagementProps {
+  companyId: string;
+  companyName: string;
+  companyCnpj: string;  // NOVO
+}
 ```
 
-3. Fazer deploy e chamar via curl:
-```
-POST /create-cloud-user-only
-Body: { "email": "luccavicchiattigiani@gmail.com", "password": "SenhQueUsuarioDefiniu" }
+### Dashboard.tsx - Passar CNPJ:
+
+```typescript
+<ConvitesManagement 
+  companyId={company.id} 
+  companyName={company.razao_social}
+  companyCnpj={company.cnpj}  // NOVO
+/>
 ```
 
-4. Depois de criar, deletar a Edge Function temporária.
+### Convites.tsx (se existir como rota separada) - mesma alteracao:
+
+```typescript
+<ConvitesManagement 
+  companyId={company.id} 
+  companyName={company.razao_social}
+  companyCnpj={company.cnpj}
+/>
+```
 
 ---
 
-## Resumo
+## Nota sobre company-operations na Producao
 
-| Arquivo | Alteração |
+A Edge Function `company-operations` na Producao precisa ter as operacoes `list-pending-invites` e `cancel-invite` implementadas. Se voce ja fez o deploy manual conforme discutido anteriormente, essas operacoes ja estao disponiveis. Caso contrario, sera necessario o deploy antes de testar.
+
+A operacao `list-employees` ja e usada pelo `Funcionarios.tsx` e ja funciona via `invokeEdgeFunction`.
+
+---
+
+## Resumo de arquivos
+
+| Arquivo | Alteracao |
 |---------|-----------|
-| `supabase/functions/create-user-both-envs/index.ts` | Mudar lógica de `existsInCloud OR existsInProd` para `existsInCloud AND existsInProd`, e criar no ambiente faltante |
-
-Essa correção resolve o problema na raiz: qualquer cadastro futuro via convite empresarial criará o usuário em AMBOS os ambientes, mesmo que já exista em um deles.
-
+| `src/components/empresa/ConvitesManagement.tsx` | Substituir queries diretas ao Cloud por `invokeEdgeFunction` apontando para Producao |
+| `src/pages/empresa/Dashboard.tsx` | Passar `companyCnpj` para `ConvitesManagement` |
+| `src/pages/empresa/Convites.tsx` | Passar `companyCnpj` para `ConvitesManagement` |
