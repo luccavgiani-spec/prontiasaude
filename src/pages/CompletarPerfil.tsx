@@ -167,7 +167,14 @@ const CompletarPerfil = () => {
       setInviteData(invite);
       
       // Preencher email automaticamente
-      setFormData(prev => ({ ...prev, first_name: invite.email }));
+      // Preencher nome do convite (se disponível), NÃO o email
+      if (invite.first_name || invite.last_name) {
+        setFormData(prev => ({ 
+          ...prev, 
+          first_name: invite.first_name || '',
+          last_name: invite.last_name || ''
+        }));
+      }
       
       // Verificar se usuário já está logado
       const { data: { session } } = await supabase.auth.getSession();
@@ -450,11 +457,13 @@ const CompletarPerfil = () => {
             } else {
               // Login falhou - redirecionar para /entrar com token salvo
               if (inviteData.isFamilyInvite) {
-                sessionStorage.setItem('pending_family_invite_token', inviteData.invite_token);
-                localStorage.setItem('pending_family_invite_token', inviteData.invite_token);
+                const tokenValue = inviteData.invite_token || familyToken || '';
+                sessionStorage.setItem('pending_family_invite_token', tokenValue);
+                localStorage.setItem('pending_family_invite_token', tokenValue);
               } else {
-                sessionStorage.setItem('pending_invite_token', inviteData.invite_token);
-                localStorage.setItem('pending_invite_token', inviteData.invite_token);
+                const tokenValue = inviteData.token || inviteToken || '';
+                sessionStorage.setItem('pending_invite_token', tokenValue);
+                localStorage.setItem('pending_invite_token', tokenValue);
               }
               
               toast({
@@ -545,6 +554,10 @@ const CompletarPerfil = () => {
 
       console.log('[CompletarPerfil] ✅ Perfil salvo com sucesso via Edge Function:', upsertResult);
       
+      // ✅ Usar user_id canônico retornado pelo backend
+      const canonicalUserId = upsertResult?.user_id || activeUser?.id;
+      console.log('[CompletarPerfil] User ID canônico:', canonicalUserId);
+      
       // SE FOR CONVITE DE EMPRESA, ativar plano via Edge Function segura
       if (inviteData && !inviteData.isFamilyInvite) {
         try {
@@ -561,7 +574,7 @@ const CompletarPerfil = () => {
           const { data: planResult, error: planError } = await invokeEdgeFunction('company-operations', {
             body: {
               operation: 'activate-employee-plan',
-              invite_token: inviteData.invite_token,
+              invite_token: inviteData.token || inviteToken,
               employee_data: {
                 nome: `${formData.first_name} ${formData.last_name}`,
                 cpf: formData.cpf.replace(/\D/g, ''),
@@ -601,7 +614,9 @@ const CompletarPerfil = () => {
             description: activationErr.message || "Não foi possível ativar seu plano empresarial. Entre em contato com o suporte.",
             variant: "destructive",
           });
-          throw activationErr;
+          // ✅ NÃO propagar erro - perfil já foi salvo com sucesso
+          // Redirecionar mesmo sem plano ativo (admin pode corrigir depois)
+          console.warn('[CompletarPerfil] Plan activation failed but profile saved, continuing redirect...');
         }
       } else if (inviteData && inviteData.isFamilyInvite) {
         // SE FOR CONVITE FAMILIAR, ativar plano do familiar
@@ -644,7 +659,7 @@ const CompletarPerfil = () => {
             description: familyErr.message || "Não foi possível ativar seu plano familiar.",
             variant: "destructive",
           });
-          throw familyErr;
+          console.warn('[CompletarPerfil] Family plan activation failed but profile saved, continuing redirect...');
         }
       } else {
         toast({
