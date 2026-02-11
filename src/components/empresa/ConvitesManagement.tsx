@@ -17,7 +17,6 @@ import {
   Calendar
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { supabase } from '@/integrations/supabase/client';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -26,6 +25,7 @@ import { ptBR } from 'date-fns/locale';
 interface ConvitesManagementProps {
   companyId: string;
   companyName: string;
+  companyCnpj: string;
 }
 
 interface InviteData {
@@ -37,7 +37,7 @@ interface InviteData {
   completed_at: string | null;
 }
 
-export default function ConvitesManagement({ companyId, companyName }: ConvitesManagementProps) {
+export default function ConvitesManagement({ companyId, companyName, companyCnpj }: ConvitesManagementProps) {
   const [invites, setInvites] = useState<InviteData[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,25 +55,30 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
     }
     
     try {
-      let query = supabase
-        .from('pending_employee_invites')
-        .select('*')
-        .eq('company_id', companyId)
-        .neq('status', 'cancelled')
-        .order('invited_at', { ascending: false });
+      const { data, error } = await invokeEdgeFunction('company-operations', {
+        body: {
+          operation: 'list-pending-invites',
+          company_cnpj: companyCnpj
+        }
+      });
+
+      if (error) throw error;
+
+      let results: InviteData[] = data?.invites || [];
+
+      // Filtros client-side (dados já vêm da Produção)
+      results = results.filter((i: InviteData) => i.status !== 'cancelled');
 
       if (filters.status) {
-        query = query.eq('status', filters.status);
+        results = results.filter((i: InviteData) => i.status === filters.status);
       }
 
       if (filters.email_search) {
-        query = query.ilike('email', `%${filters.email_search}%`);
+        const search = filters.email_search.toLowerCase();
+        results = results.filter((i: InviteData) => i.email.toLowerCase().includes(search));
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setInvites(data || []);
+      setInvites(results);
     } catch (error) {
       console.error('Error fetching invites:', error);
       toast.error('Erro ao carregar convites');
@@ -92,7 +97,7 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [companyId, filters]);
+  }, [companyCnpj, filters]);
 
   const applyFilters = () => {
     fetchInvites(false);
@@ -132,10 +137,13 @@ export default function ConvitesManagement({ companyId, companyName }: ConvitesM
   const handleCancelInvite = async (inviteId: string) => {
     setLoadingActions(prev => ({ ...prev, [inviteId]: true }));
     try {
-      const { error } = await supabase
-        .from('pending_employee_invites')
-        .delete()
-        .eq('id', inviteId);
+      const { error } = await invokeEdgeFunction('company-operations', {
+        body: {
+          operation: 'cancel-invite',
+          invite_id: inviteId,
+          company_cnpj: companyCnpj
+        }
+      });
 
       if (error) throw error;
       

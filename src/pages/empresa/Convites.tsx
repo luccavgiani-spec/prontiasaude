@@ -38,6 +38,7 @@ export default function EmpresaConvites() {
         <ConvitesManagement 
           companyId={company.id} 
           companyName={company.razao_social}
+          companyCnpj={company.cnpj}
         />
       </div>
     </div>

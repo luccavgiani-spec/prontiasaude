@@ -130,7 +130,7 @@ export default function EmpresaDashboard() {
               </p>
             </div>
             
-            <ConvitesManagement companyId={company.id} companyName={company.razao_social} />
+            <ConvitesManagement companyId={company.id} companyName={company.razao_social} companyCnpj={company.cnpj} />
           </div>
         </div>
       </div>
