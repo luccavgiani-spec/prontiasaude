@@ -1,139 +1,135 @@
 
-# Correcao: Dashboard e Funcionarios nao mostram dados
 
-## Causa Raiz
+# Correcao: Modal de Ativacao Manual + Tabela de Planos ClickLife
 
-O problema e uma **divergencia de ambiente**: os convites e funcionarios sao criados pela Edge Function `company-operations` no banco de **Producao**, mas o frontend consulta o banco do **Cloud**.
+## Problema
 
-### Evidencia direta do banco Cloud:
+1. O modal `ManualPlanActivationModal` usa 3 planos fictícios (BASIC, PREMIUM, FAMILY) que nao existem no sistema
+2. A ativacao manual nao aciona a ClickLife
+3. Os mapeamentos de plano para ClickLife em **4 edge functions** nao diferenciam planos FAMILIARES (que usam IDs 1237/1238) de INDIVIDUAIS (863/864)
 
-```
-pending_employee_invites WHERE company_id = '505c987b...' → 0 resultados
-company_employees → tabela completamente vazia
-```
+## Tabela de Mapeamento Correta
 
-Os dados existem apenas na Producao (acessivel via Edge Function `company-operations`).
-
-### Detalhamento por pagina:
-
-**`/empresa` (Dashboard.tsx):**
-- Renderiza `ConvitesManagement` passando `company.id` do Cloud (`505c987b...`)
-- `ConvitesManagement` faz query direta: `supabase.from('pending_employee_invites').eq('company_id', companyId)`
-- `supabase` aqui e o cliente Cloud -- tabela vazia para este company_id
-- Resultado: 0 convites, contadores zerados
-
-**`/empresa/funcionarios` (Funcionarios.tsx):**
-- Corretamente usa `invokeEdgeFunction('company-operations')` para listar funcionarios e convites
-- Porem a versao deployada em Producao pode nao ter as operacoes `list-employees` e `list-pending-invites`
-- Mesmo que tenha, a resposta vem corretamente da Producao (usando CNPJ, nao UUID)
+| Tipo de Plano | ClickLife plan_id |
+|---|---|
+| Individual SEM especialista | 863 |
+| Individual COM especialista | 864 |
+| Familiar SEM especialista | **1237** |
+| Familiar COM especialista | **1238** |
+| Empresarial | 864 |
+| Servico avulso (sem plano) | 864 |
 
 ---
 
-## Correcoes Necessarias
+## Arquivos a Alterar
 
-### Arquivo 1: `src/components/empresa/ConvitesManagement.tsx`
+### 1. `src/components/admin/ManualPlanActivationModal.tsx`
 
-**Problema:** Faz query direta ao Cloud via `supabase.from(...)`. Precisa usar `invokeEdgeFunction` para buscar dados da Producao.
+- Substituir array mock `planSkus` pelos planos reais do `PLANOS` (constants.ts), filtrando o Empresarial (preco 0)
+- Adicionar funcao de mapeamento ClickLife com a regra FAMILIAR vs INDIVIDUAL
+- Apos sucesso da ativacao local, chamar `invokeEdgeFunction('activate-clicklife-manual')` com o `plan_id` correto
+- Expandir interface `user` para incluir `phone`, `gender`, `birth_date`
 
-**Alteracoes:**
-- Substituir `supabase.from('pending_employee_invites')` por `invokeEdgeFunction('company-operations', { body: { operation: 'list-pending-invites', company_cnpj: companyCnpj } })`
-- Adicionar prop `companyCnpj` ao componente (alem de `companyId` e `companyName`)
-- Atualizar `handleCancelInvite` para usar Edge Function ao inves de query direta
-- Atualizar `handleResendInvite` (ja usa Edge Function - OK)
+### 2. `src/components/admin/UserRegistrationsTab.tsx`
 
-### Arquivo 2: `src/pages/empresa/Dashboard.tsx`
+- Passar `phone`, `gender` e `birth_date` do paciente ao modal
 
-**Alteracao minima:**
-- Passar `companyCnpj={company.cnpj}` para o componente `ConvitesManagement`
+### 3. `supabase/functions/mp-webhook/index.ts`
+
+- Linha ~1074: alterar mapeamento para diferenciar FAMILIAR
+- De: `COM_ESP ? 864 : SEM_ESP ? 863 : 864`
+- Para: `FAM_COM_ESP ? 1238 : FAM_SEM_ESP ? 1237 : COM_ESP ? 864 : SEM_ESP ? 863 : 864`
+- Aplicar mesma logica nas outras ocorrencias hardcoded (linhas ~1410, ~1477, ~1742)
+
+### 4. `supabase/functions/reconcile-pending-payments/index.ts`
+
+- Linha ~271: mesma correcao de mapeamento FAMILIAR
+
+### 5. `supabase/functions/schedule-redirect/index.ts`
+
+- Linha ~128-138: o array `PLANOS_COM_ESPECIALISTAS` mistura Individual e Familiar no mesmo grupo (todos apontam 864). Precisa separar e usar funcao que retorne 864 para IND e 1238 para FAM
+- Ajustar a logica de `getClickLifePlanId()` (se existir) ou criar uma
+
+### 6. `supabase/functions/activate-clicklife-manual/index.ts`
+
+- Nao precisa de alteracao estrutural (ja recebe `plan_id` como parametro), mas o fallback default `plan_id || 864` deve considerar que o caller agora envia o ID correto
 
 ---
 
 ## Detalhes Tecnicos
 
-### ConvitesManagement - Nova logica de fetch:
+### Funcao centralizada de mapeamento (usada no modal e nas edge functions):
 
 ```typescript
-// ANTES (query Cloud - vazio):
-let query = supabase
-  .from('pending_employee_invites')
-  .select('*')
-  .eq('company_id', companyId)
-  .neq('status', 'cancelled')
-  .order('invited_at', { ascending: false });
-
-// DEPOIS (via Edge Function - dados da Producao):
-const { data, error } = await invokeEdgeFunction('company-operations', {
-  body: {
-    operation: 'list-pending-invites',
-    company_cnpj: companyCnpj
+function getClickLifePlanId(planCode: string): number {
+  if (planCode.includes('FAM') || planCode.includes('FAMILIAR')) {
+    return planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA') ? 1238 : 1237;
   }
-});
-setInvites(data?.invites || []);
-```
-
-### ConvitesManagement - Cancel invite:
-
-```typescript
-// ANTES (deleta no Cloud - nao afeta Producao):
-const { error } = await supabase
-  .from('pending_employee_invites')
-  .delete()
-  .eq('id', inviteId);
-
-// DEPOIS (via Edge Function na Producao):
-const { error } = await invokeEdgeFunction('company-operations', {
-  body: {
-    operation: 'cancel-invite',
-    invite_id: inviteId,
-    company_cnpj: companyCnpj
-  }
-});
-```
-
-### ConvitesManagement - Props atualizadas:
-
-```typescript
-interface ConvitesManagementProps {
-  companyId: string;
-  companyName: string;
-  companyCnpj: string;  // NOVO
+  if (planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA')) return 864;
+  if (planCode.includes('SEM_ESP') || planCode.includes('SEM_ESPECIALISTA')) return 863;
+  if (planCode.startsWith('EMPRESA')) return 864;
+  return 864; // fallback para servicos avulsos
 }
 ```
 
-### Dashboard.tsx - Passar CNPJ:
+### Modal - planos reais:
 
 ```typescript
-<ConvitesManagement 
-  companyId={company.id} 
-  companyName={company.razao_social}
-  companyCnpj={company.cnpj}  // NOVO
-/>
+const planSkus = PLANOS
+  .filter(p => p.precoMensal["1"] > 0) // Exclui Empresarial
+  .map(p => ({
+    sku: p.code,
+    nome: p.nome,
+    preco: Math.round(p.precoMensal["1"] * 100),
+    clicklifePlanId: getClickLifePlanId(p.code)
+  }));
 ```
 
-### Convites.tsx (se existir como rota separada) - mesma alteracao:
+### Modal - ativacao ClickLife apos sucesso:
 
 ```typescript
-<ConvitesManagement 
-  companyId={company.id} 
-  companyName={company.razao_social}
-  companyCnpj={company.cnpj}
-/>
+if (data?.success && user.cpf) {
+  const clicklifePlanId = getClickLifePlanId(planCode);
+  await invokeEdgeFunction('activate-clicklife-manual', {
+    body: {
+      email: user.email,
+      cpf: user.cpf,
+      plan_id: clicklifePlanId,
+      nome: user.name,
+      telefone: user.phone,
+      sexo: user.gender,
+      dataNascimento: user.birth_date,
+      skip_db_lookup: false
+    }
+  });
+}
+```
+
+### UserRegistrationsTab - props extras:
+
+```typescript
+user={{
+  id: selectedUser.patientId || selectedUser.id,
+  email: selectedUser.email,
+  name: `${selectedUser.patient?.first_name || ''} ${selectedUser.patient?.last_name || ''}`.trim(),
+  cpf: selectedUser.patient?.cpf,
+  phone: selectedUser.patient?.phone_e164,      // NOVO
+  gender: selectedUser.patient?.gender,          // NOVO
+  birth_date: selectedUser.patient?.birth_date,  // NOVO
+  currentPlan: ...
+}}
 ```
 
 ---
 
-## Nota sobre company-operations na Producao
-
-A Edge Function `company-operations` na Producao precisa ter as operacoes `list-pending-invites` e `cancel-invite` implementadas. Se voce ja fez o deploy manual conforme discutido anteriormente, essas operacoes ja estao disponiveis. Caso contrario, sera necessario o deploy antes de testar.
-
-A operacao `list-employees` ja e usada pelo `Funcionarios.tsx` e ja funciona via `invokeEdgeFunction`.
-
----
-
-## Resumo de arquivos
+## Resumo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/empresa/ConvitesManagement.tsx` | Substituir queries diretas ao Cloud por `invokeEdgeFunction` apontando para Producao |
-| `src/pages/empresa/Dashboard.tsx` | Passar `companyCnpj` para `ConvitesManagement` |
-| `src/pages/empresa/Convites.tsx` | Passar `companyCnpj` para `ConvitesManagement` |
+| `ManualPlanActivationModal.tsx` | Planos reais + ClickLife + mapeamento FAMILIAR |
+| `UserRegistrationsTab.tsx` | Passar phone/gender/birth_date ao modal |
+| `mp-webhook/index.ts` | Mapeamento FAM 1237/1238 (4 ocorrencias) |
+| `reconcile-pending-payments/index.ts` | Mapeamento FAM 1237/1238 |
+| `schedule-redirect/index.ts` | Separar FAMILIAR de INDIVIDUAL no mapeamento |
+| `patient-operations/index.ts` | Ja correto (1237/1238) - sem alteracao |
+
