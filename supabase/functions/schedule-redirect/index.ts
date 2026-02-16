@@ -1324,18 +1324,25 @@ async function redirectClickLife(payload: SchedulePayload, reason: string, corsH
   const REDIRECT_URL = Deno.env.get('CLICKLIFE_REDIRECT_URL')!
 
   // ✅ Determinar plano_id baseado no PLANO do paciente (não no SKU da consulta)
-  // 864 = Plano com especialistas | 863 = Plano sem especialistas
-  let planoId = 863; // Default: sem especialistas
+  // INDIVIDUAL: 864 = com especialistas | 863 = sem especialistas
+  // FAMILIAR: 1238 = com especialistas | 1237 = sem especialistas
+  let planoId = 863; // Default: sem especialistas (individual)
 
   if (payload.plano_ativo && payload.plan_code) {
     const planoIncluiEspecialistas = 
       PLANOS_COM_ESPECIALISTAS.includes(payload.plan_code) || 
       isPlanoEmpresarial(payload.plan_code);
     
-    planoId = planoIncluiEspecialistas ? 864 : 863;
+    const isFamiliar = payload.plan_code.includes('FAM');
+    
+    if (isFamiliar) {
+      planoId = planoIncluiEspecialistas ? 1238 : 1237;
+    } else {
+      planoId = planoIncluiEspecialistas ? 864 : 863;
+    }
     
     console.log(`[ClickLife] Plano do paciente: ${payload.plan_code}`);
-    console.log(`[ClickLife] Inclui especialistas: ${planoIncluiEspecialistas}`);
+    console.log(`[ClickLife] Familiar: ${isFamiliar}, Inclui especialistas: ${planoIncluiEspecialistas}`);
   }
 
   console.log(`[ClickLife] plano_id selecionado: ${planoId} (plan_code: ${payload.plan_code}, plano_ativo: ${payload.plano_ativo})`);

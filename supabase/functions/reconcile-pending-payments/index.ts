@@ -268,9 +268,14 @@ Deno.serve(async (req) => {
                   
                   if (CLICKLIFE_API && INTEGRATOR_TOKEN && PATIENT_PASSWORD) {
                     // Determinar planoId correto baseado no SKU
-                    const clickLifePlanoId = sku.includes('COM_ESP') ? 864 : 
-                                             sku.includes('SEM_ESP') ? 863 : 
-                                             sku.startsWith('EMPRESA_') ? 864 : 864;
+                    // FAMILIAR COM_ESP → 1238 | FAMILIAR SEM_ESP → 1237
+                    // INDIVIDUAL COM_ESP → 864 | INDIVIDUAL SEM_ESP → 863
+                    const isFamiliar = sku.includes('FAM');
+                    const clickLifePlanoId = isFamiliar
+                      ? (sku.includes('COM_ESP') ? 1238 : 1237)
+                      : (sku.includes('COM_ESP') ? 864 : 
+                         sku.includes('SEM_ESP') ? 863 : 
+                         sku.startsWith('EMPRESA_') ? 864 : 864);
                     
                     const nomeCompleto = `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
                     

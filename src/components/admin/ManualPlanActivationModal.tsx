@@ -10,26 +10,34 @@ import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { toast } from "sonner";
 import { CATALOGO_SERVICOS, PLANOS } from "@/lib/constants";
 
-// Helper para extrair SKUs únicos dos catálogos
-const getAllSkus = () => {
-  const servicoSkus = CATALOGO_SERVICOS.flatMap(s => {
-    if (s.variantes) {
-      return s.variantes.map(v => ({ sku: v.sku, nome: v.nome, preco: v.valor * 100 }));
-    }
-    return [{ sku: s.sku, nome: s.nome, preco: s.precoBase * 100 }];
-  });
-  
-  // Planos básicos (mock - ajustar conforme necessário)
-  const planSkus = [
-    { sku: "BASIC", nome: "Plano Básico (30 dias)", preco: 2399 },
-    { sku: "PREMIUM", nome: "Plano Premium", preco: 4999 },
-    { sku: "FAMILY", nome: "Plano Família", preco: 7999 },
-  ];
-  
-  return { servicoSkus, planSkus };
-};
+// ✅ Mapeamento centralizado: Prontia plan_code → ClickLife plano_id
+export function getClickLifePlanId(planCode: string): number {
+  if (planCode.includes('FAM') || planCode.includes('FAMILIAR')) {
+    return planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA') ? 1238 : 1237;
+  }
+  if (planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA')) return 864;
+  if (planCode.includes('SEM_ESP') || planCode.includes('SEM_ESPECIALISTA')) return 863;
+  if (planCode.startsWith('EMPRESA')) return 864;
+  return 864; // fallback para serviços avulsos
+}
 
-const { servicoSkus, planSkus } = getAllSkus();
+// Planos reais do PLANOS (constants.ts), excluindo Empresarial (preço 0)
+const planSkus = PLANOS
+  .filter(p => (p.precoMensal as Record<string, number>)["1"] > 0)
+  .map(p => ({
+    sku: p.code,
+    nome: p.nome,
+    preco: Math.round(((p.precoMensal as Record<string, number>)["1"] || 0) * 100),
+    clicklifePlanId: getClickLifePlanId(p.code)
+  }));
+
+// Serviços avulsos do catálogo
+const servicoSkus = CATALOGO_SERVICOS.flatMap(s => {
+  if (s.variantes) {
+    return s.variantes.map(v => ({ sku: v.sku, nome: v.nome, preco: Math.round(v.valor * 100) }));
+  }
+  return [{ sku: s.sku, nome: s.nome, preco: Math.round(s.precoBase * 100) }];
+});
 
 interface ManualPlanActivationModalProps {
   open: boolean;
@@ -39,6 +47,9 @@ interface ManualPlanActivationModalProps {
     email: string;
     name: string;
     cpf?: string;
+    phone?: string;
+    gender?: string;
+    birth_date?: string;
     currentPlan?: {
       code: string;
       expiresAt: string;
@@ -69,6 +80,7 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
 
     setLoading(true);
     try {
+      // 1. Ativar plano no banco local
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'activate_plan_manual',
@@ -86,10 +98,8 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
         return;
       }
 
-      // Verificar se a resposta indica sucesso
       if (!data?.success) {
         console.error('[ManualPlanActivationModal] Failed:', data);
-        // Mostrar detalhes do erro de forma clara
         const errorParts = [];
         if (data?.step) errorParts.push(`Etapa: ${data.step}`);
         if (data?.error) errorParts.push(data.error);
@@ -99,7 +109,39 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
         return;
       }
 
-      toast.success(`Plano ${planCode} ativado com sucesso!`);
+      // 2. Ativar na ClickLife automaticamente (se tem CPF)
+      if (user.cpf) {
+        const clicklifePlanId = getClickLifePlanId(planCode);
+        console.log(`[ManualPlanActivationModal] Ativando na ClickLife com plano_id: ${clicklifePlanId}`);
+
+        try {
+          const { data: clData, error: clError } = await invokeEdgeFunction('activate-clicklife-manual', {
+            body: {
+              email: user.email,
+              cpf: user.cpf,
+              plan_id: clicklifePlanId,
+              nome: user.name,
+              telefone: user.phone || '',
+              sexo: user.gender || 'F',
+              birth_date: user.birth_date,
+              skip_db_lookup: true
+            }
+          });
+
+          if (clData?.success) {
+            toast.success(`Plano ${planCode} ativado + ClickLife OK (plano_id: ${clicklifePlanId})`);
+          } else {
+            console.warn('[ManualPlanActivationModal] ClickLife falhou:', clData?.error || clError);
+            toast.warning(`Plano ativado no banco, mas ClickLife falhou: ${clData?.error || 'erro desconhecido'}`);
+          }
+        } catch (clException) {
+          console.error('[ManualPlanActivationModal] ClickLife exception:', clException);
+          toast.warning('Plano ativado no banco, mas erro ao conectar com ClickLife');
+        }
+      } else {
+        toast.success(`Plano ${planCode} ativado com sucesso! (sem CPF, ClickLife não acionada)`);
+      }
+
       onSuccess();
     } catch (error) {
       console.error('[ManualPlanActivationModal] Exception:', error);
@@ -167,7 +209,7 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
                 </div>
                 {planSkus.map((plano) => (
                   <SelectItem key={plano.sku} value={plano.sku}>
-                    {plano.nome} - R$ {(plano.preco / 100).toFixed(2)}
+                    {plano.nome} - R$ {(plano.preco / 100).toFixed(2)} (ClickLife: {plano.clicklifePlanId})
                   </SelectItem>
                 ))}
                 
