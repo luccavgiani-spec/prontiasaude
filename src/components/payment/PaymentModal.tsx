@@ -967,9 +967,8 @@ export function PaymentModal({
         patientAddress?.cep &&
         patientAddress?.city &&
         patientAddress?.state &&
-        patientAddress?.street_name &&
-        patientAddress?.street_number
-      ), // ✅ FASE 3.2: Exigir street_number
+        patientAddress?.street_name
+      ), // ✅ street_number agora é opcional (não bloqueia pagamento)
       name: formData.name.trim().split(" ").length >= 2,
     };
 
@@ -2444,6 +2443,7 @@ export function PaymentModal({
                           token: data.token,
                           payment_method_id: data.payment_method_id,
                           installments: data.installments,
+                          issuer_id: data.issuer_id,
                           deviceId: data.deviceId,
                           payerOverride: data.payerOverride,
                         });
@@ -2714,6 +2714,7 @@ export function PaymentModal({
                           token: data.token,
                           payment_method_id: data.payment_method_id,
                           installments: data.installments,
+                          issuer_id: data.issuer_id,
                           deviceId: data.deviceId,
                           payerOverride: data.payerOverride,
                         });
