@@ -1109,6 +1109,9 @@ export default function UserRegistrationsTab() {
             email: selectedUser.email,
             name: `${selectedUser.patient?.first_name || ''} ${selectedUser.patient?.last_name || ''}`.trim(),
             cpf: selectedUser.patient?.cpf,
+            phone: selectedUser.patient?.phone_e164,
+            gender: selectedUser.patient?.gender,
+            birth_date: selectedUser.patient?.birth_date,
             currentPlan: selectedUser.activePlan ? {
               code: selectedUser.planCode || '',
               expiresAt: ''

@@ -1068,12 +1068,15 @@ Deno.serve(async (req) => {
         console.log('[mp-webhook] 🏥 Cadastrando paciente na ClickLife (compra de plano)...');
         
         // Determinar planoId correto baseado no SKU
-        // COM_ESP → 864 (com especialistas)
-        // SEM_ESP → 863 (sem especialistas)
-        // EMPRESA_ → 864 (empresariais têm especialistas)
-        const clickLifePlanoId = schedulePayload.sku.includes('COM_ESP') ? 864 : 
-                                  schedulePayload.sku.includes('SEM_ESP') ? 863 : 
-                                  schedulePayload.sku.startsWith('EMPRESA_') ? 864 : 864;
+        // FAMILIAR COM_ESP → 1238 | FAMILIAR SEM_ESP → 1237
+        // INDIVIDUAL COM_ESP → 864 | INDIVIDUAL SEM_ESP → 863
+        // EMPRESA_ → 864
+        const isFamiliar = schedulePayload.sku.includes('FAM');
+        const clickLifePlanoId = isFamiliar
+          ? (schedulePayload.sku.includes('COM_ESP') ? 1238 : 1237)
+          : (schedulePayload.sku.includes('COM_ESP') ? 864 : 
+             schedulePayload.sku.includes('SEM_ESP') ? 863 : 
+             schedulePayload.sku.startsWith('EMPRESA_') ? 864 : 864);
         
         const nomeCompleto = `${patientDataForClickLife.first_name || ''} ${patientDataForClickLife.last_name || ''}`.trim();
         
