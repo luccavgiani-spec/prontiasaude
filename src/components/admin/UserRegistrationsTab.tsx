@@ -127,6 +127,17 @@ export default function UserRegistrationsTab() {
     loadPatients();
   }, [page]);
 
+  // Fix z-index: marca overlay do Dialog de Consulta Rápida para ficar acima dos float buttons
+  useEffect(() => {
+    if (quickConsultUser) {
+      const timer = setTimeout(() => {
+        const overlay = document.querySelector('[data-radix-dialog-overlay]');
+        if (overlay) overlay.setAttribute('data-quick-consult-overlay', '');
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [quickConsultUser]);
+
   const isPlaceholderPhone = (phone?: string) => phone === PLACEHOLDER_PHONE;
   const isInvalidCpf = (cpf?: string) => {
     if (!cpf) return false;
@@ -1133,7 +1144,7 @@ export default function UserRegistrationsTab() {
           setGeneratedConsultUrl(null);
         }
       }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md !z-[10001]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HeartPulse className="h-5 w-5 text-purple-600" />

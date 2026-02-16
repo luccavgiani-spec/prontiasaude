@@ -379,3 +379,8 @@
     padding: 0 !important;
   }
 }
+
+/* Fix: overlay do Dialog de Consulta Rápida acima dos float buttons no mobile */
+[data-quick-consult-overlay] {
+  z-index: 10001 !important;
+}
