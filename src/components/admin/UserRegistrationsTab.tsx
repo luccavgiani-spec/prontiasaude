@@ -666,9 +666,14 @@ export default function UserRegistrationsTab() {
         setGeneratedConsultUrl(data.url);
         setQuickConsultLoading(false);
         
-        // Copiar automaticamente
-        await navigator.clipboard.writeText(data.url);
-        toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
+        // Copiar automaticamente (try/catch isolado para não fechar modal no mobile)
+        try {
+          await navigator.clipboard.writeText(data.url);
+          toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
+        } catch (clipErr) {
+          console.warn('[QuickConsult] Clipboard não disponível:', clipErr);
+          toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Copie o link abaixo.`);
+        }
         
         // NÃO fechar o modal - deixar aberto para mostrar o link
       } else {
