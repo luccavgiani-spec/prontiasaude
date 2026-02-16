@@ -1,40 +1,48 @@
 
 
-# Correcao: "Criar Consulta" falha no mobile (Failed to fetch)
+# Correcao: Popup de link da consulta nao aparece no mobile
 
-## Diagnostico
+## Causa raiz
 
-O erro `TypeError: Failed to fetch` no mobile e causado por restricoes de CORS no navegador mobile dentro do iframe de preview. A funcao `schedule-redirect` no Supabase de Producao tem uma lista restrita de headers permitidos:
+Na funcao `handleQuickConsult` (linha 664-671), apos receber a URL com sucesso:
 
 ```
-Access-Control-Allow-Headers: authorization, x-client-info, apikey, content-type
+1. setGeneratedConsultUrl(data.url)  // OK - salva URL
+2. setQuickConsultLoading(false)      // OK
+3. await navigator.clipboard.writeText(data.url)  // FALHA no mobile!
+4. toast.success(...)                 // Nunca executa
 ```
 
-Navegadores mobile frequentemente enviam headers adicionais (como `x-supabase-client-platform`, `x-supabase-client-platform-version`, etc.) que sao **rejeitados** no preflight OPTIONS, causando o `Failed to fetch` antes mesmo do request real.
+O `navigator.clipboard.writeText` **lanca excecao** em navegadores mobile dentro de iframes (falta de secure context ou permissao). Essa excecao cai no `catch` (linha 711), que executa `setQuickConsultUser(null)` — **fechando o modal** antes do usuario ver o link.
 
 ## Solucao
 
-Atualizar os CORS headers na edge function `schedule-redirect` para incluir TODOS os headers que navegadores mobile podem enviar. A funcao ja tem `verify_jwt = false`, entao nao ha risco adicional de seguranca.
+Envolver o `navigator.clipboard.writeText` em um try/catch separado dentro do bloco de sucesso, para que a falha do clipboard nao feche o modal.
 
 ## Alteracao
 
-### `supabase/functions/schedule-redirect/index.ts` (linhas 24-28)
+### `src/components/admin/UserRegistrationsTab.tsx` (linhas 669-671)
 
-Atualizar o `Access-Control-Allow-Headers` no `getCorsHeaders`:
+```typescript
+// ANTES:
+await navigator.clipboard.writeText(data.url);
+toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
 
-```text
-ANTES:
-"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
-
-DEPOIS:
-"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version"
+// DEPOIS:
+try {
+  await navigator.clipboard.writeText(data.url);
+  toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
+} catch (clipErr) {
+  console.warn('[QuickConsult] Clipboard nao disponivel:', clipErr);
+  toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Copie o link abaixo.`);
+}
 ```
 
-## Pos-alteracao
+Isso garante que:
+- O modal permanece aberto mostrando o link gerado
+- O usuario pode copiar manualmente pelo botao de copiar no modal
+- No desktop, o link continua sendo copiado automaticamente
 
-Apos a alteracao no codigo aqui no Lovable, voce precisara **copiar o conteudo atualizado** do `schedule-redirect/index.ts` e **redeployar no Supabase de Producao** para que o mobile funcione.
-
-| Arquivo | Linha | O que muda |
-|---------|-------|------------|
-| `supabase/functions/schedule-redirect/index.ts` | 26 | Adicionar headers extras no CORS Allow-Headers |
-
+| Arquivo | Linhas | O que muda |
+|---------|--------|------------|
+| `UserRegistrationsTab.tsx` | 669-671 | Envolver clipboard em try/catch isolado |
