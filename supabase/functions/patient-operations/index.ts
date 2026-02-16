@@ -1071,23 +1071,30 @@ serve(async (req) => {
           });
         }
 
-        // Check if user is admin
-        const token = authHeader!.replace("Bearer ", "");
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser(token);
+        // Check if user is admin (via Lovable Cloud - mesmo padrão do activate_plan_manual)
+        const token = authHeader?.replace("Bearer ", "") || "";
+        const LOVABLE_CLOUD_URL_DP = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+        const LOVABLE_CLOUD_ANON_KEY_DP =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
 
-        if (authError || !user) {
+        const authClientDP = createClient(LOVABLE_CLOUD_URL_DP, LOVABLE_CLOUD_ANON_KEY_DP, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        const { data: authDataDP, error: authError } = await authClientDP.auth.getUser(token);
+
+        if (authError || !authDataDP?.user) {
+          console.error("[disable_plan] Token inválido no Cloud:", authError?.message);
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
+        const { data: roles } = await authClientDP
+          .from("user_roles").select("role").eq("user_id", authDataDP.user.id);
+        const isAdminDP = roles?.some((r: any) => r.role === "admin");
 
-        if (!roles || roles.role !== "admin") {
+        if (!isAdminDP) {
           return new Response(JSON.stringify({ error: "Apenas administradores podem desabilitar planos" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1142,23 +1149,30 @@ serve(async (req) => {
           });
         }
 
-        // Check if user is admin
-        const token = authHeader!.replace("Bearer ", "");
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser(token);
+        // Check if user is admin (via Lovable Cloud - mesmo padrão do activate_plan_manual)
+        const token = authHeader?.replace("Bearer ", "") || "";
+        const LOVABLE_CLOUD_URL_CP = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+        const LOVABLE_CLOUD_ANON_KEY_CP =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
 
-        if (authError || !user) {
+        const authClientCP = createClient(LOVABLE_CLOUD_URL_CP, LOVABLE_CLOUD_ANON_KEY_CP, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+        const { data: authDataCP, error: authError } = await authClientCP.auth.getUser(token);
+
+        if (authError || !authDataCP?.user) {
+          console.error("[change_plan] Token inválido no Cloud:", authError?.message);
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
+        const { data: roles } = await authClientCP
+          .from("user_roles").select("role").eq("user_id", authDataCP.user.id);
+        const isAdminCP = roles?.some((r: any) => r.role === "admin");
 
-        if (!roles || roles.role !== "admin") {
+        if (!isAdminCP) {
           return new Response(JSON.stringify({ error: "Apenas administradores podem alterar planos" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
