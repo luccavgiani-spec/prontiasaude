@@ -1,48 +1,113 @@
 
 
-# Correcao: Popup de link da consulta nao aparece no mobile
+# Diagnostico: Pagamentos com Cartao Nao Completam
 
-## Causa raiz
+## Causa Raiz Principal
 
-Na funcao `handleQuickConsult` (linha 664-671), apos receber a URL com sucesso:
+Foram identificadas **3 causas** que, combinadas, explicam o problema de "barra carrega mas pagamento nao completa":
+
+---
+
+### Causa 1: CORS Bloqueando Requests no Mobile (Mesma do schedule-redirect)
+
+O `mp-create-payment` no Supabase de Producao tem os mesmos CORS limitados que acabamos de corrigir no `schedule-redirect`:
 
 ```
-1. setGeneratedConsultUrl(data.url)  // OK - salva URL
-2. setQuickConsultLoading(false)      // OK
-3. await navigator.clipboard.writeText(data.url)  // FALHA no mobile!
-4. toast.success(...)                 // Nunca executa
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 ```
 
-O `navigator.clipboard.writeText` **lanca excecao** em navegadores mobile dentro de iframes (falta de secure context ou permissao). Essa excecao cai no `catch` (linha 711), que executa `setQuickConsultUser(null)` — **fechando o modal** antes do usuario ver o link.
+Em navegadores mobile dentro do iframe do Lovable, headers adicionais (`x-supabase-client-platform`, etc.) sao enviados e **rejeitados no preflight OPTIONS**, resultando em `Failed to fetch` antes do request chegar a funcao. Por isso **nao ha logs** no `mp-create-payment` - o request nunca chega.
 
-## Solucao
+### Causa 2: Validacao de Endereco Bloqueia Silenciosamente
 
-Envolver o `navigator.clipboard.writeText` em um try/catch separado dentro do bloco de sucesso, para que a falha do clipboard nao feche o modal.
+A funcao `validatePaymentReadiness()` (linha 960) exige `patientAddress?.street_number` (numero do endereco). Muitos pacientes nao tem esse campo preenchido no perfil. Quando falta:
 
-## Alteracao
+1. O Brick do MP mostra a barra de loading (tokenizacao ok)
+2. `handleCardSubmit` e chamado
+3. `validatePaymentReadiness()` retorna `false`
+4. Um toast aparece dizendo "Complete seu endereco"
+5. **Mas o usuario pode nao ver o toast** porque ele aparece atras/abaixo do modal
 
-### `src/components/admin/UserRegistrationsTab.tsx` (linhas 669-671)
+O pagamento nunca e enviado ao backend.
+
+### Causa 3: issuer_id Nao Sendo Passado
+
+Na callback `onSubmit` do `MercadoPagoCardForm` (linhas 2442-2449 e 2712-2719), o `issuer_id` nao e incluido no objeto passado para `handleCardSubmit`:
 
 ```typescript
-// ANTES:
-await navigator.clipboard.writeText(data.url);
-toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
-
-// DEPOIS:
-try {
-  await navigator.clipboard.writeText(data.url);
-  toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Link copiado.`);
-} catch (clipErr) {
-  console.warn('[QuickConsult] Clipboard nao disponivel:', clipErr);
-  toast.success(`Consulta criada na ${quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare'}! Copie o link abaixo.`);
-}
+// ATUAL - falta issuer_id
+await handleCardSubmit({
+  token: data.token,
+  payment_method_id: data.payment_method_id,
+  installments: data.installments,
+  deviceId: data.deviceId,
+  payerOverride: data.payerOverride,
+});
 ```
 
-Isso garante que:
-- O modal permanece aberto mostrando o link gerado
-- O usuario pode copiar manualmente pelo botao de copiar no modal
-- No desktop, o link continua sendo copiado automaticamente
+Isso nao bloqueia o pagamento, mas reduz a pontuacao de qualidade do Mercado Pago e pode contribuir para recusas.
 
-| Arquivo | Linhas | O que muda |
-|---------|--------|------------|
-| `UserRegistrationsTab.tsx` | 669-671 | Envolver clipboard em try/catch isolado |
+---
+
+## Plano de Correcao
+
+### 1. CORS do mp-create-payment (Edge Function)
+
+**Arquivo:** `supabase/functions/mp-create-payment/index.ts` (linha 35)
+
+Atualizar `Access-Control-Allow-Headers` para incluir os headers extras de mobile:
+
+```
+ANTES:
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+
+DEPOIS:
+'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
+```
+
+**Pos-alteracao:** Copiar o arquivo e redeployar no Supabase de Producao.
+
+### 2. Relaxar Validacao de street_number
+
+**Arquivo:** `src/components/payment/PaymentModal.tsx` (linhas 966-972)
+
+Tornar `street_number` **opcional** na validacao (manter o warning mas nao bloquear):
+
+```typescript
+// ANTES: Bloqueia sem street_number
+address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name && patientAddress?.street_number),
+
+// DEPOIS: Apenas exige CEP, cidade, estado e rua
+address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name),
+```
+
+### 3. Passar issuer_id na Callback
+
+**Arquivo:** `src/components/payment/PaymentModal.tsx` (linhas 2442-2449 e 2712-2719)
+
+Adicionar `issuer_id: data.issuer_id` ao objeto passado:
+
+```typescript
+await handleCardSubmit({
+  token: data.token,
+  payment_method_id: data.payment_method_id,
+  installments: data.installments,
+  issuer_id: data.issuer_id,       // NOVO
+  deviceId: data.deviceId,
+  payerOverride: data.payerOverride,
+});
+```
+
+---
+
+## Resumo de Alteracoes
+
+| # | Arquivo | Linha(s) | Alteracao |
+|---|---------|----------|-----------|
+| 1 | `supabase/functions/mp-create-payment/index.ts` | 35 | Expandir CORS headers |
+| 2 | `src/components/payment/PaymentModal.tsx` | 966-972 | Tornar street_number opcional |
+| 3 | `src/components/payment/PaymentModal.tsx` | 2442-2449 | Passar issuer_id (instancia 1) |
+| 4 | `src/components/payment/PaymentModal.tsx` | 2712-2719 | Passar issuer_id (instancia 2) |
+
+**Nota importante:** Apos a alteracao #1, voce precisara redeployar o `mp-create-payment` no Supabase de Producao manualmente.
+
