@@ -1,72 +1,41 @@
 
 
-# Correção: Erro 403 em disable_plan e change_plan
+# Correção: Adicionar change_plan e disable_plan ao AUTH_BYPASS_OPERATIONS
 
-## O Que Muda (e o que NAO muda)
+## Causa do 401
 
-A correção altera **apenas** a parte de "quem é esse admin?" (verificação de identidade). As operações de banco de dados (desabilitar/alterar planos) continuam rodando na **Produção** como antes.
+O erro 401 vem da **validação genérica** na linha 632-643, que roda **antes** de chegar nos cases `disable_plan` e `change_plan`. Essa validação usa `supabase.auth.getUser(token)` no Supabase de Produção, e como o token é do Cloud, falha com "Token inválido".
+
+A correção dos cases individuais (que fizemos na última edição) está correta, mas nunca é alcançada porque o código é barrado antes.
 
 ```text
-FLUXO ATUAL (quebrado):
-  Admin (Cloud JWT) --> supabase.auth.getUser (Produção) --> FALHA 403
+Linha 622: AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient"]
+                                     ❌ change_plan e disable_plan NÃO estão aqui
 
-FLUXO CORRIGIDO (igual ao activate_plan_manual):
-  Admin (Cloud JWT) --> authClient.auth.getUser (Cloud) --> OK
-  Operação de banco --> supabase (Produção, service_role) --> OK
+Linha 624-643: if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
+                 // valida token via Produção --> FALHA 401 (nunca chega no case)
+               }
 ```
 
-Nenhuma outra linha é afetada. As queries em `patient_plans` continuam usando o mesmo `supabase` (Produção).
+## Correção (1 linha)
 
-## Alteração (1 arquivo)
-
-### `supabase/functions/patient-operations/index.ts`
-
-**Em `disable_plan` (linhas 1074-1095):** Substituir a validação admin por authClient (Cloud):
+### `supabase/functions/patient-operations/index.ts` - Linha 622
 
 ```typescript
-// ANTES (linhas 1074-1095):
-const token = authHeader!.replace("Bearer ", "");
-const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-if (authError || !user) { return 403 }
-const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", user.id).single();
-if (!roles || roles.role !== "admin") { return 403 }
+// ANTES:
+const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient"];
 
 // DEPOIS:
-const token = authHeader?.replace("Bearer ", "") || "";
-const LOVABLE_CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
-const LOVABLE_CLOUD_ANON_KEY = "eyJhbGci...fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
-// (mesma chave ja usada no activate_plan_manual, linha 1284-1285)
-
-const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_ANON_KEY, {
-  global: { headers: { Authorization: `Bearer ${token}` } },
-});
-const { data: authData, error: authError } = await authClient.auth.getUser(token);
-if (authError || !authData?.user) {
-  return new Response(JSON.stringify({ error: "Nao autorizado" }), { status: 403 });
-}
-const { data: roles } = await authClient
-  .from("user_roles").select("role").eq("user_id", authData.user.id);
-const isAdmin = roles?.some((r: any) => r.role === "admin");
-if (!isAdmin) {
-  return new Response(JSON.stringify({ error: "Apenas administradores podem desabilitar planos" }), { status: 403 });
-}
+const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient", "change_plan", "disable_plan"];
 ```
 
-**Em `change_plan` (linhas 1145-1166):** Mesma substituicao identica.
+Isso permite que essas operações passem pela validação genérica e cheguem nos seus respectivos `case`, onde a validação admin via Cloud (que já foi implementada na edição anterior) será executada corretamente.
 
-## O Que NAO Muda
+## Apos a alteracao
 
-- A query `supabase.from("patient_plans").update(...)` nas linhas 1098-1106 e 1179-1184 continua igual (Producao, service_role)
-- Nenhuma outra operacao e afetada
-- O `AUTH_BYPASS_OPERATIONS` permanece com `change_plan` e `disable_plan` incluidos (permite passar a validacao generica da linha 624)
-- O sistema hibrido de sessao nao e alterado
+Copiar novamente o conteudo atualizado de `patient-operations/index.ts` e redeployar no Supabase de Producao.
 
-## Apos a Alteracao
-
-Copiar o conteudo completo atualizado de `patient-operations/index.ts` e redeployar no Supabase de Producao.
-
-| Arquivo | Linhas Alteradas | O Que Muda |
-|---------|-----------------|------------|
-| `patient-operations/index.ts` | 1074-1095 | `disable_plan`: validacao admin via Cloud |
-| `patient-operations/index.ts` | 1145-1166 | `change_plan`: validacao admin via Cloud |
+| Arquivo | Linha | Alteracao |
+|---------|-------|-----------|
+| `patient-operations/index.ts` | 622 | Adicionar `change_plan` e `disable_plan` ao array `AUTH_BYPASS_OPERATIONS` |
 
