@@ -1,41 +1,40 @@
 
 
-# Correção: Adicionar change_plan e disable_plan ao AUTH_BYPASS_OPERATIONS
+# Correcao: "Criar Consulta" falha no mobile (Failed to fetch)
 
-## Causa do 401
+## Diagnostico
 
-O erro 401 vem da **validação genérica** na linha 632-643, que roda **antes** de chegar nos cases `disable_plan` e `change_plan`. Essa validação usa `supabase.auth.getUser(token)` no Supabase de Produção, e como o token é do Cloud, falha com "Token inválido".
+O erro `TypeError: Failed to fetch` no mobile e causado por restricoes de CORS no navegador mobile dentro do iframe de preview. A funcao `schedule-redirect` no Supabase de Producao tem uma lista restrita de headers permitidos:
 
-A correção dos cases individuais (que fizemos na última edição) está correta, mas nunca é alcançada porque o código é barrado antes.
+```
+Access-Control-Allow-Headers: authorization, x-client-info, apikey, content-type
+```
+
+Navegadores mobile frequentemente enviam headers adicionais (como `x-supabase-client-platform`, `x-supabase-client-platform-version`, etc.) que sao **rejeitados** no preflight OPTIONS, causando o `Failed to fetch` antes mesmo do request real.
+
+## Solucao
+
+Atualizar os CORS headers na edge function `schedule-redirect` para incluir TODOS os headers que navegadores mobile podem enviar. A funcao ja tem `verify_jwt = false`, entao nao ha risco adicional de seguranca.
+
+## Alteracao
+
+### `supabase/functions/schedule-redirect/index.ts` (linhas 24-28)
+
+Atualizar o `Access-Control-Allow-Headers` no `getCorsHeaders`:
 
 ```text
-Linha 622: AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient"]
-                                     ❌ change_plan e disable_plan NÃO estão aqui
+ANTES:
+"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
 
-Linha 624-643: if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
-                 // valida token via Produção --> FALHA 401 (nunca chega no case)
-               }
+DEPOIS:
+"Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version"
 ```
 
-## Correção (1 linha)
+## Pos-alteracao
 
-### `supabase/functions/patient-operations/index.ts` - Linha 622
+Apos a alteracao no codigo aqui no Lovable, voce precisara **copiar o conteudo atualizado** do `schedule-redirect/index.ts` e **redeployar no Supabase de Producao** para que o mobile funcione.
 
-```typescript
-// ANTES:
-const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient"];
-
-// DEPOIS:
-const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient", "change_plan", "disable_plan"];
-```
-
-Isso permite que essas operações passem pela validação genérica e cheguem nos seus respectivos `case`, onde a validação admin via Cloud (que já foi implementada na edição anterior) será executada corretamente.
-
-## Apos a alteracao
-
-Copiar novamente o conteudo atualizado de `patient-operations/index.ts` e redeployar no Supabase de Producao.
-
-| Arquivo | Linha | Alteracao |
-|---------|-------|-----------|
-| `patient-operations/index.ts` | 622 | Adicionar `change_plan` e `disable_plan` ao array `AUTH_BYPASS_OPERATIONS` |
+| Arquivo | Linha | O que muda |
+|---------|-------|------------|
+| `supabase/functions/schedule-redirect/index.ts` | 26 | Adicionar headers extras no CORS Allow-Headers |
 
