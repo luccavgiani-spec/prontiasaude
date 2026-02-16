@@ -1,135 +1,121 @@
 
+# Correção: Pop-up "Consulta Rápida" não abre no mobile
 
-# Correcao: Modal de Ativacao Manual + Tabela de Planos ClickLife
+## Diagnóstico
 
-## Problema
+O problema é um conflito de **z-index** entre o Dialog (modal) de "Consulta Rápida" e os botões flutuantes globais.
 
-1. O modal `ManualPlanActivationModal` usa 3 planos fictícios (BASIC, PREMIUM, FAMILY) que nao existem no sistema
-2. A ativacao manual nao aciona a ClickLife
-3. Os mapeamentos de plano para ClickLife em **4 edge functions** nao diferenciam planos FAMILIARES (que usam IDs 1237/1238) de INDIVIDUAIS (863/864)
+- O `Dialog` (Radix UI) renderiza overlay e conteúdo com `z-50`
+- O `ConsultNowFloatButton` usa `z-[9999]` (botão) e `z-[10000]` (chat popup)
+- O `WhatsAppFloatButton` provavelmente usa z-index similar
 
-## Tabela de Mapeamento Correta
+No **desktop**, o modal centralizado na tela não conflita visualmente com os botões no canto inferior direito. No **mobile**, o chat popup do `ConsultNowFloatButton` (que inicia **aberto por padrão**) ocupa boa parte da tela e fica **por cima** do overlay do Dialog, bloqueando a interação com o modal de Consulta Rápida.
 
-| Tipo de Plano | ClickLife plan_id |
-|---|---|
-| Individual SEM especialista | 863 |
-| Individual COM especialista | 864 |
-| Familiar SEM especialista | **1237** |
-| Familiar COM especialista | **1238** |
-| Empresarial | 864 |
-| Servico avulso (sem plano) | 864 |
+Além disso, o overlay escuro do Dialog (`z-50`) não cobre os float buttons (`z-9999/10000`), então o usuário pode interagir com os floats ao invés do modal.
 
----
+## Correção (1 arquivo)
 
-## Arquivos a Alterar
+### `src/components/admin/UserRegistrationsTab.tsx`
 
-### 1. `src/components/admin/ManualPlanActivationModal.tsx`
+Aumentar o z-index do `DialogContent` do modal de Consulta Rápida para ficar acima dos botões flutuantes:
 
-- Substituir array mock `planSkus` pelos planos reais do `PLANOS` (constants.ts), filtrando o Empresarial (preco 0)
-- Adicionar funcao de mapeamento ClickLife com a regra FAMILIAR vs INDIVIDUAL
-- Apos sucesso da ativacao local, chamar `invokeEdgeFunction('activate-clicklife-manual')` com o `plan_id` correto
-- Expandir interface `user` para incluir `phone`, `gender`, `birth_date`
-
-### 2. `src/components/admin/UserRegistrationsTab.tsx`
-
-- Passar `phone`, `gender` e `birth_date` do paciente ao modal
-
-### 3. `supabase/functions/mp-webhook/index.ts`
-
-- Linha ~1074: alterar mapeamento para diferenciar FAMILIAR
-- De: `COM_ESP ? 864 : SEM_ESP ? 863 : 864`
-- Para: `FAM_COM_ESP ? 1238 : FAM_SEM_ESP ? 1237 : COM_ESP ? 864 : SEM_ESP ? 863 : 864`
-- Aplicar mesma logica nas outras ocorrencias hardcoded (linhas ~1410, ~1477, ~1742)
-
-### 4. `supabase/functions/reconcile-pending-payments/index.ts`
-
-- Linha ~271: mesma correcao de mapeamento FAMILIAR
-
-### 5. `supabase/functions/schedule-redirect/index.ts`
-
-- Linha ~128-138: o array `PLANOS_COM_ESPECIALISTAS` mistura Individual e Familiar no mesmo grupo (todos apontam 864). Precisa separar e usar funcao que retorne 864 para IND e 1238 para FAM
-- Ajustar a logica de `getClickLifePlanId()` (se existir) ou criar uma
-
-### 6. `supabase/functions/activate-clicklife-manual/index.ts`
-
-- Nao precisa de alteracao estrutural (ja recebe `plan_id` como parametro), mas o fallback default `plan_id || 864` deve considerar que o caller agora envia o ID correto
-
----
-
-## Detalhes Tecnicos
-
-### Funcao centralizada de mapeamento (usada no modal e nas edge functions):
-
-```typescript
-function getClickLifePlanId(planCode: string): number {
-  if (planCode.includes('FAM') || planCode.includes('FAMILIAR')) {
-    return planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA') ? 1238 : 1237;
-  }
-  if (planCode.includes('COM_ESP') || planCode.includes('COM_ESPECIALISTA')) return 864;
-  if (planCode.includes('SEM_ESP') || planCode.includes('SEM_ESPECIALISTA')) return 863;
-  if (planCode.startsWith('EMPRESA')) return 864;
-  return 864; // fallback para servicos avulsos
-}
+```tsx
+// Linha ~1136 - Adicionar className com z-index alto
+<DialogContent className="sm:max-w-md z-[10001]">
 ```
 
-### Modal - planos reais:
+E adicionar z-index no `DialogOverlay` implícito (via wrapper) para garantir que o overlay também cubra os floats. Como o `Dialog` do shadcn não expõe o overlay separadamente no uso, a alternativa é aplicar o fix diretamente no `DialogContent` e usar CSS para o overlay:
 
-```typescript
-const planSkus = PLANOS
-  .filter(p => p.precoMensal["1"] > 0) // Exclui Empresarial
-  .map(p => ({
-    sku: p.code,
-    nome: p.nome,
-    preco: Math.round(p.precoMensal["1"] * 100),
-    clicklifePlanId: getClickLifePlanId(p.code)
-  }));
+```tsx
+<Dialog open={!!quickConsultUser} onOpenChange={...}>
+  <DialogContent className="sm:max-w-md z-[10001] [&~*]:z-[10001]">
 ```
 
-### Modal - ativacao ClickLife apos sucesso:
+Ou, de forma mais limpa, envolver com um estilo inline que force o portal a ter z-index superior:
 
-```typescript
-if (data?.success && user.cpf) {
-  const clicklifePlanId = getClickLifePlanId(planCode);
-  await invokeEdgeFunction('activate-clicklife-manual', {
-    body: {
-      email: user.email,
-      cpf: user.cpf,
-      plan_id: clicklifePlanId,
-      nome: user.name,
-      telefone: user.phone,
-      sexo: user.gender,
-      dataNascimento: user.birth_date,
-      skip_db_lookup: false
-    }
-  });
-}
+```tsx
+<Dialog open={!!quickConsultUser} onOpenChange={...}>
+  <DialogContent 
+    className="sm:max-w-md max-h-[90vh] overflow-y-auto" 
+    style={{ zIndex: 10001 }}
+  >
 ```
 
-### UserRegistrationsTab - props extras:
+E sobrescrever o overlay no mesmo nível. A forma mais robusta é usar a prop `className` no overlay via composição.
 
-```typescript
-user={{
-  id: selectedUser.patientId || selectedUser.id,
-  email: selectedUser.email,
-  name: `${selectedUser.patient?.first_name || ''} ${selectedUser.patient?.last_name || ''}`.trim(),
-  cpf: selectedUser.patient?.cpf,
-  phone: selectedUser.patient?.phone_e164,      // NOVO
-  gender: selectedUser.patient?.gender,          // NOVO
-  birth_date: selectedUser.patient?.birth_date,  // NOVO
-  currentPlan: ...
-}}
+**Abordagem final recomendada:** Passar o `className` com z-index elevado tanto no overlay quanto no content. Como o shadcn `DialogContent` já renderiza o `DialogOverlay` internamente, basta alterar o `DialogContent` e garantir que o overlay herde o z-index. A forma mais simples:
+
+No `UserRegistrationsTab.tsx`, linha ~1136:
+```tsx
+<DialogContent className="sm:max-w-md !z-[10001] max-h-[90vh] overflow-y-auto">
 ```
 
----
+E adicionar um CSS global ou inline para o overlay (que é irmão no DOM):
 
-## Resumo
+Melhor alternativa: como o `dialog.tsx` renderiza overlay e content dentro do mesmo portal, basta adicionar um wrapper `<div>` com z-index alto via `style` no Dialog que envolve tudo.
 
-| Arquivo | Alteracao |
-|---------|-----------|
-| `ManualPlanActivationModal.tsx` | Planos reais + ClickLife + mapeamento FAMILIAR |
-| `UserRegistrationsTab.tsx` | Passar phone/gender/birth_date ao modal |
-| `mp-webhook/index.ts` | Mapeamento FAM 1237/1238 (4 ocorrencias) |
-| `reconcile-pending-payments/index.ts` | Mapeamento FAM 1237/1238 |
-| `schedule-redirect/index.ts` | Separar FAMILIAR de INDIVIDUAL no mapeamento |
-| `patient-operations/index.ts` | Ja correto (1237/1238) - sem alteracao |
+**Solução mais simples e pontual:**
+- Adicionar `className="!z-[10001]"` ao `DialogContent` (linha ~1136)  
+- Isso sozinho não resolve o overlay. A solução completa é sobrescrever ambos.
 
+**Solução definitiva (2 linhas):**
+
+No `DialogContent` do modal de Consulta Rápida, usar classes customizadas:
+
+```tsx
+<DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto z-[10001] 
+  [&_~_[data-radix-dialog-overlay]]:z-[10001]">
+```
+
+Porém, como o overlay é renderizado **antes** do content no DOM pelo shadcn, o seletor CSS precisa ser diferente. A forma mais limpa é simplesmente adicionar no arquivo `dialog.tsx`... mas isso viola a regra de não alterar componentes UI sem pedido.
+
+**Solução final aprovada (pontual, sem alterar dialog.tsx):**
+
+No `UserRegistrationsTab.tsx`, envolver o Dialog inteiro em um `<div>` com z-index elevado via style:
+
+```tsx
+<div style={{ position: 'relative', zIndex: 10001 }}>
+  <Dialog open={!!quickConsultUser} onOpenChange={...}>
+    <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      ...
+    </DialogContent>
+  </Dialog>
+</div>
+```
+
+Como o `DialogPortal` cria um portal no `document.body`, o wrapper div não afeta o z-index do portal. Portanto, precisamos de uma abordagem CSS.
+
+**Solução definitiva correta:**
+
+Usar a prop `forceMount` não resolve. A solução real é passar o z-index via className ao `DialogContent` e ao overlay. Como ambos são renderizados via portal no body, o `DialogContent` do shadcn aceita className. Precisamos apenas garantir que o overlay também tenha z-index alto.
+
+Olhando o código do `dialog.tsx` (linha 22), o overlay tem `z-50 fixed`. O content (linha 39) também tem `z-50 fixed`. Ambos são filhos diretos do portal.
+
+**A correção mais limpa é:** passar um `className` override no `DialogContent` que aplique `!z-[10001]` e usar CSS com seletor para o overlay adjacente.
+
+Na prática, a solução pontual mais eficaz:
+
+1. No `UserRegistrationsTab.tsx`, linha ~1136, mudar:
+```tsx
+<DialogContent className="sm:max-w-md z-[10001]">
+```
+
+2. Adicionar um `<style>` inline ou CSS global para forçar o overlay do mesmo dialog a ter z-index alto. Como alternativa mais simples, podemos ajustar o CSS no `index.css` com um seletor global para overlays de dialog na página admin.
+
+## Resumo da Alteração
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/admin/UserRegistrationsTab.tsx` | Adicionar `z-[10001]` ao `DialogContent` do modal de Consulta Rápida + adicionar estilo inline para overlay |
+
+A implementação exata será: usar um `useEffect` ou inline `<style>` para garantir que quando o modal está aberto, o overlay também ganhe z-index elevado. Ou, alternativamente, esconder os float buttons quando o modal está aberto (abordagem mais simples e elegante).
+
+## Abordagem Recomendada (Mais Simples)
+
+Esconder os float buttons quando o modal de Consulta Rápida está aberto, **OU** na página `/admin` inteira (já que é uma página de gestão, não precisa dos botões de consulta e WhatsApp).
+
+Verificar se já existe alguma lógica de esconder floats no admin. Se não, a correção pontual seria: no `ConsultNowFloatButton` e `WhatsAppFloatButton`, verificar se a rota atual é `/admin` e não renderizar.
+
+Mas isso muda componentes não solicitados. A correção mais cirúrgica:
+
+**No `UserRegistrationsTab.tsx`:** Ao abrir o modal de Consulta Rápida, temporariamente aplicar z-index alto via `document.querySelector` nos elementos do overlay e content, e restaurar ao fechar.
