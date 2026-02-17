@@ -1,113 +1,117 @@
 
 
-# Diagnostico: Pagamentos com Cartao Nao Completam
+# Correcao: Nota PIX 70/100 no Mercado Pago (Falta SDK v2 no Frontend)
 
-## Causa Raiz Principal
+## Diagnostico
 
-Foram identificadas **3 causas** que, combinadas, explicam o problema de "barra carrega mas pagamento nao completa":
+O problema esta claro ao comparar os dois fluxos:
 
----
+| Fluxo | Frontend | Score |
+|-------|----------|-------|
+| Cartao | Usa `<CardPayment />` Brick do SDK React | 100/100 |
+| PIX | Botao manual "Gerar QR Code PIX" que chama backend diretamente | 70/100 |
 
-### Causa 1: CORS Bloqueando Requests no Mobile (Mesma do schedule-redirect)
+Para **cartao**, o SDK do MP gerencia todo o formulario (Secure Fields, device fingerprint, tokenizacao). O scanner do MP detecta o SDK ativo e da nota maxima.
 
-O `mp-create-payment` no Supabase de Producao tem os mesmos CORS limitados que acabamos de corrigir no `schedule-redirect`:
+Para **PIX**, o frontend coleta os dados manualmente (email, CPF, nome) e chama `invokeEdgeFunction("mp-create-payment")` diretamente. O scanner do MP **nao detecta** nenhum Brick/SDK envolvido no fluxo PIX, resultando em nota 70/100.
 
+A nota baixa no PIX contamina a nota geral da integracao, e o sistema antifraude do MP passa a recusar pagamentos com cartao tambem (especialmente em bancos digitais, que tem regras mais senssiveis ao score de integracao).
+
+## Solucao
+
+Substituir o botao manual "Gerar QR Code PIX" pelo componente `<Payment />` do `@mercadopago/sdk-react`, configurado para mostrar **apenas PIX** (`bankTransfer: 'all'`).
+
+O Brick coleta e valida os dados do pagador atraves do SDK oficial do MP (email, CPF, nome, etc.), e retorna os dados estruturados no callback `onSubmit`. O frontend entao envia esses dados ao backend (`mp-create-payment`) exatamente como faz hoje.
+
+Isso garante que o scanner do MP detecte o SDK v2 ativo no fluxo PIX, elevando a nota para 100/100.
+
+## Arquivos Alterados
+
+### 1. NOVO: `src/components/payment/MercadoPagoPixForm.tsx`
+
+Componente wrapper do `<Payment />` Brick configurado para PIX only:
+
+```text
+- Importa Payment de @mercadopago/sdk-react
+- Configura customization.paymentMethods = { bankTransfer: 'all' }
+- Exclui tipos: creditCard, debitCard, ticket, atm, mercadoPago
+- Pre-preenche payer com email, CPF, nome do formulario do PaymentModal
+- No onSubmit, extrai formData e chama o callback do pai
+- Mostra loader enquanto Brick carrega
 ```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-```
 
-Em navegadores mobile dentro do iframe do Lovable, headers adicionais (`x-supabase-client-platform`, etc.) sao enviados e **rejeitados no preflight OPTIONS**, resultando em `Failed to fetch` antes do request chegar a funcao. Por isso **nao ha logs** no `mp-create-payment` - o request nunca chega.
-
-### Causa 2: Validacao de Endereco Bloqueia Silenciosamente
-
-A funcao `validatePaymentReadiness()` (linha 960) exige `patientAddress?.street_number` (numero do endereco). Muitos pacientes nao tem esse campo preenchido no perfil. Quando falta:
-
-1. O Brick do MP mostra a barra de loading (tokenizacao ok)
-2. `handleCardSubmit` e chamado
-3. `validatePaymentReadiness()` retorna `false`
-4. Um toast aparece dizendo "Complete seu endereco"
-5. **Mas o usuario pode nao ver o toast** porque ele aparece atras/abaixo do modal
-
-O pagamento nunca e enviado ao backend.
-
-### Causa 3: issuer_id Nao Sendo Passado
-
-Na callback `onSubmit` do `MercadoPagoCardForm` (linhas 2442-2449 e 2712-2719), o `issuer_id` nao e incluido no objeto passado para `handleCardSubmit`:
+Interface de saida:
 
 ```typescript
-// ATUAL - falta issuer_id
-await handleCardSubmit({
-  token: data.token,
-  payment_method_id: data.payment_method_id,
-  installments: data.installments,
-  deviceId: data.deviceId,
-  payerOverride: data.payerOverride,
-});
+interface PixFormSubmitData {
+  payment_method_id: string; // "pix"
+  transaction_amount: number;
+  payer: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    identification: { type: string; number: string };
+  };
+  deviceId?: string;
+}
 ```
 
-Isso nao bloqueia o pagamento, mas reduz a pontuacao de qualidade do Mercado Pago e pode contribuir para recusas.
+### 2. ALTERACAO: `src/components/payment/PaymentModal.tsx`
 
----
+Duas alteracoes cirurgicas:
 
-## Plano de Correcao
-
-### 1. CORS do mp-create-payment (Edge Function)
-
-**Arquivo:** `supabase/functions/mp-create-payment/index.ts` (linha 35)
-
-Atualizar `Access-Control-Allow-Headers` para incluir os headers extras de mobile:
-
-```
-ANTES:
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-
-DEPOIS:
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
-
-**Pos-alteracao:** Copiar o arquivo e redeployar no Supabase de Producao.
-
-### 2. Relaxar Validacao de street_number
-
-**Arquivo:** `src/components/payment/PaymentModal.tsx` (linhas 966-972)
-
-Tornar `street_number` **opcional** na validacao (manter o warning mas nao bloquear):
+**2a. Import** (topo do arquivo): Adicionar import do novo componente:
 
 ```typescript
-// ANTES: Bloqueia sem street_number
-address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name && patientAddress?.street_number),
-
-// DEPOIS: Apenas exige CEP, cidade, estado e rua
-address: !!(patientAddress?.cep && patientAddress?.city && patientAddress?.state && patientAddress?.street_name),
+import { MercadoPagoPixForm, type PixFormSubmitData } from "./MercadoPagoPixForm";
 ```
 
-### 3. Passar issuer_id na Callback
+**2b. Troca do botao PIX** (regiao do `paymentMethod === "pix"`, linhas ~2492-2496):
 
-**Arquivo:** `src/components/payment/PaymentModal.tsx` (linhas 2442-2449 e 2712-2719)
-
-Adicionar `issuer_id: data.issuer_id` ao objeto passado:
+Substituir:
 
 ```typescript
-await handleCardSubmit({
-  token: data.token,
-  payment_method_id: data.payment_method_id,
-  installments: data.installments,
-  issuer_id: data.issuer_id,       // NOVO
-  deviceId: data.deviceId,
-  payerOverride: data.payerOverride,
-});
+{paymentMethod === "pix" && (
+  <>
+    <Button onClick={handlePixSubmit} className="w-full" size="lg">
+      Gerar QR Code PIX
+    </Button>
 ```
 
----
+Por:
 
-## Resumo de Alteracoes
+```typescript
+{paymentMethod === "pix" && (
+  <>
+    <MercadoPagoPixForm
+      amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+      payerEmail={formData.email}
+      payerCPF={formData.cpf}
+      payerName={formData.name}
+      onSubmit={async (data: PixFormSubmitData) => {
+        // Setar deviceId capturado pelo Brick
+        if (data.deviceId) setDeviceId(data.deviceId);
+        // Chamar o handlePixSubmit existente (sem alteracoes)
+        await handlePixSubmit();
+      }}
+      isProcessing={paymentStatus === "processing"}
+    />
+```
 
-| # | Arquivo | Linha(s) | Alteracao |
-|---|---------|----------|-----------|
-| 1 | `supabase/functions/mp-create-payment/index.ts` | 35 | Expandir CORS headers |
-| 2 | `src/components/payment/PaymentModal.tsx` | 966-972 | Tornar street_number opcional |
-| 3 | `src/components/payment/PaymentModal.tsx` | 2442-2449 | Passar issuer_id (instancia 1) |
-| 4 | `src/components/payment/PaymentModal.tsx` | 2712-2719 | Passar issuer_id (instancia 2) |
+O `handlePixSubmit()` continua exatamente como esta hoje -- a unica diferenca e que agora ele e disparado pelo Brick ao inves do botao manual.
 
-**Nota importante:** Apos a alteracao #1, voce precisara redeployar o `mp-create-payment` no Supabase de Producao manualmente.
+### Resumo de impacto
+
+| Arquivo | Tipo | Linhas afetadas |
+|---------|------|----------------|
+| `src/components/payment/MercadoPagoPixForm.tsx` | NOVO | ~80 linhas |
+| `src/components/payment/PaymentModal.tsx` | ALTERACAO | ~2 linhas (import) + ~6 linhas (troca botao por componente) |
+
+### O que NAO muda
+
+- `supabase/functions/mp-create-payment/index.ts` -- zero alteracoes
+- `handlePixSubmit()` -- mantido intacto
+- `PixPaymentForm.tsx` -- mantido intacto (exibe QR code apos geracao)
+- Fluxo de cartao -- mantido intacto
+- Toda logica de cupom, polling, redirecionamento -- mantida intacta
 
