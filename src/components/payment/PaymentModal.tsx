@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { PixPaymentForm } from "./PixPaymentForm";
 import { PaymentSummary } from "./PaymentSummary";
 import { MercadoPagoCardForm, type CardFormSubmitData } from "./MercadoPagoCardForm";
+import { MercadoPagoPixForm, type PixFormSubmitData } from "./MercadoPagoPixForm";
 import { MP_PUBLIC_KEY } from "@/lib/constants";
 import { trackInitiateCheckout, trackPurchase } from "@/lib/meta-tracking";
 
@@ -2491,9 +2492,17 @@ export function PaymentModal({
                 {/* Botão PIX */}
                 {paymentMethod === "pix" && (
                   <>
-                    <Button onClick={handlePixSubmit} className="w-full" size="lg">
-                      Gerar QR Code PIX
-                    </Button>
+                    <MercadoPagoPixForm
+                      amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                      payerEmail={formData.email}
+                      payerCPF={formData.cpf}
+                      payerName={formData.name}
+                      onSubmit={async (data: PixFormSubmitData) => {
+                        if (data.deviceId) setDeviceId(data.deviceId);
+                        await handlePixSubmit();
+                      }}
+                      isProcessing={["processing"].includes(paymentStatus)}
+                    />
 
                     {isPollingPayment && (
                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -2762,9 +2771,17 @@ export function PaymentModal({
                 {/* Botão PIX */}
                 {paymentMethod === "pix" && (
                   <>
-                    <Button onClick={handlePixSubmit} className="w-full" size="lg">
-                      Gerar QR Code PIX
-                    </Button>
+                    <MercadoPagoPixForm
+                      amount={appliedCoupon ? appliedCoupon.amount_discounted : amount}
+                      payerEmail={formData.email}
+                      payerCPF={formData.cpf}
+                      payerName={formData.name}
+                      onSubmit={async (data: PixFormSubmitData) => {
+                        if (data.deviceId) setDeviceId(data.deviceId);
+                        await handlePixSubmit();
+                      }}
+                      isProcessing={["processing"].includes(paymentStatus)}
+                    />
 
                     {isPollingPayment && (
                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
