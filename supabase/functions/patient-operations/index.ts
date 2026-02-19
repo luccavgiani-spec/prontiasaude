@@ -491,11 +491,39 @@ const validateString = (str: string, maxLength: number): boolean => {
   return typeof str === "string" && str.length > 0 && str.length <= maxLength;
 };
 
+// Normaliza qualquer formato de data para YYYY-MM-DD (formato aceito pelo Postgres)
+function normalizeDateToISO(value: any): string | null {
+  if (!value) return null;
+  
+  const str = String(value).trim();
+  
+  // Ja esta no formato YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+  
+  // ISO timestamp: 2000-01-15T00:00:00.000Z -> 2000-01-15
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+    return str.substring(0, 10);
+  }
+  
+  // DD/MM/YYYY ou DD-MM-YYYY (formato BR - prioridade)
+  const brMatch = str.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+  if (brMatch) {
+    return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  }
+  
+  return null; // formato nao reconhecido
+}
+
 const validateDate = (dateStr: string): boolean => {
-  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRegex.test(dateStr)) return false;
-  const date = new Date(dateStr);
-  return date instanceof Date && !isNaN(date.getTime());
+  const normalized = normalizeDateToISO(dateStr);
+  if (!normalized) return false;
+  const [year, month, day] = normalized.split('-').map(Number);
+  if (year < 1900 || year > new Date().getFullYear()) return false;
+  if (month < 1 || month > 12) return false;
+  if (day < 1 || day > 31) return false;
+  return true;
 };
 
 interface UpsertPatientRequest {
@@ -729,7 +757,14 @@ serve(async (req) => {
 
           // Campos opcionais (enviados pelo frontend mas nao obrigatorios na interface)
           if (body.cpf) patientData.cpf = body.cpf;
-          if (body.birth_date) patientData.birth_date = body.birth_date;
+          if (body.birth_date) {
+            const normalizedDate = normalizeDateToISO(body.birth_date);
+            if (normalizedDate) {
+              patientData.birth_date = normalizedDate;
+            } else {
+              console.warn("[upsert_patient] birth_date ignorada (formato invalido):", body.birth_date);
+            }
+          }
           if (body.gender) patientData.gender = body.gender;
           if (body.cep) patientData.cep = body.cep;
           if (body.address_line) patientData.address_line = body.address_line;
@@ -835,8 +870,9 @@ serve(async (req) => {
           });
         }
 
-        if (!validateDate(profileData.birth_date)) {
-          return new Response(JSON.stringify({ error: "Data de nascimento inválida" }), {
+        const normalizedBirthDate = normalizeDateToISO(profileData.birth_date);
+        if (!normalizedBirthDate) {
+          return new Response(JSON.stringify({ error: "Data de nascimento inválida. Use o formato DD/MM/AAAA ou AAAA-MM-DD." }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -864,7 +900,7 @@ serve(async (req) => {
           email: profileData.email.substring(0, 255),
           phone: profileData.phone,
           cpf: cpfClean,
-          birth_date: profileData.birth_date,
+          birth_date: normalizedBirthDate,
           gender: profileData.gender ? profileData.gender.substring(0, 1) : "",
           cep: profileData.cep ? profileData.cep.substring(0, 10) : "",
           address_number: profileData.address_number ? profileData.address_number.substring(0, 20) : "",
@@ -2305,7 +2341,16 @@ serve(async (req) => {
         const sanitizedUpdates: Record<string, any> = {};
         for (const key of Object.keys(updates)) {
           if (ALLOWED_FIELDS.includes(key)) {
-            sanitizedUpdates[key] = updates[key];
+            if (key === 'birth_date' && updates[key]) {
+              const normalized = normalizeDateToISO(updates[key]);
+              if (normalized) {
+                sanitizedUpdates[key] = normalized;
+              } else {
+                console.warn("[admin_update_patient] birth_date ignorada (formato invalido):", updates[key]);
+              }
+            } else {
+              sanitizedUpdates[key] = updates[key];
+            }
           } else {
             console.warn("[admin_update_patient] Campo não permitido ignorado:", key);
           }
@@ -2392,9 +2437,12 @@ serve(async (req) => {
         });
     }
   } catch (error) {
-    console.error("Error in patient-operations:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error("Error in patient-operations:", errorMessage);
+    console.error("Stack:", errorStack);
+    console.error("Operation:", body?.operation);
 
-    // ✅ CORREÇÃO: Garantir que erro também usa corsHeaders calculados
     const requestOrigin = req.headers.get("origin");
     const errorCorsHeaders = getCorsHeaders(requestOrigin);
 
@@ -2402,6 +2450,7 @@ serve(async (req) => {
       JSON.stringify({
         success: false,
         error: "Erro interno do servidor",
+        debug_hint: errorMessage.substring(0, 200),
       }),
       {
         headers: { ...errorCorsHeaders, "Content-Type": "application/json" },
