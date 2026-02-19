@@ -1,74 +1,59 @@
 
-# Correcao definitiva: JWT do Cloud rejeitado pelo gateway de Producao (401)
 
-## Problema raiz
+# Correcao: 2 erros na patient-operations em Producao
 
-O `invokeEdgeFunction` (linha 42-54 de `src/lib/edge-functions.ts`) busca o `access_token` da sessao do **Cloud** (`supabase.auth.getSession()`) e envia como `Authorization: Bearer <cloud_jwt>` para o Supabase de **Producao**.
+## Erro 1: Foreign key violation no `ensure_patient`
 
-O gateway de Producao rejeita esse JWT porque ele foi assinado por outro projeto. Resultado: **401 antes do codigo da funcao rodar**.
+**Causa**: O frontend envia o `user_id` do Cloud (`19d8998f...`) para a operacao `ensure_patient`. Mas na Producao, a tabela `patients` tem uma foreign key `patients_user_id_fkey` que referencia `auth.users`. Como o usuario `19d8998f` so existe no Cloud (nao na Producao), o INSERT falha com erro `23503`.
 
-## Solucao (2 arquivos)
+O usuario na Producao tem ID `131d55f8-b7b3-409d-8ead-2ae5b67e5ffe` (confirmado nos logs do `check-user-exists`).
 
-### 1. `src/lib/edge-functions.ts` - Parar de enviar JWT do Cloud para Producao
-
-Na linha 54, trocar a logica de Authorization para **sempre usar a anon key de Producao** como Bearer token (que e um JWT valido para aquele projeto):
+**Solucao**: Modificar a operacao `ensure_patient` no arquivo `supabase/functions/patient-operations/index.ts` para, antes de inserir, buscar o `user_id` correto na Producao pelo email:
 
 ```typescript
-// ANTES (linha 53-55):
-if (!options.headers?.Authorization) {
-  headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
-}
+case "ensure_patient": {
+  let { user_id, email } = body;
 
-// DEPOIS:
-if (!options.headers?.Authorization) {
-  headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
-}
+  // Se o user_id veio do Cloud, buscar o user_id correto na Producao pelo email
+  if (email) {
+    const { data: prodUser } = await supabase
+      .from("patients")
+      .select("user_id")
+      .eq("email", email.toLowerCase())
+      .maybeSingle();
+    
+    if (prodUser?.user_id) {
+      user_id = prodUser.user_id;
+    } else {
+      // Buscar no auth da Producao
+      const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 50 });
+      const found = authUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      if (found) {
+        user_id = found.id;
+      }
+    }
+  }
+  // ... resto do codigo continua igual
 ```
 
-Isso funciona porque:
-- A anon key e um JWT valido para o projeto de Producao (o gateway aceita)
-- A funcao `patient-operations` usa `service_role` internamente (nao depende do JWT do usuario)
-- As operacoes ja recebem `email`, `user_id` etc. no body da requisicao
+## Erro 2: Coluna `complement` nao encontrada no schema cache
 
-### 2. `supabase/functions/patient-operations/index.ts` - Adicionar operacoes faltantes ao bypass
+**Causa**: O PostgREST da Producao tem um cache de schema desatualizado. A coluna `complement` existe na tabela `patients` (confirmado no schema), mas o PostgREST nao a reconhece.
 
-Operacoes chamadas pelo frontend que NAO estao na lista de bypass e falhariam na validacao interna (linha 662-673) ao receber anon key no `getUser()`:
+**Solucao**: Executar o seguinte comando SQL no dashboard do Supabase de Producao (`ploqujuhpwutpcibedbr`):
 
-- `complete_profile`
-- `invite-familiar`
-- `resend-family-invite`
-- `activate-family-member`
-- `deactivate_plan_manual`
-- `schedule_appointment`
-- `schedule_redirect`
-
-Linha 652, trocar:
-
-```typescript
-// ANTES:
-const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient", "change_plan", "disable_plan"];
-
-// DEPOIS:
-const AUTH_BYPASS_OPERATIONS = [
-  "upsert_patient", "activate_plan_manual", "ensure_patient", 
-  "admin_update_patient", "change_plan", "disable_plan",
-  "complete_profile", "invite-familiar", "resend-family-invite", 
-  "activate-family-member", "deactivate_plan_manual",
-  "schedule_appointment", "schedule_redirect"
-];
+```sql
+NOTIFY pgrst, 'reload schema';
 ```
 
-Isso e seguro porque a funcao ja usa `service_role` para todas as operacoes de banco e recebe os dados de identidade (email, user_id) no body.
+Isso forca o PostgREST a recarregar o cache e reconhecer todas as colunas atuais.
 
-## Resumo
+## Resumo das acoes
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/lib/edge-functions.ts` (linha 54) | Usar `SUPABASE_ANON_KEY` ao inves do Cloud access_token |
-| `supabase/functions/patient-operations/index.ts` (linha 652) | Adicionar operacoes faltantes ao AUTH_BYPASS_OPERATIONS |
+| Acao | Onde | O que fazer |
+|------|------|-------------|
+| 1 | `supabase/functions/patient-operations/index.ts` (operacao `ensure_patient`, ~linha 2164) | Adicionar busca do user_id correto da Producao pelo email antes de inserir |
+| 2 | Dashboard Supabase Producao > SQL Editor | Executar `NOTIFY pgrst, 'reload schema';` |
 
-## Apos aplicar
+Ambas as acoes precisam ser feitas diretamente no Supabase de Producao. A alteracao no arquivo aqui no Lovable serve como referencia para voce copiar e deployar manualmente.
 
-O arquivo `patient-operations` atualizado precisa ser **deployado manualmente no Supabase de Producao** (`ploqujuhpwutpcibedbr`).
-
-A mudanca no `edge-functions.ts` sera aplicada automaticamente ao publicar pelo Lovable.
