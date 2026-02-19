@@ -6,7 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// URLs fixas dos dois ambientes
 const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
 const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
@@ -31,22 +30,14 @@ interface CreateUserRequest {
   };
 }
 
-/**
- * ✅ CORRIGIDO: Verifica existência de email via REST API direta do GoTrue
- * Resolve o bug de getUserByEmail não existir no SDK 2.49.1
- */
 async function checkEmailExists(supabaseUrl: string, serviceKey: string, email: string, envName: string): Promise<boolean> {
   const normalizedEmail = email.toLowerCase().trim();
-  
   try {
     let page = 1;
     const perPage = 50;
     const maxPages = 50;
-    
     while (page <= maxPages) {
-      const url = `${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`;
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=${perPage}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${serviceKey}`,
@@ -54,37 +45,48 @@ async function checkEmailExists(supabaseUrl: string, serviceKey: string, email: 
           'Content-Type': 'application/json',
         },
       });
-      
       if (!response.ok) {
         console.error(`[create-user-both-envs] ${envName}: REST API error ${response.status}`);
         return false;
       }
-      
       const data = await response.json();
       const users = data.users || data || [];
-      
-      if (!Array.isArray(users) || users.length === 0) {
-        return false;
-      }
-      
+      if (!Array.isArray(users) || users.length === 0) return false;
       const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
       if (found) {
         console.log(`[create-user-both-envs] ${envName}: Email já existe! ID: ${found.id}`);
         return true;
       }
-      
-      if (users.length < perPage) {
-        return false;
-      }
-      
+      if (users.length < perPage) return false;
       page++;
     }
-    
     return false;
   } catch (err) {
     console.error(`[create-user-both-envs] ${envName}: Exceção ao verificar email:`, err);
     return false;
   }
+}
+
+async function findUserIdByEmail(supabaseUrl: string, serviceKey: string, email: string): Promise<string | null> {
+  const normalizedEmail = email.toLowerCase().trim();
+  try {
+    let page = 1;
+    while (page <= 50) {
+      const resp = await fetch(`${supabaseUrl}/auth/v1/admin/users?page=${page}&per_page=50`, {
+        headers: { 'Authorization': `Bearer ${serviceKey}`, 'apikey': serviceKey, 'Content-Type': 'application/json' }
+      });
+      if (!resp.ok) break;
+      const d = await resp.json();
+      const users = d.users || d || [];
+      const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+      if (found) return found.id;
+      if (users.length < 50) break;
+      page++;
+    }
+  } catch (e: any) {
+    console.error(`[create-user-both-envs] Erro ao buscar ID:`, e.message);
+  }
+  return null;
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -94,150 +96,62 @@ serve(async (req: Request): Promise<Response> => {
 
   try {
     console.log("[create-user-both-envs] ========================================");
-    console.log("[create-user-both-envs] Iniciando criação de usuário em ambos ambientes...");
-    
+    console.log("[create-user-both-envs] Iniciando criação (Cloud primeiro, Prod depois)...");
+
     const body: CreateUserRequest = await req.json();
     const { email, password, metadata } = body;
-    
+
     if (!email || !password) {
       return new Response(
         JSON.stringify({ success: false, error: "Email e senha são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     const normalizedEmail = email.toLowerCase().trim();
     console.log(`[create-user-both-envs] Email: ${normalizedEmail}`);
-    
-    // =============================================
-    // OBTER SERVICE KEYS
-    // =============================================
+
     const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
-    
-    console.log("[create-user-both-envs] Cloud key exists:", !!cloudServiceKey);
-    console.log("[create-user-both-envs] Prod key exists:", !!prodServiceKey);
-    
+
     if (!cloudServiceKey) {
-      console.error("[create-user-both-envs] ❌ SUPABASE_SERVICE_ROLE_KEY não disponível!");
       return new Response(
         JSON.stringify({ success: false, error: "Configuração de Cloud incompleta" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
     if (!prodServiceKey) {
-      console.error("[create-user-both-envs] ❌ ORIGINAL_SUPABASE_SERVICE_ROLE_KEY não configurada!");
       return new Response(
         JSON.stringify({ success: false, error: "Configuração de Produção incompleta" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    // Criar clientes (usados para createUser e operações de banco)
+
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
-    
     const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
-    
-    // =============================================
-    // ✅ CORRIGIDO: Verificar existência via REST API direta
-    // =============================================
-    console.log("[create-user-both-envs] Verificando se email já existe...");
-    
+
+    // Verificar existência em paralelo
     const [existsInCloud, existsInProd] = await Promise.all([
       checkEmailExists(CLOUD_URL, cloudServiceKey, normalizedEmail, "Cloud"),
       checkEmailExists(PRODUCTION_URL, prodServiceKey, normalizedEmail, "Produção"),
     ]);
-    
-    // ✅ CORRIGIDO: Só bloquear se existe em AMBOS os ambientes
+
     if (existsInCloud && existsInProd) {
-      console.log(`[create-user-both-envs] Email já existe em AMBOS os ambientes`);
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Este email já está cadastrado. Faça login ou recupere sua senha.",
-          existsInCloud: true,
-          existsInProd: true
-        }),
+        JSON.stringify({ success: false, error: "Este email já está cadastrado. Faça login ou recupere sua senha.", existsInCloud: true, existsInProd: true }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    // Se existe em apenas um, criar no outro
-    if (existsInCloud || existsInProd) {
-      console.log(`[create-user-both-envs] Existe parcialmente: Cloud=${existsInCloud}, Prod=${existsInProd}. Criando no ambiente faltante...`);
-    }
-    
+
     // =============================================
-    // CRIAR USUÁRIO NA PRODUÇÃO (PRINCIPAL)
-    // =============================================
-    let prodUserId: string | null = null;
-    
-    if (!existsInProd) {
-      console.log("[create-user-both-envs] Criando usuário na Produção...");
-      try {
-        const { data: prodData, error: prodError } = await prodClient.auth.admin.createUser({
-          email: normalizedEmail,
-          password,
-          email_confirm: true,
-          user_metadata: metadata,
-        });
-        
-        if (prodError) {
-          console.error("[create-user-both-envs] ❌ Erro ao criar em Produção:", prodError.message);
-          // Só retornar erro fatal se Cloud também não existe (nenhum ambiente teria o user)
-          if (!existsInCloud) {
-            return new Response(
-              JSON.stringify({ success: false, error: prodError.message }),
-              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        } else {
-          prodUserId = prodData.user?.id || null;
-          console.log(`[create-user-both-envs] ✅ Usuário criado em Produção: ${prodUserId}`);
-        }
-      } catch (err: any) {
-        console.error("[create-user-both-envs] ❌ Exceção ao criar em Produção:", err.message);
-        if (!existsInCloud) {
-          return new Response(
-            JSON.stringify({ success: false, error: err.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-    } else {
-      console.log("[create-user-both-envs] Usuário já existe na Produção, pulando criação");
-      // Buscar o ID existente via REST API
-      try {
-        const url = `${PRODUCTION_URL}/auth/v1/admin/users?page=1&per_page=50`;
-        let page = 1;
-        while (page <= 50) {
-          const resp = await fetch(`${PRODUCTION_URL}/auth/v1/admin/users?page=${page}&per_page=50`, {
-            headers: { 'Authorization': `Bearer ${prodServiceKey}`, 'apikey': prodServiceKey, 'Content-Type': 'application/json' }
-          });
-          if (!resp.ok) break;
-          const d = await resp.json();
-          const users = d.users || d || [];
-          const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
-          if (found) { prodUserId = found.id; break; }
-          if (users.length < 50) break;
-          page++;
-        }
-        console.log(`[create-user-both-envs] ID existente na Produção: ${prodUserId}`);
-      } catch (e: any) {
-        console.error("[create-user-both-envs] Erro ao buscar ID existente na Produção:", e.message);
-      }
-    }
-    
-    // =============================================
-    // CRIAR USUÁRIO NO CLOUD (SECUNDÁRIO)
+    // 1) CRIAR NO CLOUD PRIMEIRO (principal)
     // =============================================
     let cloudUserId: string | null = null;
-    
+
     if (!existsInCloud) {
       console.log("[create-user-both-envs] Criando usuário no Cloud...");
       try {
@@ -247,46 +161,67 @@ serve(async (req: Request): Promise<Response> => {
           email_confirm: true,
           user_metadata: metadata,
         });
-        
         if (cloudError) {
-          console.error("[create-user-both-envs] ⚠️ Erro ao criar no Cloud (não crítico):", cloudError.message);
+          console.error("[create-user-both-envs] ❌ Erro ao criar no Cloud:", cloudError.message);
+          // Cloud é o ambiente principal - se falhar E não existe em prod, é erro fatal
+          if (!existsInProd) {
+            return new Response(
+              JSON.stringify({ success: false, error: cloudError.message }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         } else {
           cloudUserId = cloudData.user?.id || null;
           console.log(`[create-user-both-envs] ✅ Usuário criado no Cloud: ${cloudUserId}`);
         }
       } catch (err: any) {
-        console.error("[create-user-both-envs] ⚠️ Exceção ao criar no Cloud (não crítico):", err.message);
+        console.error("[create-user-both-envs] ❌ Exceção ao criar no Cloud:", err.message);
+        if (!existsInProd) {
+          return new Response(
+            JSON.stringify({ success: false, error: err.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
     } else {
-      console.log("[create-user-both-envs] Usuário já existe no Cloud, pulando criação");
-      // Buscar o ID existente
-      try {
-        let page = 1;
-        while (page <= 50) {
-          const resp = await fetch(`${CLOUD_URL}/auth/v1/admin/users?page=${page}&per_page=50`, {
-            headers: { 'Authorization': `Bearer ${cloudServiceKey}`, 'apikey': cloudServiceKey, 'Content-Type': 'application/json' }
-          });
-          if (!resp.ok) break;
-          const d = await resp.json();
-          const users = d.users || d || [];
-          const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
-          if (found) { cloudUserId = found.id; break; }
-          if (users.length < 50) break;
-          page++;
-        }
-        console.log(`[create-user-both-envs] ID existente no Cloud: ${cloudUserId}`);
-      } catch (e: any) {
-        console.error("[create-user-both-envs] Erro ao buscar ID existente no Cloud:", e.message);
-      }
+      console.log("[create-user-both-envs] Usuário já existe no Cloud, buscando ID...");
+      cloudUserId = await findUserIdByEmail(CLOUD_URL, cloudServiceKey, normalizedEmail);
     }
-    
+
+    // =============================================
+    // 2) CRIAR NA PRODUÇÃO (secundário, não-fatal)
+    // =============================================
+    let prodUserId: string | null = null;
+
+    if (!existsInProd) {
+      console.log("[create-user-both-envs] Criando usuário na Produção...");
+      try {
+        const { data: prodData, error: prodError } = await prodClient.auth.admin.createUser({
+          email: normalizedEmail,
+          password,
+          email_confirm: true,
+          user_metadata: metadata,
+        });
+        if (prodError) {
+          console.error("[create-user-both-envs] ⚠️ Erro ao criar em Produção (não-fatal):", prodError.message);
+        } else {
+          prodUserId = prodData.user?.id || null;
+          console.log(`[create-user-both-envs] ✅ Usuário criado em Produção: ${prodUserId}`);
+        }
+      } catch (err: any) {
+        console.error("[create-user-both-envs] ⚠️ Exceção ao criar em Produção (não-fatal):", err.message);
+      }
+    } else {
+      console.log("[create-user-both-envs] Usuário já existe na Produção, buscando ID...");
+      prodUserId = await findUserIdByEmail(PRODUCTION_URL, prodServiceKey, normalizedEmail);
+    }
+
     // =============================================
     // SINCRONIZAR TABELA PATIENTS EM AMBOS
     // =============================================
     console.log("[create-user-both-envs] Sincronizando tabela patients...");
-    
+
     const patientCoreData = {
-      user_id: prodUserId,
       email: normalizedEmail,
       first_name: metadata?.first_name || null,
       last_name: metadata?.last_name || null,
@@ -303,93 +238,61 @@ serve(async (req: Request): Promise<Response> => {
       marketing_opt_in: metadata?.marketing_opt_in || false,
       profile_complete: !!(metadata?.cpf && metadata?.phone_e164 && metadata?.birth_date),
     };
-    
-    // Inserir na Produção
-    try {
-      const { data: existingProd } = await prodClient
-        .from('patients')
-        .select('id')
-        .eq('email', normalizedEmail)
-        .maybeSingle();
-      
-      if (existingProd) {
-        const { error: updateError } = await prodClient
-          .from('patients')
-          .update({ ...patientCoreData, user_id: prodUserId })
-          .eq('id', existingProd.id);
-        
-        if (updateError) {
-          console.error("[create-user-both-envs] Erro ao atualizar patient em Produção:", updateError.message);
-        } else {
-          console.log("[create-user-both-envs] ✅ Patient atualizado em Produção (id:", existingProd.id, ")");
-        }
-      } else {
-        const { error: insertError } = await prodClient
-          .from('patients')
-          .insert(patientCoreData);
-        
-        if (insertError) {
-          console.error("[create-user-both-envs] Erro ao inserir patient em Produção:", insertError.message);
-        } else {
-          console.log("[create-user-both-envs] ✅ Patient criado em Produção");
-        }
-      }
-    } catch (err: any) {
-      console.error("[create-user-both-envs] Exceção ao criar patient em Produção:", err.message);
-    }
-    
-    // Inserir no Cloud
+
+    // Sync Cloud patients
     if (cloudUserId) {
       try {
         const cloudPatientData = { ...patientCoreData, user_id: cloudUserId };
-        
-        const { data: existingCloud } = await cloudClient
-          .from('patients')
-          .select('id')
-          .eq('email', normalizedEmail)
-          .maybeSingle();
-        
-        if (existingCloud) {
-          const { error: updateError } = await cloudClient
-            .from('patients')
-            .update(cloudPatientData)
-            .eq('id', existingCloud.id);
-          
-          if (updateError) {
-            console.error("[create-user-both-envs] Erro ao atualizar patient no Cloud:", updateError.message);
-          } else {
-            console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud (id:", existingCloud.id, ")");
-          }
+        const { data: existing } = await cloudClient.from('patients').select('id').eq('email', normalizedEmail).maybeSingle();
+        if (existing) {
+          await cloudClient.from('patients').update(cloudPatientData).eq('id', existing.id);
+          console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud");
         } else {
-          const { error: insertError } = await cloudClient
-            .from('patients')
-            .insert(cloudPatientData);
-          
-          if (insertError) {
-            console.error("[create-user-both-envs] Erro ao inserir patient no Cloud:", insertError.message);
-          } else {
-            console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
-          }
+          await cloudClient.from('patients').insert(cloudPatientData);
+          console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
         }
       } catch (err: any) {
-        console.error("[create-user-both-envs] Exceção ao criar patient no Cloud:", err.message);
+        console.error("[create-user-both-envs] Erro patient Cloud:", err.message);
       }
     }
-    
+
+    // Sync Prod patients (não-fatal)
+    if (prodUserId) {
+      try {
+        const prodPatientData = { ...patientCoreData, user_id: prodUserId };
+        const { data: existing } = await prodClient.from('patients').select('id').eq('email', normalizedEmail).maybeSingle();
+        if (existing) {
+          await prodClient.from('patients').update(prodPatientData).eq('id', existing.id);
+          console.log("[create-user-both-envs] ✅ Patient atualizado em Produção");
+        } else {
+          await prodClient.from('patients').insert(prodPatientData);
+          console.log("[create-user-both-envs] ✅ Patient criado em Produção");
+        }
+      } catch (err: any) {
+        console.error("[create-user-both-envs] ⚠️ Erro patient Produção (não-fatal):", err.message);
+      }
+    }
+
+    // =============================================
+    // RESULTADO: sucesso se pelo menos Cloud OK
+    // =============================================
+    const success = !!(cloudUserId || existsInCloud);
+
     console.log("[create-user-both-envs] ========================================");
-    console.log(`[create-user-both-envs] RESULTADO: Produção=${!!prodUserId}, Cloud=${!!cloudUserId}`);
-    console.log("[create-user-both-envs] ========================================");
-    
+    console.log(`[create-user-both-envs] RESULTADO: Cloud=${!!cloudUserId}, Prod=${!!prodUserId}, success=${success}`);
+
+    if (!success) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Falha ao criar usuário em ambos os ambientes" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        prodUserId,
-        cloudUserId,
-        message: "Usuário criado com sucesso em ambos os ambientes"
-      }),
+      JSON.stringify({ success: true, prodUserId, cloudUserId, message: "Usuário criado com sucesso" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-    
+
   } catch (error: any) {
     console.error("[create-user-both-envs] Erro geral:", error);
     return new Response(
