@@ -649,7 +649,13 @@ serve(async (req) => {
     // - ensure_patient: usa service_role no backend, não precisa validar JWT do usuário
     //   (a própria lógica do ensure_patient valida que user_id foi passado)
     // ============================================================
-    const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient", "change_plan", "disable_plan"];
+    const AUTH_BYPASS_OPERATIONS = [
+      "upsert_patient", "activate_plan_manual", "ensure_patient",
+      "admin_update_patient", "change_plan", "disable_plan",
+      "complete_profile", "invite-familiar", "resend-family-invite",
+      "activate-family-member", "deactivate_plan_manual",
+      "schedule_appointment", "schedule_redirect"
+    ];
 
     if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
       if (!authHeader) {
