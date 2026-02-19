@@ -298,48 +298,90 @@ export const hybridSignUp = async (
       };
     }
 
-    // ✅ CORREÇÃO: Limpar qualquer sessão no Cloud antes de fazer login na Produção
-    // Isso evita que getHybridSession() encontre sessão "fantasma" no Cloud
-    // e cause conflito com o ambiente de Produção onde os dados foram salvos
-    try {
-      await supabase.auth.signOut();
-      console.log('[hybridSignUp] Cloud session cleared');
-    } catch (e) {
-      console.warn('[hybridSignUp] Could not clear cloud session:', e);
-    }
+    // ✅ CORREÇÃO: Verificar se Produção foi criada com sucesso
+    if (result.prodUserId) {
+      // Produção OK: limpar Cloud e logar na Produção
+      console.log('[hybridSignUp] Produção criada OK, fazendo login na Produção...');
+      try {
+        await supabase.auth.signOut();
+        console.log('[hybridSignUp] Cloud session cleared');
+      } catch (e) {
+        console.warn('[hybridSignUp] Could not clear cloud session:', e);
+      }
 
-    // Fazer login automaticamente na Produção após criar
-    console.log('[hybridSignUp] Fazendo login automático na Produção...');
-    const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
-      email: normalizedEmail,
-      password,
-    });
+      const { data: loginData, error: loginError } = await supabaseProductionAuth.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
 
-    if (loginError) {
-      console.error('[hybridSignUp] Erro no login automático:', loginError.message);
-      // Usuário foi criado, mas login falhou - não é erro crítico
+      if (loginError) {
+        console.error('[hybridSignUp] Erro no login Produção:', loginError.message);
+        // Fallback: tentar Cloud
+        const { data: cloudLogin } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+        if (cloudLogin?.session) {
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('auth_environment', 'cloud');
+          }
+          return {
+            success: true,
+            user: cloudLogin.user,
+            session: cloudLogin.session,
+            prodUserId: result.prodUserId,
+            cloudUserId: result.cloudUserId,
+          };
+        }
+        return {
+          success: true,
+          prodUserId: result.prodUserId,
+          cloudUserId: result.cloudUserId,
+          error: 'Conta criada! Por favor, faça login manualmente.'
+        };
+      }
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth_environment', 'production');
+      }
+
+      console.log('[hybridSignUp] ✅ Cadastro completo! ProdID:', result.prodUserId, 'CloudID:', result.cloudUserId);
       return {
         success: true,
+        user: loginData.user,
+        session: loginData.session,
         prodUserId: result.prodUserId,
         cloudUserId: result.cloudUserId,
-        error: 'Conta criada! Por favor, faça login manualmente.'
+      };
+    } else {
+      // Produção FALHOU: NÃO limpar sessão Cloud, logar no Cloud
+      console.log('[hybridSignUp] Produção falhou, fazendo login no Cloud...');
+      const { data: cloudLogin, error: cloudLoginError } = await supabase.auth.signInWithPassword({
+        email: normalizedEmail,
+        password,
+      });
+
+      if (cloudLoginError) {
+        console.error('[hybridSignUp] Erro no login Cloud:', cloudLoginError.message);
+        return {
+          success: true,
+          cloudUserId: result.cloudUserId,
+          error: 'Conta criada! Por favor, faça login manualmente.'
+        };
+      }
+
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth_environment', 'cloud');
+      }
+
+      console.log('[hybridSignUp] ✅ Cadastro completo (Cloud only)! CloudID:', result.cloudUserId);
+      return {
+        success: true,
+        user: cloudLogin.user,
+        session: cloudLogin.session,
+        cloudUserId: result.cloudUserId,
       };
     }
-
-    // Salvar ambiente no sessionStorage
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('auth_environment', 'production');
-    }
-
-    console.log('[hybridSignUp] ✅ Cadastro completo! ProdID:', result.prodUserId, 'CloudID:', result.cloudUserId);
-    
-    return {
-      success: true,
-      user: loginData.user,
-      session: loginData.session,
-      prodUserId: result.prodUserId,
-      cloudUserId: result.cloudUserId,
-    };
     
   } catch (error: any) {
     console.error('[hybridSignUp] Exceção:', error);
