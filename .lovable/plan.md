@@ -1,83 +1,82 @@
 
 
-# Correcao: Paciente nunca encontrado por user_id (causa logout/redirect loop)
+# Correcao: Frontend mostra dados antigos do Cloud em vez dos dados atualizados da Producao
 
-## Diagnostico
+## Diagnostico confirmado
 
-O problema **nao e na patient-operations**. O problema e no **frontend** ao carregar dados do paciente.
+Existem **dois registros** do paciente Tulio:
 
-### Fluxo atual (quebrado)
+1. **Cloud DB** (Lovable Cloud): `user_id = 19d8998f`, CPF `06852872890`, complement `null` -- DADOS ANTIGOS
+2. **Producao DB** (`ploqujuhpwutpcibedbr`): dados atualizados com CPF e complemento corretos
 
-1. Usuario loga via Cloud → sessao tem `user_id = 19d8998f...` (ID do Cloud)
-2. Na Producao, o registro `patients` tem `user_id = 131d55f8...` (ID da Producao)
-3. `AreaDoPaciente` (linha 60-64) busca: `patients WHERE user_id = 19d8998f` → nao encontra
-4. Fallback (linha 69-74) tenta outro cliente mas com o **mesmo user_id Cloud** → tambem nao encontra
-5. Resultado: perfil nao encontrado → redireciona para `/completar-perfil` (parece "logout")
-6. Mesmo problema no `AuthCallback` (linhas 124-141): busca por user_id Cloud, nao encontra, redireciona para `/completar-perfil`
+### Por que o frontend mostra dados antigos
 
-**Os IDs de usuario sao DIFERENTES entre Cloud e Producao. Buscar por user_id nunca vai funcionar cross-environment.**
+No `AreaDoPaciente.tsx`, linha 56-64:
 
-### Solucao: Buscar por email como fallback
+```text
+1. Usuario loga via Cloud -> environment = 'cloud'
+2. dbClient = supabase (Cloud)
+3. Query: patients WHERE user_id = '19d8998f' -> ENCONTRA o registro antigo do Cloud
+4. Como encontrou, NUNCA chega ao fallback de Producao (linhas 80-104)
+5. setPatient(dados_antigos_do_cloud)
+```
 
-O email do usuario e o mesmo em ambos os ambientes. Quando a busca por `user_id` falhar, buscar por `email`.
+Todas as edicoes de perfil vao para a Producao via Edge Function, mas a leitura dos dados vem do Cloud. Os dados nunca se sincronizam.
 
-## Arquivos a alterar (2 arquivos frontend)
+## Solucao
 
-### 1. `src/pages/AreaDoPaciente.tsx` (linhas 60-115)
+Alterar a logica de busca no `AreaDoPaciente.tsx` para **sempre priorizar os dados da Producao**, ja que e la onde todas as edicoes sao salvas.
 
-Adicionar fallback por email quando nenhum dos dois clientes encontrar o paciente por user_id:
+### Arquivo: `src/pages/AreaDoPaciente.tsx` (linhas 55-112)
+
+Substituir a logica atual por:
 
 ```typescript
-// Apos tentar user_id em ambos os clientes sem resultado:
+// SEMPRE buscar na Producao primeiro (onde os dados sao editados)
+let patientFound = null;
+
+// 1. Tentar por user_id na Producao
+const { data: prodData } = await supabaseProductionAuth
+  .from('patients')
+  .select('*')
+  .eq('user_id', session.user.id)
+  .maybeSingle();
+
+patientFound = prodData;
+
+// 2. Se nao encontrou por user_id, tentar por email na Producao
 if (!patientFound && session.user.email) {
-  // Buscar por email na Producao (onde os dados reais estao)
   const { data: byEmail } = await supabaseProductionAuth
     .from('patients')
     .select('*')
     .eq('email', session.user.email.toLowerCase())
     .maybeSingle();
-  
-  if (byEmail?.profile_complete) {
-    setPatient(byEmail as Patient);
-  } else {
-    window.location.replace('/completar-perfil');
-    return;
-  }
+  patientFound = byEmail;
 }
-```
 
-### 2. `src/pages/auth/Callback.tsx` (linhas 119-141)
-
-Mesmo padrao - fallback por email:
-
-```typescript
-// Se nao encontrou por user_id em nenhum ambiente
-if (!patientData && session.user.email) {
-  const { data: byEmail } = await supabaseProductionAuth
+// 3. Ultimo fallback: tentar no Cloud
+if (!patientFound) {
+  const { data: cloudData } = await supabase
     .from('patients')
-    .select('profile_complete')
-    .eq('email', session.user.email.toLowerCase())
+    .select('*')
+    .eq('user_id', session.user.id)
     .maybeSingle();
-  patientData = byEmail;
+  patientFound = cloudData;
 }
 ```
 
-## Erro PGRST204 (complement)
+### Nenhum outro arquivo sera alterado
 
-Este erro e separado e persiste porque o cache do PostgREST na Producao esta desatualizado.
+- Nao altera Edge Functions
+- Nao altera `CompletarPerfil.tsx`
+- Nao altera `auth-hybrid.ts`
+- Nao altera nenhuma tabela ou coluna
 
-**Acao obrigatoria no dashboard do Supabase de Producao** (`ploqujuhpwutpcibedbr`):
+### Por que isso resolve
 
-1. Abrir **SQL Editor**
-2. Executar: `NOTIFY pgrst, 'reload schema';`
-3. Opcionalmente, ir em **Settings > API** e clicar **"Reload Schema"**
-
-Sem isso, qualquer update que inclua a coluna `complement` vai falhar com PGRST204.
-
-## Resumo
-
-| Problema | Causa | Correcao | Onde |
-|----------|-------|----------|------|
-| CPF edit causa "logout" | `AreaDoPaciente` e `Callback` buscam por `user_id` do Cloud, mas paciente na Producao tem outro `user_id` | Adicionar fallback por email | `src/pages/AreaDoPaciente.tsx`, `src/pages/auth/Callback.tsx` |
-| PGRST204 complement | Cache do PostgREST desatualizado | `NOTIFY pgrst, 'reload schema';` | SQL Editor do Supabase de Producao |
+| Antes | Depois |
+|-------|--------|
+| Busca no Cloud primeiro, encontra dados antigos, para | Busca na Producao primeiro, encontra dados atualizados |
+| Edicoes vao para Producao mas leitura vem do Cloud | Leitura e escrita ambas na Producao |
+| Dados sempre desatualizados | Dados sempre frescos |
 
