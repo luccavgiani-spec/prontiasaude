@@ -638,7 +638,9 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceRoleKey);
 
+    let operationName = 'unknown';
     const body = await req.json();
+    operationName = body.operation || 'unknown';
 
     // ============================================================
     // ✅ VALIDAÇÃO GENÉRICA: exceto operações que têm validação própria
@@ -708,7 +710,7 @@ serve(async (req) => {
           },
         });
 
-        if (authError && !authError.message.includes("already exists")) {
+        if (authError && !authError.message.includes("already")) {
           console.error("[upsert_patient] Auth error:", authError.message);
           throw authError;
         }
@@ -2441,7 +2443,7 @@ serve(async (req) => {
     const errorStack = error instanceof Error ? error.stack : '';
     console.error("Error in patient-operations:", errorMessage);
     console.error("Stack:", errorStack);
-    console.error("Operation:", body?.operation);
+    console.error("Operation:", operationName);
 
     const requestOrigin = req.headers.get("origin");
     const errorCorsHeaders = getCorsHeaders(requestOrigin);
