@@ -667,16 +667,7 @@ const CompletarPerfil = () => {
           description: "Suas informações foram salvas com sucesso.",
         });
       }
-      
-      // ✅ CORREÇÃO: Limpar sessão Cloud antes do redirect para evitar loop
-      // (getHybridSession verifica Cloud primeiro, então precisamos garantir
-      // que só a sessão de Produção existe antes de ir para /area-do-paciente)
-      try {
-        await supabase.auth.signOut();
-        console.log('[CompletarPerfil] Cloud session cleared before redirect');
-      } catch (e) {
-        console.warn('[CompletarPerfil] Could not clear cloud session:', e);
-      }
+
 
       const redirectUrl = searchParams.get('redirect');
       if (redirectUrl) {
