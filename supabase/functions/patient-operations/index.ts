@@ -2162,18 +2162,80 @@ serve(async (req) => {
       // ✅ ENSURE_PATIENT - Garantir que existe registro em patients (usando service_role, ignora RLS)
       // ============================================================
       case "ensure_patient": {
-        const { user_id, email } = body;
+        let { user_id, email } = body;
 
         console.log("[ensure_patient] 📥 Recebido:", { user_id, email });
 
-        if (!user_id) {
-          return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
+        if (!user_id && !email) {
+          return new Response(JSON.stringify({ error: "user_id ou email é obrigatório" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        // Verificar se já existe
+        // ✅ CORREÇÃO: Resolver user_id correto da Produção pelo email
+        // O frontend pode enviar user_id do Cloud, que não existe no auth.users da Produção
+        if (email) {
+          const normalizedEmail = email.toLowerCase().trim();
+          
+          // 1. Buscar na tabela patients primeiro
+          const { data: prodPatient } = await supabase
+            .from("patients")
+            .select("id, user_id, profile_complete")
+            .eq("email", normalizedEmail)
+            .maybeSingle();
+          
+          if (prodPatient) {
+            console.log("[ensure_patient] ✅ Paciente já existe por email:", prodPatient.id, "user_id:", prodPatient.user_id);
+            return new Response(
+              JSON.stringify({
+                success: true,
+                patient_id: prodPatient.id,
+                profile_complete: prodPatient.profile_complete,
+                already_existed: true,
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+          
+          // 2. Buscar user_id correto no auth da Produção via paginação
+          console.log("[ensure_patient] 🔍 Buscando user_id correto na Produção pelo email:", normalizedEmail);
+          let foundUserId: string | null = null;
+          let page = 1;
+          const perPage = 50;
+          const maxPages = 50;
+          
+          while (page <= maxPages) {
+            const { data: authPage } = await supabase.auth.admin.listUsers({ page, perPage });
+            const users = authPage?.users || [];
+            if (users.length === 0) break;
+            
+            const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
+            if (found) {
+              foundUserId = found.id;
+              console.log("[ensure_patient] ✅ user_id da Produção encontrado:", foundUserId);
+              break;
+            }
+            
+            if (users.length < perPage) break;
+            page++;
+          }
+          
+          if (foundUserId) {
+            user_id = foundUserId;
+          } else {
+            console.log("[ensure_patient] ⚠️ Usuário não encontrado no auth da Produção, usando user_id original:", user_id);
+          }
+        }
+
+        if (!user_id) {
+          return new Response(JSON.stringify({ error: "Não foi possível resolver user_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Verificar se já existe por user_id
         const { data: existing, error: checkError } = await supabase
           .from("patients")
           .select("id, profile_complete")
