@@ -335,8 +335,7 @@ const Cadastrar = () => {
       return;
     }
 
-    // Salvar que o login foi feito via produção
-    sessionStorage.setItem('auth_environment', 'production');
+    // auth_environment já é definido pelo hybridSignUp
 
     toast({
       title: "✅ Cadastro realizado com sucesso!",
