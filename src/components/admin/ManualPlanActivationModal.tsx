@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CalendarClock } from "lucide-react";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CATALOGO_SERVICOS, PLANOS } from "@/lib/constants";
 
@@ -80,7 +81,17 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
 
     setLoading(true);
     try {
-      // 1. Ativar plano no banco local
+      // ✅ CORREÇÃO: Obter token JWT real do admin logado no Cloud
+      const { data: sessionData } = await supabase.auth.getSession();
+      const adminToken = sessionData?.session?.access_token;
+
+      if (!adminToken) {
+        toast.error("Sessão expirada. Faça login novamente.");
+        setLoading(false);
+        return;
+      }
+
+      // 1. Ativar plano no banco de produção
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'activate_plan_manual',
@@ -89,6 +100,9 @@ export function ManualPlanActivationModal({ open, onOpenChange, user, onSuccess 
           plan_code: planCode,
           duration_days: parseInt(durationDays),
           send_email: sendEmail
+        },
+        headers: {
+          Authorization: `Bearer ${adminToken}`
         }
       });
 

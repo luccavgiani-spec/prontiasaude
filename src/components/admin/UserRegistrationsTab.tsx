@@ -462,11 +462,18 @@ export default function UserRegistrationsTab() {
     }
 
     try {
+      // ✅ CORREÇÃO: Enviar JWT real do admin
+      const { data: sessionData } = await supabase.auth.getSession();
+      const adminToken = sessionData?.session?.access_token;
+
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'deactivate_plan_manual',
-          patient_email: user.email  // ✅ Correto: usar email, não patient_id
-        }
+          patient_email: user.email
+        },
+        headers: adminToken ? {
+          Authorization: `Bearer ${adminToken}`
+        } : undefined
       });
 
       if (error) {
