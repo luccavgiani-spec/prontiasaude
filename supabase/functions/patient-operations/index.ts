@@ -742,9 +742,32 @@ serve(async (req) => {
         // Se "already exists", buscar pelo email
         let finalUserId = userId;
         if (!finalUserId) {
-          const { data: existingUsers } = await supabase.auth.admin.listUsers();
-          const found = existingUsers?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-          finalUserId = found?.id || null;
+          // Buscar direto na tabela patients por email (evita listUsers paginado)
+          const { data: patientByEmail } = await supabase
+            .from("patients")
+            .select("user_id")
+            .eq("email", email.toLowerCase())
+            .maybeSingle();
+
+          if (patientByEmail?.user_id) {
+            finalUserId = patientByEmail.user_id;
+            console.log("[upsert_patient] Found user_id via patients table:", finalUserId);
+          } else {
+            // Fallback: buscar no auth com paginacao
+            let page = 1;
+            const perPage = 100;
+            while (!finalUserId) {
+              const { data: usersPage } = await supabase.auth.admin.listUsers({ page, perPage });
+              if (!usersPage?.users?.length) break;
+              const found = usersPage.users.find((u: any) => u.email?.toLowerCase() === email.toLowerCase());
+              if (found) {
+                finalUserId = found.id;
+                break;
+              }
+              if (usersPage.users.length < perPage) break;
+              page++;
+            }
+          }
         }
 
         // Upsert na tabela patients com todos os campos recebidos
