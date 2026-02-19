@@ -352,10 +352,10 @@ const PlansManagement = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session) {
+      if (!session?.access_token) {
         toast({
           title: "Não autenticado",
-          description: "Você precisa estar autenticado",
+          description: "Sessão expirada. Faça login novamente.",
           variant: "destructive"
         });
         return;
@@ -367,6 +367,9 @@ const PlansManagement = () => {
           plan_id: selectedPlan.id,
           new_plan_code: newPlanCode,
           new_expires_at: newExpiryDate ? new Date(newExpiryDate).toISOString() : undefined
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
@@ -401,10 +404,10 @@ const PlansManagement = () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session) {
+      if (!session?.access_token) {
         toast({
           title: "Não autenticado",
-          description: "Você precisa estar autenticado",
+          description: "Sessão expirada. Faça login novamente.",
           variant: "destructive"
         });
         return;
@@ -414,6 +417,9 @@ const PlansManagement = () => {
         body: {
           operation: 'disable_plan',
           email: selectedPlan.email
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
         }
       });
 
