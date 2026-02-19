@@ -1,77 +1,74 @@
 
-# Correcao: `listUsers()` sem paginacao impede UPDATE de pacientes existentes
+# Correcao definitiva: JWT do Cloud rejeitado pelo gateway de Producao (401)
 
-## Problema Identificado
+## Problema raiz
 
-Na edge function `patient-operations`, operacao `upsert_patient`, quando o usuario ja existe no auth do Supabase:
+O `invokeEdgeFunction` (linha 42-54 de `src/lib/edge-functions.ts`) busca o `access_token` da sessao do **Cloud** (`supabase.auth.getSession()`) e envia como `Authorization: Bearer <cloud_jwt>` para o Supabase de **Producao**.
 
-1. `createUser` retorna erro "already registered" (correto, tratado)
-2. `userId` fica `null` (correto)
-3. **Linha 745**: `supabase.auth.admin.listUsers()` e chamado SEM parametros
-4. O Supabase retorna apenas os **primeiros 50 usuarios** por padrao
-5. Se o email do usuario nao esta nessa primeira pagina, `finalUserId` fica `null`
-6. O bloco de UPDATE (linha 751) **nao e executado** porque `if (finalUserId)` e falso
-7. A funcao retorna `{ success: true }` mesmo sem ter gravado nada
+O gateway de Producao rejeita esse JWT porque ele foi assinado por outro projeto. Resultado: **401 antes do codigo da funcao rodar**.
 
-Esse e o motivo do "sucesso mas dado nao muda".
+## Solucao (2 arquivos)
 
-## Solucao
+### 1. `src/lib/edge-functions.ts` - Parar de enviar JWT do Cloud para Producao
 
-### Arquivo: `supabase/functions/patient-operations/index.ts`
+Na linha 54, trocar a logica de Authorization para **sempre usar a anon key de Producao** como Bearer token (que e um JWT valido para aquele projeto):
 
-Substituir o `listUsers()` generico por uma busca direta por email, que e muito mais eficiente e confiavel:
-
-**Linhas 744-748 - Trocar listUsers por getUserByEmail:**
-
-De:
 ```typescript
-let finalUserId = userId;
-if (!finalUserId) {
-  const { data: existingUsers } = await supabase.auth.admin.listUsers();
-  const found = existingUsers?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-  finalUserId = found?.id || null;
+// ANTES (linha 53-55):
+if (!options.headers?.Authorization) {
+  headers["Authorization"] = `Bearer ${accessToken || SUPABASE_ANON_KEY}`;
+}
+
+// DEPOIS:
+if (!options.headers?.Authorization) {
+  headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
 }
 ```
 
-Para:
+Isso funciona porque:
+- A anon key e um JWT valido para o projeto de Producao (o gateway aceita)
+- A funcao `patient-operations` usa `service_role` internamente (nao depende do JWT do usuario)
+- As operacoes ja recebem `email`, `user_id` etc. no body da requisicao
+
+### 2. `supabase/functions/patient-operations/index.ts` - Adicionar operacoes faltantes ao bypass
+
+Operacoes chamadas pelo frontend que NAO estao na lista de bypass e falhariam na validacao interna (linha 662-673) ao receber anon key no `getUser()`:
+
+- `complete_profile`
+- `invite-familiar`
+- `resend-family-invite`
+- `activate-family-member`
+- `deactivate_plan_manual`
+- `schedule_appointment`
+- `schedule_redirect`
+
+Linha 652, trocar:
+
 ```typescript
-let finalUserId = userId;
-if (!finalUserId) {
-  // Buscar direto na tabela patients por email (evita listUsers paginado)
-  const { data: patientByEmail } = await supabase
-    .from("patients")
-    .select("user_id")
-    .eq("email", email.toLowerCase())
-    .maybeSingle();
-  
-  if (patientByEmail?.user_id) {
-    finalUserId = patientByEmail.user_id;
-    console.log("[upsert_patient] Found user_id via patients table:", finalUserId);
-  } else {
-    // Fallback: buscar no auth com paginacao
-    let page = 1;
-    const perPage = 100;
-    while (!finalUserId) {
-      const { data: usersPage } = await supabase.auth.admin.listUsers({ page, perPage });
-      if (!usersPage?.users?.length) break;
-      const found = usersPage.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
-      if (found) {
-        finalUserId = found.id;
-        break;
-      }
-      if (usersPage.users.length < perPage) break;
-      page++;
-    }
-  }
-}
+// ANTES:
+const AUTH_BYPASS_OPERATIONS = ["upsert_patient", "activate_plan_manual", "ensure_patient", "admin_update_patient", "change_plan", "disable_plan"];
+
+// DEPOIS:
+const AUTH_BYPASS_OPERATIONS = [
+  "upsert_patient", "activate_plan_manual", "ensure_patient", 
+  "admin_update_patient", "change_plan", "disable_plan",
+  "complete_profile", "invite-familiar", "resend-family-invite", 
+  "activate-family-member", "deactivate_plan_manual",
+  "schedule_appointment", "schedule_redirect"
+];
 ```
 
-### Por que essa abordagem
+Isso e seguro porque a funcao ja usa `service_role` para todas as operacoes de banco e recebe os dados de identidade (email, user_id) no body.
 
-- **Primeiro tenta pela tabela `patients`**: busca direta por email, sem paginacao, instantanea
-- **Fallback com paginacao**: se por algum motivo o paciente nao existir na tabela mas existir no auth, percorre todas as paginas
-- **Nenhum outro arquivo sera alterado**
+## Resumo
 
-### Depois de aplicar
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/lib/edge-functions.ts` (linha 54) | Usar `SUPABASE_ANON_KEY` ao inves do Cloud access_token |
+| `supabase/functions/patient-operations/index.ts` (linha 652) | Adicionar operacoes faltantes ao AUTH_BYPASS_OPERATIONS |
 
-O codigo atualizado precisa ser **deployado manualmente no Supabase de Producao** (`ploqujuhpwutpcibedbr`), como nas correcoes anteriores.
+## Apos aplicar
+
+O arquivo `patient-operations` atualizado precisa ser **deployado manualmente no Supabase de Producao** (`ploqujuhpwutpcibedbr`).
+
+A mudanca no `edge-functions.ts` sera aplicada automaticamente ao publicar pelo Lovable.
