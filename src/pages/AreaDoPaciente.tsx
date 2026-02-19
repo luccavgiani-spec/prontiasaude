@@ -63,56 +63,53 @@ const AreaDoPaciente = () => {
         .eq('user_id', session.user.id)
         .maybeSingle();
       
-      if (error) {
-        console.error('[AreaDoPaciente] Fetch patient error:', error);
-        // Tentar no outro ambiente como fallback
+      let patientFound = data;
+      
+      if (error || !data) {
+        console.error('[AreaDoPaciente] Fetch patient error:', error?.message);
+        // Tentar no outro ambiente por user_id
         const fallbackClient = environment === 'production' ? supabase : supabaseProductionAuth;
-        const { data: fallbackData, error: fallbackError } = await fallbackClient
+        const { data: fallbackData } = await fallbackClient
           .from('patients')
           .select('*')
           .eq('user_id', session.user.id)
           .maybeSingle();
-        
-        if (fallbackError || !fallbackData || !fallbackData.profile_complete) {
-          console.log('[AreaDoPaciente] Paciente não encontrado em nenhum ambiente, redirecionando para /completar-perfil');
-          window.location.replace('/completar-perfil');
-          return;
-        }
-        
-        setPatient(fallbackData as Patient);
-      } else if (!data || !data.profile_complete) {
-        // ✅ CORREÇÃO: Antes de redirecionar, tentar buscar no OUTRO ambiente
-        // (o perfil pode estar completo na Produção mas não existir no Cloud)
-        console.log('[AreaDoPaciente] Perfil incompleto no ambiente', environment, '- tentando fallback...');
-        
-        const otherClient = environment === 'production' ? supabase : supabaseProductionAuth;
-        const otherEnvName = environment === 'production' ? 'cloud' : 'production';
-        
-        const { data: fallbackData, error: fallbackError } = await otherClient
-          .from('patients')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        
-        console.log('[AreaDoPaciente] Fallback no', otherEnvName, ':', { 
-          found: !!fallbackData, 
-          profile_complete: fallbackData?.profile_complete,
-          error: fallbackError?.message 
-        });
-        
-        if (fallbackData?.profile_complete) {
-          // ✅ Encontrou perfil completo no outro ambiente - usar esse
-          console.log('[AreaDoPaciente] ✅ Usando perfil do ambiente', otherEnvName);
-          setPatient(fallbackData as Patient);
-        } else {
-          // Não encontrou perfil completo em nenhum ambiente - redirecionar
-          console.log('[AreaDoPaciente] Perfil incompleto em ambos ambientes, redirecionando para /completar-perfil');
-          window.location.replace('/completar-perfil');
-          return;
-        }
-      } else {
-        setPatient(data as Patient);
+        patientFound = fallbackData;
       }
+      
+      // ✅ FALLBACK POR EMAIL: user_id difere entre Cloud e Produção
+      if (!patientFound && session.user.email) {
+        console.log('[AreaDoPaciente] user_id não encontrado em nenhum ambiente, tentando por email...');
+        const { data: byEmail } = await supabaseProductionAuth
+          .from('patients')
+          .select('*')
+          .eq('email', session.user.email.toLowerCase())
+          .maybeSingle();
+        
+        if (!byEmail) {
+          // Tentar também no Cloud
+          const { data: byEmailCloud } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('email', session.user.email.toLowerCase())
+            .maybeSingle();
+          patientFound = byEmailCloud;
+        } else {
+          patientFound = byEmail;
+        }
+        
+        if (patientFound) {
+          console.log('[AreaDoPaciente] ✅ Paciente encontrado por email!');
+        }
+      }
+      
+      if (!patientFound || !patientFound.profile_complete) {
+        console.log('[AreaDoPaciente] Perfil incompleto ou não encontrado, redirecionando para /completar-perfil');
+        window.location.replace('/completar-perfil');
+        return;
+      }
+      
+      setPatient(patientFound as Patient);
 
       // Load patient plan
       try {
