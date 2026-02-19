@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
@@ -142,7 +142,7 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
       console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
       
       // ✅ CORREÇÃO: Usar invokeCloudEdgeFunction (Cloud valida token, executa no banco de produção)
-      const { data, error } = await invokeCloudEdgeFunction('patient-operations', {
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'admin_update_patient',
           patient_id: patient.id,
