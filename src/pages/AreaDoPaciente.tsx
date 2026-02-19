@@ -52,55 +52,43 @@ const AreaDoPaciente = () => {
       
       setCurrentUser(session.user);
       
-      // ✅ CORREÇÃO: Escolher cliente correto baseado no ambiente detectado
-      const dbClient = environment === 'production' ? supabaseProductionAuth : supabase;
-      console.log('[AreaDoPaciente] Usando cliente:', environment);
-      
-      // Buscar paciente no ambiente correto
-      const { data, error } = await dbClient
+      // ✅ CORREÇÃO: SEMPRE buscar na Produção primeiro (onde os dados são editados/salvos)
+      console.log('[AreaDoPaciente] Buscando paciente na Produção primeiro...');
+      let patientFound = null;
+
+      // 1. Tentar por user_id na Produção
+      const { data: prodData } = await supabaseProductionAuth
         .from('patients')
         .select('*')
         .eq('user_id', session.user.id)
         .maybeSingle();
-      
-      let patientFound = data;
-      
-      if (error || !data) {
-        console.error('[AreaDoPaciente] Fetch patient error:', error?.message);
-        // Tentar no outro ambiente por user_id
-        const fallbackClient = environment === 'production' ? supabase : supabaseProductionAuth;
-        const { data: fallbackData } = await fallbackClient
-          .from('patients')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        patientFound = fallbackData;
-      }
-      
-      // ✅ FALLBACK POR EMAIL: user_id difere entre Cloud e Produção
+
+      patientFound = prodData;
+
+      // 2. Se não encontrou por user_id, tentar por email na Produção
       if (!patientFound && session.user.email) {
-        console.log('[AreaDoPaciente] user_id não encontrado em nenhum ambiente, tentando por email...');
+        console.log('[AreaDoPaciente] user_id não encontrado na Produção, tentando por email...');
         const { data: byEmail } = await supabaseProductionAuth
           .from('patients')
           .select('*')
           .eq('email', session.user.email.toLowerCase())
           .maybeSingle();
-        
-        if (!byEmail) {
-          // Tentar também no Cloud
-          const { data: byEmailCloud } = await supabase
-            .from('patients')
-            .select('*')
-            .eq('email', session.user.email.toLowerCase())
-            .maybeSingle();
-          patientFound = byEmailCloud;
-        } else {
-          patientFound = byEmail;
-        }
-        
-        if (patientFound) {
-          console.log('[AreaDoPaciente] ✅ Paciente encontrado por email!');
-        }
+        patientFound = byEmail;
+      }
+
+      // 3. Último fallback: tentar no Cloud
+      if (!patientFound) {
+        console.log('[AreaDoPaciente] Não encontrado na Produção, tentando Cloud...');
+        const { data: cloudData } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .maybeSingle();
+        patientFound = cloudData;
+      }
+
+      if (patientFound) {
+        console.log('[AreaDoPaciente] ✅ Paciente encontrado! CPF:', patientFound.cpf, 'Complement:', patientFound.complement);
       }
       
       if (!patientFound || !patientFound.profile_complete) {
