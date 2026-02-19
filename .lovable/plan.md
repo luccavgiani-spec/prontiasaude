@@ -1,59 +1,83 @@
 
 
-# Correcao: 2 erros na patient-operations em Producao
+# Correcao: Paciente nunca encontrado por user_id (causa logout/redirect loop)
 
-## Erro 1: Foreign key violation no `ensure_patient`
+## Diagnostico
 
-**Causa**: O frontend envia o `user_id` do Cloud (`19d8998f...`) para a operacao `ensure_patient`. Mas na Producao, a tabela `patients` tem uma foreign key `patients_user_id_fkey` que referencia `auth.users`. Como o usuario `19d8998f` so existe no Cloud (nao na Producao), o INSERT falha com erro `23503`.
+O problema **nao e na patient-operations**. O problema e no **frontend** ao carregar dados do paciente.
 
-O usuario na Producao tem ID `131d55f8-b7b3-409d-8ead-2ae5b67e5ffe` (confirmado nos logs do `check-user-exists`).
+### Fluxo atual (quebrado)
 
-**Solucao**: Modificar a operacao `ensure_patient` no arquivo `supabase/functions/patient-operations/index.ts` para, antes de inserir, buscar o `user_id` correto na Producao pelo email:
+1. Usuario loga via Cloud → sessao tem `user_id = 19d8998f...` (ID do Cloud)
+2. Na Producao, o registro `patients` tem `user_id = 131d55f8...` (ID da Producao)
+3. `AreaDoPaciente` (linha 60-64) busca: `patients WHERE user_id = 19d8998f` → nao encontra
+4. Fallback (linha 69-74) tenta outro cliente mas com o **mesmo user_id Cloud** → tambem nao encontra
+5. Resultado: perfil nao encontrado → redireciona para `/completar-perfil` (parece "logout")
+6. Mesmo problema no `AuthCallback` (linhas 124-141): busca por user_id Cloud, nao encontra, redireciona para `/completar-perfil`
+
+**Os IDs de usuario sao DIFERENTES entre Cloud e Producao. Buscar por user_id nunca vai funcionar cross-environment.**
+
+### Solucao: Buscar por email como fallback
+
+O email do usuario e o mesmo em ambos os ambientes. Quando a busca por `user_id` falhar, buscar por `email`.
+
+## Arquivos a alterar (2 arquivos frontend)
+
+### 1. `src/pages/AreaDoPaciente.tsx` (linhas 60-115)
+
+Adicionar fallback por email quando nenhum dos dois clientes encontrar o paciente por user_id:
 
 ```typescript
-case "ensure_patient": {
-  let { user_id, email } = body;
-
-  // Se o user_id veio do Cloud, buscar o user_id correto na Producao pelo email
-  if (email) {
-    const { data: prodUser } = await supabase
-      .from("patients")
-      .select("user_id")
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
-    
-    if (prodUser?.user_id) {
-      user_id = prodUser.user_id;
-    } else {
-      // Buscar no auth da Producao
-      const { data: authUsers } = await supabase.auth.admin.listUsers({ page: 1, perPage: 50 });
-      const found = authUsers?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
-      if (found) {
-        user_id = found.id;
-      }
-    }
+// Apos tentar user_id em ambos os clientes sem resultado:
+if (!patientFound && session.user.email) {
+  // Buscar por email na Producao (onde os dados reais estao)
+  const { data: byEmail } = await supabaseProductionAuth
+    .from('patients')
+    .select('*')
+    .eq('email', session.user.email.toLowerCase())
+    .maybeSingle();
+  
+  if (byEmail?.profile_complete) {
+    setPatient(byEmail as Patient);
+  } else {
+    window.location.replace('/completar-perfil');
+    return;
   }
-  // ... resto do codigo continua igual
+}
 ```
 
-## Erro 2: Coluna `complement` nao encontrada no schema cache
+### 2. `src/pages/auth/Callback.tsx` (linhas 119-141)
 
-**Causa**: O PostgREST da Producao tem um cache de schema desatualizado. A coluna `complement` existe na tabela `patients` (confirmado no schema), mas o PostgREST nao a reconhece.
+Mesmo padrao - fallback por email:
 
-**Solucao**: Executar o seguinte comando SQL no dashboard do Supabase de Producao (`ploqujuhpwutpcibedbr`):
-
-```sql
-NOTIFY pgrst, 'reload schema';
+```typescript
+// Se nao encontrou por user_id em nenhum ambiente
+if (!patientData && session.user.email) {
+  const { data: byEmail } = await supabaseProductionAuth
+    .from('patients')
+    .select('profile_complete')
+    .eq('email', session.user.email.toLowerCase())
+    .maybeSingle();
+  patientData = byEmail;
+}
 ```
 
-Isso forca o PostgREST a recarregar o cache e reconhecer todas as colunas atuais.
+## Erro PGRST204 (complement)
 
-## Resumo das acoes
+Este erro e separado e persiste porque o cache do PostgREST na Producao esta desatualizado.
 
-| Acao | Onde | O que fazer |
-|------|------|-------------|
-| 1 | `supabase/functions/patient-operations/index.ts` (operacao `ensure_patient`, ~linha 2164) | Adicionar busca do user_id correto da Producao pelo email antes de inserir |
-| 2 | Dashboard Supabase Producao > SQL Editor | Executar `NOTIFY pgrst, 'reload schema';` |
+**Acao obrigatoria no dashboard do Supabase de Producao** (`ploqujuhpwutpcibedbr`):
 
-Ambas as acoes precisam ser feitas diretamente no Supabase de Producao. A alteracao no arquivo aqui no Lovable serve como referencia para voce copiar e deployar manualmente.
+1. Abrir **SQL Editor**
+2. Executar: `NOTIFY pgrst, 'reload schema';`
+3. Opcionalmente, ir em **Settings > API** e clicar **"Reload Schema"**
+
+Sem isso, qualquer update que inclua a coluna `complement` vai falhar com PGRST204.
+
+## Resumo
+
+| Problema | Causa | Correcao | Onde |
+|----------|-------|----------|------|
+| CPF edit causa "logout" | `AreaDoPaciente` e `Callback` buscam por `user_id` do Cloud, mas paciente na Producao tem outro `user_id` | Adicionar fallback por email | `src/pages/AreaDoPaciente.tsx`, `src/pages/auth/Callback.tsx` |
+| PGRST204 complement | Cache do PostgREST desatualizado | `NOTIFY pgrst, 'reload schema';` | SQL Editor do Supabase de Producao |
 
