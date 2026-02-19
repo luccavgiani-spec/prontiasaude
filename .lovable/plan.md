@@ -1,37 +1,42 @@
 
+# Correcao: Dois bugs em patient-operations
 
-# Correcao: EditPatientModal usando ambiente errado
+## Problema 1: `ReferenceError: body is not defined`
+- **Linha 2444**: O bloco `catch` referencia `body?.operation`, mas `body` e declarado dentro do `try` (linha 641) e nao e acessivel no `catch`.
+- Isso faz o proprio error handler crashar, escondendo o erro real.
 
-## Problema
-O `EditPatientModal` usa `invokeCloudEdgeFunction` que envia a requisicao para o Lovable Cloud (`yrsjluhhnhxogdgnbnya`) ao inves do Supabase de Producao (`ploqujuhpwutpcibedbr`), onde os dados reais dos pacientes estao.
+## Problema 2: Checagem de "already exists" nao funciona
+- **Linha 711**: O codigo faz `authError.message.includes("already exists")` mas a mensagem real do Supabase e `"A user with this email address has already been registered"`.
+- Como `"already exists"` nao esta na mensagem, o erro e lancado (throw) ao inves de ser tratado, causando o 500.
 
 ## Solucao
 
-### Arquivo: `src/components/admin/EditPatientModal.tsx`
+### Arquivo: `supabase/functions/patient-operations/index.ts`
 
-Duas alteracoes cirurgicas:
-
-**1. Linha 7 - Trocar o import:**
+**1. Linha 711 - Corrigir a checagem de erro de usuario existente:**
 
 De:
 ```typescript
-import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
+if (authError && !authError.message.includes("already exists")) {
 ```
 Para:
 ```typescript
-import { invokeEdgeFunction } from '@/lib/edge-functions';
+if (authError && !authError.message.includes("already") && !authError.message.includes("already exists")) {
 ```
 
-**2. Linha ~131 - Trocar a chamada:**
+Mais robusto: usar `.includes("already")` que cobre tanto "already exists" quanto "already been registered".
 
-De:
-```typescript
-const { data, error } = await invokeCloudEdgeFunction('patient-operations', {
-```
-Para:
-```typescript
-const { data, error } = await invokeEdgeFunction('patient-operations', {
-```
+**2. Linhas 2439-2444 - Mover `body` para escopo acessivel ou remover referencia:**
 
-Nenhum outro arquivo sera alterado. O `invokeEdgeFunction` ja respeita headers customizados (nao sobrescreve o Authorization quando ele ja vem definido), entao o token do admin continuara sendo enviado corretamente.
+Declarar uma variavel `let operationName` antes do try, e setar ela apos o parse do body. No catch, usar `operationName` ao inves de `body?.operation`.
 
+### Resumo das alteracoes
+
+| Linha | Antes | Depois |
+|-------|-------|--------|
+| 711 | `!authError.message.includes("already exists")` | `!authError.message.includes("already")` |
+| ~639 (antes do try) | (nada) | `let operationName = 'unknown';` |
+| ~642 (apos parse body) | (nada) | `operationName = body.operation;` |
+| 2444 | `console.error("Operation:", body?.operation);` | `console.error("Operation:", operationName);` |
+
+Nenhum outro arquivo sera alterado.
