@@ -1,42 +1,77 @@
 
-# Correcao: Dois bugs em patient-operations
+# Correcao: `listUsers()` sem paginacao impede UPDATE de pacientes existentes
 
-## Problema 1: `ReferenceError: body is not defined`
-- **Linha 2444**: O bloco `catch` referencia `body?.operation`, mas `body` e declarado dentro do `try` (linha 641) e nao e acessivel no `catch`.
-- Isso faz o proprio error handler crashar, escondendo o erro real.
+## Problema Identificado
 
-## Problema 2: Checagem de "already exists" nao funciona
-- **Linha 711**: O codigo faz `authError.message.includes("already exists")` mas a mensagem real do Supabase e `"A user with this email address has already been registered"`.
-- Como `"already exists"` nao esta na mensagem, o erro e lancado (throw) ao inves de ser tratado, causando o 500.
+Na edge function `patient-operations`, operacao `upsert_patient`, quando o usuario ja existe no auth do Supabase:
+
+1. `createUser` retorna erro "already registered" (correto, tratado)
+2. `userId` fica `null` (correto)
+3. **Linha 745**: `supabase.auth.admin.listUsers()` e chamado SEM parametros
+4. O Supabase retorna apenas os **primeiros 50 usuarios** por padrao
+5. Se o email do usuario nao esta nessa primeira pagina, `finalUserId` fica `null`
+6. O bloco de UPDATE (linha 751) **nao e executado** porque `if (finalUserId)` e falso
+7. A funcao retorna `{ success: true }` mesmo sem ter gravado nada
+
+Esse e o motivo do "sucesso mas dado nao muda".
 
 ## Solucao
 
 ### Arquivo: `supabase/functions/patient-operations/index.ts`
 
-**1. Linha 711 - Corrigir a checagem de erro de usuario existente:**
+Substituir o `listUsers()` generico por uma busca direta por email, que e muito mais eficiente e confiavel:
+
+**Linhas 744-748 - Trocar listUsers por getUserByEmail:**
 
 De:
 ```typescript
-if (authError && !authError.message.includes("already exists")) {
+let finalUserId = userId;
+if (!finalUserId) {
+  const { data: existingUsers } = await supabase.auth.admin.listUsers();
+  const found = existingUsers?.users?.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+  finalUserId = found?.id || null;
+}
 ```
+
 Para:
 ```typescript
-if (authError && !authError.message.includes("already") && !authError.message.includes("already exists")) {
+let finalUserId = userId;
+if (!finalUserId) {
+  // Buscar direto na tabela patients por email (evita listUsers paginado)
+  const { data: patientByEmail } = await supabase
+    .from("patients")
+    .select("user_id")
+    .eq("email", email.toLowerCase())
+    .maybeSingle();
+  
+  if (patientByEmail?.user_id) {
+    finalUserId = patientByEmail.user_id;
+    console.log("[upsert_patient] Found user_id via patients table:", finalUserId);
+  } else {
+    // Fallback: buscar no auth com paginacao
+    let page = 1;
+    const perPage = 100;
+    while (!finalUserId) {
+      const { data: usersPage } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (!usersPage?.users?.length) break;
+      const found = usersPage.users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+      if (found) {
+        finalUserId = found.id;
+        break;
+      }
+      if (usersPage.users.length < perPage) break;
+      page++;
+    }
+  }
+}
 ```
 
-Mais robusto: usar `.includes("already")` que cobre tanto "already exists" quanto "already been registered".
+### Por que essa abordagem
 
-**2. Linhas 2439-2444 - Mover `body` para escopo acessivel ou remover referencia:**
+- **Primeiro tenta pela tabela `patients`**: busca direta por email, sem paginacao, instantanea
+- **Fallback com paginacao**: se por algum motivo o paciente nao existir na tabela mas existir no auth, percorre todas as paginas
+- **Nenhum outro arquivo sera alterado**
 
-Declarar uma variavel `let operationName` antes do try, e setar ela apos o parse do body. No catch, usar `operationName` ao inves de `body?.operation`.
+### Depois de aplicar
 
-### Resumo das alteracoes
-
-| Linha | Antes | Depois |
-|-------|-------|--------|
-| 711 | `!authError.message.includes("already exists")` | `!authError.message.includes("already")` |
-| ~639 (antes do try) | (nada) | `let operationName = 'unknown';` |
-| ~642 (apos parse body) | (nada) | `operationName = body.operation;` |
-| 2444 | `console.error("Operation:", body?.operation);` | `console.error("Operation:", operationName);` |
-
-Nenhum outro arquivo sera alterado.
+O codigo atualizado precisa ser **deployado manualmente no Supabase de Producao** (`ploqujuhpwutpcibedbr`), como nas correcoes anteriores.
