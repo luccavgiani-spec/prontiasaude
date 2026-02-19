@@ -120,7 +120,7 @@ const AuthCallback = () => {
       // Tentar em ambos os ambientes para encontrar o paciente
       let patientData = null;
       
-      // Primeiro, tentar no ambiente atual
+      // Primeiro, tentar no ambiente atual por user_id
       const { data: currentEnvData } = await dbClient
         .from('patients')
         .select('profile_complete')
@@ -129,7 +129,7 @@ const AuthCallback = () => {
       
       patientData = currentEnvData;
       
-      // Se não encontrou, tentar no outro ambiente
+      // Se não encontrou, tentar no outro ambiente por user_id
       if (!patientData) {
         const otherClient = authEnvironment === 'production' ? supabase : supabaseProductionAuth;
         const { data: otherEnvData } = await otherClient
@@ -138,6 +138,26 @@ const AuthCallback = () => {
           .eq('user_id', session.user.id)
           .maybeSingle();
         patientData = otherEnvData;
+      }
+      
+      // ✅ FALLBACK POR EMAIL: user_id difere entre Cloud e Produção
+      if (!patientData && session.user.email) {
+        console.log('[AuthCallback] user_id não encontrado, tentando por email...');
+        const { data: byEmail } = await supabaseProductionAuth
+          .from('patients')
+          .select('profile_complete')
+          .eq('email', session.user.email.toLowerCase())
+          .maybeSingle();
+        patientData = byEmail;
+        
+        if (!patientData) {
+          const { data: byEmailCloud } = await supabase
+            .from('patients')
+            .select('profile_complete')
+            .eq('email', session.user.email.toLowerCase())
+            .maybeSingle();
+          patientData = byEmailCloud;
+        }
       }
 
       if (!patientData?.profile_complete) {

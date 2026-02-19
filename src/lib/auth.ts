@@ -47,7 +47,7 @@ export const requireAuth = async (): Promise<{ user: User; session: Session } | 
   return { user: session.user, session };
 };
 
-export const getPatient = async (userId: string): Promise<Patient | null> => {
+export const getPatient = async (userId: string, userEmail?: string): Promise<Patient | null> => {
   // ✅ HÍBRIDO: Usar cliente correto baseado no ambiente de autenticação
   const environment = sessionStorage.getItem('auth_environment') as 'cloud' | 'production' | null;
   const client = environment === 'production' ? supabaseProductionAuth : supabase;
@@ -58,12 +58,31 @@ export const getPatient = async (userId: string): Promise<Patient | null> => {
     .eq('user_id', userId)
     .maybeSingle();
     
-  if (error) {
-    console.error('[getPatient] Error fetching patient:', error);
-    return null;
+  if (data) return data as unknown as Patient;
+  
+  // Fallback: tentar outro ambiente por user_id
+  const otherClient = environment === 'production' ? supabase : supabaseProductionAuth;
+  const { data: otherData } = await otherClient
+    .from('patients' as any)
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  
+  if (otherData) return otherData as unknown as Patient;
+  
+  // ✅ FALLBACK POR EMAIL: user_id difere entre Cloud e Produção
+  if (userEmail) {
+    console.log('[getPatient] Tentando fallback por email:', userEmail);
+    const { data: byEmail } = await supabaseProductionAuth
+      .from('patients' as any)
+      .select('*')
+      .eq('email', userEmail.toLowerCase())
+      .maybeSingle();
+    if (byEmail) return byEmail as unknown as Patient;
   }
   
-  return data as unknown as Patient;
+  if (error) console.error('[getPatient] Error fetching patient:', error);
+  return null;
 };
 
 export const upsertPatient = async (userId: string, patientData: Partial<Patient>): Promise<Patient | null> => {
