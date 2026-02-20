@@ -194,18 +194,31 @@ serve(async (req: Request): Promise<Response> => {
     let prodUserId: string | null = null;
 
     if (!existsInProd) {
-      console.log("[create-user-both-envs] Criando usuário na Produção...");
+      console.log("[create-user-both-envs] Criando usuário na Produção via REST API direta...");
       try {
-        const { data: prodData, error: prodError } = await prodClient.auth.admin.createUser({
-          email: normalizedEmail,
-          password,
-          email_confirm: true,
-          user_metadata: metadata,
+        const prodResponse = await fetch(`${PRODUCTION_URL}/auth/v1/admin/users`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${prodServiceKey}`,
+            'apikey': prodServiceKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: normalizedEmail,
+            password,
+            email_confirm: true,
+            user_metadata: metadata,
+          }),
         });
-        if (prodError) {
-          console.error("[create-user-both-envs] ⚠️ Erro ao criar em Produção (não-fatal):", prodError.message);
+
+        const prodResponseBody = await prodResponse.text();
+        console.log(`[create-user-both-envs] Produção GoTrue response: ${prodResponse.status} ${prodResponseBody}`);
+
+        if (!prodResponse.ok) {
+          console.error("[create-user-both-envs] ⚠️ Erro COMPLETO Produção (não-fatal):", prodResponseBody);
         } else {
-          prodUserId = prodData.user?.id || null;
+          const prodUserData = JSON.parse(prodResponseBody);
+          prodUserId = prodUserData.id || null;
           console.log(`[create-user-both-envs] ✅ Usuário criado em Produção: ${prodUserId}`);
         }
       } catch (err: any) {
