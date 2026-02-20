@@ -81,6 +81,7 @@ const PLACEHOLDER_CPF = '00000000000';
 export default function UserRegistrationsTab() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
+  const [allUsersCache, setAllUsersCache] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -114,18 +115,22 @@ export default function UserRegistrationsTab() {
   });
   const limit = 50;
 
+  // Fetch data once on mount
   useEffect(() => {
-    // Debounce search to avoid too many API calls
-    const timeoutId = setTimeout(() => {
-      setPage(1); // Reset to first page when search changes
-      loadPatients();
-    }, search ? 300 : 0);
-    return () => clearTimeout(timeoutId);
-  }, [statusFilter, search]);
-  
+    fetchAllUsers();
+  }, []);
+
+  // Apply filters locally whenever search, filter, page, or cache changes
   useEffect(() => {
-    loadPatients();
-  }, [page]);
+    if (allUsersCache.length > 0) {
+      applyFilters();
+    }
+  }, [search, statusFilter, page, allUsersCache]);
+
+  // Reset page when search or filter changes
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   // Fix z-index: marca overlay do Dialog de Consulta Rápida para ficar acima dos float buttons
   useEffect(() => {
@@ -255,17 +260,12 @@ export default function UserRegistrationsTab() {
     return Array.from(emailMap.values());
   };
 
-  const loadPatients = async () => {
+  const fetchAllUsers = async () => {
     setLoading(true);
     try {
-      // ==========================================
-      // BUSCAR VIA EDGE FUNCTION - TODOS OS AUTH.USERS
-      // ==========================================
       console.log('[UserRegistrationsTab] ========================================');
       console.log('[UserRegistrationsTab] Buscando via list-all-users...');
       
-      // ✅ IMPORTANTE: Usar invokeCloudEdgeFunction porque a função está no Lovable Cloud
-      // e precisa das service keys de ambos os ambientes
       const { data: response, error: fetchError } = await invokeCloudEdgeFunction('list-all-users', {
         body: {}
       });
@@ -292,12 +292,10 @@ export default function UserRegistrationsTab() {
       }
       
       console.log(`[UserRegistrationsTab] ✅ Recebidos: ${response.users?.length || 0} usuários`);
-      console.log('[UserRegistrationsTab] Stats:', response.stats);
       
       // Transformar dados da Edge Function para formato User
       const allUsers: User[] = await Promise.all(
         (response.users || []).map(async (u: any) => {
-          // Buscar plano por email (sempre da Produção)
           let activePlan = false;
           let planCode: string | undefined;
           
@@ -345,7 +343,7 @@ export default function UserRegistrationsTab() {
             patient: patientData,
             activePlan,
             planCode,
-            hasAuthAccount: true, // Todos vêm do auth.users
+            hasAuthAccount: true,
             authProvider: 'email',
             hasInvalidCpf: isInvalidCpf(patientData?.cpf),
             hasPlaceholderPhone: isPlaceholderPhone(patientData?.phone_e164),
@@ -354,59 +352,8 @@ export default function UserRegistrationsTab() {
           } as User;
         })
       );
-      
-      // Apply search filter FIRST (by email, name, CPF, or phone)
-      let filteredUsers = allUsers;
-      if (search.trim()) {
-        const searchLower = search.toLowerCase().trim();
-        const searchDigits = search.replace(/\D/g, '');
-        filteredUsers = filteredUsers.filter(u => {
-          // Search in email
-          if (u.email?.toLowerCase().includes(searchLower)) return true;
-          // Search in first name
-          if (u.patient?.first_name?.toLowerCase().includes(searchLower)) return true;
-          // Search in last name
-          if (u.patient?.last_name?.toLowerCase().includes(searchLower)) return true;
-          // Search in full name (first + last)
-          const fullName = `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.toLowerCase();
-          if (fullName.includes(searchLower)) return true;
-          // Search in CPF (digits only)
-          if (searchDigits && u.patient?.cpf?.replace(/\D/g, '').includes(searchDigits)) return true;
-          // Search in phone (digits only)
-          if (searchDigits && u.patient?.phone_e164?.replace(/\D/g, '').includes(searchDigits)) return true;
-          return false;
-        });
-        console.log(`[UserRegistrationsTab] Filtro de busca: "${search}" -> ${filteredUsers.length} resultados`);
-      }
-      
-      // Apply status filter
-      if (statusFilter === 'with_account') {
-        filteredUsers = filteredUsers.filter(u => u.hasAuthAccount);
-      } else if (statusFilter === 'without_account') {
-        filteredUsers = filteredUsers.filter(u => !u.hasAuthAccount);
-      } else if (statusFilter === 'with_plan') {
-        filteredUsers = filteredUsers.filter(u => u.activePlan);
-      } else if (statusFilter === 'incomplete_data') {
-        filteredUsers = filteredUsers.filter(u => u.hasMissingCriticalData);
-      } else if (statusFilter === 'invalid_phone') {
-        filteredUsers = filteredUsers.filter(u => u.hasPlaceholderPhone);
-      } else if (statusFilter === 'invalid_cpf') {
-        filteredUsers = filteredUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
-      } else if (statusFilter === 'critical_with_plan') {
-        filteredUsers = filteredUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
-      } else if (statusFilter === 'cloud_only') {
-        filteredUsers = filteredUsers.filter(u => u.source === 'cloud');
-      } else if (statusFilter === 'production_only') {
-        filteredUsers = filteredUsers.filter(u => u.source === 'production');
-      }
 
-      // Paginar localmente
-      const startIdx = (page - 1) * limit;
-      const paginatedUsers = filteredUsers.slice(startIdx, startIdx + limit);
-
-      setUsers(paginatedUsers);
-
-      // Calculate stats from response
+      // Calculate stats
       const withPlanCount = allUsers.filter(u => u.activePlan).length;
       const criticalWithPlanCount = allUsers.filter(u => u.activePlan && u.hasMissingCriticalData).length;
 
@@ -418,12 +365,62 @@ export default function UserRegistrationsTab() {
         productionOnly: response.stats?.productionOnly || 0,
       });
 
+      // Store in cache - filtering will happen via applyFilters useEffect
+      setAllUsersCache(allUsers);
+
     } catch (error) {
       console.error('Error loading patients:', error);
       toast.error('Erro ao carregar pacientes');
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filteredUsers = [...allUsersCache];
+
+    // Apply search filter
+    if (search.trim()) {
+      const searchLower = search.toLowerCase().trim();
+      const searchDigits = search.replace(/\D/g, '');
+      filteredUsers = filteredUsers.filter(u => {
+        if (u.email?.toLowerCase().includes(searchLower)) return true;
+        if (u.patient?.first_name?.toLowerCase().includes(searchLower)) return true;
+        if (u.patient?.last_name?.toLowerCase().includes(searchLower)) return true;
+        const fullName = `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.toLowerCase();
+        if (fullName.includes(searchLower)) return true;
+        if (searchDigits && u.patient?.cpf?.replace(/\D/g, '').includes(searchDigits)) return true;
+        if (searchDigits && u.patient?.phone_e164?.replace(/\D/g, '').includes(searchDigits)) return true;
+        return false;
+      });
+    }
+    
+    // Apply status filter
+    if (statusFilter === 'with_account') {
+      filteredUsers = filteredUsers.filter(u => u.hasAuthAccount);
+    } else if (statusFilter === 'without_account') {
+      filteredUsers = filteredUsers.filter(u => !u.hasAuthAccount);
+    } else if (statusFilter === 'with_plan') {
+      filteredUsers = filteredUsers.filter(u => u.activePlan);
+    } else if (statusFilter === 'incomplete_data') {
+      filteredUsers = filteredUsers.filter(u => u.hasMissingCriticalData);
+    } else if (statusFilter === 'invalid_phone') {
+      filteredUsers = filteredUsers.filter(u => u.hasPlaceholderPhone);
+    } else if (statusFilter === 'invalid_cpf') {
+      filteredUsers = filteredUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
+    } else if (statusFilter === 'critical_with_plan') {
+      filteredUsers = filteredUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
+    } else if (statusFilter === 'cloud_only') {
+      filteredUsers = filteredUsers.filter(u => u.source === 'cloud');
+    } else if (statusFilter === 'production_only') {
+      filteredUsers = filteredUsers.filter(u => u.source === 'production');
+    }
+
+    // Paginate locally
+    const startIdx = (page - 1) * limit;
+    const paginatedUsers = filteredUsers.slice(startIdx, startIdx + limit);
+
+    setUsers(paginatedUsers);
   };
 
   const handleDelete = async (userId: string, userEmail: string) => {
@@ -449,7 +446,7 @@ export default function UserRegistrationsTab() {
 
       console.log('[handleDelete] Resultado:', data);
       toast.success(`Usuário ${userEmail} deletado com sucesso`);
-      loadPatients();
+      fetchAllUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
       toast.error('Erro ao deletar usuário');
@@ -488,7 +485,7 @@ export default function UserRegistrationsTab() {
       }
 
       toast.success('Plano removido com sucesso!');
-      loadPatients();
+      fetchAllUsers();
     } catch (error) {
       console.error('[handleRemovePlan] Exception:', error);
       toast.error('Erro inesperado ao remover plano');
@@ -865,7 +862,7 @@ export default function UserRegistrationsTab() {
               placeholder="Buscar por email, nome ou CPF..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && loadPatients()}
+              onKeyDown={(e) => e.key === 'Enter' && fetchAllUsers()}
               className="pl-10"
             />
           </div>
@@ -884,7 +881,7 @@ export default function UserRegistrationsTab() {
             </SelectContent>
           </Select>
 
-          <Button onClick={loadPatients}>
+          <Button onClick={fetchAllUsers}>
             <Search className="h-4 w-4 mr-2" />
             Buscar
           </Button>
@@ -1107,7 +1104,7 @@ export default function UserRegistrationsTab() {
         onOpenChange={setImportModalOpen}
         onSuccess={() => {
           setImportModalOpen(false);
-          loadPatients();
+          fetchAllUsers();
         }}
       />
 
@@ -1118,7 +1115,7 @@ export default function UserRegistrationsTab() {
         patient={editingPatient}
         onSuccess={() => {
           setEditingPatient(null);
-          loadPatients();
+          fetchAllUsers();
         }}
       />
 
@@ -1143,7 +1140,7 @@ export default function UserRegistrationsTab() {
           onSuccess={() => {
             setActivationModalOpen(false);
             setSelectedUser(null);
-            loadPatients();
+            fetchAllUsers();
             toast.success('Plano ativado com sucesso!');
           }}
         />
