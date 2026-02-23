@@ -7,7 +7,8 @@ import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
-import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { checkProfileComplete } from "@/lib/patients";
 
 export default function SolicitacaoExames() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -44,7 +45,8 @@ export default function SolicitacaoExames() {
       content_name: servico.nome
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
     
     if (!user) {
       const pendingService = {
@@ -59,13 +61,9 @@ export default function SolicitacaoExames() {
       return;
     }
 
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('profile_complete')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const { profileComplete, patient: patientResult } = await checkProfileComplete(user.id, user.email!, environment);
 
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       const pendingService = {
         sku: servico.sku,
         serviceName: servico.nome,
@@ -82,12 +80,7 @@ export default function SolicitacaoExames() {
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
+      const patient = patientResult;
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({ description: 'Complete seu cadastro antes de agendar', variant: 'destructive' });
         navigate('/completar-perfil');

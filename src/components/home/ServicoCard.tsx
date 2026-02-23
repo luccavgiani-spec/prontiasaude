@@ -6,11 +6,10 @@ import { PaymentModal } from "@/components/payment/PaymentModal";
 import { PackageSelectionModal } from "@/components/payment/PackageSelectionModal";
 import { formataPreco } from "@/lib/utils";
 import { trackLead } from "@/lib/meta-tracking";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Clock, Users, CheckCircle, Stethoscope, Pill, Heart, UserCheck, FileText, X, Apple, Dumbbell, Brain } from "lucide-react";
 import { getHybridSession } from "@/lib/auth-hybrid";
-import { supabaseProduction } from "@/lib/supabase-production";
+import { checkProfileComplete } from "@/lib/patients";
 interface Servico {
   slug: string;
   nome: string;
@@ -80,7 +79,6 @@ export function ServicoCard({
     // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
     const { session, environment } = await getHybridSession();
     const user = session?.user;
-    const client = environment === 'production' ? supabaseProduction : supabase;
 
     // ✅ PARA PSICÓLOGA E MÉDICOS ESPECIALISTAS: Verificar plano ativo ANTES de abrir modal
     if ((servico.slug === "psicologa" || servico.slug === "medicos_especialistas") && servico.variantes) {
@@ -96,14 +94,10 @@ export function ServicoCard({
         return;
       }
 
-      // Verificar se perfil está completo usando cliente correto
-      const { data: patient } = await client
-        .from('patients')
-        .select('profile_complete')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // Verificar se perfil está completo (com fallback cross-environment)
+      const { profileComplete: pc } = await checkProfileComplete(user.id, user.email!, environment);
 
-      if (!patient?.profile_complete) {
+      if (!pc) {
         const returnUrl = window.location.pathname + window.location.search;
         localStorage.setItem('returnUrl', returnUrl);
         localStorage.setItem('pendingService', JSON.stringify({
@@ -157,14 +151,10 @@ export function ServicoCard({
       return;
     }
 
-    // Verificar se perfil está completo usando cliente correto
-    const { data: patient } = await client
-      .from('patients')
-      .select('profile_complete')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete, patient: patientData } = await checkProfileComplete(user.id, user.email!, environment);
 
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       const returnUrl = window.location.pathname + window.location.search;
       localStorage.setItem('returnUrl', returnUrl);
       localStorage.setItem('pendingService', JSON.stringify({
@@ -182,13 +172,6 @@ export function ServicoCard({
 
     // ✅ EXCEÇÃO: Laudos psicológicos SEMPRE cobram, mesmo com plano ativo
     if (planStatus.canBypassPayment && servico.slug !== 'laudos_psicologicos') {
-      // Tem plano ativo: buscar dados completos do paciente usando cliente correto
-      const { data: patientData } = await client
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
       if (!patientData || !patientData.cpf || !patientData.first_name || !patientData.phone_e164 || !patientData.gender) {
         toast('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
@@ -235,7 +218,6 @@ export function ServicoCard({
     // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
     const { session, environment } = await getHybridSession();
     const user = session?.user;
-    const client = environment === 'production' ? supabaseProduction : supabase;
     
     if (!user) {
       // Salvar returnUrl no localStorage
@@ -252,14 +234,10 @@ export function ServicoCard({
       return;
     }
 
-    // Verificar se perfil está completo usando cliente correto
-    const { data: patient } = await client
-      .from('patients')
-      .select('profile_complete')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete, patient: patientData } = await checkProfileComplete(user.id, user.email!, environment);
 
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       const returnUrl = window.location.pathname + window.location.search;
       localStorage.setItem('returnUrl', returnUrl);
       localStorage.setItem('pendingService', JSON.stringify({
@@ -276,13 +254,6 @@ export function ServicoCard({
     const planStatus = await checkPatientPlanActive(user.email!);
 
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados completos do paciente usando cliente correto
-      const { data: patientData } = await client
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
       if (!patientData || !patientData.cpf || !patientData.first_name || !patientData.phone_e164 || !patientData.gender) {
         toast('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
