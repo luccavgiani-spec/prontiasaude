@@ -7,7 +7,8 @@ import { formataPreco } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
-import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { checkProfileComplete } from "@/lib/patients";
 
 export default function LaudosPsicologicos() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -44,7 +45,8 @@ export default function LaudosPsicologicos() {
       content_name: servico.nome
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
     
     if (!user) {
       const pendingService = {
@@ -59,13 +61,9 @@ export default function LaudosPsicologicos() {
       return;
     }
 
-    const { data: patient } = await supabase
-      .from('patients')
-      .select('profile_complete')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const { profileComplete } = await checkProfileComplete(user.id, user.email!, environment);
 
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       const pendingService = {
         sku: servico.sku,
         serviceName: servico.nome,
@@ -83,42 +81,7 @@ export default function LaudosPsicologicos() {
     const { checkPatientPlanActive } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
 
-    // Laudos psicológicos não permitem bypass de pagamento
-    if (false && planStatus.canBypassPayment) { // Desabilitado para laudos
-      const { data: patient } = await supabase
-        .from('patients')
-        .select('cpf, first_name, last_name, phone_e164, gender')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
-        toast({ description: 'Complete seu cadastro antes de agendar', variant: 'destructive' });
-        navigate('/completar-perfil');
-        return;
-      }
-
-      const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
-      toast({ description: 'Redirecionando para agendamento...', duration: 2000 });
-
-      const { scheduleWithActivePlan } = await import('@/lib/schedule-service');
-      const result = await scheduleWithActivePlan({
-        cpf: patient.cpf,
-        email: user.email!,
-        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
-        telefone: patient.phone_e164,
-        especialidade: servico.nome,
-        sku: servico.sku,
-        plano_ativo: true,
-        sexo: mapSexo(patient.gender)
-      });
-
-      if (result.ok && result.url) {
-        window.location.href = result.url;
-      } else {
-        toast({ description: result.error || 'Erro ao agendar', variant: 'destructive' });
-      }
-      return;
-    }
+    // Laudos psicológicos não permitem bypass de pagamento - abrir modal direto
 
     setIsPaymentModalOpen(true);
   };

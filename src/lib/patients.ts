@@ -1,6 +1,53 @@
 import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { getPatientPlan } from "./patient-plan";
+import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+
+const PATIENT_FIELDS = 'profile_complete, cpf, first_name, last_name, phone_e164, gender';
+
+/**
+ * Busca centralizada de paciente com fallback cross-environment.
+ * 1. user_id no ambiente atual
+ * 2. user_id no outro ambiente
+ * 3. email na Produção (fallback final)
+ */
+export async function checkProfileComplete(
+  userId: string,
+  email: string,
+  environment: 'cloud' | 'production' | null
+): Promise<{ profileComplete: boolean; patient: any | null; resolvedClient: any }> {
+  const primaryClient = environment === 'production' ? supabaseProduction : supabase;
+  const secondaryClient = environment === 'production' ? supabase : supabaseProduction;
+
+  // 1. Tentar por user_id no ambiente atual
+  const { data: p1 } = await primaryClient
+    .from('patients')
+    .select(PATIENT_FIELDS)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (p1) return { profileComplete: !!p1.profile_complete, patient: p1, resolvedClient: primaryClient };
+
+  // 2. Tentar por user_id no outro ambiente
+  const { data: p2 } = await secondaryClient
+    .from('patients')
+    .select(PATIENT_FIELDS)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (p2) return { profileComplete: !!p2.profile_complete, patient: p2, resolvedClient: secondaryClient };
+
+  // 3. Fallback por email na Produção
+  if (email) {
+    const { data: p3 } = await supabaseProduction
+      .from('patients')
+      .select(PATIENT_FIELDS)
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+    if (p3) return { profileComplete: !!p3.profile_complete, patient: p3, resolvedClient: supabaseProduction };
+  }
+
+  return { profileComplete: false, patient: null, resolvedClient: primaryClient };
+}
 
 /** 
  * Garante que exista uma linha em public.patients para o usuário atual.

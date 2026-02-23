@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { PaymentModal } from '@/components/payment/PaymentModal';
 import { CATALOGO_SERVICOS } from '@/lib/constants';
 import { getHybridSession } from '@/lib/auth-hybrid';
-import { supabase } from '@/integrations/supabase/client';
-import { supabaseProduction } from '@/lib/supabase-production';
+import { checkProfileComplete } from '@/lib/patients';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 const ConsultNowFloatButton = () => {
@@ -38,17 +37,10 @@ const ConsultNowFloatButton = () => {
         return;
       }
 
-      // 2. Usar cliente correto baseado no ambiente de autenticação
-      const client = environment === 'production' ? supabaseProduction : supabase;
-      
-      // 3. Verificar se perfil está completo
-      const { data: patient } = await client
-        .from('patients')
-        .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      // 2. Verificar se perfil está completo (com fallback cross-environment)
+      const { profileComplete, patient } = await checkProfileComplete(user.id, user.email!, environment);
         
-      if (!patient?.profile_complete) {
+      if (!profileComplete) {
         localStorage.setItem('returnUrl', window.location.pathname);
         localStorage.setItem('pendingService', JSON.stringify({
           sku: prontoAtendimento.sku,

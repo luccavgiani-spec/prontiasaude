@@ -8,9 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { getHybridSession } from "@/lib/auth-hybrid";
-import { supabaseProduction } from "@/lib/supabase-production";
+import { checkProfileComplete } from "@/lib/patients";
 
 interface Variante {
   valor: number;
@@ -110,16 +109,10 @@ export default function MedicosEspecialistas() {
       return;
     }
 
-    // ✅ Usar cliente correto baseado no ambiente detectado
-    const client = environment === 'production' ? supabaseProduction : supabase;
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete } = await checkProfileComplete(user.id, user.email!, environment);
 
-    const { data: patient } = await client
-      .from('patients')
-      .select('profile_complete')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       const pendingService = {
         sku: getCurrentSku(),
         serviceName: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),

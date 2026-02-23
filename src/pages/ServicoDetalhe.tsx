@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Clock, Users, CheckCircle, Star, Shield } from "lucide-react";
 import { trackViewContent, trackLead } from "@/lib/meta-tracking";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import { getHybridSession } from "@/lib/auth-hybrid";
+import { checkProfileComplete } from "@/lib/patients";
 interface Variante {
   valor: number;
   nome: string;
@@ -102,12 +103,9 @@ const ServicoDetalhe = () => {
       content_name: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : '')
     });
 
-    // Verificar se usuário está logado
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    // Verificar se usuário está logado (sessão híbrida)
+    const { session, environment } = await getHybridSession();
+    const user = session?.user;
     if (!user) {
       // Salvar serviço pendente e redirecionar para login
       const pendingService = {
@@ -122,11 +120,9 @@ const ServicoDetalhe = () => {
       return;
     }
 
-    // Verificar se perfil está completo
-    const {
-      data: patient
-    } = await supabase.from('patients').select('profile_complete').eq('user_id', user.id).maybeSingle();
-    if (!patient?.profile_complete) {
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete, patient: patientResult } = await checkProfileComplete(user.id, user.email!, environment);
+    if (!profileComplete) {
       const pendingService = {
         sku: getCurrentSku(),
         serviceName: servico.nome + (selectedVariant ? ` - ${selectedVariant}` : ''),
@@ -145,10 +141,8 @@ const ServicoDetalhe = () => {
     } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados completos do paciente
-      const {
-        data: patient
-      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
+      // Tem plano ativo: usar dados já obtidos do checkProfileComplete
+      const patient = patientResult;
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
@@ -204,14 +198,10 @@ const ServicoDetalhe = () => {
       content_name: `${servico.nome} - ${pkg.nome}`
     });
 
-    // Verificar se usuário está logado
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    // Verificar se usuário está logado (sessão híbrida)
+    const { session: s2, environment: env2 } = await getHybridSession();
+    const user = s2?.user;
     if (!user) {
-      // Salvar serviço pendente e redirecionar para login
       const pendingService = {
         sku: pkg.sku,
         serviceName: `${servico.nome} - ${pkg.nome}`,
@@ -224,11 +214,9 @@ const ServicoDetalhe = () => {
       return;
     }
 
-    // Verificar se perfil está completo
-    const {
-      data: patient
-    } = await supabase.from('patients').select('profile_complete').eq('user_id', user.id).maybeSingle();
-    if (!patient?.profile_complete) {
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete: pc2, patient: pat2 } = await checkProfileComplete(user.id, user.email!, env2);
+    if (!pc2) {
       const pendingService = {
         sku: pkg.sku,
         serviceName: `${servico.nome} - ${pkg.nome}`,
@@ -247,10 +235,7 @@ const ServicoDetalhe = () => {
     } = await import('@/lib/patient-plan');
     const planStatus = await checkPatientPlanActive(user.email!);
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados completos do paciente
-      const {
-        data: patient
-      } = await supabase.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
+      const patient = pat2;
       if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast({
           description: 'Complete seu cadastro antes de agendar',
@@ -260,7 +245,6 @@ const ServicoDetalhe = () => {
         return;
       }
 
-      // Mapear gender para 'M' ou 'F'
       const mapSexo = (g?: string) => g?.toUpperCase().startsWith('F') ? 'F' : 'M';
       toast({
         description: 'Redirecionando para agendamento...',

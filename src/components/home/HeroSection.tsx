@@ -2,11 +2,10 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { PaymentModal } from "@/components/payment/PaymentModal";
-import { supabase } from "@/integrations/supabase/client";
-import { supabaseProduction } from "@/lib/supabase-production";
 import { getHybridSession } from "@/lib/auth-hybrid";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
+import { checkProfileComplete } from "@/lib/patients";
 import { toast } from "sonner";
 import { ArrowRight, CheckCircle } from "lucide-react";
 export function HeroSection() {
@@ -28,15 +27,10 @@ export function HeroSection() {
       return;
     }
 
-    // ✅ CORREÇÃO: Usar cliente correto baseado no ambiente da sessão
-    const client = environment === 'production' ? supabaseProduction : supabase;
+    // Verificar se perfil está completo (com fallback cross-environment)
+    const { profileComplete, patient } = await checkProfileComplete(user.id, user.email!, environment);
     
-    // Verificar se perfil está completo
-    const {
-      data: patient
-    } = await client.from('patients').select('profile_complete').eq('user_id', user.id).maybeSingle();
-    
-    if (!patient?.profile_complete) {
+    if (!profileComplete) {
       localStorage.setItem('returnUrl', '/');
       localStorage.setItem('pendingService', JSON.stringify({
         sku: 'ITC6534',
@@ -50,11 +44,7 @@ export function HeroSection() {
     // Verificar plano ativo
     const planStatus = await checkPatientPlanActive(user.email!);
     if (planStatus.canBypassPayment) {
-      // Tem plano ativo: buscar dados completos do paciente
-      const {
-        data: patientData
-      } = await client.from('patients').select('cpf, first_name, last_name, phone_e164, gender').eq('user_id', user.id).maybeSingle();
-      if (!patientData || !patientData.cpf || !patientData.first_name || !patientData.phone_e164 || !patientData.gender) {
+      if (!patient || !patient.cpf || !patient.first_name || !patient.phone_e164 || !patient.gender) {
         toast.error('Complete seu cadastro antes de agendar');
         navigate('/completar-perfil');
         return;
@@ -66,13 +56,13 @@ export function HeroSection() {
         duration: 2000
       });
       const result = await scheduleWithActivePlan({
-        cpf: patientData.cpf,
+        cpf: patient.cpf,
         email: user.email!,
-        nome: `${patientData.first_name} ${patientData.last_name || ''}`.trim(),
-        telefone: patientData.phone_e164,
+        nome: `${patient.first_name} ${patient.last_name || ''}`.trim(),
+        telefone: patient.phone_e164,
         sku: 'ITC6534',
         plano_ativo: true,
-        sexo: mapSexo(patientData.gender)
+        sexo: mapSexo(patient.gender)
       });
       if (result.ok && result.url) {
         window.location.href = result.url;
