@@ -99,6 +99,7 @@ export default function UserRegistrationsTab() {
   // Platform activation modal state
   const [platformActivationUser, setPlatformActivationUser] = useState<User | null>(null);
   const [selectedPlatform, setSelectedPlatform] = useState<'clicklife' | 'communicare'>('clicklife');
+  const [selectedClickLifePlanId, setSelectedClickLifePlanId] = useState<number>(864);
   const [platformActivationLoading, setPlatformActivationLoading] = useState(false);
   
   // Reset password modal state
@@ -509,7 +510,8 @@ export default function UserRegistrationsTab() {
         telefone: platformActivationUser.patient?.phone_e164,
         sexo: platformActivationUser.patient?.gender || 'F',
         birth_date: platformActivationUser.patient?.birth_date,
-        skip_db_lookup: true  // Flag para pular busca no banco
+        skip_db_lookup: true,
+        ...(selectedPlatform === 'clicklife' ? { plan_id: selectedClickLifePlanId } : {})
       };
       
       console.log(`[PlatformActivation] Ativando na ${selectedPlatform}:`, {
@@ -536,8 +538,9 @@ export default function UserRegistrationsTab() {
         const platformName = selectedPlatform === 'clicklife' ? 'ClickLife' : 'Communicare';
         const patientName = platformActivationUser.patient?.first_name || platformActivationUser.email;
         
-        toast.success(`${patientName} ativado na ${platformName}!`, {
-          description: 'Paciente cadastrado e ativado com sucesso.',
+        const planInfo = selectedPlatform === 'clicklife' ? ` (plano_id: ${selectedClickLifePlanId})` : '';
+        toast.success(`${patientName} ativado na ${platformName}!${planInfo}`, {
+          description: selectedPlatform === 'clicklife' ? `Plano ClickLife: ${selectedClickLifePlanId}` : 'Paciente cadastrado e ativado com sucesso.',
           duration: 6000,
         });
         
@@ -1299,8 +1302,29 @@ export default function UserRegistrationsTab() {
                     </div>
                     <HeartPulse className="h-5 w-5 text-purple-500" />
                   </div>
-                </RadioGroup>
+              </RadioGroup>
               </div>
+
+              {/* Seletor de Plano ClickLife (visível apenas quando ClickLife selecionado) */}
+              {selectedPlatform === 'clicklife' && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Código do Plano ClickLife:</Label>
+                  <Select 
+                    value={String(selectedClickLifePlanId)} 
+                    onValueChange={(v) => setSelectedClickLifePlanId(Number(v))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="863">863 — Sem Especialista (Pronto Atendimento)</SelectItem>
+                      <SelectItem value="864">864 — Com Especialista (padrão)</SelectItem>
+                      <SelectItem value="1237">1237 — Familiar Sem Especialista</SelectItem>
+                      <SelectItem value="1238">1238 — Familiar Com Especialista</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Botões de Ação */}
               <div className="flex gap-3">
