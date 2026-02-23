@@ -1,125 +1,70 @@
 
 
-# Correcao: Usuaria Redirecionada para /completar-perfil Apesar de Perfil Completo
+# Adicionar Seletor de Plano ClickLife na Ativacao Manual
 
-## Problema Identificado
+## Situacao Atual
 
-A usuaria `thaiz-santos-15@outlook.com` possui:
-- Conta em `auth.users` no Cloud (user_id: `9a7d9b64-0fc7-4ea5-abd9-248befeed294`)
-- Conta em `auth.users` na Producao (user_id diferente)
-- `loginEnvironment: "cloud"` (o sistema direciona login para o Cloud)
-- **NENHUM registro na tabela `patients` do Cloud** (registro existe apenas na Producao, com user_id da Producao)
+Quando voce clica em "Ativar Paciente em Plataforma" e escolhe ClickLife, o sistema envia o payload SEM `plan_id`. A Edge Function `activate-clicklife-manual` recebe isso e usa `plan_id || 864` como fallback. Ou seja, **todos os pacientes sao ativados no plano 864 (Com Especialista)**.
 
-Quando ela clica em "Consulta Agora", o codigo faz:
-1. `getHybridSession()` retorna ambiente `cloud`
-2. Busca `patients` no Cloud por `user_id` do Cloud
-3. Nao encontra nada (patient = null)
-4. `!patient?.profile_complete` = true
-5. Redireciona para `/completar-perfil`
+## O Que Sera Feito
 
-Este e um problema **sistemico**: qualquer usuario que existe em ambos os ambientes mas tem registro `patients` apenas na Producao (com user_id diferente) nunca consegue comprar.
+Adicionar um seletor de plano ClickLife no modal de ativacao, visivel apenas quando a plataforma selecionada for "ClickLife". O admin podera escolher entre os 4 codigos de plano antes de confirmar.
 
-## Solucao
+## Alteracao
 
-Criar uma funcao utilitaria centralizada `checkProfileComplete()` que busca o paciente com fallback: primeiro por `user_id` no ambiente atual, depois por `user_id` no outro ambiente, e por fim por `email` na Producao. Substituir todas as 9+ ocorrencias espalhadas pelo codigo por essa funcao.
+**Arquivo unico:** `src/components/admin/UserRegistrationsTab.tsx`
 
-## Alteracoes
-
-### Arquivo 1: `src/lib/patients.ts`
-
-Adicionar funcao:
+### 1. Novo estado para o plano selecionado
 
 ```typescript
-export async function checkProfileComplete(
-  userId: string, 
-  email: string, 
-  environment: 'cloud' | 'production' | null
-): Promise<{ profileComplete: boolean; patient: any | null; resolvedClient: any }> {
-  const primaryClient = environment === 'production' ? supabaseProduction : supabase;
-  const secondaryClient = environment === 'production' ? supabase : supabaseProduction;
-  
-  // 1. Tentar por user_id no ambiente atual
-  const { data: p1 } = await primaryClient
-    .from('patients')
-    .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (p1) return { profileComplete: !!p1.profile_complete, patient: p1, resolvedClient: primaryClient };
-  
-  // 2. Tentar por user_id no outro ambiente
-  const { data: p2 } = await secondaryClient
-    .from('patients')
-    .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (p2) return { profileComplete: !!p2.profile_complete, patient: p2, resolvedClient: secondaryClient };
-  
-  // 3. Fallback por email na Producao
-  if (email) {
-    const { data: p3 } = await supabaseProduction
-      .from('patients')
-      .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
-      .eq('email', email.toLowerCase())
-      .maybeSingle();
-    if (p3) return { profileComplete: !!p3.profile_complete, patient: p3, resolvedClient: supabaseProduction };
-  }
-  
-  return { profileComplete: false, patient: null, resolvedClient: primaryClient };
-}
+const [selectedClickLifePlanId, setSelectedClickLifePlanId] = useState<number>(864);
 ```
 
-### Arquivos 2-9: Substituir queries diretas pela funcao centralizada
+### 2. Seletor de plano no modal (aparece apenas quando ClickLife esta selecionado)
 
-Todos os seguintes arquivos terao suas queries `from('patients').select('profile_complete').eq('user_id', ...)` substituidas por `checkProfileComplete(user.id, user.email, environment)`:
+Sera adicionado entre a selecao de plataforma e os botoes de acao:
 
-| Arquivo | Ocorrencias |
-|---------|-------------|
-| `src/components/home/HeroSection.tsx` | 1 |
-| `src/components/home/ServicoCard.tsx` | 3 |
-| `src/components/layout/ConsultNowFloatButton.tsx` | 1 |
-| `src/pages/ServicoDetalhe.tsx` | 2 |
-| `src/pages/servicos/Consulta.tsx` | 1 |
-| `src/pages/servicos/LaudosPsicologicos.tsx` | 1 |
-| `src/pages/servicos/MedicosEspecialistas.tsx` | 1 |
-| `src/pages/servicos/SolicitacaoExames.tsx` | 1 |
-| `src/pages/servicos/Psicologa.tsx` | 1 |
+```
+Codigo do Plano ClickLife:
+  [863] Sem Especialista (Pronto Atendimento)
+  [864] Com Especialista (padrao)              <-- pre-selecionado
+  [1237] Familiar Sem Especialista
+  [1238] Familiar Com Especialista
+```
 
-Exemplo de substituicao (HeroSection.tsx):
+### 3. Incluir `plan_id` no payload
 
 ```typescript
-// ANTES:
-const { data: patient } = await client
-  .from('patients').select('profile_complete')
-  .eq('user_id', user.id).maybeSingle();
-if (!patient?.profile_complete) { navigate('/completar-perfil'); return; }
-
-// DEPOIS:
-const { profileComplete } = await checkProfileComplete(user.id, user.email!, environment);
-if (!profileComplete) { navigate('/completar-perfil'); return; }
+const payload = {
+  email: ...,
+  cpf: ...,
+  nome: ...,
+  telefone: ...,
+  sexo: ...,
+  birth_date: ...,
+  skip_db_lookup: true,
+  plan_id: selectedPlatform === 'clicklife' ? selectedClickLifePlanId : undefined
+};
 ```
 
-Para componentes que tambem buscam dados do paciente (cpf, nome, telefone, gender) logo apos a verificacao de perfil, a funcao `checkProfileComplete` ja retorna esses campos, eliminando a segunda query.
+### 4. Toast de sucesso com o plano usado
+
+```typescript
+toast.success(`${patientName} ativado na ClickLife! (plano_id: ${selectedClickLifePlanId})`);
+```
+
+## Resultado
+
+- Ao selecionar ClickLife, aparece um dropdown com os 4 planos
+- Ao selecionar Communicare, o dropdown fica oculto
+- O `plan_id` escolhido e enviado no payload
+- A Edge Function ja aceita `plan_id` no body (nenhuma alteracao backend necessaria)
+- Padrao continua sendo 864
 
 ## Escopo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/lib/patients.ts` | Adicionar `checkProfileComplete()` |
-| `src/components/home/HeroSection.tsx` | Usar `checkProfileComplete()` |
-| `src/components/home/ServicoCard.tsx` | Usar `checkProfileComplete()` |
-| `src/components/layout/ConsultNowFloatButton.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/ServicoDetalhe.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/servicos/Consulta.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/servicos/LaudosPsicologicos.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/servicos/MedicosEspecialistas.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/servicos/SolicitacaoExames.tsx` | Usar `checkProfileComplete()` |
-| `src/pages/servicos/Psicologa.tsx` | Usar `checkProfileComplete()` |
+| `src/components/admin/UserRegistrationsTab.tsx` | Adicionar estado, seletor e enviar plan_id no payload |
 
-Nenhum arquivo fora desta lista sera alterado.
-
-## Resultado Esperado
-
-- Usuaria `thaiz-santos-15@outlook.com` (e qualquer outro usuario na mesma situacao) conseguira iniciar o checkout normalmente
-- O sistema encontra o registro `patients` mesmo quando o `user_id` difere entre Cloud e Producao
-- A busca por email como fallback garante que nenhum usuario com perfil completo seja redirecionado incorretamente
-
+Nenhum outro arquivo sera alterado.
