@@ -1,81 +1,125 @@
 
 
-# Correcao: Listagem Incompleta e Lenta de Pacientes
+# Correcao: Usuaria Redirecionada para /completar-perfil Apesar de Perfil Completo
 
 ## Problema Identificado
 
-Duas causas raiz:
+A usuaria `thaiz-santos-15@outlook.com` possui:
+- Conta em `auth.users` no Cloud (user_id: `9a7d9b64-0fc7-4ea5-abd9-248befeed294`)
+- Conta em `auth.users` na Producao (user_id diferente)
+- `loginEnvironment: "cloud"` (o sistema direciona login para o Cloud)
+- **NENHUM registro na tabela `patients` do Cloud** (registro existe apenas na Producao, com user_id da Producao)
 
-### 1. N+1 Queries (Performance)
-Ao receber 1117 usuarios da Edge Function, o frontend executa `getPatientPlanByEmail()` **individualmente para cada um** (1117 consultas ao banco de Producao). Isso:
-- Sobrecarrega o connection pool do banco
-- Causa timeouts parciais (alguns usuarios podem "sumir")
-- Torna o carregamento inicial extremamente lento (30-60+ segundos)
+Quando ela clica em "Consulta Agora", o codigo faz:
+1. `getHybridSession()` retorna ambiente `cloud`
+2. Busca `patients` no Cloud por `user_id` do Cloud
+3. Nao encontra nada (patient = null)
+4. `!patient?.profile_complete` = true
+5. Redireciona para `/completar-perfil`
 
-### 2. Pacientes sem conta auth ficam invisiveis
-A Edge Function `list-all-users` busca apenas `auth.users` e depois enriquece com dados de `patients`. Pacientes que foram cadastrados diretamente na tabela `patients` (sem conta em `auth.users`) nao aparecem na listagem.
+Este e um problema **sistemico**: qualquer usuario que existe em ambos os ambientes mas tem registro `patients` apenas na Producao (com user_id diferente) nunca consegue comprar.
 
 ## Solucao
 
-### Etapa 1: Batch query para planos (eliminar N+1)
+Criar uma funcao utilitaria centralizada `checkProfileComplete()` que busca o paciente com fallback: primeiro por `user_id` no ambiente atual, depois por `user_id` no outro ambiente, e por fim por `email` na Producao. Substituir todas as 9+ ocorrencias espalhadas pelo codigo por essa funcao.
 
-**Arquivo:** `src/components/admin/UserRegistrationsTab.tsx`
+## Alteracoes
 
-Substituir o `Promise.all` com 1117 chamadas individuais por UMA unica query batch:
+### Arquivo 1: `src/lib/patients.ts`
+
+Adicionar funcao:
 
 ```typescript
-// ANTES (N+1): 1117 chamadas individuais
-const allUsers = await Promise.all(
-  response.users.map(async (u) => {
-    const plan = await getPatientPlanByEmail(u.email); // 1 query por usuario
-    ...
-  })
-);
-
-// DEPOIS (batch): 1 unica query
-const emails = response.users.map(u => u.email?.toLowerCase()).filter(Boolean);
-const { data: allPlans } = await supabaseProduction
-  .from('patient_plans')
-  .select('email, plan_code, plan_expires_at, status')
-  .in('email', emails)
-  .eq('status', 'active');
-
-// Criar mapa email -> plano
-const planMap = new Map();
-for (const plan of allPlans || []) {
-  planMap.set(plan.email?.toLowerCase(), plan);
+export async function checkProfileComplete(
+  userId: string, 
+  email: string, 
+  environment: 'cloud' | 'production' | null
+): Promise<{ profileComplete: boolean; patient: any | null; resolvedClient: any }> {
+  const primaryClient = environment === 'production' ? supabaseProduction : supabase;
+  const secondaryClient = environment === 'production' ? supabase : supabaseProduction;
+  
+  // 1. Tentar por user_id no ambiente atual
+  const { data: p1 } = await primaryClient
+    .from('patients')
+    .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (p1) return { profileComplete: !!p1.profile_complete, patient: p1, resolvedClient: primaryClient };
+  
+  // 2. Tentar por user_id no outro ambiente
+  const { data: p2 } = await secondaryClient
+    .from('patients')
+    .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (p2) return { profileComplete: !!p2.profile_complete, patient: p2, resolvedClient: secondaryClient };
+  
+  // 3. Fallback por email na Producao
+  if (email) {
+    const { data: p3 } = await supabaseProduction
+      .from('patients')
+      .select('profile_complete, cpf, first_name, last_name, phone_e164, gender')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+    if (p3) return { profileComplete: !!p3.profile_complete, patient: p3, resolvedClient: supabaseProduction };
+  }
+  
+  return { profileComplete: false, patient: null, resolvedClient: primaryClient };
 }
-
-// Transformar usuarios usando o mapa (sem queries adicionais)
-const allUsers = response.users.map((u) => {
-  const plan = planMap.get(u.email?.toLowerCase());
-  // ... montar User sincronamente
-});
 ```
 
-**Resultado:** De 1117 queries para 1 query. Carregamento cai de 30-60s para 2-3s.
+### Arquivos 2-9: Substituir queries diretas pela funcao centralizada
 
-### Etapa 2: Adicionar funcao batch no patient-plan.ts
+Todos os seguintes arquivos terao suas queries `from('patients').select('profile_complete').eq('user_id', ...)` substituidas por `checkProfileComplete(user.id, user.email, environment)`:
 
-**Arquivo:** `src/lib/patient-plan.ts`
+| Arquivo | Ocorrencias |
+|---------|-------------|
+| `src/components/home/HeroSection.tsx` | 1 |
+| `src/components/home/ServicoCard.tsx` | 3 |
+| `src/components/layout/ConsultNowFloatButton.tsx` | 1 |
+| `src/pages/ServicoDetalhe.tsx` | 2 |
+| `src/pages/servicos/Consulta.tsx` | 1 |
+| `src/pages/servicos/LaudosPsicologicos.tsx` | 1 |
+| `src/pages/servicos/MedicosEspecialistas.tsx` | 1 |
+| `src/pages/servicos/SolicitacaoExames.tsx` | 1 |
+| `src/pages/servicos/Psicologa.tsx` | 1 |
 
-Adicionar funcao `getPatientPlansBatch(emails: string[])` que faz uma unica query com `.in('email', emails)` e retorna um `Map<string, PatientPlan>`.
+Exemplo de substituicao (HeroSection.tsx):
 
-**Nota sobre limite de 1000 rows:** A query `.in()` do Supabase tem limite de 1000 itens. Como temos 1117 usuarios, a funcao vai dividir em chunks de 500 emails e fazer 2-3 queries em paralelo (ainda muito melhor que 1117).
+```typescript
+// ANTES:
+const { data: patient } = await client
+  .from('patients').select('profile_complete')
+  .eq('user_id', user.id).maybeSingle();
+if (!patient?.profile_complete) { navigate('/completar-perfil'); return; }
+
+// DEPOIS:
+const { profileComplete } = await checkProfileComplete(user.id, user.email!, environment);
+if (!profileComplete) { navigate('/completar-perfil'); return; }
+```
+
+Para componentes que tambem buscam dados do paciente (cpf, nome, telefone, gender) logo apos a verificacao de perfil, a funcao `checkProfileComplete` ja retorna esses campos, eliminando a segunda query.
 
 ## Escopo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/lib/patient-plan.ts` | Adicionar `getPatientPlansBatch()` com chunking |
-| `src/components/admin/UserRegistrationsTab.tsx` | Substituir N+1 `Promise.all` por batch query |
+| `src/lib/patients.ts` | Adicionar `checkProfileComplete()` |
+| `src/components/home/HeroSection.tsx` | Usar `checkProfileComplete()` |
+| `src/components/home/ServicoCard.tsx` | Usar `checkProfileComplete()` |
+| `src/components/layout/ConsultNowFloatButton.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/ServicoDetalhe.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/servicos/Consulta.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/servicos/LaudosPsicologicos.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/servicos/MedicosEspecialistas.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/servicos/SolicitacaoExames.tsx` | Usar `checkProfileComplete()` |
+| `src/pages/servicos/Psicologa.tsx` | Usar `checkProfileComplete()` |
 
-Nenhum outro arquivo sera alterado.
+Nenhum arquivo fora desta lista sera alterado.
 
 ## Resultado Esperado
 
-- Carregamento inicial: de 30-60s para 2-3s
-- Todos os 1117 usuarios aparecem corretamente
-- Busca por nome/email/CPF funciona instantaneamente (ja implementado no cache local)
-- Sem risco de timeout ou perda parcial de dados
+- Usuaria `thaiz-santos-15@outlook.com` (e qualquer outro usuario na mesma situacao) conseguira iniciar o checkout normalmente
+- O sistema encontra o registro `patients` mesmo quando o `user_id` difere entre Cloud e Producao
+- A busca por email como fallback garante que nenhum usuario com perfil completo seja redirecionado incorretamente
 
