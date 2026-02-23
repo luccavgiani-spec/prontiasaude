@@ -79,6 +79,71 @@ export const getPatientPlan = async (email: string): Promise<PatientPlan | null>
 export const getPatientPlanByEmail = getPatientPlan;
 
 /**
+ * Busca planos ativos em BATCH para múltiplos emails (elimina N+1 queries)
+ * Divide em chunks de 500 para respeitar limite do Supabase
+ * Retorna Map<email_lowercase, PatientPlan>
+ */
+export const getPatientPlansBatch = async (emails: string[]): Promise<Map<string, PatientPlan>> => {
+  const planMap = new Map<string, PatientPlan>();
+  
+  if (!emails.length) return planMap;
+  
+  const normalizedEmails = emails
+    .map(e => (e || '').toLowerCase().trim())
+    .filter(Boolean);
+  
+  // Deduplicate
+  const uniqueEmails = [...new Set(normalizedEmails)];
+  
+  // Chunk into groups of 500 (Supabase .in() limit is ~1000, use 500 for safety)
+  const CHUNK_SIZE = 500;
+  const chunks: string[][] = [];
+  for (let i = 0; i < uniqueEmails.length; i += CHUNK_SIZE) {
+    chunks.push(uniqueEmails.slice(i, i + CHUNK_SIZE));
+  }
+  
+  console.log(`[patient-plan] Batch: ${uniqueEmails.length} emails em ${chunks.length} chunks`);
+  
+  const now = new Date();
+  
+  // Execute all chunks in parallel
+  const results = await Promise.all(
+    chunks.map(async (chunk) => {
+      const { data, error } = await supabaseProduction
+        .from('patient_plans')
+        .select('id, email, plan_code, plan_expires_at, status, created_at, updated_at')
+        .in('email', chunk)
+        .eq('status', 'active');
+      
+      if (error) {
+        console.error('[patient-plan] Batch chunk error:', error);
+        return [];
+      }
+      return data || [];
+    })
+  );
+  
+  // Flatten and build map, checking expiry
+  for (const plans of results) {
+    for (const plan of plans) {
+      if (!plan.email) continue;
+      
+      const expiresAt = new Date(plan.plan_expires_at);
+      if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
+        expiresAt.setUTCHours(23, 59, 59, 999);
+      }
+      
+      if (expiresAt < now) continue; // expired
+      
+      planMap.set(plan.email.toLowerCase(), plan);
+    }
+  }
+  
+  console.log(`[patient-plan] Batch: ${planMap.size} planos ativos encontrados`);
+  return planMap;
+};
+
+/**
  * @deprecated Mantido apenas para compatibilidade com código legado
  */
 export const getPatientPlanFromProduction = async (patientId: string): Promise<PatientPlan | null> => {
