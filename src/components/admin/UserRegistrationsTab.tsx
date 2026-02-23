@@ -13,7 +13,7 @@ import { invokeEdgeFunction, invokeCloudEdgeFunction } from '@/lib/edge-function
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle, Key } from 'lucide-react';
 import { Label } from '@/components/ui/label';
-import { getPatientPlanByEmail } from '@/lib/patient-plan';
+import { getPatientPlanByEmail, getPatientPlansBatch } from '@/lib/patient-plan';
 import { ManualPlanActivationModal } from './ManualPlanActivationModal';
 import { ImportUsersModal } from './ImportUsersModal';
 import { EditPatientModal } from './EditPatientModal';
@@ -293,65 +293,54 @@ export default function UserRegistrationsTab() {
       
       console.log(`[UserRegistrationsTab] ✅ Recebidos: ${response.users?.length || 0} usuários`);
       
-      // Transformar dados da Edge Function para formato User
-      const allUsers: User[] = await Promise.all(
-        (response.users || []).map(async (u: any) => {
-          let activePlan = false;
-          let planCode: string | undefined;
-          
-          try {
-            const plan = await getPatientPlanByEmail(u.email || '');
-            if (plan) {
-              let expiresAt: Date | null = null;
-              if (plan.plan_expires_at) {
-                expiresAt = new Date(plan.plan_expires_at);
-                if (expiresAt.getUTCHours() === 0 && expiresAt.getUTCMinutes() === 0) {
-                  expiresAt.setUTCHours(23, 59, 59, 999);
-                }
-              }
-              const now = new Date();
-              activePlan = expiresAt !== null && expiresAt >= now && plan.status === 'active';
-              planCode = plan.plan_code;
-            }
-          } catch (err) {
-            console.error(`Erro ao buscar plano para ${u.email}:`, err);
-          }
-          
-          const patientData = u.patient ? {
-            first_name: u.patient.first_name,
-            last_name: u.patient.last_name,
-            cpf: u.patient.cpf,
-            phone_e164: u.patient.phone_e164,
-            birth_date: u.patient.birth_date,
-            gender: u.patient.gender,
-            cep: u.patient.cep,
-            address_line: u.patient.address_line,
-            address_number: u.patient.address_number,
-            city: u.patient.city,
-            state: u.patient.state,
-            profile_complete: u.patient.profile_complete || false,
-          } : undefined;
-          
-          return {
-            id: u.id,
-            patientId: u.patient?.id || u.id,
-            email: u.email || '',
-            created_at: u.created_at,
-            last_sign_in_at: u.last_sign_in_at,
-            email_confirmed_at: u.email_confirmed_at,
-            roles: [],
-            patient: patientData,
-            activePlan,
-            planCode,
-            hasAuthAccount: true,
-            authProvider: 'email',
-            hasInvalidCpf: isInvalidCpf(patientData?.cpf),
-            hasPlaceholderPhone: isPlaceholderPhone(patientData?.phone_e164),
-            hasMissingCriticalData: hasCriticalDataMissing(patientData),
-            source: u.source as 'cloud' | 'production' | 'both',
-          } as User;
-        })
-      );
+      // Batch: buscar todos os planos de uma vez (em vez de 1 query por usuário)
+      const allEmails = (response.users || [])
+        .map((u: any) => u.email?.toLowerCase())
+        .filter(Boolean) as string[];
+      
+      const planMap = await getPatientPlansBatch(allEmails);
+      console.log(`[UserRegistrationsTab] Batch plans: ${planMap.size} planos ativos para ${allEmails.length} emails`);
+      
+      // Transformar dados sincronamente usando o mapa de planos
+      const allUsers: User[] = (response.users || []).map((u: any) => {
+        const plan = planMap.get((u.email || '').toLowerCase());
+        const activePlan = !!plan;
+        const planCode = plan?.plan_code;
+        
+        const patientData = u.patient ? {
+          first_name: u.patient.first_name,
+          last_name: u.patient.last_name,
+          cpf: u.patient.cpf,
+          phone_e164: u.patient.phone_e164,
+          birth_date: u.patient.birth_date,
+          gender: u.patient.gender,
+          cep: u.patient.cep,
+          address_line: u.patient.address_line,
+          address_number: u.patient.address_number,
+          city: u.patient.city,
+          state: u.patient.state,
+          profile_complete: u.patient.profile_complete || false,
+        } : undefined;
+        
+        return {
+          id: u.id,
+          patientId: u.patient?.id || u.id,
+          email: u.email || '',
+          created_at: u.created_at,
+          last_sign_in_at: u.last_sign_in_at,
+          email_confirmed_at: u.email_confirmed_at,
+          roles: [],
+          patient: patientData,
+          activePlan,
+          planCode,
+          hasAuthAccount: true,
+          authProvider: 'email',
+          hasInvalidCpf: isInvalidCpf(patientData?.cpf),
+          hasPlaceholderPhone: isPlaceholderPhone(patientData?.phone_e164),
+          hasMissingCriticalData: hasCriticalDataMissing(patientData),
+          source: u.source as 'cloud' | 'production' | 'both',
+        } as User;
+      });
 
       // Calculate stats
       const withPlanCount = allUsers.filter(u => u.activePlan).length;
