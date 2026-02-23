@@ -1,64 +1,81 @@
 
 
-# Correcao: Filtro de Pacientes Nao Funciona
+# Correcao: Listagem Incompleta e Lenta de Pacientes
 
 ## Problema Identificado
 
-Ao digitar no campo de busca (nome, email ou CPF), o sistema **recarrega TODOS os usuarios do zero** a cada tecla (com debounce de 300ms). Isso causa:
+Duas causas raiz:
 
-1. **N+1 queries**: Para cada usuario retornado, o sistema faz uma chamada individual `getPatientPlanByEmail()`. Com centenas de usuarios, isso leva muitos segundos.
-2. **Race condition**: Existem dois `useEffect` que chamam `loadPatients()` -- um para `[search, statusFilter]` e outro para `[page]`. Quando o search muda, ele faz `setPage(1)` que dispara o segundo useEffect, causando duas chamadas simultaneas.
-3. **Resultado**: Enquanto carrega, a tabela mostra "carregando". Quando termina, o usuario ja pode ter mudado o campo de busca, disparando outro carregamento. A sensacao e de que a busca "nao funciona".
+### 1. N+1 Queries (Performance)
+Ao receber 1117 usuarios da Edge Function, o frontend executa `getPatientPlanByEmail()` **individualmente para cada um** (1117 consultas ao banco de Producao). Isso:
+- Sobrecarrega o connection pool do banco
+- Causa timeouts parciais (alguns usuarios podem "sumir")
+- Torna o carregamento inicial extremamente lento (30-60+ segundos)
+
+### 2. Pacientes sem conta auth ficam invisiveis
+A Edge Function `list-all-users` busca apenas `auth.users` e depois enriquece com dados de `patients`. Pacientes que foram cadastrados diretamente na tabela `patients` (sem conta em `auth.users`) nao aparecem na listagem.
 
 ## Solucao
 
-Separar **busca de dados** (fetch) de **filtragem** (search/filter). Os dados sao carregados UMA vez e ficam em cache. A filtragem e feita instantaneamente no cache local.
-
-## Alteracoes
+### Etapa 1: Batch query para planos (eliminar N+1)
 
 **Arquivo:** `src/components/admin/UserRegistrationsTab.tsx`
 
-### 1. Adicionar estado para cache dos dados
+Substituir o `Promise.all` com 1117 chamadas individuais por UMA unica query batch:
 
 ```typescript
-const [allUsersCache, setAllUsersCache] = useState<User[]>([]);
+// ANTES (N+1): 1117 chamadas individuais
+const allUsers = await Promise.all(
+  response.users.map(async (u) => {
+    const plan = await getPatientPlanByEmail(u.email); // 1 query por usuario
+    ...
+  })
+);
+
+// DEPOIS (batch): 1 unica query
+const emails = response.users.map(u => u.email?.toLowerCase()).filter(Boolean);
+const { data: allPlans } = await supabaseProduction
+  .from('patient_plans')
+  .select('email, plan_code, plan_expires_at, status')
+  .in('email', emails)
+  .eq('status', 'active');
+
+// Criar mapa email -> plano
+const planMap = new Map();
+for (const plan of allPlans || []) {
+  planMap.set(plan.email?.toLowerCase(), plan);
+}
+
+// Transformar usuarios usando o mapa (sem queries adicionais)
+const allUsers = response.users.map((u) => {
+  const plan = planMap.get(u.email?.toLowerCase());
+  // ... montar User sincronamente
+});
 ```
 
-### 2. Separar `loadPatients` em duas funcoes
+**Resultado:** De 1117 queries para 1 query. Carregamento cai de 30-60s para 2-3s.
 
-- `fetchAllUsers()`: Busca todos os usuarios da Edge Function (chamada apenas 1x no mount e ao clicar "Atualizar")
-- `applyFilters()`: Filtra o cache local por search/statusFilter/page (chamada instantaneamente a cada tecla)
+### Etapa 2: Adicionar funcao batch no patient-plan.ts
 
-### 3. Reescrever os useEffects
+**Arquivo:** `src/lib/patient-plan.ts`
 
-```typescript
-// Carregar dados apenas 1x no mount
-useEffect(() => {
-  fetchAllUsers();
-}, []);
+Adicionar funcao `getPatientPlansBatch(emails: string[])` que faz uma unica query com `.in('email', emails)` e retorna um `Map<string, PatientPlan>`.
 
-// Filtrar localmente quando search, filtro ou pagina mudam
-useEffect(() => {
-  applyFilters();
-}, [search, statusFilter, page, allUsersCache]);
-```
-
-### 4. A funcao `applyFilters` filtra instantaneamente
-
-Mesma logica de filtro que ja existe (linhas 358-406), mas operando sobre `allUsersCache` em vez de re-buscar da API.
-
-## Resultado Esperado
-
-- Digitar no campo de busca filtra **instantaneamente** (sem loading)
-- A busca por nome, email e CPF funciona sem delay
-- Atualizar a pagina recarrega os dados do servidor
-- Botao "Atualizar" permite forcar recarga manual
+**Nota sobre limite de 1000 rows:** A query `.in()` do Supabase tem limite de 1000 itens. Como temos 1117 usuarios, a funcao vai dividir em chunks de 500 emails e fazer 2-3 queries em paralelo (ainda muito melhor que 1117).
 
 ## Escopo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/admin/UserRegistrationsTab.tsx` | Separar fetch de filtragem, adicionar cache local |
+| `src/lib/patient-plan.ts` | Adicionar `getPatientPlansBatch()` com chunking |
+| `src/components/admin/UserRegistrationsTab.tsx` | Substituir N+1 `Promise.all` por batch query |
 
 Nenhum outro arquivo sera alterado.
+
+## Resultado Esperado
+
+- Carregamento inicial: de 30-60s para 2-3s
+- Todos os 1117 usuarios aparecem corretamente
+- Busca por nome/email/CPF funciona instantaneamente (ja implementado no cache local)
+- Sem risco de timeout ou perda parcial de dados
 
