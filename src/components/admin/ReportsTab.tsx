@@ -105,7 +105,7 @@ const SKU_PRICES: Record<string, number> = {
   // Consultas avulsas
   'ITC6534': 4390,
   // Clínico Geral
-  'ZXW2165': 3999,
+  'ZXW2165': 4990,
   // Psicólogo
   'OVM9892': 11990,
   // Laudo Psicológico
@@ -149,9 +149,9 @@ const SKU_PRICES: Record<string, number> = {
   // Personal Trainer
   'VPN5132': 6990,
   // Nutricionista
-  'HXR8516': 3999,
+  'HXR8516': 4990,
   // Psicólogo 4 sessões
-  'YME9025': 3999,
+  'YME9025': 4990,
   // Psicólogo 8 sessões
   'QOP1101': 8990,
   // Psiquiatra
