@@ -876,23 +876,22 @@ Deno.serve(async (req) => {
       // Continuar fluxo normal para ClickLife (não retornar aqui)
     }
 
-    // ✅ EXCEÇÃO: Psicólogos SEM plano ativo → Agenda Online da Psicóloga
+    // ✅ EXCEÇÃO: Psicólogos SEM plano ativo → WhatsApp para agendamento
     const isPsicologoSemPlano = PSICOLOGO_SKUS.includes(payload.sku) && !payload.plano_ativo;
 
     if (isPsicologoSemPlano) {
-      console.log(`[schedule-redirect] ✓ Psicólogo SEM plano ativo (${payload.sku}) → Agenda Online da Psicóloga`);
+      const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
+      const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
+      console.log(`[schedule-redirect] ✓ Psicólogo SEM plano ativo (${payload.sku}) → WhatsApp`);
 
-      const agendaUrl = "https://prontiasaude.agendar.cc/#/perfil/264663";
-
-      // Salvar appointment no banco com provider Communicare
-      await saveAppointment(payload, "Communicare", agendaUrl, supabase);
-      console.log("[schedule-redirect] ✅ Appointment salvo para Agenda Online da Psicóloga");
+      await saveAppointment(payload, "whatsapp_psicologo", whatsappUrl, supabase);
+      console.log("[schedule-redirect] ✅ Appointment salvo para WhatsApp Psicólogo");
 
       return new Response(
         JSON.stringify({
           ok: true,
-          url: agendaUrl,
-          provider: "Communicare",
+          url: whatsappUrl,
+          provider: "whatsapp_psicologo",
         }),
         {
           status: 200,
