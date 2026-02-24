@@ -17,7 +17,7 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "psicologa", 
     nome: "Psicólogo", 
-    precoBase: 39.99, 
+    precoBase: 49.90, 
     sku: "ZXW2165",
     descricao: "Sessão de psicologia online",
     tempo: "30 minutos",

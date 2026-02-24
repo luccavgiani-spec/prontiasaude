@@ -23,7 +23,7 @@ const SALES_START_DATE = '2025-03-01T00:00:00.000Z';
 const SKU_PRICES: Record<string, number> = {
   // Consultas avulsas (SKUs atuais)
   'ITC6534': 4390,      // Clínico Geral
-  'ZXW2165': 3999,      // Psicólogo
+  'ZXW2165': 4990,      // Psicólogo
   'OVM9892': 11990,     // Laudo Psicológico
   'ULT3571': 4390,      // Solicitação de Exames
   
@@ -47,8 +47,8 @@ const SKU_PRICES: Record<string, number> = {
   // OUTROS PROFISSIONAIS
   'BIR7668': 5490,      // Personal Trainer (R$54,90)
   'VPN5132': 6990,      // Nutricionista (R$69,90)
-  'HXR8516': 3999,      // Psicólogo 4 sessões
-  'YME9025': 3999,      // Psicólogo 8 sessões
+  'HXR8516': 4990,      // Psicólogo 4 sessões
+  'YME9025': 4990,      // Psicólogo 8 sessões
   'QOP1101': 8990,      // Psiquiatra
   
   // SKUs legados (dados históricos)
