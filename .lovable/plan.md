@@ -1,89 +1,85 @@
 
 
-# Alteracoes no Painel Administrativo
+# Diagnostico: Redirecionamento Erroneo de Psicologo para Communicare
 
-## 1. Pesquisa por email na aba Pacientes — Diagnostico
+## O Problema
 
-Analisei o codigo da funcao `applyFilters()` (linha 377 de `UserRegistrationsTab.tsx`) e a logica **esta correta no codigo**:
-
-```typescript
-if (u.email?.toLowerCase().includes(searchLower)) return true;
-```
-
-No entanto, identifiquei o provavel problema: a funcao `list-all-users` busca usuarios a partir de `auth.users`, que retorna `user.email`. Porem, para usuarios que existem em AMBOS os ambientes, o campo `email` pode estar vazio ou `undefined` em um dos ambientes. Alem disso, pacientes importados manualmente que existem apenas na tabela `patients` (sem conta em `auth.users`) nao aparecem na busca.
-
-**Solucao**: Adicionar console.log de diagnostico na funcao `applyFilters` e tambem buscar no campo `u.patient?.email` como fallback, ja que alguns usuarios podem ter email apenas nos dados do paciente.
-
-### Arquivo: `src/components/admin/UserRegistrationsTab.tsx`
-
-Na funcao `applyFilters`, apos a linha que verifica `u.email`, adicionar mais um fallback:
-
-```typescript
-// ADICIONAR: busca tambem no email do patient (fallback)
-const patientEmail = (u as any).patientEmail || '';
-if (patientEmail.toLowerCase().includes(searchLower)) return true;
-```
-
-E na construcao do User no `fetchAllUsers`, extrair o email do patient como fallback:
-
-```typescript
-return {
-  ...existingFields,
-  email: u.email || u.patient?.email || '',  // ← fallback para patient.email
-};
-```
-
-Isso garante que, mesmo se o email vier apenas do registro `patients` (e nao de `auth.users`), a busca funcione.
+Voce quer que **todos** os usuarios que compram consulta de Psicologo sejam redirecionados para o WhatsApp com a mensagem "Ola! Comprei uma consulta de psicologo e gostaria de agendar!". Porem, o codigo atual tem **dois pontos** que redirecionam psicologos SEM plano ativo para a Communicare (agendar.cc):
 
 ---
 
-## 2. Coluna de Telefone na aba de Vendas
-
-### Arquivo: `src/components/admin/SalesTab.tsx`
-
-**Alteracao 1 — Interface `Appointment`**: Adicionar campo `phone?: string` (linha ~89).
-
-**Alteracao 2 — `loadAppointments()`**: Apos filtrar e deduplicar os appointments, buscar telefones em batch da tabela `patients` na Producao:
+## Ponto 1: `schedule-redirect/index.ts` (linhas 879-902)
 
 ```typescript
-// Buscar telefones dos pacientes por email (batch)
-const emails = uniqueData.map(a => (a.email || '').toLowerCase()).filter(Boolean);
-const { data: patientsData } = await supabaseProduction
-  .from('patients')
-  .select('email, phone_e164')
-  .in('email', emails);
+// ✅ EXCEÇÃO: Psicólogos SEM plano ativo → Agenda Online da Psicóloga
+const isPsicologoSemPlano = PSICOLOGO_SKUS.includes(payload.sku) && !payload.plano_ativo;
 
-const phoneMap = new Map<string, string>();
-for (const p of patientsData || []) {
-  if (p.email && p.phone_e164) phoneMap.set(p.email.toLowerCase(), p.phone_e164);
+if (isPsicologoSemPlano) {
+  const agendaUrl = "https://prontiasaude.agendar.cc/#/perfil/264663";  // ← AQUI
+  await saveAppointment(payload, "Communicare", agendaUrl, supabase);
+  return ... provider: "Communicare" ...
 }
 ```
 
-E incluir `phone` no mapeamento de sales:
+Este bloco intercepta ANTES da logica de especialistas/psicologos com plano (linhas 904-941) que ja redireciona para WhatsApp corretamente. Como psicologos sem plano caem aqui primeiro, nunca chegam ao WhatsApp.
+
+## Ponto 2: `mp-webhook/index.ts` (linhas 1207-1272)
 
 ```typescript
-const sales = uniqueData.map(apt => ({
-  ...existingFields,
-  phone: phoneMap.get((apt.email || '').toLowerCase()) || '',
-}));
+// ✅ EXCEÇÃO 1: PSICÓLOGOS SEM plano → Agendar.cc
+if (isPsicologo && semPlanoAtivo && !fromClicklife) {
+  const agendarUrl = 'https://prontiasaude.agendar.cc/';  // ← AQUI
+  ...
+}
 ```
 
-**Alteracao 3 — Tabela (linha ~958)**: Adicionar `<TableHead>Telefone</TableHead>` apos Email. Atualizar `colSpan` de 7 para 8. Adicionar celula na row:
-
-```typescript
-<TableCell className="text-xs">{apt.phone || '-'}</TableCell>
-```
-
-**Alteracao 4 — CSV Export (linha ~436)**: Adicionar "Telefone" no header apos "Email" e `apt.phone || '-'` na row apos `apt.email`.
+O webhook do Mercado Pago tambem tem a mesma logica errada — quando o pagamento e aprovado, redireciona psicologos sem plano para agendar.cc.
 
 ---
 
-## Escopo Final
+## Resumo: O que aconteceu no seu teste
+
+1. Voce comprou uma consulta de Psicologo (sem plano ativo)
+2. O pagamento foi aprovado pelo Mercado Pago
+3. O `mp-webhook` processou o pagamento e criou o appointment com `redirect_url = agendar.cc`
+4. O `check-payment-status` (polling do frontend) encontrou esse appointment e te redirecionou para agendar.cc
+5. Alternativamente, o `schedule-redirect` tambem teria feito o mesmo redirecionamento
+
+---
+
+## Correcao Necessaria
+
+### Arquivo 1: `supabase/functions/schedule-redirect/index.ts`
+
+Alterar linhas 879-902: trocar o redirecionamento de `agendar.cc` para o WhatsApp:
+
+```typescript
+if (isPsicologoSemPlano) {
+  const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
+  const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
+  await saveAppointment(payload, "whatsapp_psicologo", whatsappUrl, supabase);
+  return ... provider: "whatsapp_psicologo" ...
+}
+```
+
+### Arquivo 2: `supabase/functions/mp-webhook/index.ts`
+
+Alterar linhas 1207-1272: trocar o redirecionamento de `agendar.cc` para o WhatsApp:
+
+```typescript
+if (isPsicologo && semPlanoAtivo && !fromClicklife) {
+  const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
+  const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
+  // ... salvar appointment com provider "whatsapp_psicologo" e redirect_url = whatsappUrl
+}
+```
+
+### Escopo
 
 | Arquivo | Alteracao |
 |---------|-----------|
-| `src/components/admin/UserRegistrationsTab.tsx` | Fallback para `patient.email` na busca e na construcao do User |
-| `src/components/admin/SalesTab.tsx` | Campo phone na interface, batch lookup, coluna na tabela, CSV |
+| `supabase/functions/schedule-redirect/index.ts` | Linhas 879-902: trocar agendar.cc por WhatsApp |
+| `supabase/functions/mp-webhook/index.ts` | Linhas 1207-1272: trocar agendar.cc por WhatsApp |
 
 Nenhum outro arquivo sera alterado.
 
