@@ -296,7 +296,7 @@ export default function UserRegistrationsTab() {
       
       // Batch: buscar todos os planos de uma vez (em vez de 1 query por usuário)
       const allEmails = (response.users || [])
-        .map((u: any) => u.email?.toLowerCase())
+        .map((u: any) => (u.email || u.patient?.email || '').toLowerCase())
         .filter(Boolean) as string[];
       
       const planMap = await getPatientPlansBatch(allEmails);
@@ -326,12 +326,13 @@ export default function UserRegistrationsTab() {
         return {
           id: u.id,
           patientId: u.patient?.id || u.id,
-          email: u.email || '',
+          email: u.email || u.patient?.email || '',
           created_at: u.created_at,
           last_sign_in_at: u.last_sign_in_at,
           email_confirmed_at: u.email_confirmed_at,
           roles: [],
           patient: patientData,
+          patientEmail: u.patient?.email || '',
           activePlan,
           planCode,
           hasAuthAccount: true,
@@ -375,6 +376,9 @@ export default function UserRegistrationsTab() {
       const searchDigits = search.replace(/\D/g, '');
       filteredUsers = filteredUsers.filter(u => {
         if (u.email?.toLowerCase().includes(searchLower)) return true;
+        // Fallback: buscar também no email do patient (caso u.email esteja vazio)
+        const patientEmail = (u as any).patientEmail || '';
+        if (patientEmail && patientEmail.toLowerCase().includes(searchLower)) return true;
         if (u.patient?.first_name?.toLowerCase().includes(searchLower)) return true;
         if (u.patient?.last_name?.toLowerCase().includes(searchLower)) return true;
         const fullName = `${u.patient?.first_name || ''} ${u.patient?.last_name || ''}`.toLowerCase();
