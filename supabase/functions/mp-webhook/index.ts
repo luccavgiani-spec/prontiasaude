@@ -1204,13 +1204,14 @@ Deno.serve(async (req) => {
     const semPlanoAtivo = !schedulePayload.plano_ativo;
     const fromClicklife = schedulePayload.source === 'clicklife';
 
-    // ✅ EXCEÇÃO 1: PSICÓLOGOS SEM plano → Agendar.cc
+    // ✅ EXCEÇÃO 1: PSICÓLOGOS SEM plano → WhatsApp para agendamento
     if (isPsicologo && semPlanoAtivo && !fromClicklife) {
       const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
-      const agendarUrl = 'https://prontiasaude.agendar.cc/';
+      const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
+      const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
       
-      console.log(`[mp-webhook] 🧠 ${serviceName} SEM plano ativo → Agendar.cc`);
-      console.log('[mp-webhook] URL:', agendarUrl);
+      console.log(`[mp-webhook] 🧠 ${serviceName} SEM plano ativo → WhatsApp`);
+      console.log('[mp-webhook] URL:', whatsappUrl);
 
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL')!,
@@ -1250,24 +1251,20 @@ Deno.serve(async (req) => {
         start_at_local: new Date().toISOString(),
         duration_min: 30,
         status: 'pending_schedule',
-        provider: 'agendar_cc',
-        redirect_url: agendarUrl,
-        teams_join_url: agendarUrl,
+        provider: 'whatsapp_psicologo',
+        redirect_url: whatsappUrl,
         order_id: orderId
       });
 
       await supabaseAdmin.from('metrics').insert({
         metric_type: 'sale',
-        amount_cents: Math.round(payment.transaction_amount * 100),
         plan_code: schedulePayload.sku,
-        platform: 'agendar_cc',
-        status: 'approved',
-        patient_email: schedulePayload.email,
+        platform: 'whatsapp_psicologo',
         metadata: { 
           payment_id: payment.id, 
           mp_status: payment.status,
           order_id: payment.metadata?.order_id,
-          redirect_type: 'psicologo_sem_plano_agendar_cc'
+          redirect_type: 'psicologo_sem_plano_whatsapp'
         }
       });
 
@@ -1291,13 +1288,13 @@ Deno.serve(async (req) => {
           .eq('order_id', payment.metadata.order_id);
       }
 
-      console.log('[mp-webhook] ✅ Redirecionamento agendar.cc configurado (SEM plano)');
+      console.log('[mp-webhook] ✅ Redirecionamento WhatsApp configurado (psicólogo SEM plano)');
 
       return new Response(JSON.stringify({ 
         success: true, 
         payment_id: payment.id,
-        redirect_url: agendarUrl,
-        provider: 'agendar_cc'
+        redirect_url: whatsappUrl,
+        provider: 'whatsapp_psicologo'
       }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
