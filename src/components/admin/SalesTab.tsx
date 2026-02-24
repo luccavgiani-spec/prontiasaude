@@ -73,6 +73,7 @@ interface Appointment {
   id: string;
   appointment_id: string;
   email: string;
+  phone?: string;
   user_id?: string;
   service_code: string;
   service_name?: string;
@@ -239,11 +240,36 @@ const SalesTab = () => {
         return true;
       });
 
+      // 📞 Buscar telefones dos pacientes por email (batch)
+      const emails = uniqueData
+        .map(a => (a.email || '').toLowerCase())
+        .filter(Boolean);
+      
+      let phoneMap = new Map<string, string>();
+      if (emails.length > 0) {
+        try {
+          const { data: patientsData } = await supabaseProduction
+            .from('patients')
+            .select('email, phone_e164')
+            .in('email', emails);
+          
+          for (const p of patientsData || []) {
+            if (p.email && p.phone_e164) {
+              phoneMap.set(p.email.toLowerCase(), p.phone_e164);
+            }
+          }
+          console.log(`📞 [SalesTab] Phone lookup: ${phoneMap.size} telefones encontrados para ${emails.length} emails`);
+        } catch (phoneErr) {
+          console.warn('📞 [SalesTab] Erro ao buscar telefones:', phoneErr);
+        }
+      }
+
       // Transformar appointments para formato de "venda"
       const sales = uniqueData.map(apt => ({
         id: apt.id,
         appointment_id: apt.appointment_id || `APT-${apt.id.slice(0, 8)}`,
         email: apt.email || '',
+        phone: phoneMap.get((apt.email || '').toLowerCase()) || '',
         service_code: apt.service_code || '',
         service_name: apt.service_name || getServiceNameFromSKU(apt.service_code || ''),
         start_at_local: apt.start_at_local || apt.created_at,
@@ -435,6 +461,7 @@ const SalesTab = () => {
   const exportCSV = () => {
     const headers = [
       "Email",
+      "Telefone",
       "Serviço",
       "Código",
       "Data Agendamento",
@@ -446,6 +473,7 @@ const SalesTab = () => {
     ];
     const rows = filteredAppointments.map((apt) => [
       apt.email,
+      apt.phone || "-",
       apt.service_name || "-",
       apt.service_code,
       safeFormatDate(apt.start_at_local),
@@ -956,6 +984,7 @@ const SalesTab = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Email</TableHead>
+                  <TableHead>Telefone</TableHead>
                   <TableHead>Serviço</TableHead>
                   <TableHead>Data Agendamento</TableHead>
                   <TableHead>Status</TableHead>
@@ -967,7 +996,7 @@ const SalesTab = () => {
               <TableBody>
                 {filteredAppointments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground">
                       Nenhuma venda encontrada
                     </TableCell>
                   </TableRow>
@@ -975,6 +1004,7 @@ const SalesTab = () => {
                   filteredAppointments.map((apt) => (
                     <TableRow key={apt.id}>
                       <TableCell className="font-medium">{apt.email}</TableCell>
+                      <TableCell className="text-xs">{apt.phone || '-'}</TableCell>
                       <TableCell>
                         <div>
                           <div className="font-medium">{apt.service_name || "-"}</div>
