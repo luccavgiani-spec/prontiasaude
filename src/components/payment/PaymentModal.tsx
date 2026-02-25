@@ -1388,8 +1388,18 @@ export function PaymentModal({
 
       console.log("[handleCardSubmit] Payment creation response:", data);
 
-      // ✅ CORREÇÃO: mp-create-subscription retorna "authorized", não "approved"
-      const isSubscriptionApproved = data.status === "approved" || data.status === "authorized";
+      // ✅ CORREÇÃO v2: Só tratar como aprovado se success=true (mp-create-subscription agora verifica o primeiro pagamento)
+      const isSubscriptionApproved = data.success === true && (data.status === "approved" || data.status === "authorized");
+
+      // ✅ NOVO: Tratar pagamento pendente de confirmação
+      if (data.status === "payment_pending" || data.first_payment_status === "pending") {
+        setPaymentStatus("in_process");
+        toast.info("⏳ Pagamento em processamento", {
+          description: "O banco ainda está processando o pagamento. Aguarde alguns minutos e verifique na sua área do paciente.",
+          duration: 15000,
+        });
+        return;
+      }
 
       if (isSubscriptionApproved) {
         setPaymentId(data.payment_id || data.subscription_id || data.mp_subscription_id);
