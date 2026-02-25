@@ -121,12 +121,16 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
 
     setIsSending(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'invite-familiar',
           plan_id: planId,
           email: newEmail.toLowerCase().trim()
-        }
+        },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
       });
 
       if (error) throw error;
@@ -154,11 +158,15 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const handleResendInvite = async (inviteId: string) => {
     setLoadingAction(inviteId);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'resend-family-invite',
           invite_id: inviteId
-        }
+        },
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
       });
 
       if (error) throw error;
@@ -188,7 +196,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
         .from('pending_family_invites') as any)
         .delete()
         .eq('id', inviteId)
-        .eq('titular_id', currentUserId);
+        .eq('titular_patient_id', currentUserId);
 
       if (error) throw error;
 
