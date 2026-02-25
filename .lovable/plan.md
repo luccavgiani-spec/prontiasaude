@@ -1,49 +1,79 @@
 
 
-# Alterar Valor da Consulta de Psicólogo: R$ 39,99 → R$ 49,90
+# Diagnóstico e Correção: Convite de Familiar "Não Autorizado"
 
-## Arquivos que serão modificados
+## Causa raiz do erro
 
-| Arquivo | Linha | De | Para |
-|---------|-------|----|------|
-| `src/lib/constants.ts` | 20 | `precoBase: 39.99` | `precoBase: 49.90` |
-| `src/components/admin/SalesTab.tsx` | 26 | `'ZXW2165': 3999` | `'ZXW2165': 4990` |
-| `src/components/admin/SalesTab.tsx` | 50 | `'HXR8516': 3999` | `'HXR8516': 4990` |
-| `src/components/admin/SalesTab.tsx` | 51 | `'YME9025': 3999` | `'YME9025': 4990` |
-| `src/components/admin/ReportsTab.tsx` | 108 | `'ZXW2165': 3999` | `'ZXW2165': 4990` |
-| `src/components/admin/ReportsTab.tsx` | 152 | `'HXR8516': 3999` | `'HXR8516': 4990` |
-| `src/components/admin/ReportsTab.tsx` | 154 | `'YME9025': 3999` | `'YME9025': 4990` |
+O erro "Não Autorizado" ocorre porque a função `invokeEdgeFunction` no arquivo `src/lib/edge-functions.ts` **nunca envia o JWT do usuário logado**. Na linha 54, ela sempre usa:
 
-**Nota:** Os valores `39.99` em `PlanosSection.tsx` e no plano "Familiar com especialista" em `constants.ts` (linha 156) **NAO serao alterados** — esses sao precos de planos, nao da consulta de psicologo.
-
-## Arquivos NAO alterados (confirmacao)
-
-- `src/components/home/PlanosSection.tsx` — o `3999` la refere-se ao plano Familiar com Especialista
-- `src/lib/constants.ts` linha 156 — preco do plano Familiar, nao do psicologo
-- `src/lib/sku-mapping.ts` — apenas mapeamento de nome, sem preco
-- `src/components/admin/RedirectFlowMap.tsx` — apenas referencia SKUs, sem precos
-- `src/components/teste/TestesRoteamento.tsx` — apenas referencia SKUs, sem precos
-
-## SQL para Supabase de Producao
-
-Execute este SQL no editor SQL do seu Supabase de producao (`ploqujuhpwutpcibedbr`):
-
-```sql
--- Atualizar preço do Psicólogo de R$ 39,99 para R$ 49,90
-UPDATE services 
-SET price = 49.90, 
-    price_cents = 4990, 
-    updated_at = NOW() 
-WHERE sku = 'ZXW2165';
+```
+Authorization: Bearer ${SUPABASE_ANON_KEY}
 ```
 
-Se houver registros com SKUs `HXR8516` e `YME9025` (pacotes de 4 e 8 sessoes), tambem atualize:
+Quando a operação `invite-familiar` na edge function `patient-operations` tenta validar o token (linha 1683-1693):
+
+```typescript
+const token = authHeader!.replace("Bearer ", "");
+const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+```
+
+Ela recebe a **anon key** em vez do JWT do usuário → `getUser` falha → retorna "Não autorizado".
+
+## Bug secundário
+
+Na `FamiliaresSection.tsx` linha 191, o `handleCancelInvite` usa `.eq('titular_id', currentUserId)` mas a coluna correta na tabela é `titular_patient_id`.
+
+## Plano de correção
+
+### 1. Corrigir `FamiliaresSection.tsx` — passar o token do usuário
+
+Modificar `handleSendInvite`, `handleResendInvite` e `handleCancelInvite` para obter a sessão do usuário e passar o access_token no header Authorization da chamada `invokeEdgeFunction`.
+
+Também corrigir `titular_id` → `titular_patient_id` no `handleCancelInvite`.
+
+### 2. SQL para ativar planos manualmente
+
+Para cadastrar o plano familiar com especialistas para ambos os usuários na **produção**, execute no Dashboard do Supabase (`ploqujuhpwutpcibedbr`):
 
 ```sql
-UPDATE services 
-SET price = 49.90, 
-    price_cents = 4990, 
-    updated_at = NOW() 
-WHERE sku IN ('HXR8516', 'YME9025');
+-- 1. Verificar se monikeagatha174@gmail.com já tem plano ativo
+SELECT * FROM patient_plans WHERE email = 'monikeagatha174@gmail.com';
+
+-- 2. Se não tiver, ativar plano Familiar com Especialistas - Mensal para o TITULAR
+INSERT INTO patient_plans (email, plan_code, status, plan_expires_at, activated_by, created_at, updated_at)
+VALUES (
+  'monikeagatha174@gmail.com',
+  'FAM_COM_ESP_1M',
+  'active',
+  (NOW() + INTERVAL '30 days')::date,
+  'admin_manual',
+  NOW(),
+  NOW()
+);
+
+-- 3. Ativar plano para o DEPENDENTE
+INSERT INTO patient_plans (email, plan_code, status, plan_expires_at, activated_by, created_at, updated_at)
+VALUES (
+  'uaylan.davi.black.18@gmail.com',
+  'FAM_COM_ESP_1M',
+  'active',
+  (NOW() + INTERVAL '30 days')::date,
+  'admin_manual',
+  NOW(),
+  NOW()
+);
 ```
+
+**Nota:** Se o titular já tem plano (o screenshot mostra "Familiar com Especialistas - Mensal"), execute apenas o INSERT do dependente. Ajuste o `plan_expires_at` para coincidir com a data de expiração do plano do titular.
+
+### Arquivos que serão modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/components/patient/FamiliaresSection.tsx` | Passar access_token no Authorization header; corrigir `titular_id` → `titular_patient_id` |
+
+### Arquivos NÃO alterados
+- `src/lib/edge-functions.ts` — design intencional de não enviar token por padrão
+- `supabase/functions/patient-operations/index.ts` — lógica de validação está correta
+- Nenhum outro arquivo
 
