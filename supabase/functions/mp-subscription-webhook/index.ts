@@ -1,13 +1,13 @@
 // Supabase Edge Function: mp-subscription-webhook
 // Processa webhooks do Mercado Pago relacionados a subscriptions (assinaturas recorrentes)
+// ✅ v2 - Trata rejeição de pagamentos recorrentes e ativa planos pendentes
 
 import { getCorsHeaders } from '../common/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
 const corsHeaders = getCorsHeaders();
 
-// ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
-// Isso evita o problema de split-brain onde a função roda em um projeto diferente
+// ✅ URL FIXA do projeto original
 const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 
 interface WebhookPayload {
@@ -23,18 +23,12 @@ interface WebhookPayload {
   };
 }
 
-/**
- * Adiciona meses a uma data
- */
 function addMonths(date: Date, months: number): Date {
   const result = new Date(date);
   result.setMonth(result.getMonth() + months);
   return result;
 }
 
-/**
- * Adiciona dias a uma data
- */
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
@@ -42,12 +36,10 @@ function addDays(date: Date, days: number): Date {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Aceitar apenas POST
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405, headers: corsHeaders });
   }
@@ -82,239 +74,357 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original para evitar split-brain
     const ORIGINAL_SERVICE_ROLE_KEY = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAdmin = createClient(
       ORIGINAL_SUPABASE_URL,
       ORIGINAL_SERVICE_ROLE_KEY
     );
 
-    // Buscar detalhes da subscription no Mercado Pago
-    const mpResponse = await fetch(`https://api.mercadopago.com/preapproval/${payload.data.id}`, {
-      headers: {
-        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
-      }
-    });
-
-    if (!mpResponse.ok) {
-      console.error('[mp-subscription-webhook] Erro ao buscar subscription:', mpResponse.status);
-      throw new Error(`Falha ao buscar subscription: ${mpResponse.status}`);
+    // ✅ Tratar subscription_authorized_payment (pagamentos de subscription)
+    if (payload.type === 'subscription_authorized_payment') {
+      return await handleAuthorizedPayment(payload, MP_ACCESS_TOKEN, supabaseAdmin);
     }
 
-    const subscriptionData = await mpResponse.json();
-
-    console.log('[mp-subscription-webhook] Dados da subscription:', {
-      id: subscriptionData.id,
-      status: subscriptionData.status,
-      payer_email: subscriptionData.payer_email,
-      next_payment_date: subscriptionData.next_payment_date,
-      auto_recurring: subscriptionData.auto_recurring
-    });
-
-    // Buscar subscription no banco pelo mp_subscription_id
-    const { data: dbSubscription, error: fetchError } = await supabaseAdmin
-      .from('patient_subscriptions')
-      .select('*, patient_plans!patient_plans_subscription_id_fkey(*)')
-      .eq('mp_subscription_id', String(subscriptionData.id))
-      .maybeSingle();
-
-    if (fetchError) {
-      console.error('[mp-subscription-webhook] Erro ao buscar subscription no DB:', fetchError);
+    // Tratar subscription_preapproval (mudanças de status da subscription)
+    if (payload.type === 'subscription_preapproval') {
+      return await handlePreapproval(payload, MP_ACCESS_TOKEN, supabaseAdmin);
     }
 
-    // Mapear ação do webhook
-    const action = payload.action;
-
-    switch (action) {
-      case 'updated':
-      case 'created': {
-        // Atualizar status da subscription
-        if (dbSubscription) {
-          await supabaseAdmin
-            .from('patient_subscriptions')
-            .update({
-              mp_status: subscriptionData.status,
-              next_payment_date: subscriptionData.next_payment_date,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', dbSubscription.id);
-
-          console.log('[mp-subscription-webhook] ✅ Subscription atualizada:', {
-            id: dbSubscription.id,
-            new_status: subscriptionData.status
-          });
-        } else {
-          console.warn('[mp-subscription-webhook] Subscription não encontrada no DB:', subscriptionData.id);
-        }
-        break;
-      }
-
-      case 'payment.created': {
-        // Pagamento recorrente CRIADO - aguardar aprovação
-        console.log('[mp-subscription-webhook] Pagamento recorrente criado, aguardando aprovação...');
-        break;
-      }
-
-      case 'payment': {
-        // Pagamento recorrente processado - verificar se foi aprovado
-        // Buscar detalhes do pagamento
-        if (payload.type === 'subscription_authorized_payment') {
-          console.log('[mp-subscription-webhook] 🎉 Pagamento recorrente APROVADO!');
-          
-          if (dbSubscription) {
-            const frequency = subscriptionData.auto_recurring?.frequency || dbSubscription.frequency || 1;
-            const frequencyType = subscriptionData.auto_recurring?.frequency_type || dbSubscription.frequency_type || 'months';
-
-            // Calcular nova data de expiração
-            const currentExpiry = dbSubscription.patient_plans?.[0]?.plan_expires_at 
-              ? new Date(dbSubscription.patient_plans[0].plan_expires_at)
-              : new Date();
-            
-            const newExpiry = frequencyType === 'months' 
-              ? addMonths(currentExpiry, frequency)
-              : addDays(currentExpiry, frequency);
-
-            // Atualizar patient_subscriptions
-            await supabaseAdmin
-              .from('patient_subscriptions')
-              .update({
-                mp_status: 'authorized',
-                last_payment_date: new Date().toISOString(),
-                next_payment_date: subscriptionData.next_payment_date || newExpiry.toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', dbSubscription.id);
-
-            // Atualizar patient_plans com nova data de expiração
-            if (dbSubscription.patient_plans?.[0]) {
-              await supabaseAdmin
-                .from('patient_plans')
-                .update({
-                  plan_expires_at: newExpiry.toISOString(),
-                  status: 'active',
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', dbSubscription.patient_plans[0].id);
-
-              console.log('[mp-subscription-webhook] ✅ Plano RENOVADO:', {
-                plan_id: dbSubscription.patient_plans[0].id,
-                old_expiry: currentExpiry.toISOString(),
-                new_expiry: newExpiry.toISOString()
-              });
-            }
-
-            // Registrar métrica de renovação
-            await supabaseAdmin.from('metrics').insert({
-              metric_type: 'subscription_renewed',
-              patient_email: dbSubscription.email,
-              plan_code: dbSubscription.plan_code,
-              amount_cents: dbSubscription.amount_cents,
-              status: 'approved',
-              metadata: {
-                mp_subscription_id: subscriptionData.id,
-                old_expiry: currentExpiry.toISOString(),
-                new_expiry: newExpiry.toISOString(),
-                frequency: frequency,
-                frequency_type: frequencyType
-              }
-            });
-          }
-        }
-        break;
-      }
-
-      case 'cancelled': {
-        // Subscription cancelada
-        console.log('[mp-subscription-webhook] ⛔ Subscription CANCELADA');
-        
-        if (dbSubscription) {
-          await supabaseAdmin
-            .from('patient_subscriptions')
-            .update({
-              mp_status: 'cancelled',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', dbSubscription.id);
-
-          // Marcar plano como não-recorrente (mas não cancelar imediatamente - expira normalmente)
-          if (dbSubscription.patient_plans?.[0]) {
-            await supabaseAdmin
-              .from('patient_plans')
-              .update({
-                is_recurring: false,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', dbSubscription.patient_plans[0].id);
-          }
-
-          // Registrar métrica
-          await supabaseAdmin.from('metrics').insert({
-            metric_type: 'subscription_cancelled',
-            patient_email: dbSubscription.email,
-            plan_code: dbSubscription.plan_code,
-            status: 'cancelled',
-            metadata: {
-              mp_subscription_id: subscriptionData.id,
-              cancelled_at: new Date().toISOString()
-            }
-          });
-        }
-        break;
-      }
-
-      case 'paused': {
-        // Subscription pausada
-        console.log('[mp-subscription-webhook] ⏸️ Subscription PAUSADA');
-        
-        if (dbSubscription) {
-          await supabaseAdmin
-            .from('patient_subscriptions')
-            .update({
-              mp_status: 'paused',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', dbSubscription.id);
-
-          // Registrar métrica
-          await supabaseAdmin.from('metrics').insert({
-            metric_type: 'subscription_paused',
-            patient_email: dbSubscription.email,
-            plan_code: dbSubscription.plan_code,
-            status: 'paused',
-            metadata: {
-              mp_subscription_id: subscriptionData.id,
-              paused_at: new Date().toISOString()
-            }
-          });
-        }
-        break;
-      }
-
-      default: {
-        console.log('[mp-subscription-webhook] Ação não tratada:', action);
-      }
-    }
-
-    return new Response(JSON.stringify({ 
-      received: true, 
-      processed: true,
-      action: action,
-      subscription_id: subscriptionData.id
-    }), {
+    return new Response(JSON.stringify({ received: true, processed: false }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('[mp-subscription-webhook] Erro:', error);
-    
-    // Retornar 200 para não reprocessar (MP reenvia em caso de erro)
-    return new Response(JSON.stringify({ 
-      received: true, 
-      error: error.message 
-    }), {
+    return new Response(JSON.stringify({ received: true, error: error.message }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
+
+/**
+ * ✅ NOVO: Trata eventos de pagamentos autorizados (aprovados ou rejeitados)
+ */
+async function handleAuthorizedPayment(
+  payload: WebhookPayload,
+  accessToken: string,
+  supabaseAdmin: any
+): Promise<Response> {
+  const paymentId = payload.data.id;
+  
+  // Buscar detalhes do pagamento no MP
+  const paymentResponse = await fetch(
+    `https://api.mercadopago.com/authorized_payments/${paymentId}`,
+    { headers: { 'Authorization': `Bearer ${accessToken}` } }
+  );
+
+  if (!paymentResponse.ok) {
+    console.error('[mp-subscription-webhook] Erro ao buscar pagamento:', paymentResponse.status);
+    return new Response(JSON.stringify({ received: true, error: 'payment_fetch_failed' }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  const paymentData = await paymentResponse.json();
+
+  console.log('[mp-subscription-webhook] Pagamento de subscription:', {
+    id: paymentData.id,
+    status: paymentData.status,
+    status_detail: paymentData.status_detail,
+    preapproval_id: paymentData.preapproval_id,
+    transaction_amount: paymentData.transaction_amount
+  });
+
+  const subscriptionMpId = paymentData.preapproval_id;
+  if (!subscriptionMpId) {
+    console.warn('[mp-subscription-webhook] Pagamento sem preapproval_id');
+    return new Response(JSON.stringify({ received: true, no_preapproval: true }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // Buscar subscription no banco
+  const { data: dbSubscription } = await supabaseAdmin
+    .from('patient_subscriptions')
+    .select('*, patient_plans!patient_plans_subscription_id_fkey(*)')
+    .eq('mp_subscription_id', String(subscriptionMpId))
+    .maybeSingle();
+
+  if (!dbSubscription) {
+    console.warn('[mp-subscription-webhook] Subscription não encontrada no DB:', subscriptionMpId);
+    return new Response(JSON.stringify({ received: true, subscription_not_found: true }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
+  }
+
+  // ✅ PAGAMENTO APROVADO
+  if (paymentData.status === 'approved') {
+    console.log('[mp-subscription-webhook] 🎉 Pagamento APROVADO!');
+    
+    const frequency = dbSubscription.frequency || 1;
+    const frequencyType = dbSubscription.frequency_type || 'months';
+
+    const currentExpiry = dbSubscription.patient_plans?.[0]?.plan_expires_at 
+      ? new Date(dbSubscription.patient_plans[0].plan_expires_at)
+      : new Date();
+    
+    const newExpiry = frequencyType === 'months' 
+      ? addMonths(currentExpiry, frequency)
+      : addDays(currentExpiry, frequency);
+
+    // Atualizar subscription
+    await supabaseAdmin
+      .from('patient_subscriptions')
+      .update({
+        mp_status: 'authorized',
+        last_payment_date: new Date().toISOString(),
+        next_payment_date: newExpiry.toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', dbSubscription.id);
+
+    // ✅ Se era pending_first_payment, ativar o plano agora
+    if (dbSubscription.mp_status === 'pending_first_payment') {
+      console.log('[mp-subscription-webhook] ✅ Primeiro pagamento confirmado! Ativando plano...');
+      
+      // Criar ou atualizar patient_plans
+      const { data: existingPlan } = await supabaseAdmin
+        .from('patient_plans')
+        .select('id')
+        .eq('email', dbSubscription.email)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (existingPlan) {
+        await supabaseAdmin
+          .from('patient_plans')
+          .update({
+            plan_code: dbSubscription.plan_code,
+            plan_expires_at: newExpiry.toISOString(),
+            subscription_id: dbSubscription.id,
+            is_recurring: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingPlan.id);
+      } else {
+        await supabaseAdmin
+          .from('patient_plans')
+          .insert({
+            user_id: dbSubscription.user_id,
+            email: dbSubscription.email,
+            plan_code: dbSubscription.plan_code,
+            plan_expires_at: newExpiry.toISOString(),
+            status: 'active',
+            subscription_id: dbSubscription.id,
+            is_recurring: true
+          });
+      }
+
+      // Métrica de ativação via webhook
+      await supabaseAdmin.from('metrics').insert({
+        metric_type: 'subscription_activated_via_webhook',
+        sku: dbSubscription.plan_code,
+        metadata: {
+          mp_subscription_id: subscriptionMpId,
+          email: dbSubscription.email,
+          plan_expires_at: newExpiry.toISOString()
+        }
+      });
+    } else if (dbSubscription.patient_plans?.[0]) {
+      // Renovação normal - atualizar expiração do plano existente
+      await supabaseAdmin
+        .from('patient_plans')
+        .update({
+          plan_expires_at: newExpiry.toISOString(),
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', dbSubscription.patient_plans[0].id);
+
+      console.log('[mp-subscription-webhook] ✅ Plano RENOVADO:', {
+        plan_id: dbSubscription.patient_plans[0].id,
+        old_expiry: currentExpiry.toISOString(),
+        new_expiry: newExpiry.toISOString()
+      });
+    }
+
+    await supabaseAdmin.from('metrics').insert({
+      metric_type: 'subscription_payment_approved',
+      sku: dbSubscription.plan_code,
+      metadata: {
+        mp_subscription_id: subscriptionMpId,
+        payment_id: paymentData.id,
+        email: dbSubscription.email,
+        amount: paymentData.transaction_amount
+      }
+    });
+  }
+
+  // ✅ PAGAMENTO REJEITADO
+  if (paymentData.status === 'rejected') {
+    console.log('[mp-subscription-webhook] ⛔ Pagamento REJEITADO:', paymentData.status_detail);
+
+    await supabaseAdmin
+      .from('patient_subscriptions')
+      .update({
+        mp_status: 'payment_rejected',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', dbSubscription.id);
+
+    // Se era o primeiro pagamento pendente, NÃO ativar o plano
+    if (dbSubscription.mp_status === 'pending_first_payment') {
+      console.log('[mp-subscription-webhook] ❌ Primeiro pagamento rejeitado. Plano NÃO será ativado.');
+    }
+
+    await supabaseAdmin.from('metrics').insert({
+      metric_type: 'subscription_payment_rejected',
+      sku: dbSubscription.plan_code,
+      metadata: {
+        mp_subscription_id: subscriptionMpId,
+        payment_id: paymentData.id,
+        email: dbSubscription.email,
+        status_detail: paymentData.status_detail,
+        was_first_payment: dbSubscription.mp_status === 'pending_first_payment'
+      }
+    });
+  }
+
+  return new Response(JSON.stringify({ 
+    received: true, 
+    processed: true,
+    payment_status: paymentData.status
+  }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
+}
+
+/**
+ * Trata eventos de mudança de status da subscription (preapproval)
+ */
+async function handlePreapproval(
+  payload: WebhookPayload,
+  accessToken: string,
+  supabaseAdmin: any
+): Promise<Response> {
+  // Buscar detalhes da subscription no MP
+  const mpResponse = await fetch(`https://api.mercadopago.com/preapproval/${payload.data.id}`, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+
+  if (!mpResponse.ok) {
+    console.error('[mp-subscription-webhook] Erro ao buscar subscription:', mpResponse.status);
+    throw new Error(`Falha ao buscar subscription: ${mpResponse.status}`);
+  }
+
+  const subscriptionData = await mpResponse.json();
+
+  console.log('[mp-subscription-webhook] Dados da subscription:', {
+    id: subscriptionData.id,
+    status: subscriptionData.status,
+    payer_email: subscriptionData.payer_email
+  });
+
+  const { data: dbSubscription } = await supabaseAdmin
+    .from('patient_subscriptions')
+    .select('*, patient_plans!patient_plans_subscription_id_fkey(*)')
+    .eq('mp_subscription_id', String(subscriptionData.id))
+    .maybeSingle();
+
+  const action = payload.action;
+
+  switch (action) {
+    case 'updated':
+    case 'created': {
+      if (dbSubscription) {
+        await supabaseAdmin
+          .from('patient_subscriptions')
+          .update({
+            mp_status: subscriptionData.status,
+            next_payment_date: subscriptionData.next_payment_date,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', dbSubscription.id);
+      }
+      break;
+    }
+
+    case 'cancelled': {
+      console.log('[mp-subscription-webhook] ⛔ Subscription CANCELADA');
+      if (dbSubscription) {
+        await supabaseAdmin
+          .from('patient_subscriptions')
+          .update({
+            mp_status: 'cancelled',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', dbSubscription.id);
+
+        if (dbSubscription.patient_plans?.[0]) {
+          await supabaseAdmin
+            .from('patient_plans')
+            .update({
+              is_recurring: false,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', dbSubscription.patient_plans[0].id);
+        }
+
+        await supabaseAdmin.from('metrics').insert({
+          metric_type: 'subscription_cancelled',
+          sku: dbSubscription.plan_code,
+          metadata: {
+            mp_subscription_id: subscriptionData.id,
+            email: dbSubscription.email,
+            cancelled_at: new Date().toISOString()
+          }
+        });
+      }
+      break;
+    }
+
+    case 'paused': {
+      console.log('[mp-subscription-webhook] ⏸️ Subscription PAUSADA');
+      if (dbSubscription) {
+        await supabaseAdmin
+          .from('patient_subscriptions')
+          .update({
+            mp_status: 'paused',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', dbSubscription.id);
+
+        await supabaseAdmin.from('metrics').insert({
+          metric_type: 'subscription_paused',
+          sku: dbSubscription.plan_code,
+          metadata: {
+            mp_subscription_id: subscriptionData.id,
+            email: dbSubscription.email,
+            paused_at: new Date().toISOString()
+          }
+        });
+      }
+      break;
+    }
+
+    default: {
+      console.log('[mp-subscription-webhook] Ação não tratada:', action);
+    }
+  }
+
+  return new Response(JSON.stringify({ 
+    received: true, 
+    processed: true,
+    action: action,
+    subscription_id: subscriptionData.id
+  }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+  });
+}

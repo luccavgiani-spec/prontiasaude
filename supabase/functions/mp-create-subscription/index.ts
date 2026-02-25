@@ -1,6 +1,7 @@
 // Supabase Edge Function: mp-create-subscription
 // Cria assinaturas recorrentes no Mercado Pago usando a API de Subscriptions (preapproval)
 // ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
+// ✅ v2 - Verifica primeiro pagamento antes de ativar plano
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.1';
 
@@ -32,7 +33,6 @@ function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
 // ============================================================
 
 // ✅ URL FIXA do projeto original - NÃO usar Deno.env.get('SUPABASE_URL')
-// Isso evita o problema de split-brain onde a função roda em um projeto diferente
 const ORIGINAL_SUPABASE_URL = 'https://ploqujuhpwutpcibedbr.supabase.co';
 
 interface SubscriptionRequest {
@@ -53,13 +53,14 @@ interface SubscriptionRequest {
 
 interface SubscriptionResponse {
   success: boolean;
-  status: 'authorized' | 'pending' | 'rejected' | 'cancelled';
+  status: 'authorized' | 'pending' | 'rejected' | 'cancelled' | 'payment_pending';
   subscription_id?: string;
   mp_subscription_id?: string;
   plan_expires_at?: string;
   next_payment_date?: string;
   error?: string;
   error_message?: string;
+  first_payment_status?: string;
 }
 
 /**
@@ -79,12 +80,104 @@ function calculatePlanExpiry(frequency: number, frequencyType: 'months' | 'days'
  * Mapeia SKU para plan_code interno
  */
 function extractPlanCode(sku: string): string {
-  // SKUs de plano seguem padrão: IND_COM_ESP_1M, FAM_SEM_ESP_6M, etc
   if (sku.startsWith('IND_COM')) return 'INDIVIDUAL_COM_ESPECIALISTA';
   if (sku.startsWith('IND_SEM')) return 'INDIVIDUAL_SEM_ESPECIALISTA';
   if (sku.startsWith('FAM_COM')) return 'FAMILIAR_COM_ESPECIALISTA';
   if (sku.startsWith('FAM_SEM')) return 'FAMILIAR_SEM_ESPECIALISTA';
   return sku;
+}
+
+/**
+ * Aguarda um tempo em ms
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * ✅ NOVO: Verifica o status do primeiro pagamento da subscription
+ * Tenta até 3 vezes com intervalo de 2s para dar tempo do MP processar
+ */
+async function verifyFirstPayment(
+  subscriptionId: string,
+  accessToken: string
+): Promise<{ paid: boolean; status: string; detail: string }> {
+  
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    console.log(`[mp-create-subscription] Verificando primeiro pagamento (tentativa ${attempt}/3)...`);
+    
+    // Buscar pagamentos autorizados da subscription
+    const paymentsResponse = await fetch(
+      `https://api.mercadopago.com/authorized_payments/search?preapproval_id=${subscriptionId}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+
+    if (paymentsResponse.ok) {
+      const paymentsData = await paymentsResponse.json();
+      const results = paymentsData.results || [];
+      
+      console.log(`[mp-create-subscription] Pagamentos encontrados: ${results.length}`, 
+        results.map((p: any) => ({ id: p.id, status: p.status, status_detail: p.status_detail }))
+      );
+
+      if (results.length > 0) {
+        const firstPayment = results[0];
+        
+        if (firstPayment.status === 'approved') {
+          return { paid: true, status: 'approved', detail: firstPayment.status_detail || '' };
+        }
+        
+        if (firstPayment.status === 'rejected') {
+          return { 
+            paid: false, 
+            status: 'rejected', 
+            detail: firstPayment.status_detail || 'cc_rejected_other_reason' 
+          };
+        }
+        
+        // Se está em processamento, continuar tentando
+        if (firstPayment.status === 'in_process' || firstPayment.status === 'pending') {
+          if (attempt < 3) {
+            await sleep(2000);
+            continue;
+          }
+          return { paid: false, status: firstPayment.status, detail: firstPayment.status_detail || '' };
+        }
+      }
+    } else {
+      console.warn(`[mp-create-subscription] Erro ao buscar pagamentos: ${paymentsResponse.status}`);
+    }
+
+    // Fallback: verificar via summarized da subscription
+    const subResponse = await fetch(
+      `https://api.mercadopago.com/preapproval/${subscriptionId}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+
+    if (subResponse.ok) {
+      const subData = await subResponse.json();
+      const charged = subData.summarized?.charged_quantity || 0;
+      const pending = subData.summarized?.pending_charge_quantity || 0;
+      
+      console.log(`[mp-create-subscription] Summarized - charged: ${charged}, pending: ${pending}`);
+      
+      if (charged > 0) {
+        return { paid: true, status: 'approved', detail: '' };
+      }
+      
+      if (pending > 0 && attempt < 3) {
+        await sleep(2000);
+        continue;
+      }
+    }
+
+    if (attempt < 3) {
+      await sleep(2000);
+    }
+  }
+
+  // Após 3 tentativas, considerar como pendente (não ativar plano ainda)
+  return { paid: false, status: 'pending', detail: 'payment_not_confirmed_after_retries' };
 }
 
 Deno.serve(async (req) => {
@@ -150,7 +243,6 @@ Deno.serve(async (req) => {
     const frequencyType = request.frequency_type || service.recurring_frequency_type || 'months';
 
     // Criar subscription no Mercado Pago via API de Preapproval
-    // Documentação: https://www.mercadopago.com.br/developers/pt/reference/subscriptions/_preapproval/post
     const subscriptionPayload = {
       reason: request.plan_name || service.name,
       external_reference: request.order_id,
@@ -163,7 +255,7 @@ Deno.serve(async (req) => {
         currency_id: 'BRL'
       },
       back_url: 'https://prontiasaude.com.br/area-do-paciente',
-      status: 'authorized' // Iniciar como autorizada (cobrança imediata)
+      status: 'authorized'
     };
 
     console.log('[mp-create-subscription] Criando subscription no MP:', {
@@ -178,7 +270,6 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
         'X-Idempotency-Key': request.order_id,
-        // ✅ ADICIONADO: Header de sessão para análise antifraude
         'X-meli-session-id': request.device_id || ''
       },
       body: JSON.stringify(subscriptionPayload)
@@ -207,6 +298,63 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ✅ NOVO: Verificar se o primeiro pagamento foi realmente processado
+    console.log('[mp-create-subscription] Subscription criada, verificando primeiro pagamento...');
+    
+    const paymentVerification = await verifyFirstPayment(mpData.id, MP_ACCESS_TOKEN);
+    
+    console.log('[mp-create-subscription] Resultado da verificação do primeiro pagamento:', paymentVerification);
+
+    // Se o primeiro pagamento foi REJEITADO, cancelar a subscription e retornar erro
+    if (paymentVerification.status === 'rejected') {
+      console.error('[mp-create-subscription] ❌ Primeiro pagamento REJEITADO! Cancelando subscription...');
+      
+      // Tentar cancelar a subscription no MP
+      try {
+        await fetch(`https://api.mercadopago.com/preapproval/${mpData.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${MP_ACCESS_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'cancelled' })
+        });
+        console.log('[mp-create-subscription] Subscription cancelada no MP');
+      } catch (cancelErr) {
+        console.warn('[mp-create-subscription] Falha ao cancelar subscription:', cancelErr);
+      }
+
+      // Registrar métrica de falha
+      await supabaseAdmin.from('metrics').insert({
+        metric_type: 'subscription_first_payment_rejected',
+        sku: request.plan_sku,
+        metadata: {
+          mp_subscription_id: mpData.id,
+          order_id: request.order_id,
+          payer_email: request.payer_email,
+          payment_status: paymentVerification.status,
+          payment_detail: paymentVerification.detail
+        }
+      });
+
+      return new Response(JSON.stringify({
+        success: false,
+        status: 'rejected',
+        first_payment_status: paymentVerification.status,
+        error: 'first_payment_rejected',
+        error_message: 'O pagamento foi recusado pelo banco. Verifique o limite do cartão ou tente com outro cartão.'
+      } as SubscriptionResponse), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Se o pagamento ainda está pendente/em processamento, salvar mas NÃO ativar plano
+    const isPaymentConfirmed = paymentVerification.paid;
+    const planStatus = isPaymentConfirmed ? 'active' : 'pending_payment';
+    
+    console.log(`[mp-create-subscription] Status do plano: ${planStatus} (pagamento confirmado: ${isPaymentConfirmed})`);
+
     // Calcular datas
     const planExpiresAt = calculatePlanExpiry(frequency, frequencyType as 'months' | 'days');
     const nextPaymentDate = mpData.next_payment_date ? new Date(mpData.next_payment_date) : planExpiresAt;
@@ -228,87 +376,104 @@ Deno.serve(async (req) => {
         user_id: userId,
         email: request.payer_email,
         mp_subscription_id: mpData.id,
-        mp_status: mpData.status,
+        mp_status: isPaymentConfirmed ? 'authorized' : 'pending_first_payment',
         plan_code: planCode,
         amount_cents: request.amount_cents,
         frequency: frequency,
         frequency_type: frequencyType,
         next_payment_date: nextPaymentDate.toISOString(),
-        last_payment_date: new Date().toISOString()
+        last_payment_date: isPaymentConfirmed ? new Date().toISOString() : null
       })
       .select()
       .single();
 
     if (subscriptionError) {
       console.error('[mp-create-subscription] Erro ao salvar subscription:', subscriptionError);
-      // Não falhar - a subscription foi criada no MP
     }
 
-    // Criar/atualizar patient_plans com a subscription vinculada
-    const { data: existingPlan } = await supabaseAdmin
-      .from('patient_plans')
-      .select('id')
-      .eq('email', request.payer_email)
-      .eq('status', 'active')
-      .maybeSingle();
+    // Criar/atualizar patient_plans - só ativar se pagamento confirmado
+    if (isPaymentConfirmed) {
+      const { data: existingPlan } = await supabaseAdmin
+        .from('patient_plans')
+        .select('id')
+        .eq('email', request.payer_email)
+        .eq('status', 'active')
+        .maybeSingle();
 
-    if (existingPlan) {
-      // Atualizar plano existente
-      await supabaseAdmin
-        .from('patient_plans')
-        .update({
-          plan_code: planCode,
-          plan_expires_at: planExpiresAt.toISOString(),
-          subscription_id: subscription?.id,
-          is_recurring: true,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingPlan.id);
-    } else {
-      // Criar novo plano
-      await supabaseAdmin
-        .from('patient_plans')
-        .insert({
-          user_id: userId,
-          email: request.payer_email,
-          plan_code: planCode,
-          plan_expires_at: planExpiresAt.toISOString(),
-          status: 'active',
-          subscription_id: subscription?.id,
-          is_recurring: true
-        });
+      if (existingPlan) {
+        await supabaseAdmin
+          .from('patient_plans')
+          .update({
+            plan_code: planCode,
+            plan_expires_at: planExpiresAt.toISOString(),
+            subscription_id: subscription?.id,
+            is_recurring: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingPlan.id);
+      } else {
+        await supabaseAdmin
+          .from('patient_plans')
+          .insert({
+            user_id: userId,
+            email: request.payer_email,
+            plan_code: planCode,
+            plan_expires_at: planExpiresAt.toISOString(),
+            status: 'active',
+            subscription_id: subscription?.id,
+            is_recurring: true
+          });
+      }
     }
 
     // Registrar métrica
     await supabaseAdmin.from('metrics').insert({
-      metric_type: 'subscription_created',
-      patient_email: request.payer_email,
-      plan_code: planCode,
-      amount_cents: request.amount_cents,
-      status: mpData.status,
+      metric_type: isPaymentConfirmed ? 'subscription_created' : 'subscription_pending_payment',
+      sku: request.plan_sku,
       metadata: {
         mp_subscription_id: mpData.id,
         order_id: request.order_id,
+        payer_email: request.payer_email,
         frequency: frequency,
         frequency_type: frequencyType,
-        is_recurring: true
+        is_recurring: true,
+        first_payment_status: paymentVerification.status,
+        plan_activated: isPaymentConfirmed
       }
     });
 
-    console.log('[mp-create-subscription] ✅ Subscription criada com sucesso:', {
+    console.log('[mp-create-subscription] ✅ Subscription processada:', {
       subscription_id: subscription?.id,
       mp_subscription_id: mpData.id,
       plan_code: planCode,
-      plan_expires_at: planExpiresAt.toISOString()
+      plan_activated: isPaymentConfirmed,
+      first_payment: paymentVerification.status
     });
+
+    // Se pagamento pendente, retornar status diferente pro frontend
+    if (!isPaymentConfirmed) {
+      return new Response(JSON.stringify({
+        success: false,
+        status: 'payment_pending' as any,
+        subscription_id: subscription?.id,
+        mp_subscription_id: mpData.id,
+        first_payment_status: paymentVerification.status,
+        error: 'payment_processing',
+        error_message: 'O pagamento ainda está sendo processado pelo banco. Aguarde alguns minutos e verifique na sua área do paciente.'
+      } as SubscriptionResponse), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     return new Response(JSON.stringify({
       success: true,
-      status: mpData.status as 'authorized' | 'pending',
+      status: 'authorized',
       subscription_id: subscription?.id,
       mp_subscription_id: mpData.id,
       plan_expires_at: planExpiresAt.toISOString(),
-      next_payment_date: nextPaymentDate.toISOString()
+      next_payment_date: nextPaymentDate.toISOString(),
+      first_payment_status: 'approved'
     } as SubscriptionResponse), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -317,7 +482,6 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('[mp-create-subscription] Erro:', error);
     
-    // ✅ CORS: Obter origin da requisição para resposta de erro
     const requestOrigin = req.headers.get('origin');
     const corsHeaders = getCorsHeaders(requestOrigin);
     
