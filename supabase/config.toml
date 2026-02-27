@@ -72,6 +72,9 @@ verify_jwt = false
 [functions.admin-settings-update]
 verify_jwt = false
 
+[functions.admin-coupon-operations]
+verify_jwt = false
+
 [functions.delete-user-by-email]
 verify_jwt = false
 
