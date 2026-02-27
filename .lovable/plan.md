@@ -1,106 +1,50 @@
 
 
-# Investigação: Assinaturas Rejeitadas no Mercado Pago
+# Diagnóstico: Usuários não conseguem gerar cupons
 
-## Diagnóstico com 100% de certeza
+## Causa raiz
 
-O problema **não é do site**. O problema é uma **combinação do comportamento da API de Subscriptions do Mercado Pago + o banco do cliente**. Explico:
+O `MeusCuponsCard.tsx` tenta fazer INSERT diretamente na tabela `user_coupons` via cliente Supabase, mas falha em **ambos os cenários** do sistema híbrido:
 
----
+### Cenário 1: Usuário logado via Cloud (maioria dos usuários)
+- `environment === 'cloud'` → usa o cliente `supabase` (Cloud)
+- INSERT funciona no banco do **Cloud** (RLS ok, `auth.uid()` presente)
+- **Porém**: a `validate-coupon` Edge Function roda na **Produção** e consulta `user_coupons` da Produção → cupom **não é encontrado** na validação
 
-## O que acontece tecnicamente
+### Cenário 2: Usuário logado via Produção
+- `environment === 'production'` → usa `supabaseProduction`
+- Este cliente tem `persistSession: false` e `autoRefreshToken: false` — é um cliente **anônimo**
+- `auth.uid()` retorna NULL → RLS INSERT policy (`owner_user_id = auth.uid()`) **bloqueia** o insert
+- Resultado: erro de RLS violation
 
-### Fluxo atual do código (`mp-create-subscription`, linha 166):
-
-```text
-1. Frontend envia card_token + dados → mp-create-subscription
-2. Edge function cria preapproval no MP com status: "authorized" (cobrança imediata)
-3. MP retorna status "authorized" → nosso código trata como SUCESSO
-4. Código ativa o plano no banco (patient_plans + patient_subscriptions)
-5. Frontend mostra "Plano ativado com sucesso!"
-```
-
-### O que o Mercado Pago faz por baixo:
-
-```text
-1. Cria a subscription (preapproval) → status: "authorized" ✅
-2. Envia email de confirmação ao comprador ✅
-3. Tenta cobrar o PRIMEIRO pagamento do cartão...
-4. Banco REJEITA a cobrança (por risco, limite, etc.) ❌
-5. A subscription fica "authorized" mas o payment fica "rejected"
-```
-
-### Por que isso acontece?
-
-A API de **Subscriptions** (`/preapproval`) do Mercado Pago separa dois conceitos:
-
-| Conceito | Status retornado | Significado |
-|---|---|---|
-| **Subscription** (preapproval) | `authorized` | "O cliente autorizou cobranças recorrentes" |
-| **Payment** (primeira cobrança) | `rejected` | "O banco recusou esta cobrança específica" |
-
-**Nosso código trata o `authorized` da subscription como pagamento aprovado, mas isso NÃO garante que o dinheiro saiu do cartão.** O `authorized` significa apenas que o MP tem permissão de cobrar, não que cobrou com sucesso.
-
-É por isso que:
-- O pagamento aparece em "Planos de Assinatura" do MP (a subscription existe)
-- Mas NÃO aparece no extrato bancário (o payment da primeira cobrança foi rejeitado)
-- O usuário recebe email de "assinatura criada" (é o email da subscription, não do pagamento)
+### Resumo
+| Ambiente login | Cliente usado | INSERT funciona? | Cupom visível na validação? |
+|---|---|---|---|
+| Cloud | `supabase` (Cloud) | Sim | **Não** (validate-coupon lê Produção) |
+| Produção | `supabaseProduction` | **Não** (sem sessão) | N/A |
 
 ---
 
-## Evidência no código
+## Plano de correção
 
-**`mp-create-subscription/index.ts`, linhas 196-208:**
-```javascript
-if (!mpResponse.ok || mpData.status === 'rejected' || mpData.status === 'cancelled') {
-  // Só rejeita se a SUBSCRIPTION inteira falhar
-  return new Response(JSON.stringify({ success: false, ... }));
-}
-```
+### Arquivo: `src/components/patient/MeusCuponsCard.tsx`
 
-O código só rejeita se `mpData.status` (da subscription) for `rejected`. Mas o MP retorna `authorized` para a subscription mesmo quando o primeiro pagamento falha. **O primeiro pagamento é processado assincronamente.**
+Substituir o INSERT direto por uma chamada à Edge Function `admin-coupon-operations` (que já existe na Produção e usa `service_role` para bypass de RLS), passando os dados do cupom. Isso garante que:
 
-**`PaymentModal.tsx`, linha 1392:**
-```javascript
-const isSubscriptionApproved = data.status === "approved" || data.status === "authorized";
-```
+1. O cupom é **sempre criado na Produção** (onde `validate-coupon` consulta)
+2. Não depende de sessão do cliente para RLS (a Edge Function usa `service_role`)
+3. A leitura de cupons existentes (`loadCoupons`) também deve usar a Edge Function ou `invokeEdgeFunction` para consultar Produção
 
-O frontend trata `authorized` como aprovado e ativa o plano.
+### Mudanças específicas:
 
----
+1. **`createCoupon` function (linhas 101-177)**: Trocar o `client.from('user_coupons').insert(...)` por `invokeEdgeFunction('admin-coupon-operations', { body: { operation: 'create', ... } })`
 
-## Causa raiz do banco
+2. **`loadCoupons` function (linhas 34-73)**: Trocar o `client.from('user_coupons').select(...)` por `invokeEdgeFunction` que consulta a Produção, garantindo que cupons criados lá sejam visíveis
 
-As rejeições do primeiro pagamento de subscriptions são tipicamente causadas por:
+3. Importar `invokeEdgeFunction` de `@/lib/edge-functions` e remover imports não mais necessários (`supabaseProduction`)
 
-1. **Limite de crédito insuficiente** - O banco recusa silenciosamente
-2. **Cartão sem permissão para débito recorrente** - Alguns cartões bloqueiam cobranças recorrentes automaticamente
-3. **Antifraude do banco** - Transação classificada como risco (especialmente bancos digitais como Nubank, Inter)
-4. **Cartão pré-pago ou virtual** - Muitos não aceitam cobranças recorrentes
-
----
-
-## Solução recomendada
-
-Para corrigir este problema, o código precisa **verificar o status do primeiro pagamento** após criar a subscription, não apenas o status da subscription em si. Isso envolve:
-
-1. **Após criar a subscription**, consultar a API `GET /preapproval/{id}` para verificar se o `summarized.charged_quantity` é > 0
-2. **Ou** consultar `GET /authorized_payments/search?preapproval_id={id}` para verificar o status do primeiro pagamento
-3. **Se o primeiro pagamento falhou**, retornar erro ao frontend em vez de ativar o plano
-4. **Atualizar o webhook** `mp-subscription-webhook` para tratar eventos `subscription_authorized_payment` e desativar planos quando pagamentos falham
-
-### Arquivos que precisariam ser modificados:
-- `supabase/functions/mp-create-subscription/index.ts` - Adicionar verificação do primeiro pagamento após criar subscription
-- `supabase/functions/mp-subscription-webhook/index.ts` - Tratar rejeição de pagamentos recorrentes
-
----
-
-## Resumo
-
-| Pergunta | Resposta |
-|---|---|
-| É problema do site? | **Parcialmente** - O código não verifica se o primeiro pagamento foi efetivado |
-| É problema do Mercado Pago? | **Não** - A API funciona como documentado; subscription ≠ payment |
-| É problema do banco? | **Sim** - O banco recusa a cobrança, mas o MP já criou a subscription |
-| O que fazer? | Verificar o primeiro pagamento antes de ativar o plano |
+### O que NÃO será alterado:
+- Edge Functions (`admin-coupon-operations`, `validate-coupon`)
+- Tabela `user_coupons` e suas RLS policies
+- Nenhum outro componente ou página
 
