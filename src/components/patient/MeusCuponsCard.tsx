@@ -5,19 +5,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
-import { supabaseProduction } from "@/lib/supabase-production";
 import { getHybridSession } from "@/lib/auth-hybrid";
+import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { Copy, Info, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Coupon {
   id: string;
   code: string;
-  coupon_type: string; // 'SERVICE' | 'PLAN'
+  coupon_type: string;
   discount_percentage: number;
   pix_key: string | null;
 }
+
 export function MeusCuponsCard() {
   const [serviceCoupon, setServiceCoupon] = useState<Coupon | null>(null);
   const [planCoupon, setPlanCoupon] = useState<Coupon | null>(null);
@@ -26,14 +26,15 @@ export function MeusCuponsCard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPixModal, setShowPixModal] = useState(false);
   const [pendingCouponType, setPendingCouponType] = useState<'SERVICE' | 'PLAN' | null>(null);
+
   useEffect(() => {
     loadCoupons();
   }, []);
 
-  // ✅ CORREÇÃO: Usar sessão híbrida para detectar ambiente correto
+  // ✅ CORREÇÃO: Buscar cupons sempre da Produção via Edge Function
   const loadCoupons = async () => {
     try {
-      const { session, environment } = await getHybridSession();
+      const { session } = await getHybridSession();
       const user = session?.user;
       
       if (!user) {
@@ -41,26 +42,24 @@ export function MeusCuponsCard() {
         return;
       }
       
-      console.log('[MeusCuponsCard] Carregando cupons do ambiente:', environment);
+      console.log('[MeusCuponsCard] Carregando cupons via Edge Function (Produção)');
       
-      // ✅ CORREÇÃO: Usar cliente correto baseado no ambiente
-      const client = environment === 'production' ? supabaseProduction : supabase;
-      
-      const { data, error } = await client
-        .from('user_coupons')
-        .select('*')
-        .eq('owner_user_id', user.id)
-        .eq('is_active', true);
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'list_by_owner',
+          owner_user_id: user.id,
+        }
+      });
         
       if (error) throw error;
       
-      if (data) {
-        const service = data.find(c => c.coupon_type === 'SERVICE');
-        const plan = data.find(c => c.coupon_type === 'PLAN');
+      const coupons = data?.coupons || [];
+      if (coupons.length > 0) {
+        const service = coupons.find((c: any) => c.coupon_type === 'SERVICE');
+        const plan = coupons.find((c: any) => c.coupon_type === 'PLAN');
         setServiceCoupon(service || null);
         setPlanCoupon(plan || null);
 
-        // Se já tem cupom, já tem PIX key cadastrada
         if (service?.pix_key || plan?.pix_key) {
           setPixKey(service?.pix_key || plan?.pix_key || "");
         }
@@ -71,14 +70,15 @@ export function MeusCuponsCard() {
       setIsLoadingCoupons(false);
     }
   };
+
   const generateCouponCode = (userName: string, userId: string, type: 'SERVICE' | 'PLAN'): string => {
     const cleanName = userName.toUpperCase().replace(/\s+/g, '').slice(0, 6);
     const userSuffix = userId.slice(0, 4).toUpperCase();
     const typeSuffix = type === 'SERVICE' ? 'S5' : 'P5';
     return `${cleanName}${userSuffix}${typeSuffix}`;
   };
+
   const handleGenerateCoupon = async (type: 'SERVICE' | 'PLAN') => {
-    // Se não tem PIX key, abrir modal
     if (!pixKey) {
       setPendingCouponType(type);
       setShowPixModal(true);
@@ -86,6 +86,7 @@ export function MeusCuponsCard() {
     }
     await createCoupon(type);
   };
+
   const handleSavePixAndGenerateCoupon = async () => {
     if (!pixKey.trim()) {
       toast.error("Por favor, informe sua chave PIX");
@@ -97,13 +98,13 @@ export function MeusCuponsCard() {
       setPendingCouponType(null);
     }
   };
-  // ✅ CORREÇÃO: Usar sessão híbrida e cliente correto para criar cupons
+
+  // ✅ CORREÇÃO: Criar cupons sempre na Produção via Edge Function
   const createCoupon = async (type: 'SERVICE' | 'PLAN') => {
     try {
       setIsGenerating(true);
       
-      // ✅ Usar sessão híbrida
-      const { session, environment } = await getHybridSession();
+      const { session } = await getHybridSession();
       const user = session?.user;
       
       if (!user) {
@@ -111,63 +112,50 @@ export function MeusCuponsCard() {
         return;
       }
 
-      // ✅ Usar cliente correto baseado no ambiente
-      const client = environment === 'production' ? supabaseProduction : supabase;
-
-      // Buscar nome do paciente
-      const { data: patient } = await client
-        .from('patients')
-        .select('first_name')
-        .eq('user_id', user.id)
-        .single();
+      // Buscar nome do paciente via Edge Function de produção
+      const { data: patientData } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'get_patient_name',
+          user_id: user.id,
+        }
+      });
         
-      const userName = patient?.first_name || 'USER';
+      const userName = patientData?.first_name || 'USER';
       const code = generateCouponCode(userName, user.id, type);
       const discountPercentage = 5;
 
-      // Tentar criar cupom
-      const { data, error } = await client
-        .from('user_coupons')
-        .insert({
-          owner_user_id: user.id,
+      // ✅ Criar cupom na Produção via Edge Function (service_role bypassa RLS)
+      const { data, error } = await invokeEdgeFunction('admin-coupon-operations', {
+        body: {
+          operation: 'create',
           code,
           coupon_type: type,
           discount_percentage: discountPercentage,
           pix_key: pixKey,
-          is_active: true
-        })
-        .select()
-        .single();
+          owner_user_id: user.id,
+        }
+      });
         
       if (error) {
-        // Se erro de unique constraint, buscar o cupom existente
-        if (error.code === '23505') {
-          const { data: existing } = await client
-            .from('user_coupons')
-            .select('*')
-            .eq('owner_user_id', user.id)
-            .eq('coupon_type', type)
-            .single();
-            
-          if (existing) {
-            if (type === 'SERVICE') {
-              setServiceCoupon(existing);
-            } else {
-              setPlanCoupon(existing);
-            }
-            toast.success("Cupom já existe!");
-            return;
-          }
-        }
-        throw error;
+        console.error('Erro ao gerar cupom:', error);
+        toast.error(error.message || "Erro ao gerar cupom. Tente novamente.");
+        return;
       }
-      if (data) {
+
+      if (data?.success && data?.coupon) {
+        const coupon = data.coupon;
         if (type === 'SERVICE') {
-          setServiceCoupon(data);
+          setServiceCoupon(coupon);
         } else {
-          setPlanCoupon(data);
+          setPlanCoupon(coupon);
         }
         toast.success(`Cupom para ${type === 'SERVICE' ? 'serviços' : 'planos'} gerado com sucesso!`);
+      } else if (data?.error?.includes('duplicate') || data?.error?.includes('unique')) {
+        // Cupom já existe, recarregar
+        await loadCoupons();
+        toast.success("Cupom já existe!");
+      } else {
+        toast.error(data?.error || "Erro ao gerar cupom. Tente novamente.");
       }
     } catch (error) {
       console.error('Erro ao gerar cupom:', error);
@@ -176,10 +164,12 @@ export function MeusCuponsCard() {
       setIsGenerating(false);
     }
   };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Código copiado para a área de transferência!");
   };
+
   if (isLoadingCoupons) {
     return <Card className="medical-card">
         <CardContent className="pt-6 flex justify-center">
@@ -187,6 +177,7 @@ export function MeusCuponsCard() {
         </CardContent>
       </Card>;
   }
+
   return <>
       <Card className="medical-card">
         <CardHeader>
