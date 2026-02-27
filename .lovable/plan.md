@@ -1,50 +1,34 @@
 
 
-# Diagnóstico: Usuários não conseguem gerar cupons
+# Plano: Criar `admin-coupon-operations` Edge Function no Cloud
 
-## Causa raiz
+## Operações necessárias (usadas pelo frontend)
 
-O `MeusCuponsCard.tsx` tenta fazer INSERT diretamente na tabela `user_coupons` via cliente Supabase, mas falha em **ambos os cenários** do sistema híbrido:
+A partir da análise do código, a Edge Function precisa suportar **7 operações**:
 
-### Cenário 1: Usuário logado via Cloud (maioria dos usuários)
-- `environment === 'cloud'` → usa o cliente `supabase` (Cloud)
-- INSERT funciona no banco do **Cloud** (RLS ok, `auth.uid()` presente)
-- **Porém**: a `validate-coupon` Edge Function roda na **Produção** e consulta `user_coupons` da Produção → cupom **não é encontrado** na validação
+1. **`create`** — Criar cupom na `user_coupons` (usado por `CreateCouponModal` e `MeusCuponsCard`)
+2. **`toggle`** — Ativar/desativar cupom (usado por `CouponsTab`)
+3. **`delete`** — Deletar cupom (usado por `CouponsTab`)
+4. **`mark_reviewed`** — Marcar uso de cupom como conferido na `coupon_uses` (usado por `CouponsTab`)
+5. **`list_by_owner`** — Listar cupons de um owner específico (usado por `MeusCuponsCard`)
+6. **`get_patient_name`** — Buscar `first_name` de um paciente por `user_id` (usado por `MeusCuponsCard`)
 
-### Cenário 2: Usuário logado via Produção
-- `environment === 'production'` → usa `supabaseProduction`
-- Este cliente tem `persistSession: false` e `autoRefreshToken: false` — é um cliente **anônimo**
-- `auth.uid()` retorna NULL → RLS INSERT policy (`owner_user_id = auth.uid()`) **bloqueia** o insert
-- Resultado: erro de RLS violation
+## Arquivo a criar
 
-### Resumo
-| Ambiente login | Cliente usado | INSERT funciona? | Cupom visível na validação? |
-|---|---|---|---|
-| Cloud | `supabase` (Cloud) | Sim | **Não** (validate-coupon lê Produção) |
-| Produção | `supabaseProduction` | **Não** (sem sessão) | N/A |
+**`supabase/functions/admin-coupon-operations/index.ts`**
 
----
+- Auto-contido (sem imports relativos, CORS inline)
+- Usa `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` para operar no banco de **Produção**
+- `verify_jwt = false` no `config.toml` (já que pacientes não-autenticados na Produção precisam acessar)
 
-## Plano de correção
+## Detalhes técnicos
 
-### Arquivo: `src/components/patient/MeusCuponsCard.tsx`
+- A função conecta ao Supabase de **Produção** (`ploqujuhpwutpcibedbr`) usando `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY`
+- Todas as operações usam `service_role` para bypass de RLS
+- O `create` aceita `owner_user_id` direto (para pacientes) ou busca por `owner_email` (para admin)
+- Retorna `{ success: true, coupon: {...} }` no create, `{ success: true }` nos demais
 
-Substituir o INSERT direto por uma chamada à Edge Function `admin-coupon-operations` (que já existe na Produção e usa `service_role` para bypass de RLS), passando os dados do cupom. Isso garante que:
+## config.toml
 
-1. O cupom é **sempre criado na Produção** (onde `validate-coupon` consulta)
-2. Não depende de sessão do cliente para RLS (a Edge Function usa `service_role`)
-3. A leitura de cupons existentes (`loadCoupons`) também deve usar a Edge Function ou `invokeEdgeFunction` para consultar Produção
-
-### Mudanças específicas:
-
-1. **`createCoupon` function (linhas 101-177)**: Trocar o `client.from('user_coupons').insert(...)` por `invokeEdgeFunction('admin-coupon-operations', { body: { operation: 'create', ... } })`
-
-2. **`loadCoupons` function (linhas 34-73)**: Trocar o `client.from('user_coupons').select(...)` por `invokeEdgeFunction` que consulta a Produção, garantindo que cupons criados lá sejam visíveis
-
-3. Importar `invokeEdgeFunction` de `@/lib/edge-functions` e remover imports não mais necessários (`supabaseProduction`)
-
-### O que NÃO será alterado:
-- Edge Functions (`admin-coupon-operations`, `validate-coupon`)
-- Tabela `user_coupons` e suas RLS policies
-- Nenhum outro componente ou página
+Adicionar entrada `[functions.admin-coupon-operations]` com `verify_jwt = false`.
 
