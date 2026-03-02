@@ -1,32 +1,36 @@
 
 
-# Plano: Remover Cadastro Universal dos 3 Arquivos
+# Plano: Remover Cadastro ClickLife Redundante do `check-payment-status`
 
-## Diagnóstico
+## Status atual
 
-Após análise detalhada, eis o que cada arquivo contém:
+O `mp-webhook` **já está correto** — o cadastro universal já foi removido (linhas 1701-1702 contêm apenas o comentário de remoção).
 
-| Arquivo | Tipo de cadastro ClickLife/Communicare | Ação |
-|---------|---------------------------------------|------|
-| `mp-webhook` (linhas 1701-1798) | **CADASTRO UNIVERSAL** — dispara para TODAS as compras com `planoid: 864` fixo | **REMOVER** |
-| `check-payment-status` (linhas 425-457) | Cadastro ao criar plano — usa `getClickLifePlanIdFromSku()` mas usa endpoint `/pacientes` diferente do padrão | **REMOVER** (redundante com mp-webhook/schedule-redirect) |
-| `reconcile-pending-payments` (linhas 261-384 e 650-712) | Cadastro ao reconciliar plano pendente — usa planoId correto por SKU | **MANTER** (é o fallback legítimo quando webhook falha) |
+O `check-payment-status` **ainda contém** o bloco redundante de cadastro na ClickLife que causa duplicações.
 
-## Alterações
+## Alterações no `check-payment-status/index.ts`
 
-### 1. `supabase/functions/mp-webhook/index.ts`
-- **Remover linhas 1701-1798**: Bloco inteiro "CADASTRO UNIVERSAL NA CLICKLIFE" + "CADASTRO SIMULTÂNEO NA COMMUNICARE"
-- Manter os cadastros específicos que já existem nos fluxos de plano (linha 1083) e serviço avulso (linha 1375)
+### Remoção 1: Funções helper não utilizadas (linhas 14-111)
+- `getClickLifePlanIdFromSku()` — só era usada pelo bloco de cadastro abaixo
+- `registerClickLifePatient()` — usa endpoint `/pacientes` (diferente do padrão `/usuarios/usuarios` + `/usuarios/ativacao`)
 
-### 2. `supabase/functions/check-payment-status/index.ts`
-- **Remover linhas 425-457**: Bloco "CADASTRAR NA CLICKLIFE AO CRIAR PLANO" — é redundante porque o `mp-webhook` e o `schedule-redirect` já fazem o cadastro correto. Além disso, usa o endpoint `/pacientes` (diferente do padrão `/usuarios/usuarios` + `/usuarios/ativacao`)
+Substituir por comentário indicando a remoção.
 
-### 3. `supabase/functions/reconcile-pending-payments/index.ts`
-- **NÃO remover** — os dois blocos ClickLife (linhas 261-384 e 650-712) são o fallback legítimo para quando o webhook não processou. Usam planoId correto baseado no SKU
+### Remoção 2: Bloco de cadastro ClickLife (linhas 338-370)
+O trecho "CADASTRAR NA CLICKLIFE AO CRIAR PLANO" dentro do fluxo de plano aprovado:
+```typescript
+// ✅ CADASTRAR NA CLICKLIFE AO CRIAR PLANO (redundância com mp-webhook)
+const { data: patientData } = await supabaseAdmin
+  .from("patients")
+  .select("cpf, first_name, last_name, phone_e164, gender, birth_date")
+  ...
+```
+
+Remover este bloco inteiro, mantendo o código antes (verificação do plano) e depois (atualizar pending_payment).
 
 ## Resumo
 
-- **2 arquivos modificados**: `mp-webhook` e `check-payment-status`
-- **1 arquivo mantido intacto**: `reconcile-pending-payments`
-- Após implementar aqui no Cloud, você precisará **deployar manualmente** as duas funções no Supabase de Produção
+- **1 arquivo modificado**: `check-payment-status/index.ts`
+- **0 arquivos adicionais**: `mp-webhook` já está correto
+- Após implementar, você precisará **deployar manualmente** a função `check-payment-status` no Supabase de Produção
 
