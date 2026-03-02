@@ -1,44 +1,32 @@
 
 
-# Parecer: Subscriptions Pendentes e Solução
+# Plano: Remover Cadastro Universal dos 3 Arquivos
 
-## Diagnóstico confirmado
+## Diagnóstico
 
-A `reconcile-pending-payments` **NÃO processa subscriptions**. Ela só consulta a tabela `pending_payments` (pagamentos avulsos via PIX/cartão). As subscriptions ficam na tabela `patient_subscriptions` com `mp_status = 'pending_first_payment'` — e ninguém as reconcilia.
+Após análise detalhada, eis o que cada arquivo contém:
 
-**Fluxo atual quebrado:**
-1. `mp-create-subscription` cria preapproval no MP → polling 6s → desiste → salva com `mp_status: 'pending_first_payment'`
-2. `mp-subscription-webhook` só recebe `subscription_authorized_payment` (cobranças mês 2+), não o primeiro pagamento
-3. `reconcile-pending-payments` ignora completamente a tabela `patient_subscriptions`
+| Arquivo | Tipo de cadastro ClickLife/Communicare | Ação |
+|---------|---------------------------------------|------|
+| `mp-webhook` (linhas 1701-1798) | **CADASTRO UNIVERSAL** — dispara para TODAS as compras com `planoid: 864` fixo | **REMOVER** |
+| `check-payment-status` (linhas 425-457) | Cadastro ao criar plano — usa `getClickLifePlanIdFromSku()` mas usa endpoint `/pacientes` diferente do padrão | **REMOVER** (redundante com mp-webhook/schedule-redirect) |
+| `reconcile-pending-payments` (linhas 261-384 e 650-712) | Cadastro ao reconciliar plano pendente — usa planoId correto por SKU | **MANTER** (é o fallback legítimo quando webhook falha) |
 
-## Solução proposta
+## Alterações
 
-### 1. Adicionar reconciliação de subscriptions pendentes à `reconcile-pending-payments`
+### 1. `supabase/functions/mp-webhook/index.ts`
+- **Remover linhas 1701-1798**: Bloco inteiro "CADASTRO UNIVERSAL NA CLICKLIFE" + "CADASTRO SIMULTÂNEO NA COMMUNICARE"
+- Manter os cadastros específicos que já existem nos fluxos de plano (linha 1083) e serviço avulso (linha 1375)
 
-Após processar `pending_payments`, adicionar um bloco que:
-- Busca `patient_subscriptions` com `mp_status = 'pending_first_payment'` (últimos 7 dias)
-- Para cada uma, consulta `GET /preapproval/{id}` no MP para verificar `summarized.charged_quantity`
-- Também consulta `/authorized_payments/search?preapproval_id={id}` para verificar pagamento aprovado
-- Se pagamento aprovado → ativa o plano em `patient_plans` + registra na ClickLife (mesmo fluxo que já existe no reconciler para planos avulsos)
-- Se rejeitado → cancela a subscription no MP e marca como `cancelled`
+### 2. `supabase/functions/check-payment-status/index.ts`
+- **Remover linhas 425-457**: Bloco "CADASTRAR NA CLICKLIFE AO CRIAR PLANO" — é redundante porque o `mp-webhook` e o `schedule-redirect` já fazem o cadastro correto. Além disso, usa o endpoint `/pacientes` (diferente do padrão `/usuarios/usuarios` + `/usuarios/ativacao`)
 
-### 2. Reduzir intervalo do cron de 15min para 2min
+### 3. `supabase/functions/reconcile-pending-payments/index.ts`
+- **NÃO remover** — os dois blocos ClickLife (linhas 261-384 e 650-712) são o fallback legítimo para quando o webhook não processou. Usam planoId correto baseado no SKU
 
-Sim, reduzir para 2 minutos é uma solução prática e eficaz. O custo computacional é baixo (a função retorna rápido quando não há pendências). Isso reduz o gap de ativação de ~60min para ~2min.
+## Resumo
 
-**Ação necessária:** Atualizar o cron job SQL existente de `*/15 * * * *` para `*/2 * * * *`.
-
-### 3. Ativar manualmente limiervivi e gusan715
-
-Isso pode ser feito via painel admin (ativação manual de plano) ou diretamente no banco.
-
-## Arquivos a modificar
-
-- **`supabase/functions/reconcile-pending-payments/index.ts`**: Adicionar ~80 linhas após a linha 512 (antes do log final) para processar `patient_subscriptions` pendentes
-- **Cron job SQL**: Alterar intervalo de 15min para 2min (executado manualmente no banco de Produção)
-
-## O que NÃO será alterado
-- `mp-create-subscription` (o polling de 6s é um "best effort" razoável)
-- `mp-subscription-webhook` (continua processando cobranças recorrentes futuras)
-- Nenhum componente frontend
+- **2 arquivos modificados**: `mp-webhook` e `check-payment-status`
+- **1 arquivo mantido intacto**: `reconcile-pending-payments`
+- Após implementar aqui no Cloud, você precisará **deployar manualmente** as duas funções no Supabase de Produção
 
