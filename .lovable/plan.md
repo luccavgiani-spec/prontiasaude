@@ -1,34 +1,44 @@
 
 
-# Plano: Criar `admin-coupon-operations` Edge Function no Cloud
+# Parecer: Subscriptions Pendentes e Solução
 
-## Operações necessárias (usadas pelo frontend)
+## Diagnóstico confirmado
 
-A partir da análise do código, a Edge Function precisa suportar **7 operações**:
+A `reconcile-pending-payments` **NÃO processa subscriptions**. Ela só consulta a tabela `pending_payments` (pagamentos avulsos via PIX/cartão). As subscriptions ficam na tabela `patient_subscriptions` com `mp_status = 'pending_first_payment'` — e ninguém as reconcilia.
 
-1. **`create`** — Criar cupom na `user_coupons` (usado por `CreateCouponModal` e `MeusCuponsCard`)
-2. **`toggle`** — Ativar/desativar cupom (usado por `CouponsTab`)
-3. **`delete`** — Deletar cupom (usado por `CouponsTab`)
-4. **`mark_reviewed`** — Marcar uso de cupom como conferido na `coupon_uses` (usado por `CouponsTab`)
-5. **`list_by_owner`** — Listar cupons de um owner específico (usado por `MeusCuponsCard`)
-6. **`get_patient_name`** — Buscar `first_name` de um paciente por `user_id` (usado por `MeusCuponsCard`)
+**Fluxo atual quebrado:**
+1. `mp-create-subscription` cria preapproval no MP → polling 6s → desiste → salva com `mp_status: 'pending_first_payment'`
+2. `mp-subscription-webhook` só recebe `subscription_authorized_payment` (cobranças mês 2+), não o primeiro pagamento
+3. `reconcile-pending-payments` ignora completamente a tabela `patient_subscriptions`
 
-## Arquivo a criar
+## Solução proposta
 
-**`supabase/functions/admin-coupon-operations/index.ts`**
+### 1. Adicionar reconciliação de subscriptions pendentes à `reconcile-pending-payments`
 
-- Auto-contido (sem imports relativos, CORS inline)
-- Usa `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY` para operar no banco de **Produção**
-- `verify_jwt = false` no `config.toml` (já que pacientes não-autenticados na Produção precisam acessar)
+Após processar `pending_payments`, adicionar um bloco que:
+- Busca `patient_subscriptions` com `mp_status = 'pending_first_payment'` (últimos 7 dias)
+- Para cada uma, consulta `GET /preapproval/{id}` no MP para verificar `summarized.charged_quantity`
+- Também consulta `/authorized_payments/search?preapproval_id={id}` para verificar pagamento aprovado
+- Se pagamento aprovado → ativa o plano em `patient_plans` + registra na ClickLife (mesmo fluxo que já existe no reconciler para planos avulsos)
+- Se rejeitado → cancela a subscription no MP e marca como `cancelled`
 
-## Detalhes técnicos
+### 2. Reduzir intervalo do cron de 15min para 2min
 
-- A função conecta ao Supabase de **Produção** (`ploqujuhpwutpcibedbr`) usando `ORIGINAL_SUPABASE_SERVICE_ROLE_KEY`
-- Todas as operações usam `service_role` para bypass de RLS
-- O `create` aceita `owner_user_id` direto (para pacientes) ou busca por `owner_email` (para admin)
-- Retorna `{ success: true, coupon: {...} }` no create, `{ success: true }` nos demais
+Sim, reduzir para 2 minutos é uma solução prática e eficaz. O custo computacional é baixo (a função retorna rápido quando não há pendências). Isso reduz o gap de ativação de ~60min para ~2min.
 
-## config.toml
+**Ação necessária:** Atualizar o cron job SQL existente de `*/15 * * * *` para `*/2 * * * *`.
 
-Adicionar entrada `[functions.admin-coupon-operations]` com `verify_jwt = false`.
+### 3. Ativar manualmente limiervivi e gusan715
+
+Isso pode ser feito via painel admin (ativação manual de plano) ou diretamente no banco.
+
+## Arquivos a modificar
+
+- **`supabase/functions/reconcile-pending-payments/index.ts`**: Adicionar ~80 linhas após a linha 512 (antes do log final) para processar `patient_subscriptions` pendentes
+- **Cron job SQL**: Alterar intervalo de 15min para 2min (executado manualmente no banco de Produção)
+
+## O que NÃO será alterado
+- `mp-create-subscription` (o polling de 6s é um "best effort" razoável)
+- `mp-subscription-webhook` (continua processando cobranças recorrentes futuras)
+- Nenhum componente frontend
 
