@@ -422,39 +422,8 @@ Deno.serve(async (req) => {
             });
           }
           
-          // ✅ CADASTRAR NA CLICKLIFE AO CRIAR PLANO (redundância com mp-webhook)
-          const { data: patientData } = await supabaseAdmin
-            .from('patients')
-            .select('cpf, first_name, last_name, phone_e164, gender, birth_date')
-            .eq('email', patientEmail)
-            .maybeSingle();
-          
-          if (patientData?.cpf) {
-            const clickLifePlanoId = getClickLifePlanIdFromSku(sku);
-            console.log('[check-payment-status] 🏥 Cadastrando na ClickLife com planoId:', clickLifePlanoId);
-            
-            const clicklifeResult = await registerClickLifePatient(
-              patientData.cpf,
-              `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim(),
-              patientEmail,
-              patientData.phone_e164 || '',
-              clickLifePlanoId,
-              patientData.gender || 'F',
-              patientData.birth_date
-            );
-            
-            if (clicklifeResult.success) {
-              console.log('[check-payment-status] ✅ Paciente cadastrado na ClickLife');
-              await supabaseAdmin
-                .from('patients')
-                .update({ clicklife_registered_at: new Date().toISOString() })
-                .eq('email', patientEmail);
-            } else {
-              console.warn('[check-payment-status] ⚠️ Falha no cadastro ClickLife:', clicklifeResult.error);
-            }
-          } else {
-            console.warn('[check-payment-status] ⚠️ Paciente sem CPF, não foi possível cadastrar na ClickLife');
-          }
+          // ❌ CADASTRO CLICKLIFE REMOVIDO — redundante com mp-webhook e schedule-redirect
+          // Além disso, usava endpoint /pacientes (diferente do padrão /usuarios/usuarios + /usuarios/ativacao)
           
           // Atualizar pending_payment como processado
           if (orderIdToCheck) {
