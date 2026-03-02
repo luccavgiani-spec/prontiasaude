@@ -29,7 +29,7 @@ function getCorsHeaders(requestOrigin?: string | null): Record<string, string> {
 }
 
 // ============================================================
-// ✅ CPF VALIDATOR INLINE (auto-contido - substitui ../common/cpf-validator.ts)
+// ✅ CPF VALIDATOR INLINE
 // ============================================================
 function cleanCPF(cpf: string): string {
   return cpf.replace(/\D/g, "");
@@ -37,11 +37,8 @@ function cleanCPF(cpf: string): string {
 
 function validateCPFChecksum(cpf: string): boolean {
   if (!cpf) return false;
-
   const cleanedCPF = cpf.replace(/\D/g, "");
-
   if (cleanedCPF.length !== 11) return false;
-
   const invalidPatterns = [
     "00000000000",
     "11111111111",
@@ -54,41 +51,29 @@ function validateCPFChecksum(cpf: string): boolean {
     "88888888888",
     "99999999999",
   ];
-
   if (invalidPatterns.includes(cleanedCPF)) return false;
-
-  // Validar dígitos verificadores
   let sum = 0;
   let remainder;
-
   for (let i = 1; i <= 9; i++) {
     sum += parseInt(cleanedCPF.substring(i - 1, i)) * (11 - i);
   }
-
   remainder = (sum * 10) % 11;
   if (remainder === 10 || remainder === 11) remainder = 0;
   if (remainder !== parseInt(cleanedCPF.substring(9, 10))) return false;
-
   sum = 0;
   for (let i = 1; i <= 10; i++) {
     sum += parseInt(cleanedCPF.substring(i - 1, i)) * (12 - i);
   }
-
   remainder = (sum * 10) % 11;
   if (remainder === 10 || remainder === 11) remainder = 0;
   if (remainder !== parseInt(cleanedCPF.substring(10, 11))) return false;
-
   return true;
 }
 
 // ============================================================
-// ✅ CONSTANTES E HELPERS PARA SYNC CLICKLIFE DE DEPENDENTES
+// ✅ HELPERS CLICKLIFE
 // ============================================================
-
-// Planos FAMILIARES que incluem especialistas → planoid 1238 na ClickLife
 const PLANOS_FAMILIARES_COM_ESPECIALISTAS = ["FAM_COM_ESP_1M", "FAM_COM_ESP_3M", "FAM_COM_ESP_6M", "FAM_COM_ESP_12M"];
-
-// Planos FAMILIARES sem especialistas → planoid 1237 na ClickLife
 const PLANOS_FAMILIARES_SEM_ESPECIALISTAS = [
   "FAM_SEM_ESP_1M",
   "FAM_SEM_ESP_3M",
@@ -98,46 +83,35 @@ const PLANOS_FAMILIARES_SEM_ESPECIALISTAS = [
   "FAM_BASIC",
 ];
 
-// Função para determinar planoid de dependente familiar
 function getClickLifePlanIdForDependente(planCode: string | undefined | null): number {
   if (!planCode) return 1237;
   if (PLANOS_FAMILIARES_COM_ESPECIALISTAS.includes(planCode)) return 1238;
-  // Planos empresariais familiares também têm especialistas
   if (planCode.startsWith("EMPRESA_")) return 1238;
   return 1237;
 }
 
-// Normalizar gênero para 'M' | 'F'
 function normalizeGender(gender: string | undefined | null): "M" | "F" {
   if (!gender) return "F";
   const g = gender.trim().toUpperCase();
   if (g === "M" || g === "MALE" || g === "MASCULINO") return "M";
-  if (g === "F" || g === "FEMALE" || g === "FEMININO") return "F";
   return "F";
 }
 
-// Normalizar telefone (robusto) - NÃO usar fallback placeholder
 function normalizePhone(phone: string | undefined | null): string | null {
   if (!phone) return null;
   let clean = phone.replace(/\D/g, "");
-  // Se começa com 55 e tem pelo menos 12 dígitos (55 + DDD + 8/9 dígitos), remover 55
   if (clean.startsWith("55") && clean.length >= 12) {
     clean = clean.substring(2);
   }
-  // Bloquear número placeholder conhecido
   if (clean === "11999999999" || clean === "5511999999999") {
-    console.warn("[normalizePhone] Telefone placeholder detectado - rejeitando");
     return null;
   }
-  // Garantir que tem pelo menos 10 dígitos (DDD + número)
   if (clean.length < 10) {
-    console.warn("[normalizePhone] Telefone muito curto:", clean);
     return null;
   }
   return clean;
 }
 
-// Interface para resultado do sync ClickLife
 interface ClickLifeSyncResult {
   success: boolean;
   status: "ok" | "failed" | "partial";
@@ -145,7 +119,6 @@ interface ClickLifeSyncResult {
   details?: Record<string, any>;
 }
 
-// Função para sincronizar dependente na ClickLife
 async function syncDependenteClickLife(
   dependente: {
     cpf: string;
@@ -166,79 +139,42 @@ async function syncDependenteClickLife(
   const CLICKLIFE_API = Deno.env.get("CLICKLIFE_API_BASE");
   const INTEGRATOR_TOKEN = Deno.env.get("CLICKLIFE_AUTH_TOKEN");
   const PATIENT_PASSWORD = Deno.env.get("CLICKLIFE_PATIENT_DEFAULT_PASSWORD");
-
   if (!CLICKLIFE_API || !INTEGRATOR_TOKEN) {
-    console.error("[syncDependenteClickLife] ❌ Credenciais ClickLife não configuradas");
     return { success: false, status: "failed", error_message: "ClickLife credentials not configured" };
   }
-
   const cpfLimpo = dependente.cpf.replace(/\D/g, "");
   const titularCpfLimpo = titularCpf.replace(/\D/g, "");
   const details: Record<string, any> = {};
-
   try {
-    console.log("[syncDependenteClickLife] 🔄 Iniciando sync ClickLife para dependente");
-    console.log("[syncDependenteClickLife] CPF dependente:", cpfLimpo.substring(0, 3) + "***");
-    console.log("[syncDependenteClickLife] CPF titular:", titularCpfLimpo.substring(0, 3) + "***");
-    console.log("[syncDependenteClickLife] Planoid:", planoid);
-
-    // ================================
-    // PASSO 1: Verificar se dependente já existe na ClickLife
-    // ================================
-    console.log("[ClickLife Dependente] 1️⃣ Verificando se dependente existe...");
-
     const checkUserRes = await fetch(`${CLICKLIFE_API}/usuarios/obter`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        authtoken: INTEGRATOR_TOKEN,
-      },
-      body: JSON.stringify({
-        authtoken: INTEGRATOR_TOKEN,
-        cpfpaciente: cpfLimpo,
-      }),
+      headers: { "Content-Type": "application/json", authtoken: INTEGRATOR_TOKEN },
+      body: JSON.stringify({ authtoken: INTEGRATOR_TOKEN, cpfpaciente: cpfLimpo }),
     });
-
     const checkUserData = await checkUserRes.json();
     details.user_check = checkUserData;
-
-    // Checagem robusta: verificar múltiplos campos possíveis
     const userExists =
       checkUserRes.ok &&
       (checkUserData?.cpf ||
         checkUserData?.data?.cpf ||
         checkUserData?.usuario?.cpf ||
         (checkUserData?.sucesso === true && (checkUserData?.mensagem || "").toLowerCase().includes("encontrado")));
-    console.log("[ClickLife Dependente] Usuário existe?", userExists);
-
-    // ================================
-    // PASSO 2: Cadastrar usuário se não existir
-    // ================================
     if (!userExists) {
-      console.log("[ClickLife Dependente] 2️⃣ Cadastrando dependente...");
-
-      // Normalizar telefone de forma robusta
       const telefoneLimpo = normalizePhone(dependente.telefone);
-      const numero = telefoneLimpo ? telefoneLimpo.substring(2) : "999999999"; // Remove DDD
-
-      // Normalizar data de nascimento para DD-MM-YYYY
+      const numero = telefoneLimpo ? telefoneLimpo.substring(2) : "999999999";
       let birthDateFormatted = "01-01-1990";
       if (dependente.birthDate) {
         const bd = dependente.birthDate;
         if (bd.includes("-")) {
           const parts = bd.split("-");
           if (parts.length === 3 && parts[0].length === 4) {
-            // YYYY-MM-DD -> DD-MM-YYYY
             birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
           } else if (parts.length === 3) {
             birthDateFormatted = bd;
           }
         }
       }
-
-      // Normalizar gênero
       const sexoNormalizado = normalizeGender(dependente.sexo);
-
       const registerPayload = {
         nome: dependente.nome,
         cpf: cpfLimpo,
@@ -249,37 +185,22 @@ async function syncDependenteClickLife(
         telefone: numero,
         logradouro: dependente.logradouro || "Rua Exemplo",
         numero: dependente.numero || "123",
-        bairro: "Centro", // Fallback fixo (não existe em patients)
+        bairro: "Centro",
         cep: (dependente.cep || "01000000").replace(/\D/g, ""),
         cidade: dependente.cidade || "São Paulo",
         estado: dependente.estado || "SP",
         empresaid: 9083,
         planoid: planoid,
       };
-
-      console.log("[ClickLife Dependente] Payload cadastro:", {
-        ...registerPayload,
-        senha: "***",
-        cpf: cpfLimpo.substring(0, 3) + "***",
-      });
-
       const registerRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authtoken: INTEGRATOR_TOKEN,
-        },
+        headers: { "Content-Type": "application/json", authtoken: INTEGRATOR_TOKEN },
         body: JSON.stringify(registerPayload),
       });
-
       const registerData = await registerRes.json();
       details.user_register = registerData;
-      console.log("[ClickLife Dependente] Resposta cadastro:", registerData);
-
-      // Tolerar "já cadastrado" como sucesso
       const msgLower = (registerData.mensagem || "").toLowerCase();
       if (!registerRes.ok && !msgLower.includes("já cadastrado") && !msgLower.includes("ja cadastrado")) {
-        console.error("[ClickLife Dependente] ❌ Falha ao cadastrar:", registerData);
         return {
           success: false,
           status: "failed",
@@ -288,72 +209,31 @@ async function syncDependenteClickLife(
         };
       }
     }
-
-    // ================================
-    // PASSO 3: Verificar se já está vinculado como dependente
-    // ================================
-    console.log("[ClickLife Dependente] 3️⃣ Verificando vínculo com titular...");
-
     const checkDepsRes = await fetch(`${CLICKLIFE_API}/usuarios/obter-dependentes`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        authtoken: INTEGRATOR_TOKEN,
-      },
-      body: JSON.stringify({
-        authtoken: INTEGRATOR_TOKEN,
-        cpftitular: titularCpfLimpo,
-      }),
+      headers: { "Content-Type": "application/json", authtoken: INTEGRATOR_TOKEN },
+      body: JSON.stringify({ authtoken: INTEGRATOR_TOKEN, cpftitular: titularCpfLimpo }),
     });
-
     const checkDepsData = await checkDepsRes.json();
     details.dependente_check = checkDepsData;
-
-    // Verificar se CPF do dependente está na lista
     const dependentes = checkDepsData?.dependentes || checkDepsData?.data || [];
     const jaVinculado =
       Array.isArray(dependentes) && dependentes.some((d: any) => (d.cpf || "").replace(/\D/g, "") === cpfLimpo);
-
-    console.log("[ClickLife Dependente] Já vinculado?", jaVinculado);
-
-    // ================================
-    // PASSO 4: Vincular dependente ao titular se necessário
-    // ================================
     if (!jaVinculado) {
-      console.log("[ClickLife Dependente] 4️⃣ Vinculando dependente ao titular...");
-
       const linkPayload = {
         authtoken: INTEGRATOR_TOKEN,
         cpftitular: titularCpfLimpo,
         cpfdependente: cpfLimpo,
         nomedependente: dependente.nome,
       };
-
       const linkRes = await fetch(`${CLICKLIFE_API}/usuarios/cadastrar-dependente`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          authtoken: INTEGRATOR_TOKEN,
-        },
+        headers: { "Content-Type": "application/json", authtoken: INTEGRATOR_TOKEN },
         body: JSON.stringify(linkPayload),
       });
-
       const linkData = await linkRes.json();
       details.dependente_link = linkData;
-      console.log("[ClickLife Dependente] Resposta vínculo:", linkData);
-
-      // Tolerar "já vinculado" como sucesso
-      const msgLower = (linkData.mensagem || "").toLowerCase();
-      if (!linkRes.ok && !msgLower.includes("já") && !msgLower.includes("ja")) {
-        console.warn("[ClickLife Dependente] ⚠️ Falha ao vincular (continuando para ativação):", linkData);
-      }
     }
-
-    // ================================
-    // PASSO 5: Ativar dependente no plano familiar
-    // ================================
-    console.log("[ClickLife Dependente] 5️⃣ Ativando no plano familiar...");
-
     const activatePayload = {
       authtoken: INTEGRATOR_TOKEN,
       cpf: cpfLimpo,
@@ -361,21 +241,13 @@ async function syncDependenteClickLife(
       planoid: planoid,
       proposito: "Ativar",
     };
-
     const activateRes = await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        authtoken: INTEGRATOR_TOKEN,
-      },
+      headers: { "Content-Type": "application/json", authtoken: INTEGRATOR_TOKEN },
       body: JSON.stringify(activatePayload),
     });
-
     const activateData = await activateRes.json();
     details.activation = activateData;
-    console.log("[ClickLife Dependente] Resposta ativação:", activateData);
-
-    // Tolerar "já ativo" como sucesso
     const msgLower = (activateData.mensagem || "").toLowerCase();
     if (!activateRes.ok && !msgLower.includes("já ativo") && !msgLower.includes("ja ativo")) {
       return {
@@ -385,11 +257,8 @@ async function syncDependenteClickLife(
         details,
       };
     }
-
-    console.log("[ClickLife Dependente] ✅ Sync completo com sucesso!");
     return { success: true, status: "ok", details };
   } catch (error) {
-    console.error("[ClickLife Dependente] ❌ Exception:", error);
     return {
       success: false,
       status: "failed",
@@ -400,10 +269,8 @@ async function syncDependenteClickLife(
 }
 
 // ============================================================
-// FIM HELPERS CLICKLIFE
+// ✅ VALIDATION HELPERS
 // ============================================================
-
-// Validation helpers
 const TEMP_EMAIL_DOMAINS = [
   "10minutemail.com",
   "guerrillamail.com",
@@ -418,7 +285,6 @@ const TEMP_EMAIL_DOMAINS = [
   "trashmail.com",
   "sharklasers.com",
 ];
-
 const VALID_DDDS = [
   11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 24, 27, 28, 31, 32, 33, 34, 35, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48,
   49, 51, 53, 54, 55, 61, 62, 64, 63, 65, 66, 67, 68, 69, 71, 73, 74, 75, 77, 79, 81, 87, 82, 83, 84, 85, 88, 86, 89,
@@ -427,63 +293,34 @@ const VALID_DDDS = [
 
 const validateEmail = (email: string): boolean => {
   if (!email || email.length > 255) return false;
-
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(email)) return false;
-
   const domain = email.split("@")[1]?.toLowerCase();
   if (!domain) return false;
-
-  // Rejeitar domínios temporários
   if (TEMP_EMAIL_DOMAINS.some((temp) => domain.includes(temp))) return false;
-
-  // Rejeitar emails obviamente falsos
-  if (/^(test|fake|exemplo|asdf|qwerty|admin|noreply)@/.test(email.toLowerCase())) {
-    return false;
-  }
-
+  if (/^(test|fake|exemplo|asdf|qwerty|admin|noreply)@/.test(email.toLowerCase())) return false;
   return true;
 };
 
 const validatePhone = (phone: string): boolean => {
   if (!phone) return false;
-
-  // Validar formato E.164 brasileiro
   if (!/^\+55\d{10,11}$/.test(phone)) return false;
-
   const cleanPhone = phone.replace(/\D/g, "");
   const ddd = parseInt(cleanPhone.substring(2, 4));
   const number = cleanPhone.substring(4);
-
-  // Validar DDD
   if (!VALID_DDDS.includes(ddd)) return false;
-
-  // Rejeitar números sequenciais
   if (/^(\d)\1+$/.test(number)) return false;
   if (/^(0123456789|9876543210)/.test(number)) return false;
-
-  // Validar padrão de celular (9 dígitos começando com 9) ou fixo (8 dígitos)
-  if (number.length === 9) {
-    // Celular: deve começar com 9
-    return number[0] === "9";
-  } else if (number.length === 8) {
-    // Fixo: não deve começar com 9
-    return number[0] !== "9";
-  }
-
+  if (number.length === 9) return number[0] === "9";
+  if (number.length === 8) return number[0] !== "9";
   return false;
 };
 
 const validateCPF = (cpf: string): boolean => {
   if (!cpf) return false;
-
   const cleaned = cleanCPF(cpf);
   if (cleaned.length !== 11) return false;
-
-  // Rejeitar CPFs com todos dígitos iguais
   if (/^(\d)\1{10}$/.test(cleaned)) return false;
-
-  // Validar checksum matemático
   return validateCPFChecksum(cleaned);
 };
 
@@ -491,48 +328,35 @@ const validateString = (str: string, maxLength: number): boolean => {
   return typeof str === "string" && str.length > 0 && str.length <= maxLength;
 };
 
-// Normaliza qualquer formato de data para YYYY-MM-DD (formato aceito pelo Postgres)
 function normalizeDateToISO(value: any): string | null {
   if (!value) return null;
-  
   const str = String(value).trim();
-  
-  // Ja esta no formato YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    return str;
-  }
-  
-  // ISO timestamp: 2000-01-15T00:00:00.000Z -> 2000-01-15
-  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
-    return str.substring(0, 10);
-  }
-  
-  // DD/MM/YYYY ou DD-MM-YYYY (formato BR - prioridade)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) return str.substring(0, 10);
   const brMatch = str.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
-  if (brMatch) {
-    return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
-  }
-  
-  return null; // formato nao reconhecido
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  return null;
 }
 
 const validateDate = (dateStr: string): boolean => {
   const normalized = normalizeDateToISO(dateStr);
   if (!normalized) return false;
-  const [year, month, day] = normalized.split('-').map(Number);
+  const [year, month, day] = normalized.split("-").map(Number);
   if (year < 1900 || year > new Date().getFullYear()) return false;
   if (month < 1 || month > 12) return false;
   if (day < 1 || day > 31) return false;
   return true;
 };
 
+// ============================================================
+// ✅ INTERFACES
+// ============================================================
 interface UpsertPatientRequest {
   operation: "upsert_patient";
   name: string;
   email: string;
   phone_e164: string;
 }
-
 interface CompleteProfileRequest {
   operation: "complete_profile";
   user_id: string;
@@ -545,12 +369,11 @@ interface CompleteProfileRequest {
   gender?: string;
   cep?: string;
   address_number?: string;
-  address_complement?: string;
+  complement?: string;
   city?: string;
   state?: string;
   plano: boolean;
 }
-
 interface ScheduleAppointmentRequest {
   operation: "schedule_appointment";
   user_id: string;
@@ -565,7 +388,6 @@ interface ScheduleAppointmentRequest {
   cupom?: string;
   fotos_base64?: string[];
 }
-
 interface SyncAppointmentRequest {
   operation: "sync_appointment";
   appointment_id: string;
@@ -574,25 +396,21 @@ interface SyncAppointmentRequest {
   provider?: string;
   external_appointment_id?: string;
 }
-
 interface ScheduleRedirectRequest {
   operation: "schedule_redirect";
   user_id: string;
   sku: string;
 }
-
 interface DisablePlanRequest {
   operation: "disable_plan";
   email: string;
 }
-
 interface ChangePlanRequest {
   operation: "change_plan";
   plan_id: string;
   new_plan_code: string;
   new_expires_at?: string;
 }
-
 interface ActivatePlanManualRequest {
   operation: "activate_plan_manual";
   patient_email: string;
@@ -601,60 +419,53 @@ interface ActivatePlanManualRequest {
   duration_days: number;
   send_email?: boolean;
 }
-
 interface InviteFamiliarRequest {
   operation: "invite-familiar";
   plan_id: string;
   email: string;
 }
-
 interface ResendFamilyInviteRequest {
   operation: "resend-family-invite";
   invite_id: string;
 }
 
 serve(async (req) => {
-  // ✅ CORREÇÃO CORS: Calcular headers DINAMICAMENTE com o origin da requisição
   const requestOrigin = req.headers.get("origin");
   const corsHeaders = getCorsHeaders(requestOrigin);
 
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // ✅ Usar URLs hardcoded do projeto de PRODUÇÃO para evitar problemas cross-project
     const ORIGINAL_SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
     const supabaseServiceRoleKey =
       Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const gasBase = Deno.env.get("GAS_BASE");
 
-    if (!supabaseServiceRoleKey) {
-      throw new Error("Missing required environment variables");
-    }
+    if (!supabaseServiceRoleKey) throw new Error("Missing required environment variables");
 
-    // Get authenticated user from JWT (except for upsert_patient which allows registration)
     const authHeader = req.headers.get("Authorization");
     const supabase = createClient(ORIGINAL_SUPABASE_URL, supabaseServiceRoleKey);
 
-    let operationName = 'unknown';
+    let operationName = "unknown";
     const body = await req.json();
-    operationName = body.operation || 'unknown';
+    operationName = body.operation || "unknown";
 
-    // ============================================================
-    // ✅ VALIDAÇÃO GENÉRICA: exceto operações que têm validação própria
-    // - upsert_patient: permite registro sem auth
-    // - activate_plan_manual: usa validação cross-project (Lovable Cloud)
-    // - ensure_patient: usa service_role no backend, não precisa validar JWT do usuário
-    //   (a própria lógica do ensure_patient valida que user_id foi passado)
-    // ============================================================
     const AUTH_BYPASS_OPERATIONS = [
-      "upsert_patient", "activate_plan_manual", "ensure_patient",
-      "admin_update_patient", "change_plan", "disable_plan",
-      "complete_profile", "invite-familiar", "resend-family-invite",
-      "activate-family-member", "deactivate_plan_manual",
-      "schedule_appointment", "schedule_redirect"
+      "upsert_patient",
+      "activate_plan_manual",
+      "ensure_patient",
+      "admin_update_patient",
+      "change_plan",
+      "disable_plan",
+      "complete_profile",
+      "invite-familiar",
+      "resend-family-invite",
+      "activate-family-member",
+      "deactivate_plan_manual",
+      "schedule_appointment",
+      "schedule_redirect",
     ];
 
     if (!AUTH_BYPASS_OPERATIONS.includes(body.operation)) {
@@ -664,13 +475,11 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-
       const token = authHeader.replace("Bearer ", "");
       const {
         data: { user },
         error: authError,
       } = await supabase.auth.getUser(token);
-
       if (authError || !user) {
         return new Response(JSON.stringify({ error: "Token inválido" }), {
           status: 401,
@@ -682,30 +491,22 @@ serve(async (req) => {
     switch (body.operation) {
       case "upsert_patient": {
         const { name, email, phone_e164 } = body as UpsertPatientRequest;
-
-        // Validate inputs
-        if (!validateString(name, 255)) {
+        if (!validateString(name, 255))
           return new Response(JSON.stringify({ error: "Nome inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!validateEmail(email)) {
+        if (!validateEmail(email))
           return new Response(JSON.stringify({ error: "Email inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!validatePhone(phone_e164)) {
+        if (!validatePhone(phone_e164))
           return new Response(JSON.stringify({ error: "Telefone inválido (formato E.164 esperado)" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
 
-        // Save to Supabase auth.users
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
           email_confirm: true,
@@ -715,51 +516,33 @@ serve(async (req) => {
             phone_e164,
           },
         });
-
-        if (authError && !authError.message.includes("already")) {
-          console.error("[upsert_patient] Auth error:", authError.message);
-          throw authError;
-        }
-
+        if (authError && !authError.message.includes("already")) throw authError;
         const userId = authData?.user?.id || null;
 
-        console.log("[upsert_patient] User registration:", {
-          userId,
-          status: authData ? "created" : "already_exists",
-        });
-
-        // ✅ Gravar métrica de cadastro (apenas se for novo usuário)
         if (authData?.user) {
           try {
-            await supabase.from("metrics").insert({
-              metric_type: "registration",
-              patient_email: email,
-              platform: "site",
-              status: "completed",
-              metadata: { user_id: userId, phone: phone_e164 },
-            });
-            console.log("[upsert_patient] ✅ Métrica de cadastro gravada");
-          } catch (metricError) {
-            console.error("[upsert_patient] Erro ao gravar métrica:", metricError);
-          }
+            await supabase
+              .from("metrics")
+              .insert({
+                metric_type: "registration",
+                patient_email: email,
+                platform: "site",
+                status: "completed",
+                metadata: { user_id: userId, phone: phone_e164 },
+              });
+          } catch (e) {}
         }
 
-        // Buscar user_id: se criou agora, usar authData.user.id
-        // Se "already exists", buscar pelo email
         let finalUserId = userId;
         if (!finalUserId) {
-          // Buscar direto na tabela patients por email (evita listUsers paginado)
           const { data: patientByEmail } = await supabase
             .from("patients")
             .select("user_id")
             .eq("email", email.toLowerCase())
             .maybeSingle();
-
           if (patientByEmail?.user_id) {
             finalUserId = patientByEmail.user_id;
-            console.log("[upsert_patient] Found user_id via patients table:", finalUserId);
           } else {
-            // Fallback: buscar no auth com paginacao
             let page = 1;
             const perPage = 100;
             while (!finalUserId) {
@@ -776,25 +559,18 @@ serve(async (req) => {
           }
         }
 
-        // Upsert na tabela patients com todos os campos recebidos
         if (finalUserId) {
           const patientData: Record<string, any> = {
             user_id: finalUserId,
             email: email.toLowerCase(),
             first_name: name.split(" ")[0] || "",
             last_name: name.split(" ").slice(1).join(" ") || "",
-            phone_e164: phone_e164,
+            phone_e164,
           };
-
-          // Campos opcionais (enviados pelo frontend mas nao obrigatorios na interface)
           if (body.cpf) patientData.cpf = body.cpf;
           if (body.birth_date) {
-            const normalizedDate = normalizeDateToISO(body.birth_date);
-            if (normalizedDate) {
-              patientData.birth_date = normalizedDate;
-            } else {
-              console.warn("[upsert_patient] birth_date ignorada (formato invalido):", body.birth_date);
-            }
+            const nd = normalizeDateToISO(body.birth_date);
+            if (nd) patientData.birth_date = nd;
           }
           if (body.gender) patientData.gender = body.gender;
           if (body.cep) patientData.cep = body.cep;
@@ -807,34 +583,27 @@ serve(async (req) => {
           if (body.terms_accepted) patientData.terms_accepted_at = new Date().toISOString();
           if (body.profile_complete !== undefined) patientData.profile_complete = body.profile_complete;
 
-          // Verificar se ja existe por user_id
           const { data: existingPatient } = await supabase
             .from("patients")
             .select("id")
             .eq("user_id", finalUserId)
             .maybeSingle();
-
           if (existingPatient) {
-            // UPDATE
             const { error: updateErr } = await supabase
               .from("patients")
               .update(patientData)
               .eq("id", existingPatient.id);
             if (updateErr) console.error("[upsert_patient] Update patients error:", updateErr);
           } else {
-            // Verificar por email
             const { data: byEmail } = await supabase
               .from("patients")
               .select("id")
               .eq("email", email.toLowerCase())
               .maybeSingle();
-
             if (byEmail) {
-              // Vincular user_id e atualizar
               const { error: updateErr } = await supabase.from("patients").update(patientData).eq("id", byEmail.id);
               if (updateErr) console.error("[upsert_patient] Update by email error:", updateErr);
             } else {
-              // INSERT novo
               patientData.id = crypto.randomUUID();
               const { error: insertErr } = await supabase.from("patients").insert(patientData);
               if (insertErr) console.error("[upsert_patient] Insert patients error:", insertErr);
@@ -854,23 +623,26 @@ serve(async (req) => {
       }
 
       case "complete_profile": {
+        // ============================================================
+        // ✅ CORREÇÃO: Salvar diretamente no banco via service_role
+        // usando EMAIL como chave de lookup, sem depender do user_id
+        // do Lovable Cloud (que é diferente do auth.users de produção)
+        // ============================================================
         const profileData = body as CompleteProfileRequest;
 
-        // Validate required fields
+        // Validações
         if (!validateString(profileData.first_name, 100) || !validateString(profileData.last_name, 100)) {
           return new Response(JSON.stringify({ error: "Nome ou sobrenome inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-
         if (!validateEmail(profileData.email)) {
           return new Response(JSON.stringify({ error: "Email inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-
         if (!validatePhone(profileData.phone)) {
           return new Response(JSON.stringify({ error: "Telefone inválido" }), {
             status: 400,
@@ -886,104 +658,154 @@ serve(async (req) => {
           });
         }
 
-        // Check for duplicate CPF
-        const { data: existingPatient } = await supabase
+        const normalizedBirthDate = normalizeDateToISO(profileData.birth_date);
+        if (!normalizedBirthDate) {
+          return new Response(
+            JSON.stringify({ error: "Data de nascimento inválida. Use o formato DD/MM/AAAA ou AAAA-MM-DD." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        const normalizedEmail = profileData.email.toLowerCase().trim();
+
+        console.log("[complete_profile] 🔍 Buscando registro por email:", normalizedEmail);
+
+        // Verificar CPF duplicado — excluir o próprio registro do usuário (busca por email)
+        const { data: cpfConflict } = await supabase
           .from("patients")
-          .select("id")
+          .select("id, email")
           .eq("cpf", cpfClean)
-          .neq("id", profileData.user_id)
+          .neq("email", normalizedEmail)
           .maybeSingle();
 
-        if (existingPatient) {
+        if (cpfConflict) {
           return new Response(JSON.stringify({ error: "CPF já cadastrado" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
-        const normalizedBirthDate = normalizeDateToISO(profileData.birth_date);
-        if (!normalizedBirthDate) {
-          return new Response(JSON.stringify({ error: "Data de nascimento inválida. Use o formato DD/MM/AAAA ou AAAA-MM-DD." }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        // Validate user_id
-        if (!profileData.user_id) {
-          console.error("[complete_profile] Missing user_id");
-          return new Response(JSON.stringify({ error: "user_id é obrigatório" }), {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-
-        console.log("[complete_profile] Processing profile:", {
-          user_id: profileData.user_id,
-          has_plano: profileData.plano,
-        });
-
-        // Prepare GAS API payload with validated data
-        const gasPayload = {
-          user_id: profileData.user_id,
+        // Montar payload de atualização com todos os campos validados
+        const updatePayload: Record<string, any> = {
           first_name: profileData.first_name.substring(0, 100),
           last_name: profileData.last_name.substring(0, 100),
-          email: profileData.email.substring(0, 255),
-          phone: profileData.phone,
+          phone_e164: profileData.phone,
           cpf: cpfClean,
           birth_date: normalizedBirthDate,
-          gender: profileData.gender ? profileData.gender.substring(0, 1) : "",
-          cep: profileData.cep ? profileData.cep.substring(0, 10) : "",
-          address_number: profileData.address_number ? profileData.address_number.substring(0, 20) : "",
-          address_complement: profileData.address_complement ? profileData.address_complement.substring(0, 100) : "",
-          city: profileData.city ? profileData.city.substring(0, 100) : "",
-          state: profileData.state ? profileData.state.substring(0, 2) : "",
-          source: "site",
-          plano: profileData.plano,
+          gender: profileData.gender ? profileData.gender.substring(0, 1) : null,
+          cep: profileData.cep ? profileData.cep.replace(/\D/g, "").substring(0, 8) : null,
+          address_number: profileData.address_number ? profileData.address_number.substring(0, 20) : null,
+          complement: profileData.complement ? profileData.complement.substring(0, 100) : null,
+          city: profileData.city ? profileData.city.substring(0, 100) : null,
+          state: profileData.state ? profileData.state.substring(0, 2) : null,
+          profile_complete: true,
+          updated_at: new Date().toISOString(),
         };
 
-        // Call GAS API
-        const gasTarget = `${gasBase}?path=site-register`;
+        // Buscar registro existente pelo email
+        const { data: existingByEmail } = await supabase
+          .from("patients")
+          .select("id, user_id")
+          .eq("email", normalizedEmail)
+          .maybeSingle();
 
-        const gasResponse = await fetch(gasTarget, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(gasPayload),
-        });
+        let savedPatientId: string | null = null;
 
-        const gasResult = await gasResponse.text();
+        if (existingByEmail) {
+          // ✅ Registro encontrado pelo email → UPDATE direto (bypassa RLS via service_role)
+          console.log("[complete_profile] ✅ Registro encontrado por email, atualizando id:", existingByEmail.id);
+          const { error: updateErr } = await supabase
+            .from("patients")
+            .update(updatePayload)
+            .eq("id", existingByEmail.id);
 
-        console.log("[complete_profile] GAS Response status:", gasResponse.status);
+          if (updateErr) {
+            console.error("[complete_profile] ❌ Erro no UPDATE:", updateErr.message);
+            return new Response(JSON.stringify({ error: "Erro ao salvar perfil", details: updateErr.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          savedPatientId = existingByEmail.id;
+          console.log("[complete_profile] ✅ UPDATE bem-sucedido");
+        } else {
+          // ✅ Registro não existe → INSERT com email e dados completos
+          console.log("[complete_profile] ⚠️ Registro não encontrado por email, criando novo");
+          const newId = crypto.randomUUID();
+          const insertPayload = {
+            id: newId,
+            email: normalizedEmail,
+            ...updatePayload,
+          };
+
+          // Tentar vincular user_id da produção se o email existir no auth
+          const { data: authUser } = await supabase.auth.admin.getUserByEmail(normalizedEmail);
+          if (authUser?.user?.id) {
+            insertPayload["user_id"] = authUser.user.id;
+            console.log("[complete_profile] ✅ user_id da produção encontrado:", authUser.user.id);
+          }
+
+          const { error: insertErr } = await supabase.from("patients").insert(insertPayload);
+          if (insertErr) {
+            console.error("[complete_profile] ❌ Erro no INSERT:", insertErr.message);
+            return new Response(JSON.stringify({ error: "Erro ao criar perfil", details: insertErr.message }), {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          savedPatientId = newId;
+          console.log("[complete_profile] ✅ INSERT bem-sucedido");
+        }
+
+        // Também chamar o GAS se configurado (não-bloqueante, mantém compatibilidade)
+        if (gasBase) {
+          try {
+            const gasPayload = {
+              user_id: profileData.user_id,
+              first_name: profileData.first_name.substring(0, 100),
+              last_name: profileData.last_name.substring(0, 100),
+              email: normalizedEmail,
+              phone: profileData.phone,
+              cpf: cpfClean,
+              birth_date: normalizedBirthDate,
+              gender: profileData.gender ? profileData.gender.substring(0, 1) : "",
+              cep: profileData.cep ? profileData.cep.substring(0, 10) : "",
+              address_number: profileData.address_number ? profileData.address_number.substring(0, 20) : "",
+              complement: profileData.complement ? profileData.complement.substring(0, 100) : "",
+              city: profileData.city ? profileData.city.substring(0, 100) : "",
+              state: profileData.state ? profileData.state.substring(0, 2) : "",
+              source: "site",
+              plano: profileData.plano,
+            };
+            const gasResponse = await fetch(`${gasBase}?path=site-register`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(gasPayload),
+            });
+            console.log("[complete_profile] GAS Response status:", gasResponse.status);
+          } catch (gasErr) {
+            console.warn("[complete_profile] ⚠️ GAS call falhou (não-bloqueante):", gasErr);
+          }
+        }
 
         return new Response(
-          JSON.stringify({
-            success: true,
-            gas: gasResult,
-            gasStatus: gasResponse.status,
-          }),
+          JSON.stringify({ success: true, patient_id: savedPatientId, message: "Perfil salvo com sucesso." }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       case "schedule_appointment": {
         const appointmentData = body as ScheduleAppointmentRequest;
-
-        // Validate inputs
-        if (!validateEmail(appointmentData.email)) {
+        if (!validateEmail(appointmentData.email))
           return new Response(JSON.stringify({ error: "Email inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!validateString(appointmentData.nome, 255)) {
+        if (!validateString(appointmentData.nome, 255))
           return new Response(JSON.stringify({ error: "Nome inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Call GAS API
         const gasPayload = {
           user_id: appointmentData.user_id,
           email: appointmentData.email.substring(0, 255),
@@ -997,15 +819,12 @@ serve(async (req) => {
           ...(appointmentData.cupom && { cupom: appointmentData.cupom.substring(0, 50) }),
           ...(appointmentData.fotos_base64 && { fotos_base64: appointmentData.fotos_base64 }),
         };
-
         const gasResponse = await fetch(`${gasBase}?path=site-schedule`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(gasPayload),
         });
-
         const gasResult = await gasResponse.text();
-
         return new Response(JSON.stringify({ success: true, gas: gasResult }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -1014,14 +833,11 @@ serve(async (req) => {
       case "sync_appointment": {
         const { appointment_id, status, meeting_link, provider, external_appointment_id } =
           body as SyncAppointmentRequest;
-
-        if (!validateString(appointment_id, 255) || !validateString(status, 50)) {
+        if (!validateString(appointment_id, 255) || !validateString(status, 50))
           return new Response(JSON.stringify({ error: "Dados inválidos" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
         return new Response(
           JSON.stringify({
             success: true,
@@ -1038,56 +854,40 @@ serve(async (req) => {
 
       case "schedule_redirect": {
         const { user_id, sku } = body as ScheduleRedirectRequest;
-
-        if (!validateString(sku, 50)) {
+        if (!validateString(sku, 50))
           return new Response(JSON.stringify({ error: "SKU inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Fetch complete patient data
         const { data: patient, error: patientError } = await supabase
           .from("patients")
           .select("*")
           .eq("id", user_id)
           .single();
-
-        if (patientError || !patient) {
+        if (patientError || !patient)
           return new Response(JSON.stringify({ error: "Paciente não encontrado" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!patient.profile_complete) {
+        if (!patient.profile_complete)
           return new Response(JSON.stringify({ error: "Cadastro incompleto" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Get user email from auth
         const {
           data: { user },
           error: userError,
         } = await supabase.auth.admin.getUserById(user_id);
-
-        if (userError || !user?.email) {
+        if (userError || !user?.email)
           return new Response(JSON.stringify({ error: "Email do usuário não encontrado" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Format birth_date to DD-MM-AAAA
         const formatDateBR = (dateStr: string) => {
           if (!dateStr) return "";
           const [year, month, day] = dateStr.split("-");
           return `${day}-${month}-${year}`;
         };
-
-        // Build complete payload for App Script
         const gasPayload = {
           data: new Date().toISOString().split("T")[0],
           id_user: patient.id,
@@ -1100,23 +900,19 @@ serve(async (req) => {
           genero: patient.gender || "",
           cep: patient.cep || "",
           endereco_numero: patient.address_number || "",
-          complemento: patient.address_complement || "",
+          complemento: patient.complement || "",
           cidade: patient.city || "",
           uf: patient.state || "",
           fonte: patient.source || "site",
           plano: false,
           sku: sku.substring(0, 50),
         };
-
-        // Call App Script
         const gasResponse = await fetch(`${gasBase}?path=site-schedule`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(gasPayload),
         });
-
         const gasResult = await gasResponse.json();
-
         return new Response(
           JSON.stringify({
             success: true,
@@ -1130,72 +926,47 @@ serve(async (req) => {
 
       case "disable_plan": {
         const { email } = body as DisablePlanRequest;
-
-        if (!validateEmail(email)) {
+        if (!validateEmail(email))
           return new Response(JSON.stringify({ error: "Email inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Check if user is admin (via Lovable Cloud - mesmo padrão do activate_plan_manual)
         const token = authHeader?.replace("Bearer ", "") || "";
         const LOVABLE_CLOUD_URL_DP = "https://yrsjluhhnhxogdgnbnya.supabase.co";
         const LOVABLE_CLOUD_ANON_KEY_DP =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
-
         const authClientDP = createClient(LOVABLE_CLOUD_URL_DP, LOVABLE_CLOUD_ANON_KEY_DP, {
           global: { headers: { Authorization: `Bearer ${token}` } },
         });
         const { data: authDataDP, error: authError } = await authClientDP.auth.getUser(token);
-
-        if (authError || !authDataDP?.user) {
-          console.error("[disable_plan] Token inválido no Cloud:", authError?.message);
+        if (authError || !authDataDP?.user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        const { data: roles } = await authClientDP
-          .from("user_roles").select("role").eq("user_id", authDataDP.user.id);
+        const { data: roles } = await authClientDP.from("user_roles").select("role").eq("user_id", authDataDP.user.id);
         const isAdminDP = roles?.some((r: any) => r.role === "admin");
-
-        if (!isAdminDP) {
+        if (!isAdminDP)
           return new Response(JSON.stringify({ error: "Apenas administradores podem desabilitar planos" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Disable the plan
         const { data: updatedPlan, error: updateError } = await supabase
           .from("patient_plans")
-          .update({
-            status: "cancelled",
-            updated_at: new Date().toISOString(),
-          })
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
           .eq("email", email)
           .eq("status", "active")
           .select();
-
-        if (updateError) {
-          console.error("[disable_plan] Error:", updateError);
+        if (updateError)
           return new Response(JSON.stringify({ error: "Erro ao desabilitar plano" }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!updatedPlan || updatedPlan.length === 0) {
+        if (!updatedPlan || updatedPlan.length === 0)
           return new Response(JSON.stringify({ error: "Nenhum plano ativo encontrado para este email" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        console.log("[disable_plan] Plan disabled:", { email, count: updatedPlan.length });
-
         return new Response(
           JSON.stringify({
             success: true,
@@ -1208,208 +979,109 @@ serve(async (req) => {
 
       case "change_plan": {
         const { plan_id, new_plan_code, new_expires_at } = body as ChangePlanRequest;
-
-        if (!validateString(plan_id, 255) || !validateString(new_plan_code, 50)) {
+        if (!validateString(plan_id, 255) || !validateString(new_plan_code, 50))
           return new Response(JSON.stringify({ error: "Dados inválidos" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Check if user is admin (via Lovable Cloud - mesmo padrão do activate_plan_manual)
         const token = authHeader?.replace("Bearer ", "") || "";
         const LOVABLE_CLOUD_URL_CP = "https://yrsjluhhnhxogdgnbnya.supabase.co";
         const LOVABLE_CLOUD_ANON_KEY_CP =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
-
         const authClientCP = createClient(LOVABLE_CLOUD_URL_CP, LOVABLE_CLOUD_ANON_KEY_CP, {
           global: { headers: { Authorization: `Bearer ${token}` } },
         });
         const { data: authDataCP, error: authError } = await authClientCP.auth.getUser(token);
-
-        if (authError || !authDataCP?.user) {
-          console.error("[change_plan] Token inválido no Cloud:", authError?.message);
+        if (authError || !authDataCP?.user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        const { data: roles } = await authClientCP
-          .from("user_roles").select("role").eq("user_id", authDataCP.user.id);
+        const { data: roles } = await authClientCP.from("user_roles").select("role").eq("user_id", authDataCP.user.id);
         const isAdminCP = roles?.some((r: any) => r.role === "admin");
-
-        if (!isAdminCP) {
+        if (!isAdminCP)
           return new Response(JSON.stringify({ error: "Apenas administradores podem alterar planos" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Build update object
-        const updateData: Record<string, any> = {
-          plan_code: new_plan_code,
-          updated_at: new Date().toISOString(),
-        };
-
-        if (new_expires_at) {
-          updateData.plan_expires_at = new_expires_at;
-        }
-
-        // Update the plan
+        const updateData: Record<string, any> = { plan_code: new_plan_code, updated_at: new Date().toISOString() };
+        if (new_expires_at) updateData.plan_expires_at = new_expires_at;
         const { data: updatedPlan, error: updateError } = await supabase
           .from("patient_plans")
           .update(updateData)
           .eq("id", plan_id)
           .select()
           .single();
-
-        if (updateError) {
-          console.error("[change_plan] Error:", updateError);
+        if (updateError)
           return new Response(JSON.stringify({ error: "Erro ao alterar plano" }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!updatedPlan) {
+        if (!updatedPlan)
           return new Response(JSON.stringify({ error: "Plano não encontrado" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        console.log("[change_plan] Plan updated:", { plan_id, new_plan_code, updatedPlan });
-
         return new Response(
-          JSON.stringify({
-            success: true,
-            message: `Plano alterado com sucesso`,
-            plan: updatedPlan,
-          }),
+          JSON.stringify({ success: true, message: "Plano alterado com sucesso", plan: updatedPlan }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
       case "deactivate_plan_manual": {
-        // ============================================================
-        // ✅ REMOVER/CANCELAR PLANO MANUALMENTE
-        // Usado pelo painel admin para desativar plano de um paciente
-        // CORRIGIDO: Buscar por EMAIL (não por id), pois email é a chave de referência
-        // ============================================================
-
         const { patient_email } = body;
-
-        if (!patient_email) {
+        if (!patient_email)
           return new Response(JSON.stringify({ success: false, error: "Missing patient_email" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
         const normalizedEmail = patient_email.toLowerCase().trim();
-        console.log("[deactivate_plan_manual] Desativando plano para email:", normalizedEmail);
-
-        // Atualizar status para 'cancelled' no banco de PRODUÇÃO
-        // CORRIGIDO: Usar .eq('email', email) - email é a chave de referência na produção
-        const { error: updateError, count } = await supabase
+        const { error: updateError } = await supabase
           .from("patient_plans")
-          .update({
-            status: "cancelled",
-            updated_at: new Date().toISOString(),
-          })
+          .update({ status: "cancelled", updated_at: new Date().toISOString() })
           .eq("email", normalizedEmail);
-
-        if (updateError) {
-          console.error("[deactivate_plan_manual] Erro:", updateError.message);
+        if (updateError)
           return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Failed to deactivate plan",
-              details: updateError.message,
-            }),
+            JSON.stringify({ success: false, error: "Failed to deactivate plan", details: updateError.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        console.log("[deactivate_plan_manual] ✅ Plano desativado com sucesso para:", normalizedEmail);
-
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: "Plan deactivated successfully",
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
+        return new Response(JSON.stringify({ success: true, message: "Plan deactivated successfully" }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       case "activate_plan_manual": {
-        // ============================================================
-        // ✅ ARQUITETURA CROSS-PROJECT:
-        // 1. Validar token no LOVABLE CLOUD (onde admin fez login)
-        // 2. Verificar role admin no LOVABLE CLOUD
-        // 3. Executar ativação no BANCO DE PRODUÇÃO
-        // ============================================================
-
         const token = authHeader?.replace("Bearer ", "");
-
-        if (!token) {
+        if (!token)
           return new Response(JSON.stringify({ success: false, step: "admin_auth", error: "No token provided" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // ✅ PASSO 1: Criar client do LOVABLE CLOUD para validar o JWT
         const LOVABLE_CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
         const LOVABLE_CLOUD_ANON_KEY =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
-
         const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_ANON_KEY, {
           global: { headers: { Authorization: `Bearer ${token}` } },
         });
-
-        // ✅ PASSO 2: Validar token EXPLICITAMENTE usando getUser(token) no Lovable Cloud
-        console.log("[activate_plan_manual] Validando token no Lovable Cloud...");
-        console.log("[activate_plan_manual] Token recebido (primeiros 20 chars):", token.substring(0, 20) + "...");
-
-        // IMPORTANTE: Passar token explicitamente para getUser()
         const { data: authData, error: authError } = await authClient.auth.getUser(token);
-
-        if (authError || !authData?.user) {
-          console.error("[activate_plan_manual] Token inválido no Lovable Cloud:", authError?.message);
-          console.error("[activate_plan_manual] Auth error code:", authError?.code);
-
-          // Verificar se é token anon/público (fallback de sessão não autenticada)
-          const isAnonToken =
-            token.includes('"role":"anon"') || (!authData?.user && !authError?.message?.includes("expired"));
-
+        if (authError || !authData?.user)
           return new Response(
             JSON.stringify({
               success: false,
               step: "admin_auth",
-              error: isAnonToken
-                ? "Sessão do Admin não encontrada - faça login novamente"
-                : "Token inválido - não foi possível validar no servidor de auth",
+              error: "Token inválido",
               details: authError?.message || "No user data returned",
             }),
             { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
         const adminUserId = authData.user.id;
         const adminEmail = authData.user.email;
-        console.log("[activate_plan_manual] ✅ Token válido. Admin user:", { id: adminUserId, email: adminEmail });
-
-        // ✅ PASSO 3: Verificar role admin no Lovable Cloud
-        console.log("[activate_plan_manual] Verificando role admin no Lovable Cloud...");
         const { data: roles, error: rolesError } = await authClient
           .from("user_roles")
           .select("role")
           .eq("user_id", adminUserId);
-
-        if (rolesError) {
-          console.error("[activate_plan_manual] Erro ao buscar roles:", rolesError.message);
+        if (rolesError)
           return new Response(
             JSON.stringify({
               success: false,
@@ -1419,179 +1091,91 @@ serve(async (req) => {
             }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
         const isAdmin = roles?.some((r: any) => r.role === "admin");
-        console.log("[activate_plan_manual] Roles encontradas:", roles, "| É admin?", isAdmin);
-
-        if (!isAdmin) {
+        if (!isAdmin)
           return new Response(
-            JSON.stringify({
-              success: false,
-              step: "admin_role_check",
-              error: "Forbidden - Admin role required",
-              details: `User ${adminEmail} does not have admin role`,
-            }),
+            JSON.stringify({ success: false, step: "admin_role_check", error: "Forbidden - Admin role required" }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        // ✅ Admin validado! Agora executar no banco de PRODUÇÃO
-        console.log("[activate_plan_manual] ✅ Admin validado! Executando no banco de produção...");
-
         const { patient_email, patient_id, plan_code, duration_days, send_email } = body;
-
-        // Validar dados
-        if (!patient_email || !plan_code || !duration_days) {
+        if (!patient_email || !plan_code || !duration_days)
           return new Response(
-            JSON.stringify({
-              success: false,
-              step: "validation",
-              error: "Missing required fields: patient_email, plan_code, duration_days",
-            }),
+            JSON.stringify({ success: false, step: "validation", error: "Missing required fields" }),
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        // Calcular data de expiração (formato DATE para o banco)
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + parseInt(duration_days));
-        const expiresAtDate = expiresAt.toISOString().split("T")[0]; // YYYY-MM-DD
-
-        // ✅ PASSO 4: Buscar paciente no banco de PRODUÇÃO (com fallback para criar)
-        // CORRIGIDO: Implementa fallback resiliente para criar o paciente se não existir
+        const expiresAtDate = expiresAt.toISOString().split("T")[0];
         const normalizedPatientEmail = patient_email.toLowerCase().trim();
-        console.log("[activate_plan_manual] ========================================");
-        console.log("[activate_plan_manual] 🔍 Buscando paciente:", normalizedPatientEmail);
-        console.log("[activate_plan_manual] patient_id recebido:", patient_id || "(não informado)");
-
         let patient: { id: string | null; user_id: string | null } | null = null;
         let patientLookupMethod = "none";
-
-        // TENTATIVA 1: Buscar por patient_id (se fornecido como patients.id)
         if (patient_id) {
-          console.log("[activate_plan_manual] 1️⃣ Tentando buscar por patient_id:", patient_id);
-          const { data: patientById, error: errById } = await supabase
+          const { data: patientById } = await supabase
             .from("patients")
             .select("id, user_id")
             .eq("id", patient_id)
             .maybeSingle();
-
-          if (!errById && patientById) {
+          if (patientById) {
             patient = patientById;
             patientLookupMethod = "by_patient_id";
-            console.log("[activate_plan_manual] ✅ Encontrado por patient_id:", {
-              id: patient.id,
-              user_id: patient.user_id,
-            });
-          } else {
-            console.log("[activate_plan_manual] ❌ Não encontrado por patient_id");
           }
         }
-
-        // TENTATIVA 2: Buscar por email
         if (!patient) {
-          console.log("[activate_plan_manual] 2️⃣ Tentando buscar por email:", normalizedPatientEmail);
           const { data: patientByEmail, error: errByEmail } = await supabase
             .from("patients")
             .select("id, user_id")
             .eq("email", normalizedPatientEmail)
             .maybeSingle();
-
-          if (errByEmail) {
-            console.error("[activate_plan_manual] Erro na busca por email:", errByEmail.message);
+          if (errByEmail)
             return new Response(
               JSON.stringify({
                 success: false,
                 step: "patient_lookup",
-                error: "Database error looking up patient by email",
+                error: "Database error",
                 details: errByEmail.message,
               }),
               { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
             );
-          }
-
           if (patientByEmail) {
             patient = patientByEmail;
             patientLookupMethod = "by_email";
-            console.log("[activate_plan_manual] ✅ Encontrado por email:", {
-              id: patient.id,
-              user_id: patient.user_id,
-            });
-          } else {
-            console.log("[activate_plan_manual] ❌ Não encontrado por email");
           }
         }
-
-        // TENTATIVA 3: Se não encontrou paciente, NÃO criar - prosseguir apenas com email
-        // ✅ CORREÇÃO: Evita erro de FK constraint quando user_id da Produção não existe no Cloud
         if (!patient) {
-          console.log("[activate_plan_manual] 3️⃣ Paciente não existe em patients - continuando sem criar");
-          console.log("[activate_plan_manual] ⚠️ Plano será ativado apenas pelo email (sem vínculo com patients.id)");
-
-          // Criar objeto "virtual" para compatibilidade com o código seguinte
-          patient = {
-            id: null,
-            user_id: null,
-          };
+          patient = { id: null, user_id: null };
           patientLookupMethod = "email_only_no_patient_record";
         }
-
-        // Verificação final - agora permite patient.id = null
-        // pois patient_plans pode ser criado apenas com email
-        console.log("[activate_plan_manual] ✅ Paciente resolvido:", {
-          patient_id: patient?.id || "(nenhum - apenas email)",
-          user_id: patient?.user_id || "(nenhum)",
-          method: patientLookupMethod,
-        });
-        console.log("[activate_plan_manual] ========================================");
-
-        // ✅ PASSO 5: Upsert plano no banco de PRODUÇÃO
-        // CORRIGIDO: email é a chave de referência (NOT NULL) no banco de produção
-        // O id é um UUID autônomo - NÃO é igual ao patients.id
-        // Usar normalizedPatientEmail já definido no PASSO 4
-        console.log("[activate_plan_manual] Verificando plano existente para email:", normalizedPatientEmail);
-
-        // Verificar se já existe plano para esse email
         const { data: existingPlan } = await supabase
           .from("patient_plans")
           .select("id")
           .eq("email", normalizedPatientEmail)
           .maybeSingle();
-
         let planUpsertError = null;
-
         if (existingPlan) {
-          // UPDATE do plano existente
-          console.log("[activate_plan_manual] Atualizando plano existente:", existingPlan.id);
           const { error: updateErr } = await supabase
             .from("patient_plans")
             .update({
-              plan_code: plan_code,
+              plan_code,
               status: "active",
               plan_expires_at: expiresAtDate,
               user_id: patient.user_id || null,
               updated_at: new Date().toISOString(),
             })
             .eq("id", existingPlan.id);
-
           planUpsertError = updateErr;
         } else {
-          // INSERT de novo plano - email é obrigatório (NOT NULL)
-          console.log("[activate_plan_manual] Inserindo novo plano para email:", normalizedPatientEmail);
-          const { error: insertErr } = await supabase.from("patient_plans").insert({
-            email: normalizedPatientEmail,
-            user_id: patient.user_id || null,
-            plan_code: plan_code,
-            status: "active",
-            plan_expires_at: expiresAtDate,
-          });
-
+          const { error: insertErr } = await supabase
+            .from("patient_plans")
+            .insert({
+              email: normalizedPatientEmail,
+              user_id: patient.user_id || null,
+              plan_code,
+              status: "active",
+              plan_expires_at: expiresAtDate,
+            });
           planUpsertError = insertErr;
         }
-
-        if (planUpsertError) {
-          console.error("[activate_plan_manual] Erro no upsert:", planUpsertError.message);
+        if (planUpsertError)
           return new Response(
             JSON.stringify({
               success: false,
@@ -1601,50 +1185,30 @@ serve(async (req) => {
             }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        // ✅ PASSO 6: Registrar métrica de auditoria
         try {
-          await supabase.from("metrics").insert({
-            metric_type: "manual_plan_activation",
-            metadata: {
-              patient_email: patient_email,
-              plan_code: plan_code,
-              activated_by_admin: adminEmail,
-              duration_days: duration_days,
-              expires_at: expiresAtDate,
-              timestamp: new Date().toISOString(),
-            },
-          });
-        } catch (metricErr) {
-          console.warn("[activate_plan_manual] Erro ao gravar métrica (não crítico):", metricErr);
-        }
-
-        console.log("[activate_plan_manual] ✅ Plano ativado com sucesso:", {
-          patient_email,
-          plan_code,
-          expires_at: expiresAtDate,
-          activated_by: adminEmail,
-        });
-
-        // ✅ PASSO 7: Cadastrar na ClickLife (opcional)
+          await supabase
+            .from("metrics")
+            .insert({
+              metric_type: "manual_plan_activation",
+              metadata: {
+                patient_email,
+                plan_code,
+                activated_by_admin: adminEmail,
+                duration_days,
+                expires_at: expiresAtDate,
+                timestamp: new Date().toISOString(),
+              },
+            });
+        } catch (e) {}
         const { data: patientFull } = await supabase
           .from("patients")
           .select("cpf, first_name, last_name, phone_e164, gender, birth_date")
           .eq("email", patient_email.toLowerCase().trim())
           .maybeSingle();
-
         if (patientFull?.cpf) {
-          const clickLifePlanoId = plan_code.includes("COM_ESP")
-            ? 864
-            : plan_code.includes("SEM_ESP")
-              ? 863
-              : plan_code.startsWith("EMPRESA_")
-                ? 864
-                : 864;
-
+          const clickLifePlanoId = plan_code.includes("COM_ESP") ? 864 : plan_code.includes("SEM_ESP") ? 863 : 864;
           try {
-            const { error: clicklifeError } = await supabase.functions.invoke("activate-clicklife-manual", {
+            await supabase.functions.invoke("activate-clicklife-manual", {
               body: {
                 email: patient_email,
                 cpf: patientFull.cpf,
@@ -1655,17 +1219,8 @@ serve(async (req) => {
                 planoid: clickLifePlanoId,
               },
             });
-
-            if (clicklifeError) {
-              console.warn("[activate_plan_manual] ⚠️ ClickLife sync error (non-blocking):", clicklifeError);
-            } else {
-              console.log("[activate_plan_manual] ✅ ClickLife sync OK");
-            }
-          } catch (clicklifeErr) {
-            console.warn("[activate_plan_manual] ⚠️ ClickLife call failed (non-blocking):", clicklifeErr);
-          }
+          } catch (e) {}
         }
-
         return new Response(
           JSON.stringify({
             success: true,
@@ -1685,24 +1240,17 @@ serve(async (req) => {
           data: { user },
           error: authError,
         } = await supabase.auth.getUser(token);
-
-        if (authError || !user) {
+        if (authError || !user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
         const { plan_id, email } = body as InviteFamiliarRequest;
-
-        if (!validateEmail(email)) {
+        if (!validateEmail(email))
           return new Response(JSON.stringify({ error: "Email inválido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Verificar se o plano pertence ao usuário
         const { data: plan, error: planError } = await supabase
           .from("patient_plans")
           .select("*")
@@ -1710,125 +1258,80 @@ serve(async (req) => {
           .eq("user_id", user.id)
           .eq("status", "active")
           .single();
-
-        if (planError || !plan) {
+        if (planError || !plan)
           return new Response(JSON.stringify({ error: "Plano não encontrado ou sem permissão" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Verificar se é plano familiar
-        if (!plan.plan_code.includes("FAM")) {
+        if (!plan.plan_code.includes("FAM"))
           return new Response(JSON.stringify({ error: "Este plano não permite adicionar familiares" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Verificar se já existe convite pendente ou completo para este email
         const { data: existingInvite } = await supabase
           .from("pending_family_invites")
           .select("id, status")
           .eq("titular_plan_id", plan_id)
           .eq("email", email.toLowerCase())
           .maybeSingle();
-
-        if (existingInvite) {
-          if (existingInvite.status === "pending") {
-            return new Response(JSON.stringify({ error: "Já existe um convite pendente para este email" }), {
-              status: 409,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          if (existingInvite.status === "completed") {
-            return new Response(JSON.stringify({ error: "Este familiar já está cadastrado no plano" }), {
-              status: 409,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        }
-
-        // Contar familiares existentes (máximo 3)
+        if (existingInvite?.status === "pending")
+          return new Response(JSON.stringify({ error: "Já existe um convite pendente para este email" }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        if (existingInvite?.status === "completed")
+          return new Response(JSON.stringify({ error: "Este familiar já está cadastrado no plano" }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         const { count } = await supabase
           .from("pending_family_invites")
           .select("*", { count: "exact", head: true })
           .eq("titular_plan_id", plan_id)
           .in("status", ["pending", "completed"]);
-
-        if ((count || 0) >= 3) {
+        if ((count || 0) >= 3)
           return new Response(JSON.stringify({ error: "Limite de 3 familiares atingido" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Gerar token único
         const inviteToken = crypto.randomUUID();
-
-        // Buscar patient_id do titular para a coluna titular_patient_id
         const { data: titularPatient } = await supabase
           .from("patients")
           .select("id")
           .eq("user_id", user.id)
           .maybeSingle();
-
-        if (!titularPatient?.id) {
-          console.error("[invite-familiar] Titular patient not found for user:", user.id);
+        if (!titularPatient?.id)
           return new Response(JSON.stringify({ error: "Perfil do titular não encontrado" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Inserir convite com colunas CORRETAS: titular_patient_id e token
-        const { error: insertError } = await supabase.from("pending_family_invites").insert({
-          titular_patient_id: titularPatient.id,
-          titular_plan_id: plan_id,
-          email: email.toLowerCase(),
-          token: inviteToken,
-          status: "pending",
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        });
-
-        if (insertError) {
-          console.error("[invite-familiar] Insert error:", insertError);
+        const { error: insertError } = await supabase
+          .from("pending_family_invites")
+          .insert({
+            titular_patient_id: titularPatient.id,
+            titular_plan_id: plan_id,
+            email: email.toLowerCase(),
+            token: inviteToken,
+            status: "pending",
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          });
+        if (insertError)
           return new Response(JSON.stringify({ error: "Erro ao criar convite" }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Enviar email
         try {
           const inviteLink = `https://prontiasaude.com.br/completar-perfil?token_familiar=${inviteToken}`;
-
-          // Buscar nome do titular
           const { data: titular } = await supabase
             .from("patients")
             .select("first_name, last_name")
             .eq("id", user.id)
             .single();
-
           const titularName = titular ? `${titular.first_name || ""} ${titular.last_name || ""}`.trim() : "Um membro";
-
           await supabase.functions.invoke("send-form-emails", {
-            body: {
-              type: "family-invite",
-              data: {
-                email: email.toLowerCase(),
-                titularName,
-                inviteLink,
-              },
-            },
+            body: { type: "family-invite", data: { email: email.toLowerCase(), titularName, inviteLink } },
           });
-        } catch (emailError) {
-          console.error("[invite-familiar] Email error:", emailError);
-          // Não falhar se email não enviar
-        }
-
-        console.log("[invite-familiar] Invite created:", { plan_id, email });
-
+        } catch (e) {}
         return new Response(JSON.stringify({ success: true, message: "Convite enviado com sucesso" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -1840,31 +1343,22 @@ serve(async (req) => {
           data: { user },
           error: authError,
         } = await supabase.auth.getUser(token);
-
-        if (authError || !user) {
+        if (authError || !user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
         const { invite_id } = body as ResendFamilyInviteRequest;
-
-        // Buscar patient_id do titular
         const { data: titularPatient } = await supabase
           .from("patients")
           .select("id")
           .eq("user_id", user.id)
           .maybeSingle();
-
-        if (!titularPatient?.id) {
+        if (!titularPatient?.id)
           return new Response(JSON.stringify({ error: "Perfil do titular não encontrado" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Buscar convite usando colunas CORRETAS: titular_patient_id e token
         const { data: invite, error: inviteError } = await supabase
           .from("pending_family_invites")
           .select("*, patient_plans(plan_code)")
@@ -1872,148 +1366,82 @@ serve(async (req) => {
           .eq("titular_patient_id", titularPatient.id)
           .eq("status", "pending")
           .single();
-
-        if (inviteError || !invite) {
+        if (inviteError || !invite)
           return new Response(JSON.stringify({ error: "Convite não encontrado" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Gerar novo token e atualizar expiração
         const newToken = crypto.randomUUID();
         const newExpires = new Date();
         newExpires.setDate(newExpires.getDate() + 7);
-
-        // Usar coluna CORRETA: token (não invite_token)
         await supabase
           .from("pending_family_invites")
-          .update({
-            token: newToken,
-            expires_at: newExpires.toISOString(),
-          })
+          .update({ token: newToken, expires_at: newExpires.toISOString() })
           .eq("id", invite_id);
-
-        // Reenviar email
         try {
           const inviteLink = `https://prontiasaude.com.br/completar-perfil?token_familiar=${newToken}`;
-
           const { data: titular } = await supabase
             .from("patients")
             .select("first_name, last_name")
             .eq("id", user.id)
             .single();
-
           const titularName = titular ? `${titular.first_name || ""} ${titular.last_name || ""}`.trim() : "Um membro";
-
           await supabase.functions.invoke("send-form-emails", {
-            body: {
-              type: "family-invite",
-              data: {
-                email: invite.email,
-                titularName,
-                inviteLink,
-              },
-            },
+            body: { type: "family-invite", data: { email: invite.email, titularName, inviteLink } },
           });
-        } catch (emailError) {
-          console.error("[resend-family-invite] Email error:", emailError);
-        }
-
+        } catch (e) {}
         return new Response(JSON.stringify({ success: true, message: "Convite reenviado" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       case "activate-family-member": {
-        // Este endpoint será chamado pelo CompletarPerfil quando um familiar completar cadastro
         const { invite_token, user_id: passedUserId } = body;
-
-        if (!invite_token) {
+        if (!invite_token)
           return new Response(JSON.stringify({ error: "Token de convite é obrigatório" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Buscar convite válido usando coluna CORRETA: token (não invite_token)
         const { data: invite, error: inviteError } = await supabase
           .from("pending_family_invites")
           .select("*, patient_plans(plan_code, plan_expires_at)")
           .eq("token", invite_token)
           .eq("status", "pending")
           .single();
-
-        if (inviteError || !invite) {
+        if (inviteError || !invite)
           return new Response(JSON.stringify({ error: "Convite inválido ou já utilizado" }), {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (new Date(invite.expires_at) < new Date()) {
+        if (new Date(invite.expires_at) < new Date())
           return new Response(JSON.stringify({ error: "Convite expirado" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // ✅ PRIORIZAR user_id passado pelo frontend (usuários existentes)
         let memberId = passedUserId;
-
-        // Se não foi passado user_id, buscar por email
         if (!memberId) {
           const { data: authUser } = await supabase.auth.admin.getUserByEmail(invite.email);
           memberId = authUser?.user?.id;
         }
-
-        console.log("[activate-family-member] Processing:", {
-          invite_email: invite.email,
-          passed_user_id: passedUserId,
-          resolved_member_id: memberId,
-        });
-
-        // ✅ Garantir que existe registro em patients (upsert)
         if (memberId) {
-          const { error: patientError } = await supabase.from("patients").upsert(
-            {
-              id: memberId,
-              email: invite.email,
-              profile_complete: false,
-              updated_at: new Date().toISOString(),
-            },
-            {
-              onConflict: "id",
-              ignoreDuplicates: false,
-            },
-          );
-
-          if (patientError) {
-            console.error("[activate-family-member] Patient upsert error:", patientError);
-            // Não bloquear - apenas logar
-          }
+          const { error: patientError } = await supabase
+            .from("patients")
+            .upsert(
+              { id: memberId, email: invite.email, profile_complete: false, updated_at: new Date().toISOString() },
+              { onConflict: "id", ignoreDuplicates: false },
+            );
         }
-
-        // ✅ Verificar se já existe plano ativo para evitar duplicação
         const { data: existingPlan } = await supabase
           .from("patient_plans")
           .select("id, plan_code")
           .eq("email", invite.email)
           .eq("status", "active")
           .maybeSingle();
-
         if (existingPlan) {
-          console.log("[activate-family-member] User already has active plan:", existingPlan.plan_code);
-
-          // Marcar convite como completo mesmo assim (usar accepted_at, não completed_at)
           await supabase
             .from("pending_family_invites")
-            .update({
-              status: "completed",
-              accepted_at: new Date().toISOString(),
-            })
+            .update({ status: "completed", accepted_at: new Date().toISOString() })
             .eq("id", invite.id);
-
           return new Response(
             JSON.stringify({
               success: true,
@@ -2023,42 +1451,28 @@ serve(async (req) => {
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
         }
-
-        // Criar plano para o familiar
-        const { error: planError } = await supabase.from("patient_plans").insert({
-          user_id: memberId,
-          email: invite.email,
-          plan_code: invite.patient_plans?.plan_code || "FAM_BASIC",
-          plan_expires_at: invite.patient_plans?.plan_expires_at,
-          status: "active",
-        });
-
-        if (planError) {
-          console.error("[activate-family-member] Plan error:", planError);
+        const { error: planError } = await supabase
+          .from("patient_plans")
+          .insert({
+            user_id: memberId,
+            email: invite.email,
+            plan_code: invite.patient_plans?.plan_code || "FAM_BASIC",
+            plan_expires_at: invite.patient_plans?.plan_expires_at,
+            status: "active",
+          });
+        if (planError)
           return new Response(JSON.stringify({ error: "Erro ao ativar plano do familiar" }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Marcar convite como completo (usar accepted_at, não completed_at)
         await supabase
           .from("pending_family_invites")
-          .update({
-            status: "completed",
-            accepted_at: new Date().toISOString(),
-          })
+          .update({ status: "completed", accepted_at: new Date().toISOString() })
           .eq("id", invite.id);
-
-        // ============================================================
-        // ✅ NOVO: Sincronizar dependente na ClickLife
-        // ============================================================
         let clicklife_sync: "ok" | "failed" | "partial" | "skipped" = "skipped";
         let clicklife_error_message: string | undefined;
         let resolvedPlanCode: string | undefined;
-
         try {
-          // Buscar dados completos do dependente
           const { data: dependenteData } = await supabase
             .from("patients")
             .select(
@@ -2066,30 +1480,20 @@ serve(async (req) => {
             )
             .eq("email", invite.email)
             .maybeSingle();
-
-          // Buscar CPF do titular usando coluna CORRETA: titular_patient_id
           const { data: titularData } = await supabase
             .from("patients")
             .select("cpf")
             .eq("id", invite.titular_patient_id)
             .single();
-
-          // Buscar plan_code REAL do plano do titular (não confiar no join)
           const { data: titularPlanData } = await supabase
             .from("patient_plans")
             .select("plan_code")
             .eq("id", invite.titular_plan_id)
             .maybeSingle();
-
           const planCode = titularPlanData?.plan_code || invite.patient_plans?.plan_code || "FAMILY";
           resolvedPlanCode = planCode;
-
           if (dependenteData?.cpf && titularData?.cpf) {
             const planoid = getClickLifePlanIdForDependente(planCode);
-
-            console.log("[activate-family-member] 🔄 Iniciando sync ClickLife");
-            console.log("[activate-family-member] Plan code do titular:", planCode, "→ planoid:", planoid);
-
             const syncResult = await syncDependenteClickLife(
               {
                 cpf: dependenteData.cpf,
@@ -2107,46 +1511,25 @@ serve(async (req) => {
               titularData.cpf,
               planoid,
             );
-
             clicklife_sync = syncResult.status;
             clicklife_error_message = syncResult.error_message;
-
-            // Registrar métrica
-            await supabase.from("metrics").insert({
-              metric_type: "clicklife_family_activation",
-              status: syncResult.success ? "success" : "failed",
-              patient_email: invite.email,
-              plan_code: planCode,
-              metadata: {
-                planoid,
-                titular_cpf_masked: titularData.cpf.substring(0, 3) + "***",
-                dependente_cpf_masked: dependenteData.cpf.substring(0, 3) + "***",
-                sync_status: syncResult.status,
-                error: syncResult.error_message,
-              },
-            });
-
-            if (syncResult.success) {
-              console.log("[activate-family-member] ✅ ClickLife sync OK");
-            } else {
-              console.warn("[activate-family-member] ⚠️ ClickLife sync:", syncResult.status, syncResult.error_message);
-            }
+            await supabase
+              .from("metrics")
+              .insert({
+                metric_type: "clicklife_family_activation",
+                status: syncResult.success ? "success" : "failed",
+                patient_email: invite.email,
+                plan_code: planCode,
+                metadata: { planoid, sync_status: syncResult.status, error: syncResult.error_message },
+              });
           } else {
-            console.warn("[activate-family-member] ⚠️ Dados insuficientes para sync ClickLife:", {
-              tem_cpf_dependente: !!dependenteData?.cpf,
-              tem_cpf_titular: !!titularData?.cpf,
-            });
             clicklife_sync = "skipped";
-            clicklife_error_message = "Dados insuficientes (CPF dependente ou titular ausente)";
+            clicklife_error_message = "Dados insuficientes";
           }
-        } catch (clicklifeError) {
-          console.error("[activate-family-member] ❌ ClickLife sync error:", clicklifeError);
+        } catch (e) {
           clicklife_sync = "failed";
-          clicklife_error_message = clicklifeError instanceof Error ? clicklifeError.message : "Exception during sync";
+          clicklife_error_message = e instanceof Error ? e.message : "Exception";
         }
-
-        console.log("[activate-family-member] ✅ Family member activated:", invite.email);
-
         return new Response(
           JSON.stringify({
             success: true,
@@ -2158,35 +1541,21 @@ serve(async (req) => {
         );
       }
 
-      // ============================================================
-      // ✅ ENSURE_PATIENT - Garantir que existe registro em patients (usando service_role, ignora RLS)
-      // ============================================================
       case "ensure_patient": {
         let { user_id, email } = body;
-
-        console.log("[ensure_patient] 📥 Recebido:", { user_id, email });
-
-        if (!user_id && !email) {
+        if (!user_id && !email)
           return new Response(JSON.stringify({ error: "user_id ou email é obrigatório" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // ✅ CORREÇÃO: Resolver user_id correto da Produção pelo email
-        // O frontend pode enviar user_id do Cloud, que não existe no auth.users da Produção
         if (email) {
           const normalizedEmail = email.toLowerCase().trim();
-          
-          // 1. Buscar na tabela patients primeiro
           const { data: prodPatient } = await supabase
             .from("patients")
             .select("id, user_id, profile_complete")
             .eq("email", normalizedEmail)
             .maybeSingle();
-          
-          if (prodPatient) {
-            console.log("[ensure_patient] ✅ Paciente já existe por email:", prodPatient.id, "user_id:", prodPatient.user_id);
+          if (prodPatient)
             return new Response(
               JSON.stringify({
                 success: true,
@@ -2196,62 +1565,40 @@ serve(async (req) => {
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } },
             );
-          }
-          
-          // 2. Buscar user_id correto no auth da Produção via paginação
-          console.log("[ensure_patient] 🔍 Buscando user_id correto na Produção pelo email:", normalizedEmail);
           let foundUserId: string | null = null;
           let page = 1;
           const perPage = 50;
           const maxPages = 50;
-          
           while (page <= maxPages) {
             const { data: authPage } = await supabase.auth.admin.listUsers({ page, perPage });
             const users = authPage?.users || [];
             if (users.length === 0) break;
-            
             const found = users.find((u: any) => u.email?.toLowerCase() === normalizedEmail);
             if (found) {
               foundUserId = found.id;
-              console.log("[ensure_patient] ✅ user_id da Produção encontrado:", foundUserId);
               break;
             }
-            
             if (users.length < perPage) break;
             page++;
           }
-          
-          if (foundUserId) {
-            user_id = foundUserId;
-          } else {
-            console.log("[ensure_patient] ⚠️ Usuário não encontrado no auth da Produção, usando user_id original:", user_id);
-          }
+          if (foundUserId) user_id = foundUserId;
         }
-
-        if (!user_id) {
+        if (!user_id)
           return new Response(JSON.stringify({ error: "Não foi possível resolver user_id" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Verificar se já existe por user_id
         const { data: existing, error: checkError } = await supabase
           .from("patients")
           .select("id, profile_complete")
           .eq("user_id", user_id)
           .maybeSingle();
-
-        if (checkError) {
-          console.error("[ensure_patient] ❌ Erro ao verificar:", checkError);
+        if (checkError)
           return new Response(JSON.stringify({ error: checkError.message }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (existing) {
-          console.log("[ensure_patient] ✅ Registro já existe:", existing.id);
+        if (existing)
           return new Response(
             JSON.stringify({
               success: true,
@@ -2261,32 +1608,19 @@ serve(async (req) => {
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        // Criar novo registro
-        console.log("[ensure_patient] 📝 Criando novo registro para user_id:", user_id);
         const newPatientId = crypto.randomUUID();
         const { data: newPatient, error: insertError } = await supabase
           .from("patients")
-          .insert({
-            id: newPatientId, // ✅ CORREÇÃO: Gerar UUID explicitamente
-            user_id,
-            email: email || null,
-            profile_complete: false,
-          })
+          .insert({ id: newPatientId, user_id, email: email || null, profile_complete: false })
           .select("id, profile_complete")
           .single();
-
         if (insertError) {
-          // Verificar se é erro de duplicata (race condition)
           if (insertError.code === "23505") {
-            console.log("[ensure_patient] ⚠️ Conflito detectado, buscando registro existente");
             const { data: conflictPatient } = await supabase
               .from("patients")
               .select("id, profile_complete")
               .eq("user_id", user_id)
               .maybeSingle();
-
             return new Response(
               JSON.stringify({
                 success: true,
@@ -2297,15 +1631,11 @@ serve(async (req) => {
               { headers: { ...corsHeaders, "Content-Type": "application/json" } },
             );
           }
-
-          console.error("[ensure_patient] ❌ Erro ao inserir:", insertError);
           return new Response(JSON.stringify({ error: insertError.message }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-
-        console.log("[ensure_patient] ✅ Novo registro criado:", newPatient?.id);
         return new Response(
           JSON.stringify({
             success: true,
@@ -2318,45 +1648,21 @@ serve(async (req) => {
       }
 
       case "admin_update_patient": {
-        // ============================================================
-        // ✅ ATUALIZAR PACIENTE VIA ADMIN
-        // Arquitetura cross-project:
-        // 1. Validar token no LOVABLE CLOUD (onde admin fez login)
-        // 2. Verificar role admin no LOVABLE CLOUD
-        // 3. Executar UPDATE no BANCO DE PRODUÇÃO usando service_role
-        // ============================================================
-
         const token = authHeader?.replace("Bearer ", "");
-
-        if (!token) {
+        if (!token)
           return new Response(JSON.stringify({ success: false, error: "Token de autenticação não fornecido" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // ✅ PASSO 1: Criar client do LOVABLE CLOUD para validar o JWT
-        // Usar secrets configuradas para garantir consistência entre ambientes
         const LOVABLE_CLOUD_URL = Deno.env.get("CLOUD_SUPABASE_URL") || "https://yrsjluhhnhxogdgnbnya.supabase.co";
         const LOVABLE_CLOUD_SERVICE_KEY = Deno.env.get("CLOUD_SUPABASE_SERVICE_ROLE_KEY");
         const LOVABLE_CLOUD_ANON_KEY =
           "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
-
-        // ✅ Usar service_role se disponível para poder consultar user_roles
-        // Caso contrário, usa anon_key com o token do usuário para autenticação
         const authClient = createClient(LOVABLE_CLOUD_URL, LOVABLE_CLOUD_SERVICE_KEY || LOVABLE_CLOUD_ANON_KEY, {
           global: { headers: { Authorization: `Bearer ${token}` } },
         });
-
-        console.log("[admin_update_patient] Usando Cloud URL:", LOVABLE_CLOUD_URL);
-        console.log("[admin_update_patient] Service key disponível:", !!LOVABLE_CLOUD_SERVICE_KEY);
-
-        // ✅ PASSO 2: Validar token no Lovable Cloud
-        console.log("[admin_update_patient] Validando token no Lovable Cloud...");
         const { data: authData, error: authError } = await authClient.auth.getUser(token);
-
-        if (authError || !authData?.user) {
-          console.error("[admin_update_patient] Token inválido:", authError?.message);
+        if (authError || !authData?.user)
           return new Response(
             JSON.stringify({
               success: false,
@@ -2365,56 +1671,34 @@ serve(async (req) => {
             }),
             { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
         const adminUserId = authData.user.id;
         const adminEmail = authData.user.email;
-        console.log("[admin_update_patient] ✅ Token válido. Admin:", adminEmail);
-
-        // ✅ PASSO 3: Verificar role admin no Lovable Cloud
-        console.log("[admin_update_patient] Verificando role admin...");
         const { data: roles, error: rolesError } = await authClient
           .from("user_roles")
           .select("role")
           .eq("user_id", adminUserId);
-
-        if (rolesError) {
-          console.error("[admin_update_patient] Erro ao verificar roles:", rolesError.message);
+        if (rolesError)
           return new Response(JSON.stringify({ success: false, error: "Falha ao verificar permissões" }), {
             status: 500,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
         const isAdmin = roles?.some((r: any) => r.role === "admin");
-        if (!isAdmin) {
-          console.warn("[admin_update_patient] Usuário não é admin:", adminEmail);
+        if (!isAdmin)
           return new Response(JSON.stringify({ success: false, error: "Permissão negada - apenas administradores" }), {
             status: 403,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        console.log("[admin_update_patient] ✅ Admin confirmado! Executando atualização...");
-
-        // ✅ PASSO 4: Validar dados e executar UPDATE no banco de PRODUÇÃO
         const { patient_id, email: patientEmail, updates } = body;
-
-        if (!patient_id && !patientEmail) {
+        if (!patient_id && !patientEmail)
           return new Response(JSON.stringify({ success: false, error: "patient_id ou email é obrigatório" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        if (!updates || typeof updates !== "object") {
+        if (!updates || typeof updates !== "object")
           return new Response(JSON.stringify({ success: false, error: "updates é obrigatório" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // ✅ Whitelist de campos permitidos para edição
         const ALLOWED_FIELDS = [
           "first_name",
           "last_name",
@@ -2430,89 +1714,51 @@ serve(async (req) => {
           "complement",
           "neighborhood",
         ];
-
         const sanitizedUpdates: Record<string, any> = {};
         for (const key of Object.keys(updates)) {
           if (ALLOWED_FIELDS.includes(key)) {
-            if (key === 'birth_date' && updates[key]) {
+            if (key === "birth_date" && updates[key]) {
               const normalized = normalizeDateToISO(updates[key]);
-              if (normalized) {
-                sanitizedUpdates[key] = normalized;
-              } else {
-                console.warn("[admin_update_patient] birth_date ignorada (formato invalido):", updates[key]);
-              }
-            } else {
-              sanitizedUpdates[key] = updates[key];
-            }
-          } else {
-            console.warn("[admin_update_patient] Campo não permitido ignorado:", key);
+              if (normalized) sanitizedUpdates[key] = normalized;
+            } else sanitizedUpdates[key] = updates[key];
           }
         }
-
-        if (Object.keys(sanitizedUpdates).length === 0) {
+        if (Object.keys(sanitizedUpdates).length === 0)
           return new Response(JSON.stringify({ success: false, error: "Nenhum campo válido para atualização" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        }
-
-        // Adicionar timestamp de atualização
         sanitizedUpdates.updated_at = new Date().toISOString();
-
-        console.log("[admin_update_patient] Campos a atualizar:", Object.keys(sanitizedUpdates));
-
-        // Executar UPDATE usando service_role (bypass RLS)
         let updateError = null;
-        let updateCount = 0;
-
         if (patient_id) {
-          const { error, count } = await supabase.from("patients").update(sanitizedUpdates).eq("id", patient_id);
+          const { error } = await supabase.from("patients").update(sanitizedUpdates).eq("id", patient_id);
           updateError = error;
-          updateCount = count || 0;
         } else if (patientEmail) {
-          const { error, count } = await supabase
+          const { error } = await supabase
             .from("patients")
             .update(sanitizedUpdates)
             .eq("email", patientEmail.toLowerCase().trim());
           updateError = error;
-          updateCount = count || 0;
         }
-
-        if (updateError) {
-          console.error("[admin_update_patient] Erro no UPDATE:", updateError.message);
+        if (updateError)
           return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Falha ao atualizar paciente",
-              details: updateError.message,
-            }),
+            JSON.stringify({ success: false, error: "Falha ao atualizar paciente", details: updateError.message }),
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
           );
-        }
-
-        console.log("[admin_update_patient] ✅ Paciente atualizado com sucesso!", {
-          patient_id: patient_id || "(por email)",
-          email: patientEmail,
-          fields_updated: Object.keys(sanitizedUpdates),
-          admin: adminEmail,
-        });
-
-        // Gravar métrica de auditoria
         try {
-          await supabase.from("metrics").insert({
-            metric_type: "admin_patient_update",
-            metadata: {
-              patient_id,
-              patient_email: patientEmail,
-              fields_updated: Object.keys(sanitizedUpdates),
-              updated_by: adminEmail,
-              timestamp: new Date().toISOString(),
-            },
-          });
-        } catch (metricErr) {
-          console.warn("[admin_update_patient] Erro ao gravar métrica (não crítico):", metricErr);
-        }
-
+          await supabase
+            .from("metrics")
+            .insert({
+              metric_type: "admin_patient_update",
+              metadata: {
+                patient_id,
+                patient_email: patientEmail,
+                fields_updated: Object.keys(sanitizedUpdates),
+                updated_by: adminEmail,
+                timestamp: new Date().toISOString(),
+              },
+            });
+        } catch (e) {}
         return new Response(
           JSON.stringify({
             success: true,
@@ -2531,24 +1777,12 @@ serve(async (req) => {
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const errorStack = error instanceof Error ? error.stack : '';
     console.error("Error in patient-operations:", errorMessage);
-    console.error("Stack:", errorStack);
     console.error("Operation:", operationName);
-
-    const requestOrigin = req.headers.get("origin");
-    const errorCorsHeaders = getCorsHeaders(requestOrigin);
-
+    const errorCorsHeaders = getCorsHeaders(req.headers.get("origin"));
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Erro interno do servidor",
-        debug_hint: errorMessage.substring(0, 200),
-      }),
-      {
-        headers: { ...errorCorsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      },
+      JSON.stringify({ success: false, error: "Erro interno do servidor", debug_hint: errorMessage.substring(0, 200) }),
+      { headers: { ...errorCorsHeaders, "Content-Type": "application/json" }, status: 500 },
     );
   }
 });
