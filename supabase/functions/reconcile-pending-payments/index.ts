@@ -511,14 +511,249 @@ Deno.serve(async (req) => {
       results.push(result);
     }
 
+    // ======================================================
+    // BLOCO 2: Reconciliar patient_subscriptions pendentes
+    // ======================================================
+    console.log('[reconcile-pending-payments] 🔄 Iniciando reconciliação de subscriptions...');
+
+    const subscriptionSummary = {
+      total: 0,
+      activated: 0,
+      still_pending: 0,
+      errors: 0
+    };
+
+    const { data: pendingSubs, error: subsError } = await supabase
+      .from('patient_subscriptions')
+      .select('*')
+      .eq('mp_status', 'pending_first_payment')
+      .gte('created_at', cutoffDate.toISOString())
+      .order('created_at', { ascending: true })
+      .limit(limit);
+
+    if (subsError) {
+      console.error('[reconcile-pending-payments] Erro ao buscar subscriptions:', subsError);
+    }
+
+    console.log('[reconcile-pending-payments] Subscriptions pendentes encontradas:', pendingSubs?.length || 0);
+
+    for (const sub of (pendingSubs || [])) {
+      subscriptionSummary.total++;
+      try {
+        console.log(`[reconcile-pending-payments] Verificando subscription MP: ${sub.mp_subscription_id}`);
+
+        // 1. Consultar preapproval no MP
+        const preapprovalRes = await fetch(
+          `https://api.mercadopago.com/preapproval/${sub.mp_subscription_id}`,
+          { headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` } }
+        );
+
+        if (!preapprovalRes.ok) {
+          console.error(`[reconcile-pending-payments] Erro MP preapproval: ${preapprovalRes.status}`);
+          subscriptionSummary.errors++;
+          continue;
+        }
+
+        const preapproval = await preapprovalRes.json();
+        console.log(`[reconcile-pending-payments] Preapproval status: ${preapproval.status}, charged_quantity: ${preapproval.summarized?.charged_quantity}`);
+
+        // 2. Consultar authorized_payments para verificar pagamento aprovado
+        const authPaymentsRes = await fetch(
+          `https://api.mercadopago.com/authorized_payments/search?preapproval_id=${sub.mp_subscription_id}`,
+          { headers: { 'Authorization': `Bearer ${MP_ACCESS_TOKEN}` } }
+        );
+
+        let firstPaymentApproved = false;
+        if (authPaymentsRes.ok) {
+          const authPayments = await authPaymentsRes.json();
+          const approvedPayment = (authPayments.results || []).find(
+            (p: any) => p.status === 'approved'
+          );
+          if (approvedPayment) {
+            firstPaymentApproved = true;
+            console.log(`[reconcile-pending-payments] ✅ Pagamento aprovado encontrado: ${approvedPayment.id}`);
+          }
+        }
+
+        // Também considerar charged_quantity > 0 como aprovado
+        if (!firstPaymentApproved && preapproval.summarized?.charged_quantity > 0) {
+          firstPaymentApproved = true;
+          console.log(`[reconcile-pending-payments] ✅ charged_quantity > 0, considerando aprovado`);
+        }
+
+        if (firstPaymentApproved && !dryRun) {
+          // ATIVAR PLANO
+          const subEmail = sub.email?.toLowerCase()?.trim();
+          const planCode = sub.plan_code;
+
+          // Verificar se já existe plano ativo
+          const { data: existingPlan } = await supabase
+            .from('patient_plans')
+            .select('id')
+            .eq('email', subEmail)
+            .eq('plan_code', planCode)
+            .eq('status', 'active')
+            .maybeSingle();
+
+          if (!existingPlan) {
+            // Buscar patient
+            let patientId = null;
+            let userId = sub.user_id || null;
+            let patientData = null;
+
+            if (subEmail) {
+              const { data: patient } = await supabase
+                .from('patients')
+                .select('id, user_id, first_name, last_name, cpf, phone_e164, gender, birth_date')
+                .eq('email', subEmail)
+                .maybeSingle();
+              patientId = patient?.id || null;
+              userId = userId || patient?.user_id || null;
+              patientData = patient;
+            }
+
+            // Calcular expiração
+            const planExpiresAt = new Date();
+            planExpiresAt.setMonth(planExpiresAt.getMonth() + 1); // Subscriptions são mensais
+
+            const { error: planError } = await supabase
+              .from('patient_plans')
+              .insert({
+                email: subEmail,
+                patient_id: patientId,
+                user_id: userId,
+                plan_code: planCode,
+                plan_expires_at: planExpiresAt.toISOString().split('T')[0],
+                start_date: new Date().toISOString().split('T')[0],
+                status: 'active',
+                is_recurring: true,
+                mp_subscription_id: sub.mp_subscription_id,
+                subscription_id: sub.id,
+                activated_at: new Date().toISOString(),
+                activated_by: 'reconcile-subscriptions',
+                payment_method: 'credit_card'
+              });
+
+            if (planError) {
+              console.error(`[reconcile-pending-payments] ❌ Erro ao criar plano de subscription:`, planError);
+              subscriptionSummary.errors++;
+            } else {
+              console.log(`[reconcile-pending-payments] ✅ Plano de subscription ativado para ${subEmail}`);
+              subscriptionSummary.activated++;
+
+              // Atualizar mp_status na subscription
+              await supabase
+                .from('patient_subscriptions')
+                .update({ mp_status: 'authorized', updated_at: new Date().toISOString() })
+                .eq('id', sub.id);
+
+              // ClickLife registration (mesmo fluxo)
+              if (patientData?.cpf) {
+                const CLICKLIFE_API = Deno.env.get('CLICKLIFE_API_BASE');
+                const INTEGRATOR_TOKEN = Deno.env.get('CLICKLIFE_AUTH_TOKEN');
+                const PATIENT_PASSWORD = Deno.env.get('CLICKLIFE_PATIENT_DEFAULT_PASSWORD');
+
+                if (CLICKLIFE_API && INTEGRATOR_TOKEN && PATIENT_PASSWORD) {
+                  const isFamiliar = planCode.includes('FAM');
+                  const clickLifePlanoId = isFamiliar
+                    ? (planCode.includes('COM_ESP') ? 1238 : 1237)
+                    : (planCode.includes('COM_ESP') ? 864 : 863);
+
+                  const nomeCompleto = `${patientData.first_name || ''} ${patientData.last_name || ''}`.trim();
+                  let telefoneLimpo = (patientData.phone_e164 || '').replace(/\D/g, '');
+                  if (telefoneLimpo.startsWith('55')) telefoneLimpo = telefoneLimpo.substring(2);
+
+                  let birthDateFormatted = '01-01-1990';
+                  if (patientData.birth_date && patientData.birth_date !== '1990-01-01') {
+                    const parts = patientData.birth_date.split('-');
+                    if (parts.length === 3) birthDateFormatted = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                  }
+
+                  try {
+                    const registerRes = await fetch(`${CLICKLIFE_API}/usuarios/usuarios`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'authtoken': INTEGRATOR_TOKEN },
+                      body: JSON.stringify({
+                        nome: nomeCompleto || 'Paciente',
+                        cpf: patientData.cpf.replace(/\D/g, ''),
+                        email: subEmail,
+                        senha: PATIENT_PASSWORD,
+                        datanascimento: birthDateFormatted,
+                        sexo: patientData.gender || 'F',
+                        telefone: telefoneLimpo,
+                        logradouro: 'Rua Exemplo', numero: '123', bairro: 'Centro',
+                        cep: '01000000', cidade: 'São Paulo', estado: 'SP',
+                        empresaid: 9083, planoid: clickLifePlanoId
+                      })
+                    });
+                    const registerData = await registerRes.json();
+
+                    if (registerRes.ok || registerData.mensagem?.toLowerCase().includes('já cadastrado')) {
+                      await fetch(`${CLICKLIFE_API}/usuarios/ativacao`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'authtoken': INTEGRATOR_TOKEN },
+                        body: JSON.stringify({
+                          authtoken: INTEGRATOR_TOKEN,
+                          cpf: patientData.cpf.replace(/\D/g, ''),
+                          empresaid: 9083, planoid: clickLifePlanoId, proposito: 'Ativar'
+                        })
+                      });
+                      console.log(`[reconcile-pending-payments] ✅ ClickLife sync para subscription`);
+
+                      await supabase
+                        .from('patients')
+                        .update({ clicklife_registered_at: new Date().toISOString() })
+                        .eq('id', patientId);
+                    }
+                  } catch (clErr) {
+                    console.error(`[reconcile-pending-payments] ❌ ClickLife error:`, clErr);
+                  }
+                }
+              }
+            }
+          } else {
+            console.log(`[reconcile-pending-payments] ⚠️ Plano já existe para ${subEmail}`);
+            subscriptionSummary.activated++;
+            // Atualizar mp_status mesmo assim
+            await supabase
+              .from('patient_subscriptions')
+              .update({ mp_status: 'authorized', updated_at: new Date().toISOString() })
+              .eq('id', sub.id);
+          }
+        } else if (firstPaymentApproved && dryRun) {
+          console.log(`[reconcile-pending-payments] [DRY RUN] Ativaria plano para ${sub.email}`);
+          subscriptionSummary.activated++;
+        } else if (['cancelled', 'paused'].includes(preapproval.status)) {
+          console.log(`[reconcile-pending-payments] Subscription ${sub.mp_subscription_id} cancelada/pausada no MP`);
+          if (!dryRun) {
+            await supabase
+              .from('patient_subscriptions')
+              .update({ mp_status: preapproval.status, updated_at: new Date().toISOString() })
+              .eq('id', sub.id);
+          }
+          subscriptionSummary.still_pending++;
+        } else {
+          console.log(`[reconcile-pending-payments] Subscription ainda pendente: ${sub.mp_subscription_id}`);
+          subscriptionSummary.still_pending++;
+        }
+      } catch (err) {
+        console.error(`[reconcile-pending-payments] Erro processando subscription ${sub.mp_subscription_id}:`, err);
+        subscriptionSummary.errors++;
+      }
+    }
+
+    console.log('[reconcile-pending-payments] Subscription summary:', subscriptionSummary);
+
     console.log('[reconcile-pending-payments] ==============================');
     console.log('[reconcile-pending-payments] ✅ Reconciliação concluída');
     console.log('[reconcile-pending-payments] Summary:', summary);
+    console.log('[reconcile-pending-payments] Subscription summary:', subscriptionSummary);
 
     return new Response(JSON.stringify({
       success: true,
       dry_run: dryRun,
       summary,
+      subscription_summary: subscriptionSummary,
       results
     }), {
       status: 200,
