@@ -5,8 +5,6 @@
 export const ALL_SPECIALTIES = [
   'Clínico Geral',
   'Psicologia',
-  'Personal Trainer',
-  'Nutrição',
   'Cardiologia',
   'Dermatologia',
   'Endocrinologia',
@@ -18,12 +16,7 @@ export const ALL_SPECIALTIES = [
   'Otorrinolaringologia',
   'Medicina da Família',
   'Psiquiatria',
-  'Nutrologia',
   'Geriatria',
-  'Reumatologia',
-  'Neurologia',
-  'Infectologia',
-  'Urologia',
   'Laudos Psicológicos',
   'Solicitação de Exames',
 ];
