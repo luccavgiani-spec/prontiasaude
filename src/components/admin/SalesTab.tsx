@@ -438,6 +438,7 @@ const SalesTab = () => {
   }, {} as Record<string, number>);
 
   const uniqueServices = Array.from(new Set(appointments.map((apt) => apt.service_code)));
+  const uniqueStatuses = Array.from(new Set(appointments.map((apt) => apt.status).filter(Boolean)));
 
   const handleCopyLink = (url: string, serviceName: string) => {
     navigator.clipboard.writeText(url);
@@ -940,9 +941,11 @@ const SalesTab = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
+                {uniqueStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -952,8 +955,8 @@ const SalesTab = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os providers</SelectItem>
-                <SelectItem value="ClickLife">ClickLife</SelectItem>
-                <SelectItem value="Communicare">Communicare</SelectItem>
+                <SelectItem value="clicklife">ClickLife</SelectItem>
+                <SelectItem value="communicare">Communicare</SelectItem>
               </SelectContent>
             </Select>
           </div>
