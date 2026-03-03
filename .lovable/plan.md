@@ -1,36 +1,37 @@
 
 
-# Plano: Remover Cadastro ClickLife Redundante do `check-payment-status`
+## Diagnóstico: Filtros de Status e Provider não funcionam
 
-## Status atual
+### Problema identificado: **FRONTEND** — incompatibilidade de case (maiúsculas/minúsculas)
 
-O `mp-webhook` **já está correto** — o cadastro universal já foi removido (linhas 1701-1702 contêm apenas o comentário de remoção).
+O problema está exclusivamente no arquivo `src/components/admin/SalesTab.tsx`.
 
-O `check-payment-status` **ainda contém** o bloco redundante de cadastro na ClickLife que causa duplicações.
+### Provider (linha 955-956)
+Os valores no `<SelectItem>` são `"ClickLife"` e `"Communicare"` (PascalCase), mas os dados salvos no banco pela edge function `schedule-redirect` usam **lowercase**: `"clicklife"` e `"communicare"`.
 
-## Alterações no `check-payment-status/index.ts`
+- Banco: `saveAppointment(payload, "clicklife", ...)` → salva `"clicklife"`
+- Filtro: `<SelectItem value="ClickLife">` → compara com `"ClickLife"`
+- Resultado: **nunca dá match**
 
-### Remoção 1: Funções helper não utilizadas (linhas 14-111)
-- `getClickLifePlanIdFromSku()` — só era usada pelo bloco de cadastro abaixo
-- `registerClickLifePatient()` — usa endpoint `/pacientes` (diferente do padrão `/usuarios/usuarios` + `/usuarios/ativacao`)
+### Status (linhas 943-945)
+Os valores no `<SelectItem>` são `"scheduled"`, `"completed"`, `"cancelled"`, mas o `schedule-redirect` salva `status: "confirmed"` (linha 577). Além disso, o fallback no `loadAppointments` (linha 277) define `status: apt.status || 'scheduled'`.
 
-Substituir por comentário indicando a remoção.
+- Banco: maioria dos registros tem `"confirmed"` como status
+- Filtro: não tem opção `"confirmed"`, tem `"scheduled"`, `"completed"`, `"cancelled"`
+- Resultado: **"confirmed" nunca aparece como opção filtrável**
 
-### Remoção 2: Bloco de cadastro ClickLife (linhas 338-370)
-O trecho "CADASTRAR NA CLICKLIFE AO CRIAR PLANO" dentro do fluxo de plano aprovado:
-```typescript
-// ✅ CADASTRAR NA CLICKLIFE AO CRIAR PLANO (redundância com mp-webhook)
-const { data: patientData } = await supabaseAdmin
-  .from("patients")
-  .select("cpf, first_name, last_name, phone_e164, gender, birth_date")
-  ...
-```
+### Correção necessária
 
-Remover este bloco inteiro, mantendo o código antes (verificação do plano) e depois (atualizar pending_payment).
+Alterar os `<SelectItem>` para usar os valores reais do banco:
 
-## Resumo
+**Provider** (linhas 955-956):
+- `"ClickLife"` → `"clicklife"`
+- `"Communicare"` → `"communicare"`
 
-- **1 arquivo modificado**: `check-payment-status/index.ts`
-- **0 arquivos adicionais**: `mp-webhook` já está correto
-- Após implementar, você precisará **deployar manualmente** a função `check-payment-status` no Supabase de Produção
+**Status** (linhas 943-945): Trocar os valores hardcoded por valores dinâmicos extraídos dos dados reais (similar ao que já é feito com `uniqueServices`), ou adicionar `"confirmed"` à lista. A abordagem dinâmica é mais robusta.
+
+### Escopo da alteração
+- **Único arquivo**: `src/components/admin/SalesTab.tsx`
+- **Linhas afetadas**: ~941-957 (SelectItems de status e provider)
+- Nenhuma alteração de backend necessária
 
