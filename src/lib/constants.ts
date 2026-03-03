@@ -26,27 +26,19 @@ export const CATALOGO_SERVICOS = [
   { 
     slug: "medicos_especialistas", 
     nome: "Médicos Especialistas", 
-    precoBase: 54.99, 
-    sku: "BIR7668",
-    descricao: "Personal Trainer, Nutrição, Reumatologia, Neurologia, Infectologia, Nutrologia, Geriatria, Urologia, Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Otorrinolaringologia, Medicina da Família, Psiquiatria",
+    precoBase: 89.90, 
+    sku: "TQP5720",
+    descricao: "Geriatria, Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Otorrinolaringologia, Medicina da Família, Psiquiatria",
     tempo: "30-60 minutos",
     inclui: [
-      "Personal Trainer", "Nutrição", "Reumatologia", 
-      "Neurologia", "Infectologia", "Nutrologia", "Geriatria",
+      "Geriatria",
       "Cardiologia", "Dermatologia", "Endocrinologia",
       "Gastroenterologia", "Ginecologia", "Oftalmologia",
       "Ortopedia", "Pediatria", "Otorrinolaringologia",
-      "Medicina da Família", "Psiquiatria", "Urologia"
+      "Medicina da Família", "Psiquiatria"
     ],
     variantes: [
-      { valor: 54.99, nome: "Personal Trainer", sku: "BIR7668" },
-      { valor: 59.90, nome: "Nutrição", sku: "VPN5132" },
-      { valor: 129.90, nome: "Reumatologia", sku: "UDH3250" },
-      { valor: 129.90, nome: "Neurologia", sku: "PKS9388" },
-      { valor: 129.90, nome: "Infectologia", sku: "MYX5186" },
-      { valor: 119.90, nome: "Nutrologia", sku: "LZF3879" },
       { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
-      { valor: 109.90, nome: "Urologia", sku: "URO1099" },
       { valor: 89.90, nome: "Cardiologia", sku: "TQP5720" },
       { valor: 89.90, nome: "Dermatologia", sku: "HGG3503" },
       { valor: 89.90, nome: "Endocrinologia", sku: "VHH8883" },

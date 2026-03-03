@@ -11,8 +11,6 @@ const SKU_TO_SERVICE: Record<string, string> = {
   'ZXW2165': 'Psicólogo',
   
   // Médicos Especialistas
-  'BIR7668': 'Personal Trainer',
-  'VPN5132': 'Nutricionista',
   'TQP5720': 'Cardiologista',
   'HGG3503': 'Dermatologista',
   'VHH8883': 'Endocrinologista',
@@ -24,11 +22,7 @@ const SKU_TO_SERVICE: Record<string, string> = {
   'HME8366': 'Otorrinolaringologista',
   'DYY8522': 'Médico da Família',
   'QOP1101': 'Psiquiatra',
-  'LZF3879': 'Nutrólogo',
   'YZD9932': 'Geriatria',
-  'UDH3250': 'Reumatologista',
-  'PKS9388': 'Neurologista',
-  'MYX5186': 'Infectologista',
   
   // Outros Serviços
   'OVM9892': 'Laudos Psicológicos',
