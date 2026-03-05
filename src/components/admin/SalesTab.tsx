@@ -183,6 +183,7 @@ const SalesTab = () => {
     'marcia.xavier@prontia.com.br',
     'hugo.victor.qa1@prontia.com.br',
     'nathalia.souza@prontia.com.br',
+    'cristielli@outlook.com',
   ];
 
   // 🔍 Padrões de email de teste a serem excluídos
@@ -202,7 +203,8 @@ const SalesTab = () => {
         .from("appointments")
         .select("*")
         .gte("created_at", SALES_START_DATE)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(10000);
 
       if (error) {
         console.warn("Erro ao buscar appointments:", error);
