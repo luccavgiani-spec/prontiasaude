@@ -2,10 +2,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
-import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent, RefreshCw } from 'lucide-react';
+import { DollarSign, ShoppingCart, Users, Activity, Download, TrendingUp, Percent, RefreshCw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Data mínima para filtrar vendas (histórico desde março/2025)
@@ -244,13 +243,14 @@ interface RecurrenceData {
 
 export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('all');
   const [recurrencePeriod, setRecurrencePeriod] = useState<number | 'all'>(30);
   const [recurrenceData, setRecurrenceData] = useState<RecurrenceData | null>(null);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
-  const [allAppointments, setAllAppointments] = useState<Array<{ email: string; created_at: string; order_id?: string }>>([]);
+  const [allAppointments, setAllAppointments] = useState<Array<{ email: string; created_at: string; order_id?: string; service_code?: string; provider?: string }>>([]);
   const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [activePlansCount, setActivePlansCount] = useState(0);
   const [metrics, setMetrics] = useState<MetricsData>({
     totalRevenue: 0,
     totalSales: 0,
@@ -263,47 +263,53 @@ export default function ReportsTab() {
     activePlans: 0,
     averageTicket: 0
   });
+  // Single data load: appointments (primary), patients, active plans
   useEffect(() => {
-    loadMetrics();
-  }, [period]);
-
-  // Load all appointments once (same source as SalesTab)
-  useEffect(() => {
-    const loadAllAppointments = async () => {
+    const loadAll = async () => {
+      setLoading(true);
       try {
-        const { data: appointmentsData, error } = await supabaseProduction
-          .from('appointments')
-          .select('id, email, created_at, order_id, service_code')
-          .gte('created_at', SALES_START_DATE)
-          .order('created_at', { ascending: false })
-          .limit(10000);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const [appointmentsResult, patientsResult, activePlansResult] = await Promise.all([
+          supabaseProduction.from('appointments')
+            .select('id, email, created_at, order_id, service_code, provider')
+            .gte('created_at', SALES_START_DATE)
+            .order('created_at', { ascending: false })
+            .limit(10000),
+          supabaseProduction.from('patients')
+            .select('id, created_at')
+            .gte('created_at', SALES_START_DATE),
+          supabaseProduction.from('patient_plans')
+            .select('id')
+            .eq('status', 'active')
+            .gte('plan_expires_at', todayStr),
+        ]);
 
-        if (error) throw error;
-
-        // Apply same filters as SalesTab: exclude test emails, require order_id, deduplicate
-        const filteredData = (appointmentsData || []).filter(apt => {
+        // Same filters as SalesTab: exclude test emails, require order_id, deduplicate
+        const filteredData = (appointmentsResult.data || []).filter(apt => {
           if (!apt.order_id || apt.order_id.trim() === '') return false;
           if (isTestEmail(apt.email)) return false;
           return true;
         });
 
-        // Deduplicate by order_id
-        const seen = new Map<string, boolean>();
+        const seen = new Set<string>();
         const uniqueData = filteredData.filter(apt => {
-          const key = apt.order_id || `${apt.email}_${apt.service_code}_${apt.created_at?.slice(0, 10)}`;
-          if (seen.has(key)) return false;
-          seen.set(key, true);
+          if (seen.has(apt.order_id)) return false;
+          seen.add(apt.order_id);
           return true;
         });
 
         setAllAppointments(uniqueData);
         setAppointmentsLoaded(true);
+        setTotalPatients(patientsResult.data?.length || 0);
+        setActivePlansCount(activePlansResult.data?.length || 0);
       } catch (err) {
-        console.error('Error loading appointments for recurrence:', err);
+        console.error('Error loading data:', err);
         setAppointmentsLoaded(true);
+      } finally {
+        setLoading(false);
       }
     };
-    loadAllAppointments();
+    loadAll();
   }, []);
 
   // Compute recurrence data locally from appointments
@@ -410,159 +416,83 @@ export default function ReportsTab() {
     }
   }, [recurrencePeriod, allAppointments, appointmentsLoaded]);
 
-  const getDateRange = () => {
-    const endDate = new Date();
-    const startDate = new Date();
-    if (period === '7d') startDate.setDate(startDate.getDate() - 7);else if (period === '30d') startDate.setDate(startDate.getDate() - 30);else if (period === '90d') startDate.setDate(startDate.getDate() - 90);else if (period === '365d') startDate.setDate(startDate.getDate() - 365);else if (period === 'all') return {
-      startDate: new Date(SALES_START_DATE),
-      endDate
+  // Compute all metrics from allAppointments (same SKU_PRICES logic as SalesTab)
+  useEffect(() => {
+    if (!appointmentsLoaded) return;
+
+    // Revenue per month
+    const revenueByMonth: Record<string, number> = {};
+    let totalRevenueCents = 0;
+
+    allAppointments.forEach(apt => {
+      const price = SKU_PRICES[apt.service_code || ''] || 0;
+      const month = formatMonthKey(new Date(apt.created_at));
+      revenueByMonth[month] = (revenueByMonth[month] || 0) + price;
+      totalRevenueCents += price;
+    });
+
+    const totalSales = allAppointments.length;
+    const averageTicketCents = totalSales > 0 ? totalRevenueCents / totalSales : 0;
+
+    // Sales by type (Consultas vs Planos)
+    const salesByTypeMap: Record<string, { count: number; revenue: number }> = {
+      'Consultas Avulsas': { count: 0, revenue: 0 },
+      'Planos': { count: 0, revenue: 0 },
     };
-    return {
-      startDate,
-      endDate
+    allAppointments.forEach(apt => {
+      const sku = apt.service_code || '';
+      const price = SKU_PRICES[sku] || 0;
+      const type = isPlanSku(sku) ? 'Planos' : 'Consultas Avulsas';
+      salesByTypeMap[type].count++;
+      salesByTypeMap[type].revenue += price;
+    });
+
+    // Sales by SKU (top 10)
+    const salesBySkuMap: Record<string, { count: number; revenue: number }> = {};
+    allAppointments.forEach(apt => {
+      const sku = apt.service_code || 'Desconhecido';
+      const price = SKU_PRICES[sku] || 0;
+      if (!salesBySkuMap[sku]) salesBySkuMap[sku] = { count: 0, revenue: 0 };
+      salesBySkuMap[sku].count++;
+      salesBySkuMap[sku].revenue += price;
+    });
+
+    // Platform groups
+    const platformGroups: Record<string, number> = {
+      'Communicare': 0, 'ClickLife': 0, 'WhatsApp': 0, 'Outros': 0,
     };
-  };
-  const loadMetrics = async () => {
-    setLoading(true);
-    try {
-      // Usar cliente de Produção diretamente (RLS permite SELECT público)
-      const {
-        startDate,
-        endDate
-      } = getDateRange();
-      const startISO = startDate.toISOString();
-      const endISO = endDate.toISOString();
-      const todayStr = new Date().toISOString().split('T')[0];
+    allAppointments.forEach(a => {
+      const provider = (a.provider || '').toLowerCase();
+      if (provider.includes('communicare')) platformGroups['Communicare']++;
+      else if (provider.includes('clicklife')) platformGroups['ClickLife']++;
+      else if (provider.includes('whatsapp')) platformGroups['WhatsApp']++;
+      else if (provider) platformGroups['Outros']++;
+    });
 
-      // Buscar dados em paralelo (PRODUÇÃO)
-      // Fonte primária de vendas: appointments com order_id (mais completa que pending_payments)
-      const [appointmentsResult, pendingPaymentsResult, patientsResult, activePlansResult] = await Promise.all([
-        supabaseProduction.from('appointments').select('*').gte('created_at', startISO).lte('created_at', endISO),
-        supabaseProduction.from('pending_payments').select('order_id, amount_cents').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
-        supabaseProduction.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
-        supabaseProduction.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr),
-      ]);
-
-      // Filtrar emails de teste
-      const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));
-      const patients = patientsResult.data || [];
-      const activePlansCount = activePlansResult.data?.length || 0;
-
-      // Construir mapa de preços reais pagos (pending_payments), indexado por order_id
-      const paidAmountByOrderId = new Map<string, number>();
-      (pendingPaymentsResult.data || []).forEach((pp: any) => {
-        if (pp.order_id && pp.amount_cents) {
-          paidAmountByOrderId.set(pp.order_id, pp.amount_cents);
-        }
-      });
-
-      // Fonte de vendas: appointments com order_id (deduplicados)
-      const seenOrders = new Set<string>();
-      interface UnifiedSale {
-        sku: string;
-        created_at: string;
-        order_id: string;
-        price: number; // Em centavos
-        provider?: string;
-      }
-      const allSales: UnifiedSale[] = [];
-
-      appointments.forEach(apt => {
-        if (!apt.order_id || apt.order_id.trim() === '') return;
-        if (seenOrders.has(apt.order_id)) return;
-        seenOrders.add(apt.order_id);
-
-        const sku = apt.service_code || '';
-        // Usar preço real do pending_payment se disponível, senão tabela de preços
-        const paidPrice = paidAmountByOrderId.get(apt.order_id);
-        const price = paidPrice ?? (SKU_PRICES[sku] || 0);
-
-        allSales.push({
-          sku,
-          created_at: apt.created_at,
-          order_id: apt.order_id,
-          price,
-          provider: apt.provider,
-        });
-      });
-
-      // Receita por mês
-      const revenueByMonth: Record<string, number> = {};
-      let totalRevenueCents = 0;
-
-      allSales.forEach(sale => {
-        const month = formatMonthKey(new Date(sale.created_at));
-        revenueByMonth[month] = (revenueByMonth[month] || 0) + sale.price;
-        totalRevenueCents += sale.price;
-      });
-
-      const totalSales = allSales.length;
-      const averageTicketCents = totalSales > 0 ? totalRevenueCents / totalSales : 0;
-
-      // Vendas por tipo (Consultas vs Planos)
-      const salesByTypeMap: Record<string, { count: number; revenue: number }> = {
-        'Consultas Avulsas': { count: 0, revenue: 0 },
-        'Planos': { count: 0, revenue: 0 },
-      };
-      allSales.forEach(sale => {
-        const type = isPlanSku(sale.sku) ? 'Planos' : 'Consultas Avulsas';
-        salesByTypeMap[type].count++;
-        salesByTypeMap[type].revenue += sale.price;
-      });
-
-      // Vendas por SKU (top 10)
-      const salesBySkuMap: Record<string, { count: number; revenue: number }> = {};
-      allSales.forEach(sale => {
-        const sku = sale.sku || 'Desconhecido';
-        if (!salesBySkuMap[sku]) salesBySkuMap[sku] = { count: 0, revenue: 0 };
-        salesBySkuMap[sku].count++;
-        salesBySkuMap[sku].revenue += sale.price;
-      });
-
-      // Atendimentos por plataforma (todos os appointments, não só com order_id)
-      const platformGroups: Record<string, number> = {
-        'Communicare': 0,
-        'ClickLife': 0,
-        'WhatsApp': 0,
-        'Outros': 0,
-      };
-      appointments.forEach(a => {
-        const provider = (a.provider || '').toLowerCase();
-        if (provider.includes('communicare')) platformGroups['Communicare']++;
-        else if (provider.includes('clicklife')) platformGroups['ClickLife']++;
-        else if (provider.includes('whatsapp')) platformGroups['WhatsApp']++;
-        else if (provider) platformGroups['Outros']++;
-      });
-
-      setMetrics({
-        totalRevenue: totalRevenueCents / 100,
-        totalSales,
-        totalPatients: patients.length,
-        totalAppointments: appointments.length,
-        activePlans: activePlansCount,
-        averageTicket: averageTicketCents / 100,
-        revenueByMonth: Object.entries(revenueByMonth)
-          .map(([month, revenue]) => ({ month, revenue: revenue / 100 }))
-          .sort((a, b) => monthSortKey(a.month) - monthSortKey(b.month)),
-        appointmentsByPlatform: Object.entries(platformGroups)
-          .filter(([_, count]) => count > 0)
-          .map(([platform, count]) => ({ platform, count })),
-        salesByType: Object.entries(salesByTypeMap)
-          .filter(([_, data]) => data.count > 0)
-          .map(([type, data]) => ({ type, count: data.count, revenue: data.revenue / 100 })),
-        salesBySku: Object.entries(salesBySkuMap)
-          .map(([sku, data]) => ({ sku, name: SKU_NAMES[sku] || sku, count: data.count, revenue: data.revenue / 100 }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 10),
-      });
-    } catch (error) {
-      console.error('Error loading metrics:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    setMetrics({
+      totalRevenue: totalRevenueCents / 100,
+      totalSales,
+      totalPatients,
+      totalAppointments: allAppointments.length,
+      activePlans: activePlansCount,
+      averageTicket: averageTicketCents / 100,
+      revenueByMonth: Object.entries(revenueByMonth)
+        .map(([month, revenue]) => ({ month, revenue: revenue / 100 }))
+        .sort((a, b) => monthSortKey(a.month) - monthSortKey(b.month)),
+      appointmentsByPlatform: Object.entries(platformGroups)
+        .filter(([_, count]) => count > 0)
+        .map(([platform, count]) => ({ platform, count })),
+      salesByType: Object.entries(salesByTypeMap)
+        .filter(([_, data]) => data.count > 0)
+        .map(([type, data]) => ({ type, count: data.count, revenue: data.revenue / 100 })),
+      salesBySku: Object.entries(salesBySkuMap)
+        .map(([sku, data]) => ({ sku, name: SKU_NAMES[sku] || sku, count: data.count, revenue: data.revenue / 100 }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10),
+    });
+  }, [allAppointments, appointmentsLoaded, totalPatients, activePlansCount]);
   const exportCSV = () => {
-    const lines = ['Relatório de Métricas Prontia', `Período: ${period === '7d' ? '7 dias' : period === '30d' ? '30 dias' : period === '90d' ? '90 dias' : period === 'all' ? 'Histórico completo' : '365 dias'}`, `Gerado em: ${new Date().toLocaleString('pt-BR')}`, '', 'RESUMO', `Receita Total,${metrics.totalRevenue.toFixed(2)}`, `Total de Vendas,${metrics.totalSales}`, `Ticket Médio,${metrics.averageTicket.toFixed(2)}`, `Novos Pacientes,${metrics.totalPatients}`, `Planos Ativos,${metrics.activePlans}`, `Atendimentos,${metrics.totalAppointments}`, '', 'VENDAS POR TIPO', 'Tipo,Quantidade,Receita', ...metrics.salesByType.map(t => `${t.type},${t.count},${t.revenue.toFixed(2)}`), '', 'TOP 10 SERVIÇOS/PLANOS', 'Serviço,Quantidade,Receita', ...metrics.salesBySku.map(s => `${s.name},${s.count},${s.revenue.toFixed(2)}`), '', 'ATENDIMENTOS POR PLATAFORMA', 'Plataforma,Quantidade', ...metrics.appointmentsByPlatform.map(p => `${p.platform},${p.count}`)];
+    const lines = ['Relatório de Métricas Prontia', `Período: Histórico completo`, `Gerado em: ${new Date().toLocaleString('pt-BR')}`, '', 'RESUMO', `Receita Total,${metrics.totalRevenue.toFixed(2)}`, `Total de Vendas,${metrics.totalSales}`, `Ticket Médio,${metrics.averageTicket.toFixed(2)}`, `Novos Pacientes,${metrics.totalPatients}`, `Planos Ativos,${metrics.activePlans}`, `Atendimentos,${metrics.totalAppointments}`, '', 'VENDAS POR TIPO', 'Tipo,Quantidade,Receita', ...metrics.salesByType.map(t => `${t.type},${t.count},${t.revenue.toFixed(2)}`), '', 'TOP 10 SERVIÇOS/PLANOS', 'Serviço,Quantidade,Receita', ...metrics.salesBySku.map(s => `${s.name},${s.count},${s.revenue.toFixed(2)}`), '', 'ATENDIMENTOS POR PLATAFORMA', 'Plataforma,Quantidade', ...metrics.appointmentsByPlatform.map(p => `${p.platform},${p.count}`)];
     const csv = 'data:text/csv;charset=utf-8,' + lines.join('\n');
     const link = document.createElement('a');
     link.setAttribute('href', encodeURI(csv));
@@ -578,24 +508,9 @@ export default function ReportsTab() {
       </div>;
   }
   return <div className="space-y-6">
-      {/* Filtros */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="flex gap-3">
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-48">
-              <Calendar className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7d">Últimos 7 dias</SelectItem>
-              <SelectItem value="30d">Últimos 30 dias</SelectItem>
-              <SelectItem value="90d">Últimos 90 dias</SelectItem>
-              <SelectItem value="365d">Último ano</SelectItem>
-              <SelectItem value="all">Histórico completo</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
+        <h2 className="text-lg font-semibold">Histórico completo</h2>
         <Button variant="outline" onClick={exportCSV}>
           <Download className="h-4 w-4 mr-2" />
           Exportar CSV
