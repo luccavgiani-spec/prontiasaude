@@ -198,21 +198,28 @@ const SalesTab = () => {
 
   const loadAppointments = async () => {
     try {
-      // ✅ Buscar diretamente da tabela appointments (fonte correta com 522+ registros)
-      const { data: appointmentsData, error } = await supabaseProduction
-        .from("appointments")
-        .select("*")
-        .gte("created_at", SALES_START_DATE)
-        .order("created_at", { ascending: false })
-        .limit(10000);
-
-      if (error) {
-        console.warn("Erro ao buscar appointments:", error);
-        throw error;
+      // Paginate to bypass PostgREST 1000-row hard limit
+      const PAGE_SIZE = 1000;
+      let appointmentsData: any[] = [];
+      let page = 0;
+      while (true) {
+        const { data, error } = await supabaseProduction
+          .from("appointments")
+          .select("*")
+          .gte("created_at", SALES_START_DATE)
+          .order("created_at", { ascending: false })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (error) {
+          console.warn("Erro ao buscar appointments:", error);
+          throw error;
+        }
+        appointmentsData = appointmentsData.concat(data || []);
+        if (!data || data.length < PAGE_SIZE) break;
+        page++;
       }
 
       // 🛡️ Filtrar: remover emails de teste, internos e links manuais
-      const filteredData = (appointmentsData || []).filter(apt => {
+      const filteredData = appointmentsData.filter(apt => {
         const email = (apt.email || '').toLowerCase();
         
         // Excluir appointments manuais (sem order_id = gerados pela aba Pacientes)
@@ -287,7 +294,7 @@ const SalesTab = () => {
         updated_at: apt.updated_at,
       } as Appointment));
 
-      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (filtradas de ${appointmentsData?.length || 0} total)`);
+      console.log(`📊 [SalesTab] Loaded ${sales.length} vendas (filtradas de ${appointmentsData.length} total)`);
       setAppointments(sales);
     } catch (error) {
       console.error("Erro ao carregar vendas:", error);
