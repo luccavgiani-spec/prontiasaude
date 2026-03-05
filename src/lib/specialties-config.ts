@@ -17,6 +17,13 @@ export const ALL_SPECIALTIES = [
   'Medicina da Família',
   'Psiquiatria',
   'Geriatria',
+  'Reumatologia',
+  'Neurologia',
+  'Infectologia',
+  'Nutrologia',
+  'Urologia',
+  'Nutrição',
+  'Personal Trainer',
   'Laudos Psicológicos',
   'Solicitação de Exames',
 ];
