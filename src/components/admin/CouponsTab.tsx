@@ -109,16 +109,35 @@ export function CouponsTab() {
 
   const loadCouponUses = async () => {
     try {
-      // Ler de Produção
+      // Ler de Produção (colunas reais: used_at, amount_original, amount_discounted, discount_percentage)
       const { data, error } = await supabaseProduction
         .from('coupon_uses')
         .select('*')
         .order('reviewed', { ascending: true })
-        .order('created_at', { ascending: false });
+        .order('used_at', { ascending: false });
 
       if (error) throw error;
 
-      setCouponUses(data || []);
+      // Mapear colunas reais do DB para a interface CouponUse
+      const mapped: CouponUse[] = (data || []).map((row: any) => ({
+        id: row.id,
+        coupon_code: row.coupon_code || '',
+        used_by_name: row.used_by_name || '',
+        used_by_email: row.used_by_email || '',
+        service_or_plan_name: row.service_or_plan_name || '',
+        owner_email: row.owner_email || '',
+        owner_pix_key: row.owner_pix_key || null,
+        original_amount: row.amount_original ?? row.original_amount ?? 0,
+        discount_amount: row.amount_discounted ?? row.discount_amount ?? 0,
+        final_amount: row.amount_discounted ?? row.final_amount ?? 0,
+        discount_percent: row.discount_percentage ?? row.discount_percent ?? 0,
+        created_at: row.used_at || row.created_at || '',
+        reviewed: row.reviewed || false,
+        reviewed_at: row.reviewed_at || null,
+        reviewed_by: row.reviewed_by || null,
+      }));
+
+      setCouponUses(mapped);
     } catch (error) {
       console.error('Erro ao carregar cupons utilizados:', error);
       toast.error("Erro ao carregar cupons");
@@ -147,24 +166,37 @@ export function CouponsTab() {
 
       if (error) throw error;
 
-      // Enriquecer com dados do owner
-      const enrichedCoupons = await Promise.all(
-        (data || []).map(async (coupon) => {
-          const { data: patient } = await supabaseProduction
-            .from('patients')
-            .select('email, first_name, last_name')
-            .eq('id', coupon.owner_user_id)
-            .single();
+      // Buscar dados dos owners em batch (evita N+1 queries)
+      const ownerIds = [...new Set(
+        (data || []).map(c => c.owner_user_id).filter(Boolean)
+      )];
 
-          return {
-            ...coupon,
-            owner_email: patient?.email || 'Admin',
-            owner_name: patient?.first_name 
-              ? `${patient.first_name} ${patient.last_name || ''}`.trim()
-              : 'Admin',
-          };
-        })
-      );
+      const ownerMap = new Map<string, { email: string; first_name: string; last_name: string }>();
+      if (ownerIds.length > 0) {
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < ownerIds.length; i += BATCH_SIZE) {
+          const batch = ownerIds.slice(i, i + BATCH_SIZE);
+          const { data: patients } = await supabaseProduction
+            .from('patients')
+            .select('id, email, first_name, last_name')
+            .in('id', batch);
+
+          for (const p of patients || []) {
+            if (p.id) ownerMap.set(p.id, p);
+          }
+        }
+      }
+
+      const enrichedCoupons = (data || []).map((coupon) => {
+        const patient = coupon.owner_user_id ? ownerMap.get(coupon.owner_user_id) : null;
+        return {
+          ...coupon,
+          owner_email: patient?.email || 'Admin',
+          owner_name: patient?.first_name
+            ? `${patient.first_name} ${patient.last_name || ''}`.trim()
+            : 'Admin',
+        };
+      });
 
       setActiveCoupons(enrichedCoupons);
     } catch (error) {
@@ -177,7 +209,7 @@ export function CouponsTab() {
 
   const loadPendingCoupons = async () => {
     try {
-      // Ler de Produção
+      // Ler de Produção (colunas reais: email, amount_cents)
       const { data, error } = await supabaseProduction
         .from('pending_payments')
         .select('*')
@@ -191,8 +223,21 @@ export function CouponsTab() {
         return;
       }
 
-      setPendingCoupons(data || []);
-      console.log(`Cupons pendentes carregados: ${data?.length || 0}`);
+      // Mapear colunas reais do DB para a interface PendingCoupon
+      const mapped: PendingCoupon[] = (data || []).map((row: any) => ({
+        id: row.id,
+        payment_id: row.payment_id || '',
+        order_id: row.order_id || null,
+        patient_email: row.patient_email || row.email || '',
+        coupon_code: row.coupon_code || '',
+        sku: row.sku || null,
+        amount: row.amount ?? row.amount_cents ?? 0,
+        status: row.status || '',
+        created_at: row.created_at || '',
+      }));
+
+      setPendingCoupons(mapped);
+      console.log(`Cupons pendentes carregados: ${mapped.length}`);
     } catch (error) {
       console.error('Erro ao carregar cupons pendentes:', error);
     }
