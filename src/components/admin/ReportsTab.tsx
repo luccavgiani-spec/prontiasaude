@@ -23,6 +23,7 @@ const TEST_EMAILS = [
   'joao.maria.teste01@gmail.com',
   'nevescristiellis@gmail.com',
   't.giani@gmail.com',
+  'cristielli@outlook.com',
 ];
 
 // Função para verificar se é email de teste

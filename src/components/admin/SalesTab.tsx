@@ -183,6 +183,7 @@ const SalesTab = () => {
     'marcia.xavier@prontia.com.br',
     'hugo.victor.qa1@prontia.com.br',
     'nathalia.souza@prontia.com.br',
+    'cristielli@outlook.com',
   ];
 
   // 🔍 Padrões de email de teste a serem excluídos
