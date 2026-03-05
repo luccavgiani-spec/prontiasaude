@@ -269,12 +269,25 @@ export default function ReportsTab() {
       setLoading(true);
       try {
         const todayStr = new Date().toISOString().split('T')[0];
-        const [appointmentsResult, patientsResult, activePlansResult] = await Promise.all([
-          supabaseProduction.from('appointments')
+
+        // Paginate appointments to bypass PostgREST 1000-row hard limit
+        const PAGE_SIZE = 1000;
+        let allRaw: any[] = [];
+        let page = 0;
+        while (true) {
+          const { data, error } = await supabaseProduction
+            .from('appointments')
             .select('id, email, created_at, order_id, service_code, provider')
             .gte('created_at', SALES_START_DATE)
             .order('created_at', { ascending: false })
-            .limit(10000),
+            .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+          if (error) throw error;
+          allRaw = allRaw.concat(data || []);
+          if (!data || data.length < PAGE_SIZE) break;
+          page++;
+        }
+
+        const [patientsResult, activePlansResult] = await Promise.all([
           supabaseProduction.from('patients')
             .select('id, created_at')
             .gte('created_at', SALES_START_DATE),
@@ -285,7 +298,7 @@ export default function ReportsTab() {
         ]);
 
         // Same filters as SalesTab: exclude test emails, require order_id, deduplicate
-        const filteredData = (appointmentsResult.data || []).filter(apt => {
+        const filteredData = allRaw.filter(apt => {
           if (!apt.order_id || apt.order_id.trim() === '') return false;
           if (isTestEmail(apt.email)) return false;
           return true;
