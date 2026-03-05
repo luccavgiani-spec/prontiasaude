@@ -225,7 +225,6 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 const isPlanSku = (sku: string): boolean => {
   return sku?.includes('_') && (sku.startsWith('INDIVIDUAL') || sku.startsWith('FAM_') || sku.startsWith('IND_') || sku.startsWith('EMP_'));
 };
-const SUPABASE_FUNCTIONS_URL = "https://ploqujuhpwutpcibedbr.supabase.co/functions/v1";
 
 interface RecurrenceSummary {
   total_vendas: number;
@@ -261,10 +260,12 @@ interface RecurrenceData {
 export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
-  const [recurrencePeriod, setRecurrencePeriod] = useState(30);
+  const [recurrencePeriod, setRecurrencePeriod] = useState<number | 'all'>(30);
   const [recurrenceData, setRecurrenceData] = useState<RecurrenceData | null>(null);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
   const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
+  const [allAppointments, setAllAppointments] = useState<Array<{ email: string; created_at: string; order_id?: string }>>([]);
+  const [appointmentsLoaded, setAppointmentsLoaded] = useState(false);
   const [metrics, setMetrics] = useState<MetricsData>({
     totalRevenue: 0,
     totalSales: 0,
@@ -281,25 +282,147 @@ export default function ReportsTab() {
     loadMetrics();
   }, [period]);
 
+  // Load all appointments once (same source as SalesTab)
   useEffect(() => {
-    loadRecurrenceStats();
-  }, [recurrencePeriod]);
+    const loadAllAppointments = async () => {
+      try {
+        const { data: appointmentsData, error } = await supabaseProduction
+          .from('appointments')
+          .select('id, email, created_at, order_id, service_code')
+          .gte('created_at', SALES_START_DATE)
+          .order('created_at', { ascending: false });
 
-  const loadRecurrenceStats = async () => {
+        if (error) throw error;
+
+        // Apply same filters as SalesTab: exclude test emails, require order_id, deduplicate
+        const filteredData = (appointmentsData || []).filter(apt => {
+          if (!apt.order_id || apt.order_id.trim() === '') return false;
+          if (isTestEmail(apt.email)) return false;
+          return true;
+        });
+
+        // Deduplicate by order_id
+        const seen = new Map<string, boolean>();
+        const uniqueData = filteredData.filter(apt => {
+          const key = apt.order_id || `${apt.email}_${apt.service_code}_${apt.created_at?.slice(0, 10)}`;
+          if (seen.has(key)) return false;
+          seen.set(key, true);
+          return true;
+        });
+
+        setAllAppointments(uniqueData);
+        setAppointmentsLoaded(true);
+      } catch (err) {
+        console.error('Error loading appointments for recurrence:', err);
+        setAppointmentsLoaded(true);
+      }
+    };
+    loadAllAppointments();
+  }, []);
+
+  // Compute recurrence data locally from appointments
+  useEffect(() => {
+    if (!appointmentsLoaded) return;
     setRecurrenceLoading(true);
     setRecurrenceError(null);
+
     try {
-      const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/get-recurrence-stats?days=${recurrencePeriod}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data: RecurrenceData = await res.json();
-      setRecurrenceData(data);
+      const now = new Date();
+
+      // Filter by period
+      const filteredByPeriod = recurrencePeriod === 'all'
+        ? allAppointments
+        : allAppointments.filter(apt => {
+            const aptDate = new Date(apt.created_at);
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - (recurrencePeriod as number));
+            return aptDate >= cutoff;
+          });
+
+      // Count purchases per email
+      const emailPurchases: Record<string, string[]> = {};
+      filteredByPeriod.forEach(apt => {
+        const email = (apt.email || '').toLowerCase();
+        if (!emailPurchases[email]) emailPurchases[email] = [];
+        emailPurchases[email].push(apt.created_at);
+      });
+
+      const totalClientes = Object.keys(emailPurchases).length;
+      const clientesRecorrentes = Object.values(emailPurchases).filter(dates => dates.length > 1).length;
+      const vendasDeRecorrentes = Object.entries(emailPurchases)
+        .filter(([_, dates]) => dates.length > 1)
+        .reduce((sum, [_, dates]) => sum + dates.length, 0);
+      const totalVendas = filteredByPeriod.length;
+      const percentualRecorrente = totalVendas > 0 ? (vendasDeRecorrentes / totalVendas) * 100 : 0;
+
+      // Build daily chart grouped by date
+      const dailyMap: Record<string, { total: number; recorrentes: number; novos: number }> = {};
+      const recurrentEmails = new Set(
+        Object.entries(emailPurchases)
+          .filter(([_, dates]) => dates.length > 1)
+          .map(([email]) => email)
+      );
+
+      filteredByPeriod.forEach(apt => {
+        const dateStr = apt.created_at.slice(0, 10);
+        if (!dailyMap[dateStr]) dailyMap[dateStr] = { total: 0, recorrentes: 0, novos: 0 };
+        dailyMap[dateStr].total++;
+        const email = (apt.email || '').toLowerCase();
+        if (recurrentEmails.has(email)) {
+          dailyMap[dateStr].recorrentes++;
+        } else {
+          dailyMap[dateStr].novos++;
+        }
+      });
+
+      const dailyChart: RecurrenceDailyChart[] = Object.entries(dailyMap)
+        .map(([date, data]) => ({
+          sale_date: date,
+          total: data.total,
+          recorrentes: data.recorrentes,
+          novos: data.novos,
+          percentual_recorrente: data.total > 0 ? (data.recorrentes / data.total) * 100 : 0,
+        }))
+        .sort((a, b) => a.sale_date.localeCompare(b.sale_date));
+
+      // Build top users
+      const topUsers: RecurrenceTopUser[] = Object.entries(emailPurchases)
+        .filter(([_, dates]) => dates.length > 1)
+        .map(([email, dates]) => {
+          const sortedDates = dates.sort();
+          const first = new Date(sortedDates[0]);
+          const last = new Date(sortedDates[sortedDates.length - 1]);
+          const dias = Math.floor((last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24));
+          return {
+            email,
+            total_compras: dates.length,
+            primeira_compra: sortedDates[0],
+            ultima_compra: sortedDates[sortedDates.length - 1],
+            dias_como_cliente: dias,
+          };
+        })
+        .sort((a, b) => b.total_compras - a.total_compras)
+        .slice(0, 10);
+
+      setRecurrenceData({
+        summary: {
+          total_vendas: totalVendas,
+          total_clientes: totalClientes,
+          clientes_recorrentes: clientesRecorrentes,
+          vendas_de_recorrentes: vendasDeRecorrentes,
+          vendas_de_novos: totalVendas - vendasDeRecorrentes,
+          percentual_recorrente: percentualRecorrente,
+        },
+        daily_chart: dailyChart,
+        top_users: topUsers,
+      });
     } catch (err: any) {
-      console.error('Error loading recurrence stats:', err);
-      setRecurrenceError('Erro ao carregar dados de recorrência');
+      console.error('Error computing recurrence stats:', err);
+      setRecurrenceError('Erro ao calcular dados de recorrência');
     } finally {
       setRecurrenceLoading(false);
     }
-  };
+  }, [recurrencePeriod, allAppointments, appointmentsLoaded]);
 
   const getDateRange = () => {
     const endDate = new Date();
@@ -786,6 +909,13 @@ export default function ReportsTab() {
                 {d}d
               </Button>
             ))}
+            <Button
+              size="sm"
+              variant={recurrencePeriod === 'all' ? 'default' : 'outline'}
+              onClick={() => setRecurrencePeriod('all')}
+            >
+              Toda a Operação
+            </Button>
           </div>
         </div>
 
@@ -846,7 +976,7 @@ export default function ReportsTab() {
               <CardContent>
                 {recurrenceData.daily_chart.length > 0 ? (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={recurrenceData.daily_chart}>
+                    <BarChart data={[...recurrenceData.daily_chart].sort((a, b) => a.sale_date.localeCompare(b.sale_date))}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                       <XAxis
                         dataKey="sale_date"
