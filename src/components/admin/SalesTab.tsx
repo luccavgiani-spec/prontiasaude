@@ -785,7 +785,7 @@ const SalesTab = () => {
               <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                 <RefreshCw className="h-3 w-3" />
                 {todayRecurring ? (
-                  <>{todayRecurring.recurring_today} recorrentes ({todayRecurring.recurring_percentage.toFixed(0)}%)</>
+                  <>{todayRecurring.recurring_today} recorrentes ({(todayRecurring.recurring_percentage ?? 0).toFixed(0)}%)</>
                 ) : (
                   <>0 recorrentes</>
                 )}
@@ -821,13 +821,13 @@ const SalesTab = () => {
                   <ArrowDownRight className="h-4 w-4 text-red-500" />
                 )}
                 <p className={`text-xl font-bold ${monthlyAnalysis.todaySales >= monthlyAnalysis.avgDailySales ? 'text-green-500' : 'text-red-500'}`}>
-                  {monthlyAnalysis.todaySales} / {monthlyAnalysis.avgDailySales.toFixed(1)}
+                  {monthlyAnalysis.todaySales} / {(monthlyAnalysis.avgDailySales ?? 0).toFixed(1)}
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
                 {monthlyAnalysis.todaySales >= monthlyAnalysis.avgDailySales 
-                  ? `+${(monthlyAnalysis.todaySales - monthlyAnalysis.avgDailySales).toFixed(1)} acima`
-                  : `${(monthlyAnalysis.todaySales - monthlyAnalysis.avgDailySales).toFixed(1)} abaixo`
+                  ? `+${(monthlyAnalysis.todaySales - (monthlyAnalysis.avgDailySales ?? 0)).toFixed(1)} acima`
+                  : `${(monthlyAnalysis.todaySales - (monthlyAnalysis.avgDailySales ?? 0)).toFixed(1)} abaixo`
                 }
               </p>
             </div>
@@ -890,7 +890,7 @@ const SalesTab = () => {
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-6 h-0.5 bg-primary" style={{ borderStyle: 'dashed' }}></div>
-                <span>Média diária ({monthlyAnalysis.avgDailySales.toFixed(1)}/dia)</span>
+                <span>Média diária ({(monthlyAnalysis.avgDailySales ?? 0).toFixed(1)}/dia)</span>
               </div>
             </div>
           </div>
