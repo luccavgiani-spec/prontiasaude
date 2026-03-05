@@ -45,8 +45,8 @@ const SKU_PRICES: Record<string, number> = {
   'MYX5186': 8990,      // Infectologista
   
   // OUTROS PROFISSIONAIS
-  'BIR7668': 5490,      // Personal Trainer (R$54,90)
-  'VPN5132': 6990,      // Nutricionista (R$69,90)
+  'BIR7668': 5990,      // Personal Trainer (R$59,90)
+  'VPN5132': 5990,      // Nutricionista (R$59,90)
   'HXR8516': 4990,      // Psicólogo 4 sessões
   'YME9025': 4990,      // Psicólogo 8 sessões
   'QOP1101': 8990,      // Psiquiatra

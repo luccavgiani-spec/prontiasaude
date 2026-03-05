@@ -57,8 +57,8 @@ export const CATALOGO_SERVICOS = [
       { valor: 89.90, nome: "Infectologia", sku: "MYX5186" },
       { valor: 89.90, nome: "Nutrologia", sku: "LZF3879" },
       { valor: 109.90, nome: "Urologia", sku: "URO1099" },
-      { valor: 69.90, nome: "Nutrição", sku: "VPN5132" },
-      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" }
+      { valor: 59.90, nome: "Nutrição", sku: "VPN5132" },
+      { valor: 59.90, nome: "Personal Trainer", sku: "BIR7668" }
     ]
   },
   { 
