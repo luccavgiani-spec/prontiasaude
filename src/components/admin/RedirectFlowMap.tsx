@@ -122,9 +122,9 @@ export default function RedirectFlowMap() {
                 <Badge className="bg-green-100 text-green-900 border-green-300">📱 WhatsApp 0800 (5508000008780)</Badge>
               </div>
               <div className="ml-8 text-xs text-muted-foreground">
-                🩺 Cardiologista, Dermatologista, Endocrinologista, Gastroenterologista, Ginecologista, Oftalmologista,
-                Ortopedista, Pediatra, Otorrino, Médico da Família, Psiquiatra, Nutrólogo, Geriatria, Reumatologista,
-                Neurologista, Infectologista
+                🩺 Pediatra, Cardiologista, Ginecologista, Dermatologista, Gastroenterologista, Otorrino, Ortopedista,
+                Oftalmologista, Endocrinologista, Psiquiatra, Urologista, Neurologista, Nutrólogo, Infectologista,
+                Imunologista, Médico da Família, Geriatra, Reumatologista, Proctologista, Pneumologista
               </div>
             </div>
 

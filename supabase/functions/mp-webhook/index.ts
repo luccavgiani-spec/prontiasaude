@@ -29,15 +29,19 @@ function mapSkuToName(sku: string): string {
     'UDH3250': 'Reumatologista',
     'PKS9388': 'Neurologista',
     'MYX5186': 'Infectologista',
+    'URO1099': 'Urologista',
+    'IMU4471': 'Imunologista',
+    'PRC6621': 'Proctologista',
+    'PNE7783': 'Pneumologista',
     'ZXW2165': 'Psicólogo - 1 sessão',
     'HXR8516': 'Psicólogo - 4 sessões',
     'YME9025': 'Psicólogo - 8 sessões',
     'OVM9892': 'Laudo Psicológico',
   };
-  
+
   if (sku.startsWith('IND_')) return 'Plano Individual';
   if (sku.startsWith('FAM_') || sku === 'FAMILY') return 'Plano Familiar';
-  
+
   return SERVICE_NAMES[sku] || sku;
 }
 
@@ -1170,7 +1174,8 @@ Deno.serve(async (req) => {
     const ESPECIALISTA_SKUS = [
       'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
       'CCP1566', 'FKS5964', 'TVQ5046', 'HMG9544', 'HME8366', 'DYY8522',
-      'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186'
+      'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186',
+      'URO1099', 'IMU4471', 'PRC6621', 'PNE7783'
     ];
     
     const PSICOLOGO_SKUS = ['ZXW2165', 'HXR8516', 'YME9025'];
@@ -1194,6 +1199,10 @@ Deno.serve(async (req) => {
       'UDH3250': 'Reumatologista',
       'PKS9388': 'Neurologista',
       'MYX5186': 'Infectologista',
+      'URO1099': 'Urologista',
+      'IMU4471': 'Imunologista',
+      'PRC6621': 'Proctologista',
+      'PNE7783': 'Pneumologista',
       'ZXW2165': 'Psicólogo - 1 sessão',
       'HXR8516': 'Psicólogo - 4 sessões',
       'YME9025': 'Psicólogo - 8 sessões',
