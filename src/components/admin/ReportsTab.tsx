@@ -25,9 +25,6 @@ const TEST_EMAILS = [
   't.giani@gmail.com',
 ];
 
-// Nomes de usuários internos a excluir
-const TEST_NAMES = ['lucca', 'victoria toledo', 'sandra toledo', 'tulio giani', 'tulio'];
-
 // Função para verificar se é email de teste
 const isTestEmail = (email: string | null | undefined): boolean => {
   if (!email) return false;
@@ -44,34 +41,21 @@ const isTestEmail = (email: string | null | undefined): boolean => {
   return false;
 };
 
-// Função para verificar se é nome de teste
-const isTestName = (name: string | null | undefined): boolean => {
-  if (!name) return false;
-  const lowerName = name.toLowerCase();
-  return TEST_NAMES.some(tn => lowerName.includes(tn));
+// Nomes abreviados dos meses em pt-BR (índice 0 = janeiro)
+const MONTH_NAMES_SHORT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// Formatar mês de forma determinística: "Mar/26"
+const formatMonthKey = (date: Date): string => {
+  const m = MONTH_NAMES_SHORT[date.getMonth()];
+  const y = String(date.getFullYear()).slice(-2);
+  return `${m}/${y}`;
 };
 
-// Ajustes mensais baseados no relatório oficial do Mercado Pago
-// Usado para corrigir gaps de registros (webhooks que falharam)
-// Formato: 'mes/ano' => { revenue: valor_em_centavos, sales: quantidade }
-const MP_ADJUSTMENTS: Record<string, { revenue: number; sales: number }> = {
-  'dez./25': { revenue: 135141, sales: 30 },   // R$ 1.351,41 - 30 vendas
-  'jan./26': { revenue: 1481247, sales: 370 }, // R$ 14.812,47 - 370 vendas
-};
-
-// Normalizar valores: Produção usa amount_cents (já em centavos)
-// Cloud usa amount (em reais, precisa converter)
-const normalizeAmountFromSource = (amountCents: number | undefined, amountReais: number | undefined): number => {
-  // Priorizar amount_cents (já em centavos) sobre amount (em reais)
-  if (amountCents !== undefined && amountCents !== null) {
-    return amountCents;
-  }
-  if (amountReais !== undefined && amountReais !== null) {
-    // Assumir que valores < 1000 são em reais
-    const num = Number(amountReais);
-    return num >= 1000 ? num : Math.round(num * 100);
-  }
-  return 0;
+// Extrair chave de ordenação numérica de "Mar/26" → 2603
+const monthSortKey = (monthStr: string): number => {
+  const [m, y] = monthStr.split('/');
+  const mi = MONTH_NAMES_SHORT.findIndex(n => n.toLowerCase() === m.toLowerCase());
+  return (parseInt(y, 10) * 100) + (mi >= 0 ? mi + 1 : 0);
 };
 interface MetricsData {
   totalRevenue: number;
@@ -448,159 +432,75 @@ export default function ReportsTab() {
       const endISO = endDate.toISOString();
       const todayStr = new Date().toISOString().split('T')[0];
 
-      // Buscar dados em paralelo de TODAS as fontes de vendas (PRODUÇÃO)
-      const [appointmentsResult, pendingPaymentsResult, plansResult, patientsResult, activePlansResult] = await Promise.all([
-      // Appointments - consultas avulsas (usar * para evitar erros de cache PostgREST)
-      supabaseProduction.from('appointments').select('*').gte('created_at', startISO).lte('created_at', endISO),
-      // Pending payments aprovados (usar * para compatibilidade com cache)
-      supabaseProduction.from('pending_payments').select('*').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
-      // Patient plans para contagem de planos (usar * para evitar erros de coluna inexistente)
-      supabaseProduction.from('patient_plans').select('*').gte('created_at', startISO).lte('created_at', endISO),
-      // Pacientes novos
-      supabaseProduction.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
-      // Planos ativos
-      supabaseProduction.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr)]);
+      // Buscar dados em paralelo (PRODUÇÃO)
+      // Fonte primária de vendas: appointments com order_id (mais completa que pending_payments)
+      const [appointmentsResult, pendingPaymentsResult, patientsResult, activePlansResult] = await Promise.all([
+        supabaseProduction.from('appointments').select('*').gte('created_at', startISO).lte('created_at', endISO),
+        supabaseProduction.from('pending_payments').select('order_id, amount_cents').eq('status', 'approved').gte('created_at', startISO).lte('created_at', endISO),
+        supabaseProduction.from('patients').select('id, created_at').gte('created_at', startISO).lte('created_at', endISO),
+        supabaseProduction.from('patient_plans').select('id').eq('status', 'active').gte('plan_expires_at', todayStr),
+      ]);
 
-      // Filtrar emails de teste de todas as fontes de vendas (fallback para nomes de colunas antigos/novos)
+      // Filtrar emails de teste
       const appointments = (appointmentsResult.data || []).filter(apt => !isTestEmail(apt.email));
-      const pendingPayments = (pendingPaymentsResult.data || []).filter(pp => {
-        // Fallback: PostgREST pode retornar 'email' (cache antigo) ou 'patient_email' (schema atual)
-        const email = pp.patient_email || (pp as any).email;
-        const name = pp.patient_name || '';
-        return !isTestEmail(email) && !isTestName(name);
-      });
-      const plans = (plansResult.data || []).filter(plan => !isTestEmail(plan.email));
       const patients = patientsResult.data || [];
       const activePlansCount = activePlansResult.data?.length || 0;
 
-      // Combinar vendas usando APENAS pending_payments como fonte de verdade para receita
+      // Construir mapa de preços reais pagos (pending_payments), indexado por order_id
+      const paidAmountByOrderId = new Map<string, number>();
+      (pendingPaymentsResult.data || []).forEach((pp: any) => {
+        if (pp.order_id && pp.amount_cents) {
+          paidAmountByOrderId.set(pp.order_id, pp.amount_cents);
+        }
+      });
+
+      // Fonte de vendas: appointments com order_id (deduplicados)
+      const seenOrders = new Set<string>();
       interface UnifiedSale {
-        id: string;
         sku: string;
         created_at: string;
-        order_id: string | null;
-        source: 'pending_payment';
+        order_id: string;
         price: number; // Em centavos
         provider?: string;
       }
-      const salesMap = new Map<string, UnifiedSale>();
+      const allSales: UnifiedSale[] = [];
 
-      // Criar mapa de appointments por order_id para obter contexto (provider, service_code)
-      const appointmentsByOrderId = new Map<string, typeof appointments[0]>();
       appointments.forEach(apt => {
-        if (apt.order_id) {
-          appointmentsByOrderId.set(apt.order_id, apt);
-        }
-      });
+        if (!apt.order_id || apt.order_id.trim() === '') return;
+        if (seenOrders.has(apt.order_id)) return;
+        seenOrders.add(apt.order_id);
 
-      // Usar APENAS pending_payments aprovados como fonte de receita
-      pendingPayments.forEach(pp => {
-        const key = pp.order_id || pp.payment_id || `pp-${pp.id}`;
-        if (!salesMap.has(key)) {
-          const sku = pp.sku || '';
-          // Produção usa 'amount_cents', Cloud usa 'amount'
-          const amountCents = (pp as any).amount_cents;
-          const amountReais = pp.amount;
-          
-          // Buscar contexto do appointment se existir
-          const apt = pp.order_id ? appointmentsByOrderId.get(pp.order_id) : null;
-          
-          salesMap.set(key, {
-            id: pp.id,
-            sku: sku || apt?.service_code || '',
-            created_at: pp.created_at || new Date().toISOString(),
-            order_id: pp.order_id,
-            source: 'pending_payment',
-            price: normalizeAmountFromSource(amountCents, amountReais),
-            provider: apt?.provider
-          });
-        }
-      });
+        const sku = apt.service_code || '';
+        // Usar preço real do pending_payment se disponível, senão tabela de preços
+        const paidPrice = paidAmountByOrderId.get(apt.order_id);
+        const price = paidPrice ?? (SKU_PRICES[sku] || 0);
 
-      const allSales = Array.from(salesMap.values());
-      
-      // Agrupar vendas do banco por mês para aplicar ajustes do MP
-      const dbSalesByMonth: Record<string, { revenue: number; sales: number }> = {};
-      allSales.forEach(sale => {
-        const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
-          month: 'short',
-          year: '2-digit'
-        }).toLowerCase();
-        if (!dbSalesByMonth[month]) {
-          dbSalesByMonth[month] = { revenue: 0, sales: 0 };
-        }
-        dbSalesByMonth[month].revenue += sale.price;
-        dbSalesByMonth[month].sales++;
-      });
-
-      // Calcular totais com ajustes do MP
-      let adjustedTotalRevenue = 0;
-      let adjustedTotalSales = 0;
-
-      // Para cada mês no banco, usar valor do MP se disponível
-      Object.entries(dbSalesByMonth).forEach(([month, data]) => {
-        if (MP_ADJUSTMENTS[month]) {
-          adjustedTotalRevenue += MP_ADJUSTMENTS[month].revenue;
-          adjustedTotalSales += MP_ADJUSTMENTS[month].sales;
-        } else {
-          adjustedTotalRevenue += data.revenue;
-          adjustedTotalSales += data.sales;
-        }
-      });
-
-      // Adicionar meses do MP que não existem no banco
-      Object.entries(MP_ADJUSTMENTS).forEach(([month, data]) => {
-        if (!dbSalesByMonth[month]) {
-          adjustedTotalRevenue += data.revenue;
-          adjustedTotalSales += data.sales;
-        }
-      });
-
-      const totalRevenue = adjustedTotalRevenue;
-      const totalSales = adjustedTotalSales;
-      const averageTicket = totalSales > 0 ? totalRevenue / totalSales : 0;
-
-      // Receita por mês (aplicando ajustes do MP)
-      const revenueByMonth: Record<string, number> = {};
-      
-      // Primeiro, popular com dados do banco
-      allSales.forEach(sale => {
-        const month = new Date(sale.created_at).toLocaleDateString('pt-BR', {
-          month: 'short',
-          year: '2-digit'
+        allSales.push({
+          sku,
+          created_at: apt.created_at,
+          order_id: apt.order_id,
+          price,
+          provider: apt.provider,
         });
+      });
+
+      // Receita por mês
+      const revenueByMonth: Record<string, number> = {};
+      let totalRevenueCents = 0;
+
+      allSales.forEach(sale => {
+        const month = formatMonthKey(new Date(sale.created_at));
         revenueByMonth[month] = (revenueByMonth[month] || 0) + sale.price;
+        totalRevenueCents += sale.price;
       });
-      
-      // Aplicar ajustes do MP (substituir valores do banco pelos valores reais)
-      Object.entries(MP_ADJUSTMENTS).forEach(([mpMonth, data]) => {
-        // Encontrar o mês correspondente no formato do banco (ex: 'dez./25' -> 'Dez./25')
-        const monthCapitalized = mpMonth.charAt(0).toUpperCase() + mpMonth.slice(1);
-        
-        // Substituir ou adicionar o valor do MP
-        if (revenueByMonth[monthCapitalized] !== undefined) {
-          revenueByMonth[monthCapitalized] = data.revenue;
-        } else if (revenueByMonth[mpMonth] !== undefined) {
-          revenueByMonth[mpMonth] = data.revenue;
-        } else {
-          // Adicionar mês que não existe no banco
-          revenueByMonth[monthCapitalized] = data.revenue;
-        }
-      });
+
+      const totalSales = allSales.length;
+      const averageTicketCents = totalSales > 0 ? totalRevenueCents / totalSales : 0;
 
       // Vendas por tipo (Consultas vs Planos)
-      const salesByTypeMap: Record<string, {
-        count: number;
-        revenue: number;
-      }> = {
-        'Consultas Avulsas': {
-          count: 0,
-          revenue: 0
-        },
-        'Planos': {
-          count: 0,
-          revenue: 0
-        }
+      const salesByTypeMap: Record<string, { count: number; revenue: number }> = {
+        'Consultas Avulsas': { count: 0, revenue: 0 },
+        'Planos': { count: 0, revenue: 0 },
       };
       allSales.forEach(sale => {
         const type = isPlanSku(sale.sku) ? 'Planos' : 'Consultas Avulsas';
@@ -609,74 +509,49 @@ export default function ReportsTab() {
       });
 
       // Vendas por SKU (top 10)
-      const salesBySkuMap: Record<string, {
-        count: number;
-        revenue: number;
-      }> = {};
+      const salesBySkuMap: Record<string, { count: number; revenue: number }> = {};
       allSales.forEach(sale => {
         const sku = sale.sku || 'Desconhecido';
-        if (!salesBySkuMap[sku]) {
-          salesBySkuMap[sku] = {
-            count: 0,
-            revenue: 0
-          };
-        }
+        if (!salesBySkuMap[sku]) salesBySkuMap[sku] = { count: 0, revenue: 0 };
         salesBySkuMap[sku].count++;
         salesBySkuMap[sku].revenue += sale.price;
       });
 
-      // Atendimentos por plataforma
+      // Atendimentos por plataforma (todos os appointments, não só com order_id)
       const platformGroups: Record<string, number> = {
         'Communicare': 0,
         'ClickLife': 0,
         'WhatsApp': 0,
-        'Outros': 0
+        'Outros': 0,
       };
       appointments.forEach(a => {
         const provider = (a.provider || '').toLowerCase();
-        if (provider.includes('communicare')) {
-          platformGroups['Communicare']++;
-        } else if (provider.includes('clicklife')) {
-          platformGroups['ClickLife']++;
-        } else if (provider.includes('whatsapp')) {
-          platformGroups['WhatsApp']++;
-        } else if (provider) {
-          platformGroups['Outros']++;
-        }
+        if (provider.includes('communicare')) platformGroups['Communicare']++;
+        else if (provider.includes('clicklife')) platformGroups['ClickLife']++;
+        else if (provider.includes('whatsapp')) platformGroups['WhatsApp']++;
+        else if (provider) platformGroups['Outros']++;
       });
 
       setMetrics({
-        totalRevenue: totalRevenue / 100,
+        totalRevenue: totalRevenueCents / 100,
         totalSales,
         totalPatients: patients.length,
         totalAppointments: appointments.length,
         activePlans: activePlansCount,
-        averageTicket: averageTicket / 100,
-        revenueByMonth: Object.entries(revenueByMonth).map(([month, revenue]) => ({
-          month,
-          revenue: revenue / 100
-        })).sort((a, b) => {
-          const months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-          const [monthA, yearA] = a.month.split('/');
-          const [monthB, yearB] = b.month.split('/');
-          if (yearA !== yearB) return yearA.localeCompare(yearB);
-          return months.indexOf(monthA.toLowerCase()) - months.indexOf(monthB.toLowerCase());
-        }),
-        appointmentsByPlatform: Object.entries(platformGroups).filter(([_, count]) => count > 0).map(([platform, count]) => ({
-          platform,
-          count
-        })),
-        salesByType: Object.entries(salesByTypeMap).filter(([_, data]) => data.count > 0).map(([type, data]) => ({
-          type,
-          count: data.count,
-          revenue: data.revenue / 100
-        })),
-        salesBySku: Object.entries(salesBySkuMap).map(([sku, data]) => ({
-          sku,
-          name: SKU_NAMES[sku] || sku,
-          count: data.count,
-          revenue: data.revenue / 100
-        })).sort((a, b) => b.count - a.count).slice(0, 10)
+        averageTicket: averageTicketCents / 100,
+        revenueByMonth: Object.entries(revenueByMonth)
+          .map(([month, revenue]) => ({ month, revenue: revenue / 100 }))
+          .sort((a, b) => monthSortKey(a.month) - monthSortKey(b.month)),
+        appointmentsByPlatform: Object.entries(platformGroups)
+          .filter(([_, count]) => count > 0)
+          .map(([platform, count]) => ({ platform, count })),
+        salesByType: Object.entries(salesByTypeMap)
+          .filter(([_, data]) => data.count > 0)
+          .map(([type, data]) => ({ type, count: data.count, revenue: data.revenue / 100 })),
+        salesBySku: Object.entries(salesBySkuMap)
+          .map(([sku, data]) => ({ sku, name: SKU_NAMES[sku] || sku, count: data.count, revenue: data.revenue / 100 }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10),
       });
     } catch (error) {
       console.error('Error loading metrics:', error);
