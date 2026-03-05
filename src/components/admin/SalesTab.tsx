@@ -136,6 +136,9 @@ const SalesTab = () => {
   const [loadingPendingPayments, setLoadingPendingPayments] = useState(false);
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
   
+  // ↻ Estado para vendas recorrentes de hoje
+  const [todayRecurring, setTodayRecurring] = useState<{ recurring_today: number; recurring_percentage: number } | null>(null);
+
   // 📅 Estado para seleção de mês no card de desempenho
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -321,6 +324,20 @@ const SalesTab = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  useEffect(() => {
+    const loadTodayRecurring = async () => {
+      try {
+        const res = await fetch('https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/get-today-sales-stats');
+        if (!res.ok) return;
+        const data = await res.json();
+        setTodayRecurring({ recurring_today: data.recurring_today, recurring_percentage: data.recurring_percentage });
+      } catch (err) {
+        console.error('Error loading today recurring stats:', err);
+      }
+    };
+    loadTodayRecurring();
   }, []);
 
   // 📊 Análise mensal comparativa
@@ -765,6 +782,12 @@ const SalesTab = () => {
               <p className="text-xs text-muted-foreground">
                 R$ {monthlyAnalysis.todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
+              {todayRecurring && todayRecurring.recurring_today > 0 && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                  <RefreshCw className="h-3 w-3" />
+                  {todayRecurring.recurring_today} recorrentes ({todayRecurring.recurring_percentage.toFixed(0)}%)
+                </p>
+              )}
             </div>
             
             {/* 4. Projeção Mensal + Comparativo */}
