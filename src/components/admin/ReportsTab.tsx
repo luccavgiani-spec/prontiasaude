@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabaseProduction } from '@/lib/supabase-production';
 import { PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, BarChart, Bar } from 'recharts';
-import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent } from 'lucide-react';
+import { DollarSign, ShoppingCart, Users, Activity, Download, Calendar, TrendingUp, Percent, RefreshCw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 // Data mínima para filtrar vendas (histórico desde março/2025)
@@ -224,9 +225,46 @@ const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3
 const isPlanSku = (sku: string): boolean => {
   return sku?.includes('_') && (sku.startsWith('INDIVIDUAL') || sku.startsWith('FAM_') || sku.startsWith('IND_') || sku.startsWith('EMP_'));
 };
+const SUPABASE_FUNCTIONS_URL = "https://ploqujuhpwutpcibedbr.supabase.co/functions/v1";
+
+interface RecurrenceSummary {
+  total_vendas: number;
+  total_clientes: number;
+  clientes_recorrentes: number;
+  vendas_de_recorrentes: number;
+  vendas_de_novos: number;
+  percentual_recorrente: number;
+}
+
+interface RecurrenceDailyChart {
+  sale_date: string;
+  total: number;
+  recorrentes: number;
+  novos: number;
+  percentual_recorrente: number;
+}
+
+interface RecurrenceTopUser {
+  email: string;
+  total_compras: number;
+  primeira_compra: string;
+  ultima_compra: string;
+  dias_como_cliente: number;
+}
+
+interface RecurrenceData {
+  summary: RecurrenceSummary;
+  daily_chart: RecurrenceDailyChart[];
+  top_users: RecurrenceTopUser[];
+}
+
 export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30d');
+  const [recurrencePeriod, setRecurrencePeriod] = useState(30);
+  const [recurrenceData, setRecurrenceData] = useState<RecurrenceData | null>(null);
+  const [recurrenceLoading, setRecurrenceLoading] = useState(true);
+  const [recurrenceError, setRecurrenceError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<MetricsData>({
     totalRevenue: 0,
     totalSales: 0,
@@ -242,6 +280,27 @@ export default function ReportsTab() {
   useEffect(() => {
     loadMetrics();
   }, [period]);
+
+  useEffect(() => {
+    loadRecurrenceStats();
+  }, [recurrencePeriod]);
+
+  const loadRecurrenceStats = async () => {
+    setRecurrenceLoading(true);
+    setRecurrenceError(null);
+    try {
+      const res = await fetch(`${SUPABASE_FUNCTIONS_URL}/get-recurrence-stats?days=${recurrencePeriod}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: RecurrenceData = await res.json();
+      setRecurrenceData(data);
+    } catch (err: any) {
+      console.error('Error loading recurrence stats:', err);
+      setRecurrenceError('Erro ao carregar dados de recorrência');
+    } finally {
+      setRecurrenceLoading(false);
+    }
+  };
+
   const getDateRange = () => {
     const endDate = new Date();
     const startDate = new Date();
@@ -707,6 +766,188 @@ export default function ReportsTab() {
           </CardContent>
         </Card>
 
+      </div>
+
+      {/* Recorrência de Compras */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Recorrência de Compras
+          </h2>
+          <div className="flex gap-2">
+            {[7, 14, 30, 60].map((d) => (
+              <Button
+                key={d}
+                size="sm"
+                variant={recurrencePeriod === d ? 'default' : 'outline'}
+                onClick={() => setRecurrencePeriod(d)}
+              >
+                {d}d
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {recurrenceLoading ? (
+          <div className="flex items-center justify-center p-8">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+          </div>
+        ) : recurrenceError ? (
+          <p className="text-sm text-muted-foreground text-center py-4">{recurrenceError}</p>
+        ) : recurrenceData ? (
+          <>
+            {/* Cards de resumo */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Índice de Recorrência</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">
+                    {recurrenceData.summary.percentual_recorrente.toFixed(1)}%
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">das vendas são de clientes recorrentes</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Clientes Recorrentes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {recurrenceData.summary.clientes_recorrentes}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    de {recurrenceData.summary.total_clientes} clientes
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium">Vendas de Recorrentes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {recurrenceData.summary.vendas_de_recorrentes}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    de {recurrenceData.summary.total_vendas} total
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Gráfico de barras empilhadas */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Vendas Diárias — Novos vs Recorrentes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recurrenceData.daily_chart.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={recurrenceData.daily_chart}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="sale_date"
+                        tickFormatter={(v: string) => {
+                          const [y, m, d] = v.split('-');
+                          return `${d}/${m}`;
+                        }}
+                        className="text-xs"
+                      />
+                      <YAxis className="text-xs" />
+                      <Tooltip
+                        labelFormatter={(label: string) => {
+                          const [y, m, d] = label.split('-');
+                          return `${d}/${m}/${y}`;
+                        }}
+                        formatter={(value: number, name: string) => {
+                          const label = name === 'novos' ? 'Novos' : 'Recorrentes';
+                          return [value, label];
+                        }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const item = payload[0]?.payload as RecurrenceDailyChart;
+                          const [y, m, d] = (label as string).split('-');
+                          return (
+                            <div className="bg-background border rounded-lg p-3 shadow-md text-sm">
+                              <p className="font-medium mb-1">{d}/{m}/{y}</p>
+                              <p>Total: <strong>{item.total}</strong></p>
+                              <p className="text-orange-500">Recorrentes: <strong>{item.recorrentes}</strong></p>
+                              <p className="text-blue-500">Novos: <strong>{item.novos}</strong></p>
+                              <p className="text-muted-foreground">{item.percentual_recorrente.toFixed(1)}% recorrentes</p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="novos" stackId="a" fill="hsl(var(--chart-1))" name="Novos" radius={[0, 0, 0, 0]} />
+                      <Bar dataKey="recorrentes" stackId="a" fill="#f97316" name="Recorrentes" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    Sem dados no período
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Tabela Top 10 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Top 10 — Usuários Mais Recorrentes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {recurrenceData.top_users.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">#</TableHead>
+                        <TableHead>E-mail</TableHead>
+                        <TableHead className="text-center">Nº de Compras</TableHead>
+                        <TableHead className="text-center">Primeira Compra</TableHead>
+                        <TableHead className="text-center">Última Compra</TableHead>
+                        <TableHead className="text-center">Dias como Cliente</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recurrenceData.top_users.slice(0, 10).map((user, idx) => (
+                        <TableRow key={user.email}>
+                          <TableCell>
+                            {idx < 3 ? (
+                              <Badge variant={idx === 0 ? 'default' : 'secondary'} className={
+                                idx === 0 ? 'bg-yellow-500 text-white' :
+                                idx === 1 ? 'bg-gray-400 text-white' :
+                                'bg-amber-700 text-white'
+                              }>
+                                {idx + 1}º
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">{idx + 1}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium text-sm">{user.email}</TableCell>
+                          <TableCell className="text-center font-bold">{user.total_compras}</TableCell>
+                          <TableCell className="text-center text-sm">
+                            {user.primeira_compra ? new Date(user.primeira_compra).toLocaleDateString('pt-BR') : '-'}
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {user.ultima_compra ? new Date(user.ultima_compra).toLocaleDateString('pt-BR') : '-'}
+                          </TableCell>
+                          <TableCell className="text-center">{user.dias_como_cliente}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <p className="text-muted-foreground text-center py-4">Sem dados de recorrência</p>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        ) : null}
       </div>
     </div>;
 }
