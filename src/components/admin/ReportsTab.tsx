@@ -243,7 +243,7 @@ interface RecurrenceData {
 
 export default function ReportsTab() {
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('30d');
+  const [period, setPeriod] = useState('all');
   const [recurrencePeriod, setRecurrencePeriod] = useState<number | 'all'>(30);
   const [recurrenceData, setRecurrenceData] = useState<RecurrenceData | null>(null);
   const [recurrenceLoading, setRecurrenceLoading] = useState(true);
@@ -274,7 +274,8 @@ export default function ReportsTab() {
           .from('appointments')
           .select('id, email, created_at, order_id, service_code')
           .gte('created_at', SALES_START_DATE)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(10000);
 
         if (error) throw error;
 

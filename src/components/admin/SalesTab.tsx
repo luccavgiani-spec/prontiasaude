@@ -202,7 +202,8 @@ const SalesTab = () => {
         .from("appointments")
         .select("*")
         .gte("created_at", SALES_START_DATE)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(10000);
 
       if (error) {
         console.warn("Erro ao buscar appointments:", error);
