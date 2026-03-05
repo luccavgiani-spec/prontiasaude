@@ -264,25 +264,31 @@ const SalesTab = () => {
         return true;
       });
 
-      // 📞 Buscar telefones dos pacientes por email (batch)
-      const emails = uniqueData
-        .map(a => (a.email || '').toLowerCase())
-        .filter(Boolean);
-      
+      // 📞 Buscar telefones dos pacientes por email (em batches para não exceder limite de URL do PostgREST)
+      const uniqueEmails = [...new Set(
+        uniqueData
+          .map(a => (a.email || '').toLowerCase())
+          .filter(Boolean)
+      )];
+
       let phoneMap = new Map<string, string>();
-      if (emails.length > 0) {
+      if (uniqueEmails.length > 0) {
         try {
-          const { data: patientsData } = await supabaseProduction
-            .from('patients')
-            .select('email, phone_e164')
-            .in('email', emails);
-          
-          for (const p of patientsData || []) {
-            if (p.email && p.phone_e164) {
-              phoneMap.set(p.email.toLowerCase(), p.phone_e164);
+          const BATCH_SIZE = 100;
+          for (let i = 0; i < uniqueEmails.length; i += BATCH_SIZE) {
+            const batch = uniqueEmails.slice(i, i + BATCH_SIZE);
+            const { data: patientsData } = await supabaseProduction
+              .from('patients')
+              .select('email, phone_e164')
+              .in('email', batch);
+
+            for (const p of patientsData || []) {
+              if (p.email && p.phone_e164) {
+                phoneMap.set(p.email.toLowerCase(), p.phone_e164);
+              }
             }
           }
-          console.log(`📞 [SalesTab] Phone lookup: ${phoneMap.size} telefones encontrados para ${emails.length} emails`);
+          console.log(`📞 [SalesTab] Phone lookup: ${phoneMap.size} telefones encontrados para ${uniqueEmails.length} emails`);
         } catch (phoneErr) {
           console.warn('📞 [SalesTab] Erro ao buscar telefones:', phoneErr);
         }
