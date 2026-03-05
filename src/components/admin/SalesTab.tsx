@@ -782,12 +782,14 @@ const SalesTab = () => {
               <p className="text-xs text-muted-foreground">
                 R$ {monthlyAnalysis.todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
-              {todayRecurring && todayRecurring.recurring_today > 0 && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <RefreshCw className="h-3 w-3" />
-                  {todayRecurring.recurring_today} recorrentes ({todayRecurring.recurring_percentage.toFixed(0)}%)
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                <RefreshCw className="h-3 w-3" />
+                {todayRecurring ? (
+                  <>{todayRecurring.recurring_today} recorrentes ({todayRecurring.recurring_percentage.toFixed(0)}%)</>
+                ) : (
+                  <>0 recorrentes</>
+                )}
+              </p>
             </div>
             
             {/* 4. Projeção Mensal + Comparativo */}
