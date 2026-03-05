@@ -15,7 +15,7 @@ import { getHybridSession } from "@/lib/auth-hybrid";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { toast as sonnerToast } from "sonner";
-import { Check, Star, ArrowRight, Users, Crown, Heart, Stethoscope, Phone, Shield, Pill, Activity, Brain, Apple, Dumbbell, Percent, X, Calendar, Clock } from "lucide-react";
+import { Check, Star, ArrowRight, Users, Crown, Heart, Stethoscope, Phone, Shield, Pill, Activity, Brain, Dumbbell, Percent, X, Calendar, Clock } from "lucide-react";
 export function PlanosSection() {
   const [duracaoSelecionada, setDuracaoSelecionada] = useState<string>("1");
   const [showEmpresarialForm, setShowEmpresarialForm] = useState(false);
@@ -139,10 +139,7 @@ export function PlanosSection() {
       texto: "Consultas com clínico geral 24h/dia"
     }, {
       icone: <Heart className="h-5 w-5" />,
-      texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia"
-    }, {
-      icone: <Apple className="h-5 w-5" />,
-      texto: "Nutrição e personal trainer*"
+      texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Fisioterapia"
     }, {
       icone: <Brain className="h-5 w-5" />,
       texto: "Psicólogo quinzenal"
@@ -177,10 +174,7 @@ export function PlanosSection() {
       texto: "Consultas com clínico geral 24h/dia"
     }, {
       icone: <Heart className="h-5 w-5" />,
-      texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Urologia, Fisioterapia"
-    }, {
-      icone: <Apple className="h-5 w-5" />,
-      texto: "Nutrição e personal trainer*"
+      texto: "Especialidades exclusivas: Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Otorrinolaringologia, Pediatria, Psiquiatria, Fisioterapia"
     }, {
       icone: <Brain className="h-5 w-5" />,
       texto: "Psicólogo quinzenal"

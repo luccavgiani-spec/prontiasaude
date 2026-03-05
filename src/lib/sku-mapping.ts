@@ -23,7 +23,14 @@ const SKU_TO_SERVICE: Record<string, string> = {
   'DYY8522': 'Médico da Família',
   'QOP1101': 'Psiquiatra',
   'YZD9932': 'Geriatria',
-  
+  'UDH3250': 'Reumatologista',
+  'PKS9388': 'Neurologista',
+  'MYX5186': 'Infectologista',
+  'LZF3879': 'Nutrólogo',
+  'URO1099': 'Urologista',
+  'VPN5132': 'Nutricionista',
+  'BIR7668': 'Personal Trainer',
+
   // Outros Serviços
   'OVM9892': 'Laudos Psicológicos',
   'ULT3571': 'Solicitação de Exames',

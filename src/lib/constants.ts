@@ -28,14 +28,16 @@ export const CATALOGO_SERVICOS = [
     nome: "Médicos Especialistas", 
     precoBase: 89.90, 
     sku: "TQP5720",
-    descricao: "Geriatria, Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Otorrinolaringologia, Medicina da Família, Psiquiatria",
+    descricao: "Geriatria, Cardiologia, Dermatologia, Endocrinologia, Gastroenterologia, Ginecologia, Oftalmologia, Ortopedia, Pediatria, Otorrinolaringologia, Medicina da Família, Psiquiatria, Reumatologia, Neurologia, Infectologia, Nutrologia, Urologia, Nutrição, Personal Trainer",
     tempo: "30-60 minutos",
     inclui: [
       "Geriatria",
       "Cardiologia", "Dermatologia", "Endocrinologia",
       "Gastroenterologia", "Ginecologia", "Oftalmologia",
       "Ortopedia", "Pediatria", "Otorrinolaringologia",
-      "Medicina da Família", "Psiquiatria"
+      "Medicina da Família", "Psiquiatria",
+      "Reumatologia", "Neurologia", "Infectologia",
+      "Nutrologia", "Urologia", "Nutrição", "Personal Trainer"
     ],
     variantes: [
       { valor: 119.90, nome: "Geriatria", sku: "YZD9932" },
@@ -49,7 +51,14 @@ export const CATALOGO_SERVICOS = [
       { valor: 89.90, nome: "Pediatria", sku: "HMG9544" },
       { valor: 89.90, nome: "Otorrinolaringologia", sku: "HME8366" },
       { valor: 89.90, nome: "Medicina da Família", sku: "DYY8522" },
-      { valor: 89.90, nome: "Psiquiatria", sku: "QOP1101" }
+      { valor: 89.90, nome: "Psiquiatria", sku: "QOP1101" },
+      { valor: 89.90, nome: "Reumatologia", sku: "UDH3250" },
+      { valor: 89.90, nome: "Neurologia", sku: "PKS9388" },
+      { valor: 89.90, nome: "Infectologia", sku: "MYX5186" },
+      { valor: 89.90, nome: "Nutrologia", sku: "LZF3879" },
+      { valor: 109.90, nome: "Urologia", sku: "URO1099" },
+      { valor: 69.90, nome: "Nutrição", sku: "VPN5132" },
+      { valor: 54.90, nome: "Personal Trainer", sku: "BIR7668" }
     ]
   },
   { 
@@ -113,7 +122,6 @@ export const PLANOS = [
       "Atendimento ilimitado",
       "Consultas com clínico geral 24h/dia",
       "Especialidades exclusivas",
-      "Nutrição e personal trainer",
       "Psicólogo quinzenal",
       "Sem coparticipação e carência",
       "Descontos em farmácias e exames"
@@ -159,7 +167,6 @@ export const PLANOS = [
       "Atendimento ilimitado",
       "Consultas com clínico geral 24h/dia",
       "Especialidades exclusivas",
-      "Nutrição e personal trainer",
       "Psicólogo quinzenal",
       "Sem coparticipação e carência",
       "Descontos em farmácias e exames"
