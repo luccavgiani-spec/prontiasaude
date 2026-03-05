@@ -81,6 +81,10 @@ const SKU_TO_CLICKLIFE_ID: Record<string, number> = {
   UDH3250: 8, // Reumatologista
   PKS9388: 8, // Neurologista
   MYX5186: 8, // Infectologista
+  URO1099: 8, // Urologista
+  IMU4471: 8, // Imunologista
+  PRC6621: 8, // Proctologista
+  PNE7783: 8, // Pneumologista
   OVM9892: 8, // Laudos Psicológicos
   RZP5755: 8, // Renovação de Receitas
   ULT3571: 8, // Solicitação de Exames
@@ -106,6 +110,10 @@ const ESPECIALISTA_SKUS = [
   "UDH3250",
   "PKS9388",
   "MYX5186",
+  "URO1099",
+  "IMU4471",
+  "PRC6621",
+  "PNE7783",
 ];
 
 // SKUs de Psicólogo (combos)
@@ -135,6 +143,10 @@ const SKU_TO_SPECIALIST_NAME: Record<string, string> = {
   UDH3250: "Reumatologista",
   PKS9388: "Neurologista",
   MYX5186: "Infectologista",
+  URO1099: "Urologista",
+  IMU4471: "Imunologista",
+  PRC6621: "Proctologista",
+  PNE7783: "Pneumologista",
   ZXW2165: "Psicólogo",
   HXR8516: "Psicólogo",
   YME9025: "Psicólogo",
@@ -559,6 +571,10 @@ async function saveAppointment(
       UDH3250: "Reumatologista",
       PKS9388: "Neurologista",
       MYX5186: "Infectologista",
+      URO1099: "Urologista",
+      IMU4471: "Imunologista",
+      PRC6621: "Proctologista",
+      PNE7783: "Pneumologista",
       OVM9892: "Laudos Psicológicos",
       RZP5755: "Renovação de Receitas",
       ULT3571: "Solicitação de Exames",

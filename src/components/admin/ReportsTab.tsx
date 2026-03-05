@@ -116,18 +116,28 @@ const SKU_PRICES: Record<string, number> = {
   // Pediatra
   'HME8366': 8990,
   // Otorrinolaringologista
-  'DYY8522': 8990,
+  'QOP1101': 8990,
+  // Psiquiatra
+  'URO1099': 10990,
+  // Urologista
+  'DYY8522': 11990,
   // Médico da Família
-  'LZF3879': 8990,
+  'LZF3879': 11990,
   // Nutrólogo
-  'YZD9932': 8990,
+  'YZD9932': 11990,
   // Geriatria
-  'UDH3250': 8990,
-  // Reumatologista
-  'PKS9388': 8990,
+  'PKS9388': 11990,
   // Neurologista
-  'MYX5186': 8990,
+  'MYX5186': 11990,
   // Infectologista
+  'IMU4471': 11990,
+  // Imunologista
+  'UDH3250': 12990,
+  // Reumatologista
+  'PRC6621': 12990,
+  // Proctologista
+  'PNE7783': 13990,
+  // Pneumologista
 
   // Outros profissionais
   'BIR7668': 5490,
@@ -138,8 +148,6 @@ const SKU_PRICES: Record<string, number> = {
   // Psicólogo 4 sessões
   'YME9025': 4990,
   // Psicólogo 8 sessões
-  'QOP1101': 8990,
-  // Psiquiatra
 
   // SKUs legados
   'RZP5755': 4390,
@@ -187,6 +195,10 @@ const SKU_NAMES: Record<string, string> = {
   'UDH3250': 'Reumatologista',
   'PKS9388': 'Neurologista',
   'MYX5186': 'Infectologista',
+  'URO1099': 'Urologista',
+  'IMU4471': 'Imunologista',
+  'PRC6621': 'Proctologista',
+  'PNE7783': 'Pneumologista',
   'BIR7668': 'Personal Trainer',
   'VPN5132': 'Nutricionista',
   'HXR8516': 'Psicólogo 4 sessões',

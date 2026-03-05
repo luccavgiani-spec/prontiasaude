@@ -28,6 +28,9 @@ const SKU_TO_SERVICE: Record<string, string> = {
   'MYX5186': 'Infectologista',
   'LZF3879': 'Nutrólogo',
   'URO1099': 'Urologista',
+  'IMU4471': 'Imunologista',
+  'PRC6621': 'Proctologista',
+  'PNE7783': 'Pneumologista',
   'VPN5132': 'Nutricionista',
   'BIR7668': 'Personal Trainer',
 

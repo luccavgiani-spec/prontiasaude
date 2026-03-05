@@ -37,19 +37,31 @@ const SKU_PRICES: Record<string, number> = {
   'FKS5964': 8990,      // Oftalmologista
   'HMG9544': 8990,      // Pediatra
   'HME8366': 8990,      // Otorrinolaringologista
-  'DYY8522': 8990,      // Médico da Família
-  'LZF3879': 8990,      // Nutrólogo
-  'YZD9932': 8990,      // Geriatria
-  'UDH3250': 8990,      // Reumatologista
-  'PKS9388': 8990,      // Neurologista
-  'MYX5186': 8990,      // Infectologista
+  'QOP1101': 8990,      // Psiquiatra
+
+  // MÉDICOS ESPECIALISTAS (R$109,90)
+  'URO1099': 10990,     // Urologista
+
+  // MÉDICOS ESPECIALISTAS (R$119,90)
+  'DYY8522': 11990,     // Médico da Família
+  'LZF3879': 11990,     // Nutrólogo
+  'YZD9932': 11990,     // Geriatria
+  'PKS9388': 11990,     // Neurologista
+  'MYX5186': 11990,     // Infectologista
+  'IMU4471': 11990,     // Imunologista
+
+  // MÉDICOS ESPECIALISTAS (R$129,90)
+  'UDH3250': 12990,     // Reumatologista
+  'PRC6621': 12990,     // Proctologista
+
+  // MÉDICOS ESPECIALISTAS (R$139,90)
+  'PNE7783': 13990,     // Pneumologista
   
   // OUTROS PROFISSIONAIS
   'BIR7668': 5990,      // Personal Trainer (R$59,90)
   'VPN5132': 5990,      // Nutricionista (R$59,90)
   'HXR8516': 4990,      // Psicólogo 4 sessões
   'YME9025': 4990,      // Psicólogo 8 sessões
-  'QOP1101': 8990,      // Psiquiatra
   
   // SKUs legados (dados históricos)
   'RZP5755': 4390,      // Clínico (variante)

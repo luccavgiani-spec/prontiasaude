@@ -29,7 +29,7 @@ export const faqData: FAQ[] = [{
 }, {
   question: "Quais especialidades estão disponíveis?",
   answer: <p>
-        Oferecemos cardiologia, dermatologia, endocrinologia, gastroenterologia, geriatria, ginecologia, médico da família, oftalmologia, ortopedia, pediatria, psiquiatria, otorrinolaringologia, psicologia, reumatologia, neurologia, infectologia, nutrologia, urologia, nutrição e personal trainer.
+        Oferecemos pediatria, cardiologia, ginecologia, dermatologia, gastroenterologia, otorrinolaringologia, ortopedia, oftalmologia, endocrinologia, psiquiatria, urologia, neurologia, nutrologia, infectologia, imunologia, médico da família, geriatria, reumatologia, proctologia, pneumologia, psicologia, nutrição e personal trainer.
       </p>
 }, {
   question: "As consultas são confidenciais?",
