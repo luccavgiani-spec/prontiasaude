@@ -326,14 +326,19 @@ Deno.serve(async (req) => {
 
       // Registrar métrica de falha
       await supabaseAdmin.from('metrics').insert({
-        metric_type: 'subscription_first_payment_rejected',
-        sku: request.plan_sku,
+        metric_type: 'sale',
+        plan_code: request.plan_sku,
+        amount_cents: request.amount_cents,
+        patient_email: request.payer_email,
+        status: 'rejected',
         metadata: {
           mp_subscription_id: mpData.id,
           order_id: request.order_id,
           payer_email: request.payer_email,
           payment_status: paymentVerification.status,
-          payment_detail: paymentVerification.detail
+          payment_detail: paymentVerification.detail,
+          source: 'mp-create-subscription',
+          is_recurring: true
         }
       });
 
@@ -391,45 +396,58 @@ Deno.serve(async (req) => {
       console.error('[mp-create-subscription] Erro ao salvar subscription:', subscriptionError);
     }
 
-    // Criar/atualizar patient_plans - só ativar se pagamento confirmado
-    if (isPaymentConfirmed) {
-      const { data: existingPlan } = await supabaseAdmin
-        .from('patient_plans')
-        .select('id')
-        .eq('email', request.payer_email)
-        .eq('status', 'active')
-        .maybeSingle();
+    // Criar/atualizar patient_plans - ativar se confirmado, ou criar como pending_payment
+    const { data: existingPlan } = await supabaseAdmin
+      .from('patient_plans')
+      .select('id, status')
+      .eq('email', request.payer_email)
+      .in('status', ['active', 'pending_payment'])
+      .maybeSingle();
 
-      if (existingPlan) {
-        await supabaseAdmin
-          .from('patient_plans')
-          .update({
-            plan_code: planCode,
-            plan_expires_at: planExpiresAt.toISOString(),
-            subscription_id: subscription?.id,
-            is_recurring: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingPlan.id);
+    if (existingPlan) {
+      // Atualizar plano existente (active ou pending_payment)
+      const updateData: Record<string, any> = {
+        plan_code: planCode,
+        plan_expires_at: planExpiresAt.toISOString(),
+        subscription_id: subscription?.id,
+        is_recurring: true,
+        updated_at: new Date().toISOString()
+      };
+      if (isPaymentConfirmed) {
+        updateData.status = 'active';
+      }
+      await supabaseAdmin
+        .from('patient_plans')
+        .update(updateData)
+        .eq('id', existingPlan.id);
+      console.log(`[mp-create-subscription] Plano ${existingPlan.id} atualizado (status: ${isPaymentConfirmed ? 'active' : existingPlan.status})`);
+    } else {
+      // Criar plano novo - active se confirmado, pending_payment se pendente
+      const { error: planInsertErr } = await supabaseAdmin
+        .from('patient_plans')
+        .insert({
+          user_id: userId,
+          email: request.payer_email,
+          plan_code: planCode,
+          plan_expires_at: planExpiresAt.toISOString(),
+          status: isPaymentConfirmed ? 'active' : 'pending_payment',
+          subscription_id: subscription?.id,
+          is_recurring: true
+        });
+      if (planInsertErr) {
+        console.error('[mp-create-subscription] Erro ao criar patient_plan:', planInsertErr);
       } else {
-        await supabaseAdmin
-          .from('patient_plans')
-          .insert({
-            user_id: userId,
-            email: request.payer_email,
-            plan_code: planCode,
-            plan_expires_at: planExpiresAt.toISOString(),
-            status: 'active',
-            subscription_id: subscription?.id,
-            is_recurring: true
-          });
+        console.log(`[mp-create-subscription] Plano criado com status: ${isPaymentConfirmed ? 'active' : 'pending_payment'}`);
       }
     }
 
     // Registrar métrica
     await supabaseAdmin.from('metrics').insert({
-      metric_type: isPaymentConfirmed ? 'subscription_created' : 'subscription_pending_payment',
-      sku: request.plan_sku,
+      metric_type: 'sale',
+      plan_code: request.plan_sku,
+      amount_cents: request.amount_cents,
+      patient_email: request.payer_email,
+      status: isPaymentConfirmed ? 'approved' : 'pending',
       metadata: {
         mp_subscription_id: mpData.id,
         order_id: request.order_id,
@@ -438,7 +456,8 @@ Deno.serve(async (req) => {
         frequency_type: frequencyType,
         is_recurring: true,
         first_payment_status: paymentVerification.status,
-        plan_activated: isPaymentConfirmed
+        plan_activated: isPaymentConfirmed,
+        source: 'mp-create-subscription'
       }
     });
 
