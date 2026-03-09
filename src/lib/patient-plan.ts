@@ -151,6 +151,16 @@ export const getPatientPlanFromProduction = async (patientId: string): Promise<P
   return null;
 };
 
+/**
+ * Verifica se o plan_code representa um plano familiar.
+ * Cobre todos os formatos: FAM_COM_ESP_*, FAM_SEM_ESP_*, FAMILIAR_COM_ESPECIALISTA, FAMILY, FAM_BASIC, etc.
+ */
+export const isFamilyPlan = (planCode?: string): boolean => {
+  if (!planCode) return false;
+  const upper = planCode.toUpperCase();
+  return upper.includes('FAM') || upper.includes('FAMILIAR');
+};
+
 export const formatPlanName = (planCode?: string): string => {
   if (!planCode) return 'Nenhum plano ativo';
   
