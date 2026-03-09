@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
+import { supabaseProduction } from "@/lib/supabase-production";
+import { getHybridSession } from "@/lib/auth-hybrid";
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { Users, UserPlus, Mail, Loader2, RefreshCw, X, Clock, CheckCircle2, AlertCircle } from "lucide-react";
@@ -62,8 +63,8 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Carregar convites pendentes
-      const { data: invitesData, error: invitesError } = await supabase
+      // Carregar convites pendentes (Production - tem public SELECT policy)
+      const { data: invitesData, error: invitesError } = await supabaseProduction
         .from('pending_family_invites')
         .select('*')
         .eq('titular_plan_id', planId)
@@ -79,11 +80,11 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
         .map((i: any) => i.email);
 
       if (completedEmails.length > 0) {
-        const { data: membersData } = await supabase
+        const { data: membersData } = await supabaseProduction
           .from('patients')
           .select('id, email, first_name, last_name, created_at')
           .in('email', completedEmails);
-        
+
         setMembers((membersData || []) as FamiliarMember[]);
       } else {
         setMembers([]);
@@ -121,8 +122,8 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
 
     setIsSending(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      const { session } = await getHybridSession();
+      const accessToken = session?.access_token;
 
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
@@ -158,8 +159,8 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const handleResendInvite = async (inviteId: string) => {
     setLoadingAction(inviteId);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      const { session } = await getHybridSession();
+      const accessToken = session?.access_token;
 
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
@@ -192,7 +193,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
   const handleCancelInvite = async (inviteId: string) => {
     setLoadingAction(inviteId);
     try {
-      const { error } = await (supabase
+      const { error } = await (supabaseProduction
         .from('pending_family_invites') as any)
         .delete()
         .eq('id', inviteId)

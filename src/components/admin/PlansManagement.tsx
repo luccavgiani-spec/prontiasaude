@@ -477,7 +477,8 @@ const PlansManagement = () => {
   };
 
   const isFamilyPlan = (planCode: string) => {
-    return planCode.startsWith('FAM_') || planCode === 'FAMILY' || planCode === 'FAM_BASIC';
+    const upper = planCode.toUpperCase();
+    return upper.includes('FAM') || upper.includes('FAMILIAR');
   };
 
   const formatAddress = (plan: PlanWithDetails) => {

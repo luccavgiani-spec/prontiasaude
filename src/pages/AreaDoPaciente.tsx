@@ -11,7 +11,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { User, CheckCircle, AlertCircle, Edit, LogOut, Phone, MapPin, Calendar, Shield, Leaf, BookOpen, Headphones, UtensilsCrossed, Gift, ExternalLink, Dumbbell, Apple, ArrowRight, PhoneCall, Stethoscope, Pill } from "lucide-react";
 import MeusAgendamentos from "@/components/agendamento/MeusAgendamentos";
 import { requireAuth, getPatient, Patient } from "@/lib/auth";
-import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPatientPlanActive } from "@/lib/patient-plan";
+import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPatientPlanActive, isFamilyPlan } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
@@ -543,7 +543,7 @@ const AreaDoPaciente = () => {
         )}
 
         {/* Seção de Familiares - APENAS para planos familiares */}
-        {patientPlan && (patientPlan.plan_code?.startsWith('FAM_') || patientPlan.plan_code === 'FAMILY') && currentUser?.id && (
+        {patientPlan && isFamilyPlan(patientPlan.plan_code) && currentUser?.id && (
           <div className="mt-8">
             <FamiliaresSection
               currentUserId={currentUser.id}

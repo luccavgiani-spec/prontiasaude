@@ -1236,11 +1236,21 @@ serve(async (req) => {
 
       case "invite-familiar": {
         const token = authHeader!.replace("Bearer ", "");
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser(token);
-        if (authError || !user)
+        // Auth dual: tentar Produção primeiro, fallback para Cloud
+        let user: any = null;
+        const { data: prodAuth, error: prodAuthError } = await supabase.auth.getUser(token);
+        if (!prodAuthError && prodAuth?.user) {
+          user = prodAuth.user;
+        } else {
+          const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+          const CLOUD_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
+          const cloudClient = createClient(CLOUD_URL, CLOUD_ANON);
+          const { data: cloudAuth, error: cloudAuthError } = await cloudClient.auth.getUser(token);
+          if (!cloudAuthError && cloudAuth?.user) {
+            user = cloudAuth.user;
+          }
+        }
+        if (!user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1251,11 +1261,13 @@ serve(async (req) => {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
+        // Verificar plano por email (robusto - funciona independente de user_id)
+        const userEmail = user.email?.toLowerCase();
         const { data: plan, error: planError } = await supabase
           .from("patient_plans")
           .select("*")
           .eq("id", plan_id)
-          .eq("user_id", user.id)
+          .eq("email", userEmail)
           .eq("status", "active")
           .single();
         if (planError || !plan)
@@ -1263,7 +1275,8 @@ serve(async (req) => {
             status: 404,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
-        if (!plan.plan_code.includes("FAM"))
+        const planCodeUpper = (plan.plan_code || "").toUpperCase();
+        if (!planCodeUpper.includes("FAM") && !planCodeUpper.includes("FAMILIAR"))
           return new Response(JSON.stringify({ error: "Este plano não permite adicionar familiares" }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1298,7 +1311,7 @@ serve(async (req) => {
         const { data: titularPatient } = await supabase
           .from("patients")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("email", userEmail)
           .maybeSingle();
         if (!titularPatient?.id)
           return new Response(JSON.stringify({ error: "Perfil do titular não encontrado" }), {
@@ -1325,7 +1338,7 @@ serve(async (req) => {
           const { data: titular } = await supabase
             .from("patients")
             .select("first_name, last_name")
-            .eq("id", user.id)
+            .eq("email", userEmail)
             .single();
           const titularName = titular ? `${titular.first_name || ""} ${titular.last_name || ""}`.trim() : "Um membro";
           await supabase.functions.invoke("send-form-emails", {
@@ -1339,20 +1352,33 @@ serve(async (req) => {
 
       case "resend-family-invite": {
         const token = authHeader!.replace("Bearer ", "");
-        const {
-          data: { user },
-          error: authError,
-        } = await supabase.auth.getUser(token);
-        if (authError || !user)
+        // Auth dual: tentar Produção primeiro, fallback para Cloud
+        let user: any = null;
+        {
+          const { data: prodAuth, error: prodAuthError } = await supabase.auth.getUser(token);
+          if (!prodAuthError && prodAuth?.user) {
+            user = prodAuth.user;
+          } else {
+            const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+            const CLOUD_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
+            const cloudClient = createClient(CLOUD_URL, CLOUD_ANON);
+            const { data: cloudAuth, error: cloudAuthError } = await cloudClient.auth.getUser(token);
+            if (!cloudAuthError && cloudAuth?.user) {
+              user = cloudAuth.user;
+            }
+          }
+        }
+        if (!user)
           return new Response(JSON.stringify({ error: "Não autorizado" }), {
             status: 401,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         const { invite_id } = body as ResendFamilyInviteRequest;
+        const userEmail = user.email?.toLowerCase();
         const { data: titularPatient } = await supabase
           .from("patients")
           .select("id")
-          .eq("user_id", user.id)
+          .eq("email", userEmail)
           .maybeSingle();
         if (!titularPatient?.id)
           return new Response(JSON.stringify({ error: "Perfil do titular não encontrado" }), {
@@ -1383,7 +1409,7 @@ serve(async (req) => {
           const { data: titular } = await supabase
             .from("patients")
             .select("first_name, last_name")
-            .eq("id", user.id)
+            .eq("email", userEmail)
             .single();
           const titularName = titular ? `${titular.first_name || ""} ${titular.last_name || ""}`.trim() : "Um membro";
           await supabase.functions.invoke("send-form-emails", {
