@@ -359,14 +359,14 @@ Deno.serve(async (req) => {
     const planExpiresAt = calculatePlanExpiry(frequency, frequencyType as 'months' | 'days');
     const nextPaymentDate = mpData.next_payment_date ? new Date(mpData.next_payment_date) : planExpiresAt;
 
-    // Buscar user_id pelo email
+    // Buscar user_id pelo email - usar patients.user_id (FK para auth.users), NÃO patients.id
     const { data: patient } = await supabaseAdmin
       .from('patients')
-      .select('id')
+      .select('id, user_id')
       .eq('email', request.payer_email)
       .maybeSingle();
 
-    const userId = patient?.id || null;
+    const userId = patient?.user_id || null;
     const planCode = extractPlanCode(request.plan_sku);
 
     // Salvar na tabela patient_subscriptions

@@ -147,10 +147,10 @@ async function handleAuthorizedPayment(
     });
   }
 
-  // Buscar subscription no banco
+  // Buscar subscription no banco (sem depender de FK para patient_plans)
   const { data: dbSubscription } = await supabaseAdmin
     .from('patient_subscriptions')
-    .select('*, patient_plans!patient_plans_subscription_id_fkey(*)')
+    .select('*')
     .eq('mp_subscription_id', String(subscriptionMpId))
     .maybeSingle();
 
@@ -162,18 +162,26 @@ async function handleAuthorizedPayment(
     });
   }
 
+  // Buscar plano existente por email (não depender de FK subscription_id)
+  const { data: existingPlan } = await supabaseAdmin
+    .from('patient_plans')
+    .select('id, plan_expires_at')
+    .eq('email', dbSubscription.email)
+    .eq('status', 'active')
+    .maybeSingle();
+
   // ✅ PAGAMENTO APROVADO
   if (paymentData.status === 'approved') {
     console.log('[mp-subscription-webhook] 🎉 Pagamento APROVADO!');
-    
+
     const frequency = dbSubscription.frequency || 1;
     const frequencyType = dbSubscription.frequency_type || 'months';
 
-    const currentExpiry = dbSubscription.patient_plans?.[0]?.plan_expires_at 
-      ? new Date(dbSubscription.patient_plans[0].plan_expires_at)
+    const currentExpiry = existingPlan?.plan_expires_at
+      ? new Date(existingPlan.plan_expires_at)
       : new Date();
-    
-    const newExpiry = frequencyType === 'months' 
+
+    const newExpiry = frequencyType === 'months'
       ? addMonths(currentExpiry, frequency)
       : addDays(currentExpiry, frequency);
 
@@ -188,79 +196,60 @@ async function handleAuthorizedPayment(
       })
       .eq('id', dbSubscription.id);
 
-    // ✅ Se era pending_first_payment, ativar o plano agora
-    if (dbSubscription.mp_status === 'pending_first_payment') {
-      console.log('[mp-subscription-webhook] ✅ Primeiro pagamento confirmado! Ativando plano...');
-      
-      // Criar ou atualizar patient_plans
-      const { data: existingPlan } = await supabaseAdmin
-        .from('patient_plans')
-        .select('id')
-        .eq('email', dbSubscription.email)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (existingPlan) {
-        await supabaseAdmin
-          .from('patient_plans')
-          .update({
-            plan_code: dbSubscription.plan_code,
-            plan_expires_at: newExpiry.toISOString(),
-            subscription_id: dbSubscription.id,
-            is_recurring: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingPlan.id);
-      } else {
-        await supabaseAdmin
-          .from('patient_plans')
-          .insert({
-            user_id: dbSubscription.user_id,
-            email: dbSubscription.email,
-            plan_code: dbSubscription.plan_code,
-            plan_expires_at: newExpiry.toISOString(),
-            status: 'active',
-            subscription_id: dbSubscription.id,
-            is_recurring: true
-          });
-      }
-
-      // Métrica de ativação via webhook
-      await supabaseAdmin.from('metrics').insert({
-        metric_type: 'subscription_activated_via_webhook',
-        sku: dbSubscription.plan_code,
-        metadata: {
-          mp_subscription_id: subscriptionMpId,
-          email: dbSubscription.email,
-          plan_expires_at: newExpiry.toISOString()
-        }
-      });
-    } else if (dbSubscription.patient_plans?.[0]) {
-      // Renovação normal - atualizar expiração do plano existente
+    // Criar ou atualizar plano - sempre garantir que exista
+    if (existingPlan) {
       await supabaseAdmin
         .from('patient_plans')
         .update({
+          plan_code: dbSubscription.plan_code,
           plan_expires_at: newExpiry.toISOString(),
-          status: 'active',
+          subscription_id: dbSubscription.id,
+          is_recurring: true,
           updated_at: new Date().toISOString()
         })
-        .eq('id', dbSubscription.patient_plans[0].id);
+        .eq('id', existingPlan.id);
 
       console.log('[mp-subscription-webhook] ✅ Plano RENOVADO:', {
-        plan_id: dbSubscription.patient_plans[0].id,
+        plan_id: existingPlan.id,
         old_expiry: currentExpiry.toISOString(),
+        new_expiry: newExpiry.toISOString()
+      });
+    } else {
+      // Criar plano novo (primeiro pagamento ou plano não existia)
+      console.log('[mp-subscription-webhook] ✅ Criando plano novo via webhook...');
+
+      await supabaseAdmin
+        .from('patient_plans')
+        .insert({
+          user_id: dbSubscription.user_id,
+          email: dbSubscription.email,
+          plan_code: dbSubscription.plan_code,
+          plan_expires_at: newExpiry.toISOString(),
+          status: 'active',
+          subscription_id: dbSubscription.id,
+          is_recurring: true
+        });
+
+      console.log('[mp-subscription-webhook] ✅ Plano CRIADO:', {
+        email: dbSubscription.email,
+        plan_code: dbSubscription.plan_code,
         new_expiry: newExpiry.toISOString()
       });
     }
 
+    // Métrica de pagamento aprovado
     await supabaseAdmin.from('metrics').insert({
-      metric_type: 'subscription_payment_approved',
-      sku: dbSubscription.plan_code,
+      metric_type: 'sale',
+      plan_code: dbSubscription.plan_code,
+      amount_cents: dbSubscription.amount_cents,
+      patient_email: dbSubscription.email,
+      status: 'approved',
       metadata: {
         mp_subscription_id: subscriptionMpId,
         payment_id: paymentData.id,
-        email: dbSubscription.email,
-        amount: paymentData.transaction_amount
+        source: 'subscription_webhook',
+        was_first_payment: dbSubscription.mp_status === 'pending_first_payment',
+        plan_expires_at: newExpiry.toISOString()
       }
     });
   }
@@ -281,18 +270,6 @@ async function handleAuthorizedPayment(
     if (dbSubscription.mp_status === 'pending_first_payment') {
       console.log('[mp-subscription-webhook] ❌ Primeiro pagamento rejeitado. Plano NÃO será ativado.');
     }
-
-    await supabaseAdmin.from('metrics').insert({
-      metric_type: 'subscription_payment_rejected',
-      sku: dbSubscription.plan_code,
-      metadata: {
-        mp_subscription_id: subscriptionMpId,
-        payment_id: paymentData.id,
-        email: dbSubscription.email,
-        status_detail: paymentData.status_detail,
-        was_first_payment: dbSubscription.mp_status === 'pending_first_payment'
-      }
-    });
   }
 
   return new Response(JSON.stringify({ 
@@ -333,7 +310,7 @@ async function handlePreapproval(
 
   const { data: dbSubscription } = await supabaseAdmin
     .from('patient_subscriptions')
-    .select('*, patient_plans!patient_plans_subscription_id_fkey(*)')
+    .select('*')
     .eq('mp_subscription_id', String(subscriptionData.id))
     .maybeSingle();
 
@@ -366,25 +343,23 @@ async function handlePreapproval(
           })
           .eq('id', dbSubscription.id);
 
-        if (dbSubscription.patient_plans?.[0]) {
+        // Buscar plano por email (não depender de FK)
+        const { data: planToUpdate } = await supabaseAdmin
+          .from('patient_plans')
+          .select('id')
+          .eq('email', dbSubscription.email)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (planToUpdate) {
           await supabaseAdmin
             .from('patient_plans')
             .update({
               is_recurring: false,
               updated_at: new Date().toISOString()
             })
-            .eq('id', dbSubscription.patient_plans[0].id);
+            .eq('id', planToUpdate.id);
         }
-
-        await supabaseAdmin.from('metrics').insert({
-          metric_type: 'subscription_cancelled',
-          sku: dbSubscription.plan_code,
-          metadata: {
-            mp_subscription_id: subscriptionData.id,
-            email: dbSubscription.email,
-            cancelled_at: new Date().toISOString()
-          }
-        });
       }
       break;
     }
@@ -399,16 +374,6 @@ async function handlePreapproval(
             updated_at: new Date().toISOString()
           })
           .eq('id', dbSubscription.id);
-
-        await supabaseAdmin.from('metrics').insert({
-          metric_type: 'subscription_paused',
-          sku: dbSubscription.plan_code,
-          metadata: {
-            mp_subscription_id: subscriptionData.id,
-            email: dbSubscription.email,
-            paused_at: new Date().toISOString()
-          }
-        });
       }
       break;
     }
