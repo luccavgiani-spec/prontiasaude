@@ -154,23 +154,22 @@ Deno.serve(async (req) => {
 
         // Buscar patient_id pelo email
         const patientEmail = schedulePayload.email?.toLowerCase()?.trim();
-        let patientId = null;
+        let patientUserId = null;
 
         if (patientEmail) {
           const { data: patient } = await supabaseAdmin
             .from("patients")
-            .select("id")
+            .select("user_id")
             .eq("email", patientEmail)
             .maybeSingle();
-          patientId = patient?.id || null;
+          patientUserId = patient?.user_id || null;
         }
 
-        // Verificar se já existe um plano ativo
+        // Verificar se já existe um plano ativo para este email
         const { data: existingPlan } = await supabaseAdmin
           .from("patient_plans")
           .select("id")
           .eq("email", patientEmail)
-          .eq("plan_code", sku)
           .eq("status", "active")
           .maybeSingle();
 
@@ -182,6 +181,7 @@ Deno.serve(async (req) => {
           const { error: updateError } = await supabaseAdmin
             .from("patient_plans")
             .update({
+              plan_code: sku,
               plan_expires_at: planExpiresAt.toISOString().split("T")[0],
               updated_at: new Date().toISOString(),
             })
@@ -189,17 +189,13 @@ Deno.serve(async (req) => {
 
           planCreatedSuccessfully = !updateError;
         } else {
-          // Criar novo patient_plans
+          // Criar novo patient_plans - usando APENAS colunas que existem na tabela
           const { error: planError } = await supabaseAdmin.from("patient_plans").insert({
+            user_id: patientUserId,
             email: patientEmail,
-            patient_id: patientId,
             plan_code: sku,
             plan_expires_at: planExpiresAt.toISOString().split("T")[0],
-            start_date: new Date().toISOString().split("T")[0],
             status: "active",
-            activated_at: new Date().toISOString(),
-            activated_by: "check-payment-status",
-            payment_method: payment.payment_type_id || "unknown",
           });
 
           if (planError) {
@@ -255,9 +251,10 @@ Deno.serve(async (req) => {
           // Gravar métrica de venda para PLANO
           await supabaseAdmin.from("metrics").insert({
             metric_type: "sale",
-            sku: sku,
-            metric_value: Math.round(payment.transaction_amount * 100),
-            platform: "plan_activation",
+            plan_code: sku,
+            amount_cents: Math.round(payment.transaction_amount * 100),
+            patient_email: patientEmail,
+            status: "approved",
             metadata: {
               payment_id: payment.id,
               mp_status: payment.status,
