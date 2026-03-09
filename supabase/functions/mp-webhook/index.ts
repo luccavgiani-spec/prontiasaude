@@ -528,7 +528,7 @@ Deno.serve(async (req) => {
 
         // Para subscription_authorized_payment, body.data.id é o ID do PAGAMENTO, não da subscription
         if (body.type === 'subscription_authorized_payment') {
-          console.log('[mp-webhook] 🎉 Pagamento de subscription detectado, ID:', body.data.id);
+          console.log('[mp-webhook] 🎉 subscription_authorized_payment recebido, payment_id:', body.data.id);
 
           // Buscar detalhes do pagamento autorizado
           const paymentResponse = await fetch(
@@ -537,7 +537,8 @@ Deno.serve(async (req) => {
           );
 
           if (!paymentResponse.ok) {
-            console.error('[mp-webhook] Erro ao buscar authorized_payment:', paymentResponse.status);
+            const errText = await paymentResponse.text();
+            console.error('[mp-webhook] FALHA ao buscar authorized_payment:', paymentResponse.status, errText);
             return new Response(JSON.stringify({ success: true, message: 'Authorized payment fetch failed' }), {
               status: 200,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -547,14 +548,16 @@ Deno.serve(async (req) => {
           const paymentData = await paymentResponse.json();
           const subscriptionMpId = paymentData.preapproval_id;
 
-          console.log('[mp-webhook] Pagamento subscription:', {
-            id: paymentData.id,
+          console.log('[mp-webhook] Dados do pagamento subscription:', {
+            payment_id: paymentData.id,
             status: paymentData.status,
-            preapproval_id: subscriptionMpId
+            preapproval_id: subscriptionMpId,
+            transaction_amount: paymentData.transaction_amount,
+            date_created: paymentData.date_created
           });
 
           if (!subscriptionMpId) {
-            console.warn('[mp-webhook] Pagamento sem preapproval_id');
+            console.warn('[mp-webhook] Pagamento sem preapproval_id - impossível vincular a subscription');
             return new Response(JSON.stringify({ success: true, no_preapproval: true }), {
               status: 200,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -562,35 +565,57 @@ Deno.serve(async (req) => {
           }
 
           // Buscar subscription no banco
-          const { data: dbSubscription } = await supabaseAdmin
+          const { data: dbSubscription, error: subLookupErr } = await supabaseAdmin
             .from('patient_subscriptions')
             .select('*')
             .eq('mp_subscription_id', String(subscriptionMpId))
             .maybeSingle();
 
+          if (subLookupErr) {
+            console.error('[mp-webhook] Erro na query patient_subscriptions:', subLookupErr);
+          }
+
           if (!dbSubscription) {
-            console.warn('[mp-webhook] Subscription não encontrada no DB:', subscriptionMpId);
-            return new Response(JSON.stringify({ success: true, subscription_not_found: true }), {
+            console.error('[mp-webhook] SUBSCRIPTION NAO ENCONTRADA no DB para mp_subscription_id:', subscriptionMpId,
+              '- O pagamento foi aprovado mas nao conseguimos vincular ao plano do paciente');
+            return new Response(JSON.stringify({ success: true, subscription_not_found: true, mp_subscription_id: subscriptionMpId }), {
               status: 200,
               headers: { ...corsHeaders, 'Content-Type': 'application/json' }
             });
           }
 
+          console.log('[mp-webhook] Subscription encontrada no DB:', {
+            id: dbSubscription.id,
+            email: dbSubscription.email,
+            plan_code: dbSubscription.plan_code,
+            mp_status: dbSubscription.mp_status,
+            frequency: dbSubscription.frequency,
+            frequency_type: dbSubscription.frequency_type
+          });
+
           if (paymentData.status === 'approved') {
-            console.log('[mp-webhook] 🎉 Pagamento recorrente APROVADO!');
+            console.log('[mp-webhook] 🎉 Pagamento recorrente APROVADO para:', dbSubscription.email);
 
             const frequency = dbSubscription.frequency || 1;
             const frequencyType = dbSubscription.frequency_type || 'months';
 
-            // Buscar plano existente por email (não depender de FK)
-            const { data: existingPlan } = await supabaseAdmin
+            // Buscar plano existente por email - incluir pending_payment para ativar planos pendentes
+            const { data: existingPlan, error: planLookupErr } = await supabaseAdmin
               .from('patient_plans')
-              .select('id, plan_expires_at')
+              .select('id, plan_expires_at, status')
               .eq('email', dbSubscription.email)
-              .eq('status', 'active')
+              .in('status', ['active', 'pending_payment'])
               .maybeSingle();
 
-            const currentExpiry = existingPlan?.plan_expires_at
+            if (planLookupErr) {
+              console.error('[mp-webhook] Erro na query patient_plans:', planLookupErr);
+            }
+
+            console.log('[mp-webhook] Plano existente encontrado:', existingPlan
+              ? { id: existingPlan.id, status: existingPlan.status, expires: existingPlan.plan_expires_at }
+              : 'NENHUM - será criado novo');
+
+            const currentExpiry = (existingPlan?.plan_expires_at && existingPlan.status === 'active')
               ? new Date(existingPlan.plan_expires_at)
               : new Date();
 
@@ -612,9 +637,9 @@ Deno.serve(async (req) => {
               })
               .eq('id', dbSubscription.id);
 
-            // Criar ou atualizar plano
+            // Criar ou atualizar plano (inclui ativação de planos pending_payment)
             if (existingPlan) {
-              await supabaseAdmin
+              const { error: planUpdateErr } = await supabaseAdmin
                 .from('patient_plans')
                 .update({
                   plan_expires_at: newExpiry.toISOString(),
@@ -625,10 +650,15 @@ Deno.serve(async (req) => {
                 })
                 .eq('id', existingPlan.id);
 
-              console.log('[mp-webhook] ✅ Plano RENOVADO até:', newExpiry.toISOString());
+              if (planUpdateErr) {
+                console.error('[mp-webhook] ERRO ao atualizar patient_plan:', planUpdateErr);
+              } else {
+                console.log('[mp-webhook] ✅ Plano', existingPlan.status === 'pending_payment' ? 'ATIVADO (era pending_payment)' : 'RENOVADO',
+                  'até:', newExpiry.toISOString());
+              }
             } else {
-              // Criar plano novo (primeiro pagamento via webhook)
-              await supabaseAdmin
+              // Criar plano novo (primeiro pagamento via webhook, sem plano pending_payment)
+              const { error: planInsertErr } = await supabaseAdmin
                 .from('patient_plans')
                 .insert({
                   user_id: dbSubscription.user_id,
@@ -640,7 +670,11 @@ Deno.serve(async (req) => {
                   is_recurring: true
                 });
 
-              console.log('[mp-webhook] ✅ Plano CRIADO via webhook subscription:', newExpiry.toISOString());
+              if (planInsertErr) {
+                console.error('[mp-webhook] ERRO ao criar patient_plan via webhook:', planInsertErr);
+              } else {
+                console.log('[mp-webhook] ✅ Plano CRIADO via webhook subscription:', newExpiry.toISOString());
+              }
             }
 
             // Registrar métrica de renovação
@@ -657,6 +691,13 @@ Deno.serve(async (req) => {
                 frequency_type: frequencyType,
                 source: 'subscription_renewal'
               }
+            });
+          } else {
+            console.warn('[mp-webhook] Pagamento subscription NAO aprovado:', {
+              status: paymentData.status,
+              email: dbSubscription.email,
+              plan_code: dbSubscription.plan_code,
+              mp_subscription_id: subscriptionMpId
             });
           }
 
