@@ -125,13 +125,22 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
       const { session } = await getHybridSession();
       const accessToken = session?.access_token;
 
+      if (!accessToken) {
+        toast({
+          title: "Sessão expirada",
+          description: "Faça login novamente para enviar convites.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'invite-familiar',
           plan_id: planId,
           email: newEmail.toLowerCase().trim()
         },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
 
       if (error) throw error;
@@ -162,12 +171,21 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
       const { session } = await getHybridSession();
       const accessToken = session?.access_token;
 
+      if (!accessToken) {
+        toast({
+          title: "Sessão expirada",
+          description: "Faça login novamente para reenviar convites.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'resend-family-invite',
           invite_id: inviteId
         },
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
 
       if (error) throw error;
