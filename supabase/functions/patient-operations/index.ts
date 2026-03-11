@@ -1235,7 +1235,12 @@ serve(async (req) => {
       }
 
       case "invite-familiar": {
-        const token = authHeader!.replace("Bearer ", "");
+        if (!authHeader)
+          return new Response(JSON.stringify({ error: "Token de autenticação não fornecido" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        const token = authHeader.replace("Bearer ", "");
         // Auth dual: tentar Produção primeiro, fallback para Cloud
         let user: any = null;
         const { data: prodAuth, error: prodAuthError } = await supabase.auth.getUser(token);
@@ -1351,7 +1356,12 @@ serve(async (req) => {
       }
 
       case "resend-family-invite": {
-        const token = authHeader!.replace("Bearer ", "");
+        if (!authHeader)
+          return new Response(JSON.stringify({ error: "Token de autenticação não fornecido" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        const token = authHeader.replace("Bearer ", "");
         // Auth dual: tentar Produção primeiro, fallback para Cloud
         let user: any = null;
         {
