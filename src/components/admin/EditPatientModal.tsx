@@ -139,11 +139,9 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
           operation: 'admin_update_patient',
           patient_id: patient.id,
           email: patient.email,
-          updates
-        },
-        headers: adminToken ? {
-          Authorization: `Bearer ${adminToken}`
-        } : undefined
+          updates,
+          admin_token: adminToken
+        }
       });
 
       if (error) {

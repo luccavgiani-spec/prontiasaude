@@ -1684,7 +1684,9 @@ serve(async (req) => {
       }
 
       case "admin_update_patient": {
-        const token = authHeader?.replace("Bearer ", "");
+        // Token do admin Cloud vem no body (admin_token) para evitar conflito
+        // com o apikey de produção no header Authorization do gateway
+        const token = body.admin_token || authHeader?.replace("Bearer ", "");
         if (!token)
           return new Response(JSON.stringify({ success: false, error: "Token de autenticação não fornecido" }), {
             status: 401,
