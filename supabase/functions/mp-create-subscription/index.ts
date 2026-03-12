@@ -220,16 +220,24 @@ Deno.serve(async (req) => {
     );
 
     // Buscar preço do plano no banco para validação
+    // NOTA: service_role bypassa RLS, então buscamos por SKU e validamos status em código
+    // para evitar divergência de nome de coluna (active vs is_active)
     const { data: service, error: serviceError } = await supabaseAdmin
       .from('services')
-      .select('price_cents, name, allows_recurring, recurring_frequency, recurring_frequency_type')
+      .select('*')
       .eq('sku', request.plan_sku)
-      .eq('is_active', true)
       .maybeSingle();
 
     if (serviceError || !service) {
       console.error('[mp-create-subscription] SKU não encontrado:', request.plan_sku);
       throw new Error(`Plano ${request.plan_sku} não encontrado ou inativo`);
+    }
+
+    // Validar status ativo (compatível com ambos os nomes de coluna)
+    const isActive = (service as any).is_active ?? (service as any).active ?? true;
+    if (isActive === false) {
+      console.error('[mp-create-subscription] Plano inativo:', request.plan_sku);
+      throw new Error(`Plano ${request.plan_sku} está inativo`);
     }
 
     // Validar se é um serviço recorrente

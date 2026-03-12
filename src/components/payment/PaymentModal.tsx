@@ -1163,7 +1163,7 @@ export function PaymentModal({
 
       // ✅ SEMPRE buscar preço do DB de PRODUÇÃO, NUNCA usar fallback de props
       const { data: service, error: serviceError } = await (supabaseProduction.from("services") as any)
-        .select("price_cents, name, allows_recurring")
+        .select("price_cents, name")
         .eq("sku", sku)
         .maybeSingle();
 
@@ -1288,10 +1288,8 @@ export function PaymentModal({
         payerOverride: cardFormData.payerOverride,
       };
 
-      // ✅ DETECTAR SE É PLANO RECORRENTE: SKU de plano + allows_recurring do banco
-      // Planos 6M e 12M têm allows_recurring=false (pagamento único adiantado)
-      const isPlanSku = sku.startsWith("IND_") || sku.startsWith("FAM_");
-      const isPlanRecurring = recurring && isPlanSku && service.allows_recurring === true;
+      // ✅ DETECTAR SE É PLANO RECORRENTE (SKUs IND_* ou FAM_*)
+      const isPlanRecurring = recurring && (sku.startsWith("IND_") || sku.startsWith("FAM_"));
 
       // Adicionar auto_recurring se for assinatura (para pagamentos normais)
       if (recurring && frequency && frequencyType && !isPlanRecurring) {

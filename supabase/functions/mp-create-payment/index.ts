@@ -274,11 +274,12 @@ Deno.serve(async (req) => {
     });
 
     // ✅ NOVO: Buscar preço validado do banco
+    // NOTA: service_role bypassa RLS, então buscamos por SKU e validamos status em código
+    // para evitar divergência de nome de coluna (active vs is_active)
     const { data: service, error: serviceError } = await supabaseAdmin
       .from('services')
-      .select('sku, name, price_cents, allows_recurring, recurring_frequency, recurring_frequency_type')
+      .select('*')
       .eq('sku', sku)
-      .eq('is_active', true)
       .maybeSingle();
 
     if (serviceError || !service) {
@@ -287,6 +288,13 @@ Deno.serve(async (req) => {
         error: serviceError?.message
       });
       throw new Error(`Invalid or inactive service SKU: ${sku}`);
+    }
+
+    // Validar status ativo (compatível com ambos os nomes de coluna)
+    const isActive = (service as any).is_active ?? (service as any).active ?? true;
+    if (isActive === false) {
+      console.error('[mp-create-payment] Service is inactive:', sku);
+      throw new Error(`Service ${sku} is inactive`);
     }
 
     const expectedAmount = service.price_cents / 100; // Converter para reais
