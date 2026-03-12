@@ -4,7 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
+import { supabase } from '@/integrations/supabase/client';
+import { parseDateOnly } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 import { validateCPF, cleanCPF, formatCPF } from '@/lib/cpf-validator';
@@ -91,7 +93,7 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
 
     // Validate birth date if provided
     if (formData.birth_date) {
-      const birthDate = new Date(formData.birth_date);
+      const birthDate = parseDateOnly(formData.birth_date);
       const now = new Date();
       if (birthDate > now) {
         newErrors.birth_date = 'Data de nascimento não pode ser futura';
@@ -129,13 +131,19 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
 
       console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
 
-      const { data, error } = await invokeCloudEdgeFunction('patient-operations', {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const adminToken = sessionData?.session?.access_token;
+
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
           operation: 'admin_update_patient',
           patient_id: patient.id,
           email: patient.email,
           updates
-        }
+        },
+        headers: adminToken ? {
+          Authorization: `Bearer ${adminToken}`
+        } : undefined
       });
 
       if (error) {

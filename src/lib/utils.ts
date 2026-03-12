@@ -82,12 +82,22 @@ export function isTelefoneValid(telefone: string): boolean {
   return numeros.length >= 10 && numeros.length <= 11;
 }
 
+/**
+ * Converte uma string de data sem horário ("YYYY-MM-DD") em um Date local,
+ * evitando o bug de timezone onde new Date("2024-04-29") é interpretado como
+ * UTC meia-noite e exibido como dia 28 em UTC-3.
+ */
+export function parseDateOnly(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 // Formatação de data brasileira
 export function formatarData(data: string | Date): string {
-  const dataObj = typeof data === 'string' ? new Date(data) : data;
+  const dataObj = typeof data === 'string' ? parseDateOnly(data) : data;
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
-    month: '2-digit', 
+    month: '2-digit',
     year: 'numeric'
   }).format(dataObj);
 }
