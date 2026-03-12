@@ -37,14 +37,14 @@ interface FamiliarMember {
 }
 
 interface FamiliaresSectionProps {
-  currentUserId: string;
+  currentPatientId: string;
   planId: string;
   planCode: string;
 }
 
 const MAX_FAMILIARES = 3; // Titular + 3 familiares = 4 no total
 
-export function FamiliaresSection({ currentUserId, planId, planCode }: FamiliaresSectionProps) {
+export function FamiliaresSection({ currentPatientId, planId, planCode }: FamiliaresSectionProps) {
   const [invites, setInvites] = useState<FamiliarInvite[]>([]);
   const [members, setMembers] = useState<FamiliarMember[]>([]);
   const [newEmail, setNewEmail] = useState("");
@@ -215,7 +215,7 @@ export function FamiliaresSection({ currentUserId, planId, planCode }: Familiare
         .from('pending_family_invites') as any)
         .delete()
         .eq('id', inviteId)
-        .eq('titular_patient_id', currentUserId);
+        .eq('titular_patient_id', currentPatientId);
 
       if (error) throw error;
 
