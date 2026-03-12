@@ -245,6 +245,7 @@ serve(async (req: Request): Promise<Response> => {
       cep: metadata?.cep || null,
       address_line: metadata?.address_line || null,
       address_number: metadata?.address_number || null,
+      address_complement: metadata?.complement || null,
       city: metadata?.city || null,
       state: metadata?.state || null,
       terms_accepted_at: metadata?.terms_accepted_at || new Date().toISOString(),
@@ -252,21 +253,40 @@ serve(async (req: Request): Promise<Response> => {
       profile_complete: !!(metadata?.cpf && metadata?.phone_e164 && metadata?.birth_date),
     };
 
+    const warnings: string[] = [];
+    let cloudPatientSynced = false;
+    let prodPatientSynced = false;
+
     // Sync Cloud patients
     if (cloudUserId) {
       try {
         const cloudPatientData = { ...patientCoreData, user_id: cloudUserId };
         const { data: existing } = await cloudClient.from('patients').select('id').eq('email', normalizedEmail).maybeSingle();
         if (existing) {
-          await cloudClient.from('patients').update(cloudPatientData).eq('id', existing.id);
-          console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud");
+          const { error: updateErr } = await cloudClient.from('patients').update(cloudPatientData).eq('id', existing.id);
+          if (updateErr) {
+            console.error("[create-user-both-envs] ❌ Erro ao atualizar patient Cloud:", updateErr.message);
+            warnings.push(`Cloud patient update failed: ${updateErr.message}`);
+          } else {
+            cloudPatientSynced = true;
+            console.log("[create-user-both-envs] ✅ Patient atualizado no Cloud");
+          }
         } else {
-          await cloudClient.from('patients').insert(cloudPatientData);
-          console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
+          const { error: insertErr } = await cloudClient.from('patients').insert(cloudPatientData);
+          if (insertErr) {
+            console.error("[create-user-both-envs] ❌ Erro ao criar patient Cloud:", insertErr.message);
+            warnings.push(`Cloud patient insert failed: ${insertErr.message}`);
+          } else {
+            cloudPatientSynced = true;
+            console.log("[create-user-both-envs] ✅ Patient criado no Cloud");
+          }
         }
       } catch (err: any) {
-        console.error("[create-user-both-envs] Erro patient Cloud:", err.message);
+        console.error("[create-user-both-envs] ❌ Exceção patient Cloud:", err.message);
+        warnings.push(`Cloud patient exception: ${err.message}`);
       }
+    } else {
+      warnings.push("Cloud user ID not available, skipped patient sync");
     }
 
     // Sync Prod patients (não-fatal)
@@ -275,14 +295,27 @@ serve(async (req: Request): Promise<Response> => {
         const prodPatientData = { ...patientCoreData, user_id: prodUserId };
         const { data: existing } = await prodClient.from('patients').select('id').eq('email', normalizedEmail).maybeSingle();
         if (existing) {
-          await prodClient.from('patients').update(prodPatientData).eq('id', existing.id);
-          console.log("[create-user-both-envs] ✅ Patient atualizado em Produção");
+          const { error: updateErr } = await prodClient.from('patients').update(prodPatientData).eq('id', existing.id);
+          if (updateErr) {
+            console.error("[create-user-both-envs] ⚠️ Erro ao atualizar patient Produção:", updateErr.message);
+            warnings.push(`Prod patient update failed: ${updateErr.message}`);
+          } else {
+            prodPatientSynced = true;
+            console.log("[create-user-both-envs] ✅ Patient atualizado em Produção");
+          }
         } else {
-          await prodClient.from('patients').insert(prodPatientData);
-          console.log("[create-user-both-envs] ✅ Patient criado em Produção");
+          const { error: insertErr } = await prodClient.from('patients').insert(prodPatientData);
+          if (insertErr) {
+            console.error("[create-user-both-envs] ⚠️ Erro ao criar patient Produção:", insertErr.message);
+            warnings.push(`Prod patient insert failed: ${insertErr.message}`);
+          } else {
+            prodPatientSynced = true;
+            console.log("[create-user-both-envs] ✅ Patient criado em Produção");
+          }
         }
       } catch (err: any) {
-        console.error("[create-user-both-envs] ⚠️ Erro patient Produção (não-fatal):", err.message);
+        console.error("[create-user-both-envs] ⚠️ Exceção patient Produção (não-fatal):", err.message);
+        warnings.push(`Prod patient exception: ${err.message}`);
       }
     }
 
@@ -293,16 +326,28 @@ serve(async (req: Request): Promise<Response> => {
 
     console.log("[create-user-both-envs] ========================================");
     console.log(`[create-user-both-envs] RESULTADO: Cloud=${!!cloudUserId}, Prod=${!!prodUserId}, success=${success}`);
+    console.log(`[create-user-both-envs] Patient sync: Cloud=${cloudPatientSynced}, Prod=${prodPatientSynced}`);
+    if (warnings.length > 0) {
+      console.warn(`[create-user-both-envs] ⚠️ Warnings:`, warnings);
+    }
 
     if (!success) {
       return new Response(
-        JSON.stringify({ success: false, error: "Falha ao criar usuário em ambos os ambientes" }),
+        JSON.stringify({ success: false, error: "Falha ao criar usuário em ambos os ambientes", warnings }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     return new Response(
-      JSON.stringify({ success: true, prodUserId, cloudUserId, message: "Usuário criado com sucesso" }),
+      JSON.stringify({
+        success: true,
+        prodUserId,
+        cloudUserId,
+        cloudPatientSynced,
+        prodPatientSynced,
+        warnings: warnings.length > 0 ? warnings : undefined,
+        message: "Usuário criado com sucesso",
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

@@ -72,6 +72,8 @@ interface User {
   hasMissingCriticalData?: boolean;
   // Source environment
   source?: 'cloud' | 'production' | 'both';
+  // True when auth user exists but no row in patients table
+  _noPatientRecord?: boolean;
 }
 
 // Constants for placeholder detection
@@ -308,6 +310,8 @@ export default function UserRegistrationsTab() {
         const activePlan = !!plan;
         const planCode = plan?.plan_code;
         
+        // _from_metadata means auth user_metadata was used as fallback (no real patients row)
+        const hasRealPatientRecord = u.patient && !u.patient._from_metadata;
         const patientData = u.patient ? {
           first_name: u.patient.first_name,
           last_name: u.patient.last_name,
@@ -322,7 +326,7 @@ export default function UserRegistrationsTab() {
           state: u.patient.state,
           profile_complete: u.patient.profile_complete || false,
         } : undefined;
-        
+
         return {
           id: u.id,
           patientId: u.patient?.id || u.id,
@@ -331,7 +335,9 @@ export default function UserRegistrationsTab() {
           last_sign_in_at: u.last_sign_in_at,
           email_confirmed_at: u.email_confirmed_at,
           roles: [],
+          // Use patientData for display; _noPatientRecord flags users missing a real DB row
           patient: patientData,
+          _noPatientRecord: !hasRealPatientRecord,
           patientEmail: u.patient?.email || '',
           activePlan,
           planCode,
@@ -404,6 +410,8 @@ export default function UserRegistrationsTab() {
       filteredUsers = filteredUsers.filter(u => u.hasInvalidCpf || !u.patient?.cpf);
     } else if (statusFilter === 'critical_with_plan') {
       filteredUsers = filteredUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
+    } else if (statusFilter === 'no_patient_record') {
+      filteredUsers = filteredUsers.filter(u => u._noPatientRecord);
     } else if (statusFilter === 'cloud_only') {
       filteredUsers = filteredUsers.filter(u => u.source === 'cloud');
     } else if (statusFilter === 'production_only') {
@@ -579,6 +587,56 @@ export default function UserRegistrationsTab() {
       user_id: user.hasAuthAccount ? user.id : undefined,
       created_at: user.created_at,
     });
+  };
+
+  const handleCreatePatientRecord = async (user: User) => {
+    if (user.patient) {
+      toast.error('Este usuário já possui registro de paciente');
+      return;
+    }
+
+    try {
+      toast.info('Criando registro de paciente...');
+
+      // First, try to get metadata from auth user (Cloud)
+      let metadata: Record<string, any> = {};
+      try {
+        const { data: cloudUserData } = await invokeCloudEdgeFunction('check-user-exists', {
+          body: { email: user.email.toLowerCase().trim() }
+        });
+        // If user exists in Cloud, we use their auth metadata
+        if (cloudUserData?.existsInCloud || cloudUserData?.existsInProduction) {
+          // The metadata will be extracted from auth user_metadata by the edge function
+        }
+      } catch (e) {
+        console.warn('[handleCreatePatientRecord] Could not fetch user metadata:', e);
+      }
+
+      const { data, error } = await invokeEdgeFunction('patient-operations', {
+        body: {
+          operation: 'admin_create_patient',
+          email: user.email,
+          user_id: user.id,
+          metadata,
+        }
+      });
+
+      if (error) {
+        toast.error('Erro ao criar registro: ' + (error.message || 'Erro desconhecido'));
+        return;
+      }
+
+      if (data?.success) {
+        toast.success('Registro de paciente criado com sucesso!');
+        // Refresh users list
+        fetchAllUsers();
+      } else {
+        toast.error(data?.error || 'Erro ao criar registro de paciente');
+      }
+    } catch (err: any) {
+      console.error('[handleCreatePatientRecord] Error:', err);
+      toast.error('Erro inesperado ao criar registro');
+    }
   };
 
   const handleResetPassword = async (user: User) => {
@@ -872,6 +930,7 @@ export default function UserRegistrationsTab() {
               <SelectItem value="with_plan">Com Plano Ativo</SelectItem>
               <SelectItem value="incomplete_data">⚠️ Perfis Incompletos (Migração)</SelectItem>
               <SelectItem value="critical_with_plan">🚨 Críticos com Plano</SelectItem>
+              <SelectItem value="no_patient_record">⚠️ Sem Registro de Paciente</SelectItem>
               <SelectItem value="cloud_only">☁️ Apenas Cloud ({stats.cloudOnly})</SelectItem>
               <SelectItem value="production_only">🏭 Apenas Produção</SelectItem>
             </SelectContent>
@@ -926,9 +985,15 @@ export default function UserRegistrationsTab() {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow 
-                      key={user.patientId} 
-                      className={user.activePlan && user.hasMissingCriticalData ? 'bg-red-50/50 dark:bg-red-950/20' : ''}
+                    <TableRow
+                      key={user.patientId}
+                      className={
+                        user._noPatientRecord
+                          ? 'bg-amber-50/50 dark:bg-amber-950/20'
+                          : user.activePlan && user.hasMissingCriticalData
+                            ? 'bg-red-50/50 dark:bg-red-950/20'
+                            : ''
+                      }
                     >
                       <TableCell className="font-mono text-sm max-w-[200px] truncate" title={user.email}>
                         {user.email}
@@ -984,19 +1049,31 @@ export default function UserRegistrationsTab() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             title="Editar Dados"
                             onClick={() => handleEditPatient(user)}
                             className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+
+                          {user._noPatientRecord && user.hasAuthAccount && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Criar Registro de Paciente (auth existe, mas sem registro na tabela patients)"
+                              onClick={() => handleCreatePatientRecord(user)}
+                              className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                            >
+                              <AlertCircle className="h-4 w-4" />
+                            </Button>
+                          )}
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             title="Consulta Rápida"
                             onClick={() => {
                               if (!user.patient?.cpf) {
