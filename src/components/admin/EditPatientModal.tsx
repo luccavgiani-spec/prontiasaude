@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { supabase } from '@/integrations/supabase/client';
+import { parseDateOnly } from '@/lib/utils';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 import { validateCPF, cleanCPF, formatCPF } from '@/lib/cpf-validator';
@@ -92,7 +93,7 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
 
     // Validate birth date if provided
     if (formData.birth_date) {
-      const birthDate = new Date(formData.birth_date);
+      const birthDate = parseDateOnly(formData.birth_date);
       const now = new Date();
       if (birthDate > now) {
         newErrors.birth_date = 'Data de nascimento não pode ser futura';

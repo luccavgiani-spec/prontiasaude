@@ -215,9 +215,10 @@ export const validateEmail = (email: string): boolean => {
 };
 
 export const validateBirthDate = (date: string): boolean => {
-  const birthDate = new Date(date);
+  const [year, month, day] = date.split('-').map(Number);
+  const birthDate = new Date(year, month - 1, day);
   const today = new Date();
-  return birthDate < today && birthDate > new Date('1900-01-01');
+  return birthDate < today && birthDate > new Date(1900, 0, 1);
 };
 
 export const isProfileComplete = (patient: any): boolean => {

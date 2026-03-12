@@ -14,6 +14,7 @@ import { requireAuth, getPatient, Patient } from "@/lib/auth";
 import { getPatientPlan, formatPlanName, formatPlanExpiry, PatientPlan, checkPatientPlanActive, isFamilyPlan } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
 import { formatCPF } from "@/lib/validations";
+import { parseDateOnly } from "@/lib/utils";
 import { DisqueDenunciaSection } from "@/components/home/DisqueDenunciaSection";
 import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 import { PlanCardWithActions } from "@/components/patient/PlanCardWithActions";
@@ -391,7 +392,7 @@ const AreaDoPaciente = () => {
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground">Data de Nascimento</Label>
                   <p className="text-foreground">
-                    {patient?.birth_date ? new Date(patient.birth_date).toLocaleDateString('pt-BR') : 'Não informado'}
+                    {patient?.birth_date ? parseDateOnly(patient.birth_date).toLocaleDateString('pt-BR') : 'Não informado'}
                   </p>
                 </div>
               </div>
