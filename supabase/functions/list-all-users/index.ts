@@ -235,13 +235,36 @@ serve(async (req: Request): Promise<Response> => {
       }
     }
     
+    // Helper: build patient-like object from auth user_metadata (fallback when no patient record)
+    const patientFromMetadata = (meta: any) => {
+      if (!meta) return undefined;
+      // Only return if there's at least a name
+      if (!meta.first_name && !meta.last_name) return undefined;
+      return {
+        id: '', // no patient record
+        first_name: meta.first_name || null,
+        last_name: meta.last_name || null,
+        cpf: meta.cpf || null,
+        phone_e164: meta.phone_e164 || null,
+        birth_date: meta.birth_date || null,
+        gender: meta.gender || null,
+        cep: meta.cep || null,
+        address_line: meta.address_line || null,
+        address_number: meta.address_number || null,
+        city: meta.city || null,
+        state: meta.state || null,
+        profile_complete: false,
+        _from_metadata: true, // flag indicating this came from auth metadata, not patients table
+      };
+    };
+
     // Processar auth.users do Cloud
     for (const user of cloudAuthUsers) {
       const email = user.email?.toLowerCase();
       if (!email) continue;
-      
+
       const patient = emailToPatientCloud.get(email) || emailToPatientProd.get(email);
-      
+
       emailToUserMap.set(email, {
         id: user.id,
         email: user.email,
@@ -264,7 +287,7 @@ serve(async (req: Request): Promise<Response> => {
           city: patient.city,
           state: patient.state,
           profile_complete: patient.profile_complete || false,
-        } : undefined,
+        } : patientFromMetadata(user.user_metadata),
       });
     }
     
@@ -296,7 +319,7 @@ serve(async (req: Request): Promise<Response> => {
             city: patient.city,
             state: patient.state,
             profile_complete: patient.profile_complete || false,
-          } : existing.patient,
+          } : existing.patient || patientFromMetadata(user.user_metadata),
         });
       } else {
         // Apenas na Produção
@@ -322,7 +345,7 @@ serve(async (req: Request): Promise<Response> => {
             city: patient.city,
             state: patient.state,
             profile_complete: patient.profile_complete || false,
-          } : undefined,
+          } : patientFromMetadata(user.user_metadata),
         });
       }
     }

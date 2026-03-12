@@ -457,6 +457,7 @@ serve(async (req) => {
       "activate_plan_manual",
       "ensure_patient",
       "admin_update_patient",
+      "admin_create_patient",
       "change_plan",
       "disable_plan",
       "complete_profile",
@@ -1800,6 +1801,146 @@ serve(async (req) => {
             success: true,
             message: "Paciente atualizado com sucesso",
             updated_fields: Object.keys(sanitizedUpdates),
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
+      case "admin_create_patient": {
+        // Creates a patient record for a user who exists in auth but has no patients row.
+        // Used by admin panel to repair incomplete registrations.
+        const token = authHeader?.replace("Bearer ", "");
+        if (!token)
+          return new Response(JSON.stringify({ success: false, error: "Token de autenticação não fornecido" }), {
+            status: 401,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+
+        const LOVABLE_CLOUD_URL_CP = Deno.env.get("CLOUD_SUPABASE_URL") || "https://yrsjluhhnhxogdgnbnya.supabase.co";
+        const LOVABLE_CLOUD_SERVICE_KEY_CP = Deno.env.get("CLOUD_SUPABASE_SERVICE_ROLE_KEY");
+        const LOVABLE_CLOUD_ANON_KEY_CP =
+          "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
+
+        const authClientCP = createClient(LOVABLE_CLOUD_URL_CP, LOVABLE_CLOUD_SERVICE_KEY_CP || LOVABLE_CLOUD_ANON_KEY_CP, {
+          global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+
+        // Verify admin
+        const { data: authDataCP, error: authErrorCP } = await authClientCP.auth.getUser(token);
+        if (authErrorCP || !authDataCP?.user)
+          return new Response(
+            JSON.stringify({ success: false, error: "Sessão inválida - faça login novamente" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+
+        const { data: rolesCP } = await authClientCP.from("user_roles").select("role").eq("user_id", authDataCP.user.id);
+        if (!rolesCP?.some((r: any) => r.role === "admin"))
+          return new Response(JSON.stringify({ success: false, error: "Permissão negada - apenas administradores" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+
+        const { email: cpEmail, user_id: cpUserId, metadata: cpMetadata } = body;
+        if (!cpEmail)
+          return new Response(JSON.stringify({ success: false, error: "email é obrigatório" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+
+        const normalizedCpEmail = cpEmail.toLowerCase().trim();
+
+        // Check if patient already exists in Production
+        const { data: existingProd } = await supabase.from("patients").select("id").eq("email", normalizedCpEmail).maybeSingle();
+        if (existingProd) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Paciente já existe na Produção", patient_id: existingProd.id }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Build patient data from metadata (extracted from auth user_metadata)
+        const patientData: Record<string, any> = {
+          email: normalizedCpEmail,
+          first_name: cpMetadata?.first_name || null,
+          last_name: cpMetadata?.last_name || null,
+          cpf: cpMetadata?.cpf || null,
+          phone_e164: cpMetadata?.phone_e164 || null,
+          birth_date: cpMetadata?.birth_date || null,
+          gender: cpMetadata?.gender || null,
+          cep: cpMetadata?.cep || null,
+          address_line: cpMetadata?.address_line || null,
+          address_number: cpMetadata?.address_number || null,
+          address_complement: cpMetadata?.complement || cpMetadata?.address_complement || null,
+          city: cpMetadata?.city || null,
+          state: cpMetadata?.state || null,
+          terms_accepted_at: cpMetadata?.terms_accepted_at || new Date().toISOString(),
+          marketing_opt_in: cpMetadata?.marketing_opt_in || false,
+          profile_complete: !!(cpMetadata?.cpf && cpMetadata?.phone_e164 && cpMetadata?.birth_date),
+        };
+
+        if (cpUserId) {
+          patientData.user_id = cpUserId;
+        }
+
+        // Insert into Production patients table
+        const { data: newPatient, error: insertErr } = await supabase
+          .from("patients")
+          .insert(patientData)
+          .select("id")
+          .single();
+
+        if (insertErr) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Falha ao criar paciente", details: insertErr.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+
+        // Also try to create in Cloud
+        let cloudSynced = false;
+        try {
+          const cloudServiceKey = LOVABLE_CLOUD_SERVICE_KEY_CP;
+          if (cloudServiceKey) {
+            const cloudClient = createClient(LOVABLE_CLOUD_URL_CP, cloudServiceKey, {
+              auth: { autoRefreshToken: false, persistSession: false },
+            });
+            const { data: existingCloud } = await cloudClient.from("patients").select("id").eq("email", normalizedCpEmail).maybeSingle();
+            if (!existingCloud) {
+              // For Cloud, we need the Cloud user_id, not the Production one
+              const cloudPatientData = { ...patientData };
+              // Remove user_id if it's the Production one — Cloud might have a different ID
+              delete cloudPatientData.user_id;
+              const { error: cloudInsertErr } = await cloudClient.from("patients").insert(cloudPatientData);
+              if (!cloudInsertErr) cloudSynced = true;
+              else console.error("[admin_create_patient] Cloud insert error:", cloudInsertErr.message);
+            } else {
+              cloudSynced = true; // already exists
+            }
+          }
+        } catch (e: any) {
+          console.error("[admin_create_patient] Cloud sync error:", e.message);
+        }
+
+        // Log the admin action
+        try {
+          await supabase.from("metrics").insert({
+            metric_type: "admin_patient_create",
+            metadata: {
+              patient_email: normalizedCpEmail,
+              patient_id: newPatient?.id,
+              cloud_synced: cloudSynced,
+              created_by: authDataCP.user.email,
+              timestamp: new Date().toISOString(),
+            },
+          });
+        } catch (e) {}
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Paciente criado com sucesso",
+            patient_id: newPatient?.id,
+            cloud_synced: cloudSynced,
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
