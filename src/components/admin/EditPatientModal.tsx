@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { invokeEdgeFunction } from '@/lib/edge-functions';
-import { supabase } from '@/integrations/supabase/client';
+import { invokeCloudEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 import { validateCPF, cleanCPF, formatCPF } from '@/lib/cpf-validator';
@@ -128,29 +127,14 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
         state: formData.state || null,
       };
 
-      // ✅ CORREÇÃO: Obter token do Cloud e usar invokeCloudEdgeFunction
-      // O admin faz login no Cloud, então a validação acontece no Cloud
-      // e a função Cloud executa o UPDATE no banco de produção via service_role
-      console.log('[EditPatientModal] Obtendo token do Cloud...');
-      const { data: sessionData } = await supabase.auth.getSession();
-      const cloudToken = sessionData?.session?.access_token;
-
-      if (!cloudToken) {
-        throw new Error('Sessão expirada. Faça login novamente.');
-      }
-
       console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
-      
-      // ✅ CORREÇÃO: Usar invokeCloudEdgeFunction (Cloud valida token, executa no banco de produção)
-      const { data, error } = await invokeEdgeFunction('patient-operations', {
+
+      const { data, error } = await invokeCloudEdgeFunction('patient-operations', {
         body: {
           operation: 'admin_update_patient',
           patient_id: patient.id,
           email: patient.email,
           updates
-        },
-        headers: {
-          'Authorization': `Bearer ${cloudToken}`
         }
       });
 
