@@ -222,6 +222,10 @@ export function PaymentModal({
   // Estado para botão de retry quando Brick do MP apresenta erro de validação
   const [showBrickRetryButton, setShowBrickRetryButton] = useState(false);
 
+  // Estado para detectar se o Brick PIX travou (submit tentado mas sem resultado)
+  const [pixBrickFrozen, setPixBrickFrozen] = useState(false);
+  const pixBrickFrozenTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Estados para cupom de desconto
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<{
@@ -667,6 +671,11 @@ export function PaymentModal({
       setPaymentMethod(undefined);
       setShowSummary(true);
       setShowBrickRetryButton(false); // Reset botão de retry do Brick
+      setPixBrickFrozen(false); // Reset PIX brick freeze detection
+      if (pixBrickFrozenTimerRef.current) {
+        clearTimeout(pixBrickFrozenTimerRef.current);
+        pixBrickFrozenTimerRef.current = null;
+      }
     }
   }, [open]);
 
@@ -1677,7 +1686,7 @@ export function PaymentModal({
       toast.error("CPF inválido", {
         description: "Verifique o CPF digitado e tente novamente.",
       });
-      return;
+      throw new Error("CPF inválido");
     }
 
     // Validar email
@@ -1685,20 +1694,17 @@ export function PaymentModal({
       toast.error("Email inválido", {
         description: "Digite um email válido para continuar.",
       });
-      return;
+      throw new Error("Email inválido");
     }
 
-    // Validar telefone
-    const { formatPhoneE164, validatePhoneE164 } = await import("@/lib/validations");
+    // Formatar telefone para E.164 (sem bloquear PIX por DDD inválido)
+    const { formatPhoneE164 } = await import("@/lib/validations");
     const formattedPhone = formatPhoneE164(formData.phone);
-    if (!validatePhoneE164(formattedPhone)) {
-      toast.error("Telefone inválido", {
-        description: "Use o formato: (11) 91234-5678",
-      });
-      return;
-    }
 
-    if (!validateForm()) return;
+    if (!formData.name || !formData.email || !formData.cpf) {
+      toast.error("Preencha todos os campos obrigatórios");
+      throw new Error("Campos obrigatórios não preenchidos");
+    }
 
     // Setar flag ANTES de iniciar
     isSubmittingRef.current = true;
@@ -2473,12 +2479,12 @@ export function PaymentModal({
                     {showBrickRetryButton && (
                       <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <p className="text-sm text-amber-800 mb-3">
-                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
+                          O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
                           usar PIX como alternativa.
                         </p>
                         <div className="flex gap-2 flex-wrap">
                           <Button variant="default" size="sm" onClick={() => window.location.reload()}>
-                            🔄 Recarregar página
+                            Recarregar página
                           </Button>
                           {/* Mostrar opção PIX se não for plano */}
                           {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
@@ -2509,10 +2515,51 @@ export function PaymentModal({
                       payerName={formData.name}
                       onSubmit={async (data: PixFormSubmitData) => {
                         if (data.deviceId) setDeviceId(data.deviceId);
-                        await handlePixSubmit();
+                        setPixBrickFrozen(false);
+                        if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                        pixBrickFrozenTimerRef.current = setTimeout(() => {
+                          if (paymentStatus === "idle") {
+                            console.warn("[PaymentModal] PIX Brick freeze detected - showing fallback button");
+                            setPixBrickFrozen(true);
+                          }
+                        }, 5000);
+                        try {
+                          await handlePixSubmit();
+                          if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                          setPixBrickFrozen(false);
+                        } catch (err) {
+                          console.warn("[PaymentModal] PIX submit validation error:", err);
+                          setPixBrickFrozen(true);
+                          if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                        }
                       }}
                       isProcessing={["processing"].includes(paymentStatus)}
                     />
+
+                    {/* Botão fallback: aparece quando o Brick do MP trava */}
+                    {pixBrickFrozen && paymentStatus === "idle" && (
+                      <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800 mb-3">
+                          O botão de pagamento não respondeu. Use o botão abaixo para gerar seu PIX:
+                        </p>
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={async () => {
+                            setPixBrickFrozen(false);
+                            try {
+                              await handlePixSubmit();
+                            } catch (err) {
+                              console.error("[PaymentModal] Fallback PIX error:", err);
+                              setPixBrickFrozen(true);
+                            }
+                          }}
+                          disabled={paymentStatus === "processing" || isSubmittingRef.current}
+                        >
+                          Gerar Código PIX
+                        </Button>
+                      </div>
+                    )}
 
                     {isPollingPayment && (
                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -2752,12 +2799,12 @@ export function PaymentModal({
                     {showBrickRetryButton && (
                       <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
                         <p className="text-sm text-amber-800 mb-3">
-                          ⚠️ O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
+                          O formulário de pagamento apresentou um problema. Você pode tentar recarregar a página ou
                           usar PIX como alternativa.
                         </p>
                         <div className="flex gap-2 flex-wrap">
                           <Button variant="default" size="sm" onClick={() => window.location.reload()}>
-                            🔄 Recarregar página
+                            Recarregar página
                           </Button>
                           {/* Mostrar opção PIX se não for plano */}
                           {!(sku?.startsWith("IND_") || sku?.startsWith("FAM_") || sku === "FAMILY" || recurring) && (
@@ -2788,10 +2835,51 @@ export function PaymentModal({
                       payerName={formData.name}
                       onSubmit={async (data: PixFormSubmitData) => {
                         if (data.deviceId) setDeviceId(data.deviceId);
-                        await handlePixSubmit();
+                        setPixBrickFrozen(false);
+                        if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                        pixBrickFrozenTimerRef.current = setTimeout(() => {
+                          if (paymentStatus === "idle") {
+                            console.warn("[PaymentModal] PIX Brick freeze detected - showing fallback button");
+                            setPixBrickFrozen(true);
+                          }
+                        }, 5000);
+                        try {
+                          await handlePixSubmit();
+                          if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                          setPixBrickFrozen(false);
+                        } catch (err) {
+                          console.warn("[PaymentModal] PIX submit validation error:", err);
+                          setPixBrickFrozen(true);
+                          if (pixBrickFrozenTimerRef.current) clearTimeout(pixBrickFrozenTimerRef.current);
+                        }
                       }}
                       isProcessing={["processing"].includes(paymentStatus)}
                     />
+
+                    {/* Botão fallback: aparece quando o Brick do MP trava */}
+                    {pixBrickFrozen && paymentStatus === "idle" && (
+                      <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-sm text-amber-800 mb-3">
+                          O botão de pagamento não respondeu. Use o botão abaixo para gerar seu PIX:
+                        </p>
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={async () => {
+                            setPixBrickFrozen(false);
+                            try {
+                              await handlePixSubmit();
+                            } catch (err) {
+                              console.error("[PaymentModal] Fallback PIX error:", err);
+                              setPixBrickFrozen(true);
+                            }
+                          }}
+                          disabled={paymentStatus === "processing" || isSubmittingRef.current}
+                        >
+                          Gerar Código PIX
+                        </Button>
+                      </div>
+                    )}
 
                     {isPollingPayment && (
                       <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
