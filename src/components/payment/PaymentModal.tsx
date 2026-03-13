@@ -1380,7 +1380,44 @@ export function PaymentModal({
         return;
       }
 
-      if (data.success === false || data.status === "rejected" || !data.status) {
+      // ✅ CORREÇÃO: Tratar payment_pending ANTES do check genérico de success===false
+      // Quando mp-create-subscription retorna payment_pending, a subscription FOI criada
+      // e o plano será ativado automaticamente pelo webhook quando o MP confirmar o pagamento.
+      if (data.status === "payment_pending" || data.first_payment_status === "pending" || data.first_payment_status === "in_process") {
+        console.log("[handleCardSubmit] Pagamento pendente de confirmação bancária:", data);
+        setPaymentStatus("in_process");
+        toast.dismiss();
+        toast.info("Pagamento em processamento", {
+          description: "O banco está processando seu pagamento. Seu plano será ativado automaticamente em alguns minutos.",
+          duration: 15000,
+        });
+
+        // ✅ NOVO: Iniciar polling para verificar ativação do plano em background
+        if (isPlanRecurring && data.mp_subscription_id) {
+          console.log("[handleCardSubmit] Iniciando verificação de plano em background...");
+          const planConfirmed = await verifyPlanCreation(
+            data.mp_subscription_id,
+            orderId,
+            formData.email,
+            sku,
+            10, // mais tentativas pois o banco pode demorar
+          );
+          if (planConfirmed) {
+            console.log("[handleCardSubmit] ✅ Plano ativado durante polling de payment_pending!");
+            setPaymentStatus("approved");
+            toast.dismiss();
+            toast.success("Plano ativado com sucesso!", {
+              description: "Redirecionando para sua área...",
+            });
+            setTimeout(() => {
+              window.location.href = "/area-do-paciente";
+            }, 2000);
+          }
+        }
+        return;
+      }
+
+      if ((data.success === false || data.status === "rejected" || !data.status) && data.status !== "payment_pending") {
         console.warn("[handleCardSubmit] Pagamento não aprovado:", data);
         toast.dismiss();
         setPaymentStatus("rejected");
@@ -1400,10 +1437,10 @@ export function PaymentModal({
       // ✅ CORREÇÃO v2: Só tratar como aprovado se success=true (mp-create-subscription agora verifica o primeiro pagamento)
       const isSubscriptionApproved = data.success === true && (data.status === "approved" || data.status === "authorized");
 
-      // ✅ NOVO: Tratar pagamento pendente de confirmação
+      // ✅ Fallback: Tratar pagamento pendente que passou pelo check acima (não deveria chegar aqui)
       if (data.status === "payment_pending" || data.first_payment_status === "pending") {
         setPaymentStatus("in_process");
-        toast.info("⏳ Pagamento em processamento", {
+        toast.info("Pagamento em processamento", {
           description: "O banco ainda está processando o pagamento. Aguarde alguns minutos e verifique na sua área do paciente.",
           duration: 15000,
         });

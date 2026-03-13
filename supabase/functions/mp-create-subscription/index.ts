@@ -477,16 +477,19 @@ Deno.serve(async (req) => {
       first_payment: paymentVerification.status
     });
 
-    // Se pagamento pendente, retornar status diferente pro frontend
+    // Se pagamento pendente, retornar success:true com status payment_pending
+    // A subscription FOI criada com sucesso, o plano existe como pending_payment
+    // e será ativado automaticamente pelo webhook subscription_authorized_payment
     if (!isPaymentConfirmed) {
       return new Response(JSON.stringify({
-        success: false,
+        success: true,
         status: 'payment_pending' as any,
         subscription_id: subscription?.id,
         mp_subscription_id: mpData.id,
+        plan_expires_at: planExpiresAt.toISOString(),
+        next_payment_date: nextPaymentDate.toISOString(),
         first_payment_status: paymentVerification.status,
-        error: 'payment_processing',
-        error_message: 'O pagamento ainda está sendo processado pelo banco. Aguarde alguns minutos e verifique na sua área do paciente.'
+        error_message: 'O pagamento está sendo processado pelo banco. Seu plano será ativado automaticamente em alguns minutos.'
       } as SubscriptionResponse), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
