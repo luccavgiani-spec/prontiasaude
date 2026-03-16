@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 interface DateOfBirthInputProps {
@@ -8,138 +8,76 @@ interface DateOfBirthInputProps {
   error?: boolean;
 }
 
+function formatDateMask(digits: string): string {
+  // Applies DD/MM/AAAA mask to raw digits
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+}
+
+function isoToDisplay(iso: string): string {
+  // Converts "YYYY-MM-DD" to "DD/MM/YYYY"
+  const parts = iso.split("-");
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return "";
+}
+
+function digitsToIso(digits: string): string {
+  // Converts 8 raw digits (DDMMYYYY) to "YYYY-MM-DD"
+  if (digits.length !== 8) return "";
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  const dayNum = parseInt(dd, 10);
+  const monthNum = parseInt(mm, 10);
+  const yearNum = parseInt(yyyy, 10);
+  const currentYear = new Date().getFullYear();
+  if (dayNum < 1 || dayNum > 31) return "";
+  if (monthNum < 1 || monthNum > 12) return "";
+  if (yearNum < 1900 || yearNum > currentYear) return "";
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function DateOfBirthInput({ value, onChange, onBlur, error }: DateOfBirthInputProps) {
-  const [day, setDay] = useState("");
-  const [month, setMonth] = useState("");
-  const [year, setYear] = useState("");
+  const [display, setDisplay] = useState("");
 
-  const dayRef = useRef<HTMLInputElement>(null);
-  const monthRef = useRef<HTMLInputElement>(null);
-  const yearRef = useRef<HTMLInputElement>(null);
-
-  // Parse incoming value (YYYY-MM-DD) into day/month/year
+  // Sync from parent value (YYYY-MM-DD) on mount or external changes
   useEffect(() => {
     if (value) {
-      const parts = value.split("-");
-      if (parts.length === 3) {
-        setYear(parts[0]);
-        setMonth(parts[1]);
-        setDay(parts[2]);
-      }
-    } else {
-      setDay("");
-      setMonth("");
-      setYear("");
-    }
-  }, [value]);
-
-  const emitChange = (d: string, m: string, y: string) => {
-    if (d && m && y.length === 4) {
-      const dayNum = parseInt(d, 10);
-      const monthNum = parseInt(m, 10);
-      const yearNum = parseInt(y, 10);
-      const currentYear = new Date().getFullYear();
-
-      if (
-        dayNum >= 1 && dayNum <= 31 &&
-        monthNum >= 1 && monthNum <= 12 &&
-        yearNum >= 1900 && yearNum <= currentYear
-      ) {
-        const iso = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-        onChange(iso);
+      const formatted = isoToDisplay(value);
+      if (formatted) {
+        setDisplay(formatted);
         return;
       }
     }
-    onChange("");
-  };
+    setDisplay("");
+  }, [value]);
 
-  const handleDay = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 2);
-    setDay(digits);
-    emitChange(digits, month, year);
-    if (digits.length === 2) {
-      monthRef.current?.focus();
-    }
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 8);
+    const masked = formatDateMask(raw);
+    setDisplay(masked);
 
-  const handleMonth = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 2);
-    setMonth(digits);
-    emitChange(day, digits, year);
-    if (digits.length === 2) {
-      yearRef.current?.focus();
-    }
+    const iso = digitsToIso(raw);
+    onChange(iso);
   };
-
-  const handleYear = (val: string) => {
-    const digits = val.replace(/\D/g, "").slice(0, 4);
-    setYear(digits);
-    emitChange(day, month, digits);
-  };
-
-  const handleKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>,
-    field: "day" | "month" | "year"
-  ) => {
-    if (e.key === "Backspace") {
-      if (field === "month" && month === "") {
-        dayRef.current?.focus();
-      } else if (field === "year" && year === "") {
-        monthRef.current?.focus();
-      }
-    }
-  };
-
-  const inputClass = cn(
-    "flex h-10 rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-    "placeholder:text-muted-foreground",
-    error ? "border-destructive" : "border-input"
-  );
 
   return (
-    <div className="flex items-center gap-2">
-      <input
-        ref={dayRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        placeholder="DD"
-        value={day}
-        onChange={(e) => handleDay(e.target.value)}
-        onKeyDown={(e) => handleKeyDown(e, "day")}
-        onBlur={onBlur}
-        className={cn(inputClass, "w-16 text-center")}
-        aria-label="Dia"
-      />
-      <span className="text-muted-foreground">/</span>
-      <input
-        ref={monthRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        placeholder="MM"
-        value={month}
-        onChange={(e) => handleMonth(e.target.value)}
-        onKeyDown={(e) => handleKeyDown(e, "month")}
-        onBlur={onBlur}
-        className={cn(inputClass, "w-16 text-center")}
-        aria-label="Mês"
-      />
-      <span className="text-muted-foreground">/</span>
-      <input
-        ref={yearRef}
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        placeholder="AAAA"
-        value={year}
-        onChange={(e) => handleYear(e.target.value)}
-        onKeyDown={(e) => handleKeyDown(e, "year")}
-        onBlur={onBlur}
-        className={cn(inputClass, "w-24 text-center")}
-        aria-label="Ano"
-      />
-    </div>
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="DD/MM/AAAA"
+      value={display}
+      onChange={handleChange}
+      onBlur={onBlur}
+      maxLength={10}
+      className={cn(
+        "flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "placeholder:text-muted-foreground",
+        error ? "border-destructive" : "border-input"
+      )}
+      aria-label="Data de nascimento"
+    />
   );
 }
