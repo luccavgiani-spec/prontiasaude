@@ -428,9 +428,8 @@ export function PlanosSection() {
                         </ul>
 
                   <div className="pt-4 mt-auto">
-                    <Button onClick={() => handleAssinar(plano.id)} size="sm" className="w-full group bg-green-600 hover:bg-green-700 text-white border-green-600 hover:border-green-700">
-                      Assinar Plano
-                      <ArrowRight className="ml-1 h-3 w-3 transition-transform group-hover:translate-x-1" />
+                    <Button disabled size="sm" className="w-full bg-gray-400 text-white border-gray-400 cursor-not-allowed opacity-80">
+                      EM BREVE!
                     </Button>
                   </div>
                 </CardContent>

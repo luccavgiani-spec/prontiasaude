@@ -25,10 +25,8 @@ export const ClubeBenBannerSection = () => {
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline">
-                  <Link to="/planos">
-                    Assinar Plano
-                  </Link>
+                <Button disabled size="lg" variant="outline" className="cursor-not-allowed opacity-80">
+                  EM BREVE!
                 </Button>
               </div>
             </div>
