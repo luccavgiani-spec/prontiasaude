@@ -8,7 +8,8 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, User, Mail, Phone, MapPin, Calendar, Shield, AlertCircle, Check } from "lucide-react";
+import { Loader2, User, Mail, Phone, MapPin, Shield, AlertCircle, Check } from "lucide-react";
+import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 import { validateEmail, validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164, formatPhoneMask, validateCEP, formatCEP } from "@/lib/validations";
 import { PasswordChecklist, isPasswordValid } from "@/components/auth/PasswordChecklist";
 import { hybridSignUp, checkUserExists, supabaseProductionAuth } from "@/lib/auth-hybrid";
@@ -608,18 +609,12 @@ const Cadastrar = () => {
             
             <div className="space-y-2">
               <Label htmlFor="birth_date">Data de Nascimento *</Label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="birth_date"
-                  type="date"
-                  value={formData.birth_date}
-                  onChange={(e) => handleInputChange('birth_date', e.target.value)}
-                  onBlur={() => validateField('birth_date')}
-                  className={`pl-10 ${fieldErrors.birth_date ? 'border-destructive' : ''}`}
-                  required
-                />
-              </div>
+              <DateOfBirthInput
+                value={formData.birth_date}
+                onChange={(date) => handleInputChange('birth_date', date)}
+                onBlur={() => validateField('birth_date')}
+                error={!!fieldErrors.birth_date}
+              />
               {fieldErrors.birth_date && (
                 <p className="text-sm text-destructive flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />
@@ -652,20 +647,20 @@ const Cadastrar = () => {
                   onCheckedChange={(checked) => handleInputChange('terms_accepted', !!checked)}
                   required
                 />
-                <Label htmlFor="terms" className="text-sm">
+                <label htmlFor="terms" className="text-sm font-medium leading-none cursor-pointer select-none">
                   Aceito os termos de uso e política de privacidade *
-                </Label>
+                </label>
               </div>
-              
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="marketing"
                   checked={formData.marketing_opt_in}
                   onCheckedChange={(checked) => handleInputChange('marketing_opt_in', !!checked)}
                 />
-                <Label htmlFor="marketing" className="text-sm">
+                <label htmlFor="marketing" className="text-sm font-medium leading-none cursor-pointer select-none">
                   Desejo receber comunicações por email
-                </Label>
+                </label>
               </div>
             </div>
             

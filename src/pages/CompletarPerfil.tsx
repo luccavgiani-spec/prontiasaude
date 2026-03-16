@@ -10,7 +10,8 @@ import { getHybridSession, supabaseProductionAuth, hybridSignOut, hybridSignUp, 
 import { invokeEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, User, MapPin, Phone, Calendar, Home, LogOut, Eye, EyeOff, Lock } from "lucide-react";
+import { Loader2, User, MapPin, Phone, Home, LogOut, Eye, EyeOff, Lock } from "lucide-react";
+import { DateOfBirthInput } from "@/components/ui/date-of-birth-input";
 import { requireAuth, getPatient } from "@/lib/auth";
 import { validateCPF, validatePhoneE164, validateBirthDate, formatPhoneE164 } from "@/lib/validations";
 import { upsertPatientBasic } from "@/lib/patients";
@@ -833,17 +834,10 @@ const CompletarPerfil = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="birth_date">Data de Nascimento *</Label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="birth_date"
-                    type="date"
-                    value={formData.birth_date}
-                    onChange={(e) => handleInputChange('birth_date', e.target.value)}
-                    className="pl-10"
-                    required
-                  />
-                </div>
+                <DateOfBirthInput
+                  value={formData.birth_date}
+                  onChange={(date) => handleInputChange('birth_date', date)}
+                />
               </div>
             </div>
             
@@ -992,9 +986,9 @@ const CompletarPerfil = () => {
                 onCheckedChange={(checked) => handleInputChange('terms_accepted', !!checked)}
                 required
               />
-              <Label htmlFor="terms" className="text-sm">
+              <label htmlFor="terms" className="text-sm font-medium leading-none cursor-pointer select-none">
                 Aceito os termos de uso e política de privacidade *
-              </Label>
+              </label>
             </div>
             
             <div className="flex gap-3">
