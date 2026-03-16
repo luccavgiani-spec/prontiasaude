@@ -287,8 +287,8 @@ const Paciente = () => {
                 <div className="text-center py-6">
                   <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                   <p className="text-muted-foreground mb-4">Sem plano ativo</p>
-                  <Button variant="medical" size="sm" asChild>
-                    <a href="/planos">Assinar Plano</a>
+                  <Button disabled variant="medical" size="sm" className="cursor-not-allowed opacity-80">
+                    EM BREVE!
                   </Button>
                 </div>
               )}

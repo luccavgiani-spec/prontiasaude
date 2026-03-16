@@ -512,11 +512,8 @@ const AreaDoPaciente = () => {
 
                     {/* CTAs */}
                     <div className="flex flex-col gap-2 pt-2">
-                      <Button asChild size="sm">
-                        <Link to="/planos">
-                          <ArrowRight className="h-4 w-4 mr-2" />
-                          Assinar Plano
-                        </Link>
+                      <Button disabled size="sm" className="cursor-not-allowed opacity-80">
+                        EM BREVE!
                       </Button>
                       <Button asChild size="sm" variant="outline">
                         <Link to="/clubeben">
