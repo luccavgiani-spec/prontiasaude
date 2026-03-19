@@ -1,0 +1,21 @@
+{
+  "name": "my-video",
+  "version": "1.0.0",
+  "description": "Prontia Saude SaaS demo video",
+  "scripts": {
+    "start": "remotion studio",
+    "render": "remotion render MyComp output.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.290",
+    "remotion": "4.0.290"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "typescript": "^5.0.0"
+  },
+  "remotion": {
+    "entrypoint": "src/index.tsx"
+  }
+}
