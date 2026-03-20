@@ -343,7 +343,7 @@ export function trackInitiateCheckout(data?: {
     ...(data?.value && { value: data.value }),
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (import.meta.env.DEV) {
     console.log('[Google Ads] Início de checkout enviado:', {
       value: data?.value || 'sem valor',
       content_name: data?.content_name,
