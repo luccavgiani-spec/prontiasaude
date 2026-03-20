@@ -2591,7 +2591,7 @@ export function PaymentModal({
                               setPixBrickFrozen(true);
                             }
                           }}
-                          disabled={paymentStatus === "processing" || isSubmittingRef.current}
+                          disabled={isSubmittingRef.current}
                         >
                           Gerar Código PIX
                         </Button>
