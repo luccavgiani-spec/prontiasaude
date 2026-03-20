@@ -302,7 +302,7 @@ export function PaymentModal({
 
   // ✅ Refs para controle de pagamento (brick legado removido)
   const isSubmittingRef = useRef(false);
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
 
