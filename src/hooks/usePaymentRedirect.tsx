@@ -21,7 +21,7 @@ export function usePaymentRedirect({
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
   const [attempts, setAttempts] = useState(0);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attemptsRef = useRef(0);
   const isMountedRef = useRef(true);
   const hasFoundUrlRef = useRef(false);

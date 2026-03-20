@@ -224,7 +224,7 @@ export function PaymentModal({
 
   // Estado para detectar se o Brick PIX travou (submit tentado mas sem resultado)
   const [pixBrickFrozen, setPixBrickFrozen] = useState(false);
-  const pixBrickFrozenTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pixBrickFrozenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Estados para cupom de desconto
   const [couponCode, setCouponCode] = useState("");
@@ -302,7 +302,7 @@ export function PaymentModal({
 
   // ✅ Refs para controle de pagamento (brick legado removido)
   const isSubmittingRef = useRef(false);
-  const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasTrackedInitiateCheckoutRef = useRef(false);
   const [isBrickReady, setIsBrickReady] = useState(false);
 
@@ -2591,7 +2591,7 @@ export function PaymentModal({
                               setPixBrickFrozen(true);
                             }
                           }}
-                          disabled={paymentStatus === "processing" || isSubmittingRef.current}
+                          disabled={isSubmittingRef.current}
                         >
                           Gerar Código PIX
                         </Button>
@@ -2911,7 +2911,7 @@ export function PaymentModal({
                               setPixBrickFrozen(true);
                             }
                           }}
-                          disabled={paymentStatus === "processing" || isSubmittingRef.current}
+                          disabled={isSubmittingRef.current}
                         >
                           Gerar Código PIX
                         </Button>
