@@ -1,26 +1,26 @@
 
 
-## Plano: Remover 7 especialidades do frontend
+## Plan: Export Cloud Users CSV + Fix Build Errors
 
-Especialidades a remover: **Personal Trainer, Nutrição, Reumatologia, Neurologia, Infectologia, Nutrologia, Urologia**
+### 1. Export CSV of Cloud Users
 
-### Arquivos que serão modificados
+I already queried all users from the Cloud `auth.users` table. I'll generate a CSV file at `/mnt/documents/cloud-users-export.csv` with columns: `id`, `email`, `created_at`, `email_confirmed_at`, `provider`.
 
-**1. `src/lib/constants.ts`** (linhas 31, 34-39, 42-49)
-- Remover da `descricao` do serviço "Médicos Especialistas"
-- Remover do array `inclui`
-- Remover das `variantes` (7 itens: Personal Trainer, Nutrição, Reumatologia, Neurologia, Infectologia, Nutrologia, Urologia)
-- O `precoBase` passará a ser o menor valor restante (Cardiologia = 89.90), e o SKU base do serviço precisa ser ajustado para não apontar para Personal Trainer (BIR7668)
+This will be done via a `psql` COPY command exporting directly to CSV.
 
-**2. `src/lib/specialties-config.ts`** (linhas 8-9, 16, 21-25)
-- Remover: `'Personal Trainer'`, `'Nutrição'`, `'Nutrologia'`, `'Reumatologia'`, `'Neurologia'`, `'Infectologia'`, `'Urologia'`
+### 2. Fix Build Errors (4 files)
 
-**3. `src/lib/sku-mapping.ts`** (linhas 14-15, 27-31)
-- Remover mapeamentos SKU: BIR7668 (Personal Trainer), VPN5132 (Nutricionista), LZF3879 (Nutrólogo), UDH3250 (Reumatologista), PKS9388 (Neurologista), MYX5186 (Infectologista)
-- Nota: Urologia não tem SKU neste arquivo (usa URO1099 só nas variantes)
+**`src/components/payment/PaymentModal.tsx`**:
+- Lines 227, 305: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`
+- Lines 2594, 2914: Remove the `paymentStatus === "processing"` check — TypeScript correctly identifies it's unreachable because the parent condition already narrowed `paymentStatus` to `"idle"`. Keep only `isSubmittingRef.current` as the disabled condition.
 
-### O que NÃO será alterado
-- Nenhum arquivo de backend/edge functions
-- Nenhum componente de UI (ServicoCard, ServicosSection, etc.) — eles renderizam dinamicamente a partir de `constants.ts`
-- Página MedicosEspecialistas.tsx — o seletor é gerado dinamicamente das variantes
+**`src/hooks/usePaymentRedirect.tsx`**:
+- Line 24: Replace `NodeJS.Timeout` with `ReturnType<typeof setTimeout>`
+
+**`src/lib/meta-tracking.ts`**:
+- Line 346: Replace `process.env.NODE_ENV !== 'production'` with `import.meta.env.DEV` (Vite equivalent)
+
+### Technical Details
+
+The `NodeJS.Timeout` type doesn't exist in browser/Vite contexts without `@types/node`. `ReturnType<typeof setTimeout>` is the portable alternative. Similarly, `process.env` is Node-specific; Vite uses `import.meta.env`.
 
