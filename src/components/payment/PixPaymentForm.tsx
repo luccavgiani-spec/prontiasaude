@@ -56,6 +56,27 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
     }
   }, [autoRedirectUrl, redirectUrl]);
 
+  // PATCH: PIX mobile visibility recovery
+  // Problema: no mobile o browser suspende JS quando o usuário troca de app para pagar.
+  // Quando volta, o polling pode ter parado. Este effect retoma uma verificação
+  // única ao detectar que a aba voltou ao foco, mas apenas se o pagamento
+  // ainda não foi confirmado.
+  // Não altera nenhum state de controle do polling principal.
+  useEffect(() => {
+    if (autoRedirectUrl || redirectUrl) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleCheckPaymentStatus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [autoRedirectUrl, redirectUrl]);
+
   const handleCopyCode = async () => {
     try {
       await navigator.clipboard.writeText(qrCode);
