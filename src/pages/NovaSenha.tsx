@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { invokeCloudEdgeFunction } from "@/lib/edge-functions";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, Lock, AlertCircle } from "lucide-react";
@@ -25,22 +24,17 @@ const NovaSenha = () => {
     let mounted = true;
 
     const handleSessionSetup = async () => {
-      console.log('🔍 Verificando sessão para nova senha...');
-      
-      // Verificar se há token customizado (novo fluxo)
       const customToken = searchParams.get('token');
       
       if (customToken) {
-        console.log('🔐 Token customizado detectado, validando...');
         try {
-          const { data, error } = await invokeCloudEdgeFunction('validate-reset-token', {
+          const { data, error } = await supabase.functions.invoke('validate-reset-token', {
             body: { token: customToken }
           });
 
           if (error) throw error;
 
           if (data?.valid && data?.email) {
-            console.log('✅ Token válido para:', data.email);
             if (mounted) {
               setIsValidSession(true);
               setUserEmail(data.email);
@@ -48,7 +42,6 @@ const NovaSenha = () => {
             }
             return;
           } else {
-            console.log('❌ Token inválido:', data?.error);
             if (mounted) {
               toast({
                 title: "Link inválido ou expirado",
@@ -60,7 +53,6 @@ const NovaSenha = () => {
             return;
           }
         } catch (error: any) {
-          console.error('❌ Erro ao validar token:', error);
           if (mounted) {
             toast({
               title: "Erro ao validar link",
@@ -73,17 +65,15 @@ const NovaSenha = () => {
         }
       }
 
-      // Fluxos legados do Supabase (mantidos para compatibilidade)
+      // Fluxos legados do Supabase
       const code = searchParams.get('code');
       const type = searchParams.get('type');
       const token_hash = searchParams.get('token_hash');
 
       try {
         if (code) {
-          console.log('🔄 Trocando código por sessão...');
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) throw error;
-          
           if (mounted) {
             setIsValidSession(true);
             setSessionChecked(true);
@@ -92,7 +82,6 @@ const NovaSenha = () => {
         }
 
         if (token_hash && type === 'recovery') {
-          console.log('🔐 Fluxo legado detectado');
           if (mounted) {
             setIsValidSession(true);
             setSessionChecked(true);
@@ -105,10 +94,8 @@ const NovaSenha = () => {
         if (!mounted) return;
 
         if (session?.user) {
-          console.log('✅ Sessão válida encontrada');
           setIsValidSession(true);
         } else {
-          console.log('❌ Nenhuma sessão válida encontrada');
           toast({
             title: "Link inválido ou expirado",
             description: "O link de reset de senha é inválido ou expirou. Solicite um novo reset.",
@@ -119,7 +106,6 @@ const NovaSenha = () => {
         
         setSessionChecked(true);
       } catch (error: any) {
-        console.error('❌ Erro ao configurar sessão:', error);
         if (mounted) {
           toast({
             title: "Erro ao processar link",
@@ -133,16 +119,12 @@ const NovaSenha = () => {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔄 Auth state change:', event);
-      
       if (event === 'PASSWORD_RECOVERY') {
-        console.log('🔐 PASSWORD_RECOVERY event detected');
         if (mounted) {
           setIsValidSession(true);
           setSessionChecked(true);
         }
       } else if (event === 'SIGNED_IN' && session) {
-        console.log('✅ User signed in after password reset');
         if (mounted) {
           setIsValidSession(true);
           setSessionChecked(true);
@@ -180,14 +162,12 @@ const NovaSenha = () => {
     }
 
     setIsLoading(true);
-    console.log('🔄 Tentando atualizar senha...');
     
-    // Verificar se é o novo fluxo (token customizado)
     const customToken = searchParams.get('token');
     
     if (customToken) {
       try {
-        const { data, error } = await invokeCloudEdgeFunction('complete-password-reset', {
+        const { data, error } = await supabase.functions.invoke('complete-password-reset', {
           body: { 
             token: customToken,
             new_password: password
@@ -197,7 +177,6 @@ const NovaSenha = () => {
         if (error) throw error;
 
         if (data?.success) {
-          console.log('✅ Senha atualizada com sucesso');
           toast({
             title: "Senha redefinida",
             description: "Sua senha foi alterada com sucesso. Faça login com a nova senha.",
@@ -207,7 +186,6 @@ const NovaSenha = () => {
           throw new Error(data?.error || 'Erro ao atualizar senha');
         }
       } catch (error: any) {
-        console.error('❌ Erro ao atualizar senha:', error);
         toast({
           title: "Erro ao redefinir senha",
           description: error.message || "Tente novamente mais tarde.",
@@ -216,12 +194,9 @@ const NovaSenha = () => {
       }
     } else {
       // Fluxo legado Supabase
-      const { error } = await supabase.auth.updateUser({
-        password: password
-      });
+      const { error } = await supabase.auth.updateUser({ password });
 
       if (error) {
-        console.error('❌ Erro ao atualizar senha:', error);
         toast({
           title: "Erro ao redefinir senha",
           description: error.message === "Auth session missing!" 
@@ -230,7 +205,6 @@ const NovaSenha = () => {
           variant: "destructive",
         });
       } else {
-        console.log('✅ Senha atualizada com sucesso');
         toast({
           title: "Senha redefinida",
           description: "Sua senha foi alterada com sucesso.",
@@ -269,10 +243,7 @@ const NovaSenha = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button 
-              onClick={() => navigate('/entrar')} 
-              className="w-full"
-            >
+            <Button onClick={() => navigate('/entrar')} className="w-full">
               Voltar para Login
             </Button>
           </CardContent>
@@ -311,9 +282,7 @@ const NovaSenha = () => {
               </div>
             </div>
             
-            {password && (
-              <PasswordChecklist password={password} />
-            )}
+            {password && <PasswordChecklist password={password} />}
             
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirmar nova senha</Label>
