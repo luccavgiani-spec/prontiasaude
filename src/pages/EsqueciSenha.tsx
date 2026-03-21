@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { invokeCloudEdgeFunction } from "@/lib/edge-functions";
+import { supabase } from "@/integrations/supabase/client"
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom";
 import { Loader2, Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
@@ -32,8 +32,7 @@ const EsqueciSenha = () => {
     
     try {
       // Usar edge function no Cloud (precisa acessar ambos os ambientes)
-      const { data, error } = await invokeCloudEdgeFunction('send-password-reset', {
-        body: { email: email.toLowerCase() }
+      const { data, error } = await supabase.functions.invoke('send-password-reset', { body: ... })
       });
 
       if (error) {
