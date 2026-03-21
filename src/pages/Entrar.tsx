@@ -5,9 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Loader2, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Loader2, Mail, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { validateEmail } from "@/lib/validations";
-import { hybridSignIn, getHybridSession } from "@/lib/auth-hybrid";
+import { supabase } from "@/integrations/supabase/client";
 
 const Entrar = () => {
   const [searchParams] = useSearchParams();
@@ -15,48 +15,39 @@ const Entrar = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showResetHint, setShowResetHint] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is already logged in (in either environment)
     const checkSession = async () => {
-      const { session, environment } = await getHybridSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        console.log('[Entrar] Already logged in via:', environment);
-        handleSuccessfulLogin(environment || 'cloud');
+        handleSuccessfulLogin();
       }
     };
     checkSession();
-  }, [navigate]);
+  }, []);
 
-  const handleSuccessfulLogin = (environment: 'cloud' | 'production' = 'cloud') => {
-    console.log('[Entrar] Login successful via:', environment);
-    
-    // ✅ Verificar convite familiar PRIMEIRO (sessionStorage + localStorage fallback)
+  const handleSuccessfulLogin = () => {
     const pendingFamilyToken = sessionStorage.getItem('pending_family_invite_token') 
       || localStorage.getItem('pending_family_invite_token');
     if (pendingFamilyToken) {
       sessionStorage.removeItem('pending_family_invite_token');
       localStorage.removeItem('pending_family_invite_token');
-      console.log('[Entrar] Redirecting with family invite token');
       window.location.href = `/completar-perfil?token_familiar=${pendingFamilyToken}`;
       return;
     }
     
-    // Verificar se há convite empresarial pendente (sessionStorage + localStorage fallback)
     const pendingToken = sessionStorage.getItem('pending_invite_token')
       || localStorage.getItem('pending_invite_token');
     if (pendingToken) {
       sessionStorage.removeItem('pending_invite_token');
       localStorage.removeItem('pending_invite_token');
-      console.log('[Entrar] Redirecting with employee invite token');
       window.location.href = `/completar-perfil?token=${pendingToken}`;
       return;
     }
     
-    // Salvar ambiente de login para uso posterior
-    sessionStorage.setItem('auth_environment', environment);
     navigate('/auth/callback');
   };
 
@@ -73,27 +64,21 @@ const Entrar = () => {
     }
 
     setIsLoading(true);
+    setShowResetHint(false);
     
-    // Usar login híbrido que verifica onde o email existe
-    const result = await hybridSignIn(email, password);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (!result.success) {
-      // Show user-friendly error messages
-      if (result.error?.includes('não encontrado')) {
-        toast({
-          title: "❌ Email não cadastrado",
-          description: "Este email não está cadastrado. Crie uma conta para continuar.",
-          variant: "warning",
-          duration: 5000,
-        });
-      } else if (result.error?.includes('incorretos')) {
+    if (error) {
+      if (error.message?.includes('Invalid login credentials') || error.message?.includes('invalid_credentials')) {
+        // Mostrar hint de reset para usuários que podem ter sido afetados pela migração
+        setShowResetHint(true);
         toast({
           title: "❌ Erro no login",
-          description: "Email ou senha incorretos. Verifique seus dados e tente novamente.",
+          description: "Email ou senha incorretos.",
           variant: "warning",
-          duration: 5000,
+          duration: 4000,
         });
-      } else if (result.error?.includes('Email not confirmed')) {
+      } else if (error.message?.includes('Email not confirmed')) {
         toast({
           title: "⚠️ Email não confirmado",
           description: "Verifique sua caixa de entrada para confirmar seu email.",
@@ -103,14 +88,13 @@ const Entrar = () => {
       } else {
         toast({
           title: "❌ Erro no login",
-          description: result.error || "Não foi possível fazer login. Tente novamente.",
+          description: error.message || "Não foi possível fazer login. Tente novamente.",
           variant: "warning",
           duration: 5000,
         });
       }
     } else {
-      console.log('[Entrar] Login successful via:', result.environment);
-      handleSuccessfulLogin(result.environment || 'cloud');
+      handleSuccessfulLogin();
     }
     
     setIsLoading(false);
@@ -127,64 +111,81 @@ const Entrar = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Sua senha"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 pr-10"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    >
-                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Entrar
-                </Button>
-              </form>
-              
-              <div className="text-center space-y-2">
-                <Link 
-                  to="/esqueci-senha"
-                  className="text-sm text-muted-foreground hover:text-primary block"
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10 pr-10"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                 >
-                  Esqueci minha senha
-                </Link>
-                <p className="text-sm text-muted-foreground">
-                  Não tem uma conta?{" "}
-                  <Link to="/cadastrar" className="text-primary hover:underline">
-                    Criar conta
-                  </Link>
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Entrar
+            </Button>
+          </form>
+
+          {/* Hint de reset — aparece só após erro de credenciais */}
+          {showResetHint && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <p className="font-medium">Primeira vez acessando o sistema atualizado?</p>
+                <p className="mt-0.5 text-amber-700">
+                  Nosso sistema foi migrado. Clique em{" "}
+                  <Link to={`/esqueci-senha${email ? `?email=${encodeURIComponent(email)}` : ''}`} className="font-semibold underline hover:text-amber-900">
+                    Redefinir senha
+                  </Link>{" "}
+                  para criar uma nova senha e continuar acessando.
                 </p>
               </div>
+            </div>
+          )}
+          
+          <div className="text-center space-y-2">
+            <Link 
+              to="/esqueci-senha"
+              className="text-sm text-muted-foreground hover:text-primary block"
+            >
+              Esqueci minha senha
+            </Link>
+            <p className="text-sm text-muted-foreground">
+              Não tem uma conta?{" "}
+              <Link to="/cadastrar" className="text-primary hover:underline">
+                Criar conta
+              </Link>
+            </p>
+          </div>
         </CardContent>
       </Card>
     </div>
