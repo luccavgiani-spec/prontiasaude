@@ -6,8 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// URLs fixas dos dois ambientes
-const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+// Fallback URL — used only if SUPABASE_URL env var is not set (should never happen in production)
 const PRODUCTION_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 interface UserRecord {
@@ -17,7 +16,7 @@ interface UserRecord {
   last_sign_in_at?: string;
   email_confirmed_at?: string;
   phone?: string;
-  source: 'cloud' | 'production' | 'both';
+  source: 'production';
   patient?: {
     id: string;
     first_name?: string;
@@ -42,39 +41,39 @@ async function fetchAllAuthUsers(client: ReturnType<typeof createClient>, label:
   const allUsers: any[] = [];
   let page = 1;
   const perPage = 1000;
-  
+
   console.log(`[list-all-users] Buscando auth.users de ${label}...`);
-  
+
   while (true) {
     try {
       const { data, error } = await client.auth.admin.listUsers({
         page,
         perPage,
       });
-      
+
       if (error) {
         console.error(`[list-all-users] Erro ao buscar ${label} página ${page}:`, error.message);
         break;
       }
-      
+
       if (!data?.users?.length) {
         break;
       }
-      
+
       allUsers.push(...data.users);
       console.log(`[list-all-users] ${label} página ${page}: ${data.users.length} usuários (total: ${allUsers.length})`);
-      
+
       if (data.users.length < perPage) {
         break;
       }
-      
+
       page++;
     } catch (err: any) {
       console.error(`[list-all-users] Exceção ao buscar ${label}:`, err.message);
       break;
     }
   }
-  
+
   return allUsers;
 }
 
@@ -85,38 +84,38 @@ async function fetchAllPatients(client: ReturnType<typeof createClient>, label: 
   const allPatients: any[] = [];
   let offset = 0;
   const limit = 1000;
-  
+
   console.log(`[list-all-users] Buscando patients de ${label}...`);
-  
+
   while (true) {
     try {
       const { data, error } = await client
         .from('patients')
         .select('*')
         .range(offset, offset + limit - 1);
-      
+
       if (error) {
         console.error(`[list-all-users] Erro ao buscar patients ${label}:`, error.message);
         break;
       }
-      
+
       if (!data?.length) {
         break;
       }
-      
+
       allPatients.push(...data);
-      
+
       if (data.length < limit) {
         break;
       }
-      
+
       offset += limit;
     } catch (err: any) {
       console.error(`[list-all-users] Exceção ao buscar patients ${label}:`, err.message);
       break;
     }
   }
-  
+
   console.log(`[list-all-users] ${label}: ${allPatients.length} patients`);
   return allPatients;
 }
@@ -128,125 +127,58 @@ serve(async (req: Request): Promise<Response> => {
 
   try {
     console.log("[list-all-users] ========================================");
-    console.log("[list-all-users] Iniciando busca unificada...");
-    
+    console.log("[list-all-users] Iniciando busca unificada (produção)...");
+
     // =============================================
-    // OBTER SERVICE KEYS
-    // A função está deployada no projeto de Produção (ploqujuhpwutpcibedbr).
-    // Nesse contexto:
-    //   - SUPABASE_SERVICE_ROLE_KEY = chave da Produção (fornecida automaticamente)
-    //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave legada (configurada manualmente,
-    //     pode não estar presente no projeto de Produção)
+    // CREDENCIAIS — sempre auto-fornecidas pelo Supabase
+    // SUPABASE_URL     = URL do projeto atual (produção)
+    // SUPABASE_SERVICE_ROLE_KEY = service key do projeto atual (produção)
+    // Não depende de segredos manuais como ORIGINAL_SUPABASE_SERVICE_ROLE_KEY
+    // =============================================
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const projectUrl = Deno.env.get("SUPABASE_URL") || PRODUCTION_URL;
+
+    console.log("[list-all-users] Project URL:", projectUrl);
+    console.log("[list-all-users] Service key exists:", !!serviceKey);
+
+    if (!serviceKey) {
+      console.error("[list-all-users] ❌ SUPABASE_SERVICE_ROLE_KEY não disponível!");
+      return new Response(
+        JSON.stringify({ success: false, error: "SUPABASE_SERVICE_ROLE_KEY não configurada" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const client = createClient(projectUrl, serviceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
+
+    // Buscar auth.users e patients em paralelo
+    const [authUsers, patients] = await Promise.all([
+      fetchAllAuthUsers(client, 'Produção'),
+      fetchAllPatients(client, 'Produção'),
+    ]);
+
+    console.log(`[list-all-users] ✅ Produção: ${authUsers.length} auth.users, ${patients.length} patients`);
+
+    // =============================================
+    // MESCLAR auth.users com patients por email
     // =============================================
 
-    // Cloud: usa SUPABASE_SERVICE_ROLE_KEY, mas CLOUD_URL aponta para o projeto
-    // Lovable Cloud desativado — a chamada vai falhar silenciosamente (cloudAuthUsers=[])
-    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    // Produção: usa ORIGINAL_SUPABASE_SERVICE_ROLE_KEY se configurada; caso contrário,
-    // usa SUPABASE_SERVICE_ROLE_KEY (a chave automática do projeto atual = produção).
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY")
-      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    console.log("[list-all-users] Cloud URL:", CLOUD_URL);
-    console.log("[list-all-users] Prod URL:", PRODUCTION_URL);
-    console.log("[list-all-users] Cloud key exists:", !!cloudServiceKey);
-    console.log("[list-all-users] Cloud key length:", cloudServiceKey?.length || 0);
-    console.log("[list-all-users] Prod key exists:", !!prodServiceKey);
-    console.log("[list-all-users] Prod key length:", prodServiceKey?.length || 0);
-    
-    // Validar que temos as credenciais da Produção
-    if (!prodServiceKey) {
-      console.error("[list-all-users] ❌ ORIGINAL_SUPABASE_SERVICE_ROLE_KEY não configurada!");
-      console.error("[list-all-users] A função só consegue buscar usuários do Cloud.");
-    }
-    
-    // Arrays para armazenar resultados
-    let cloudAuthUsers: any[] = [];
-    let cloudPatients: any[] = [];
-    let prodAuthUsers: any[] = [];
-    let prodPatients: any[] = [];
-    
-    // =============================================
-    // BUSCAR DO CLOUD (se tiver credenciais)
-    // =============================================
-    if (cloudServiceKey) {
-      try {
-        const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
-        
-        console.log("[list-all-users] Buscando do Cloud...");
-        
-        const [cloudUsers, cloudPats] = await Promise.all([
-          fetchAllAuthUsers(cloudClient, 'Cloud'),
-          fetchAllPatients(cloudClient, 'Cloud'),
-        ]);
-        
-        cloudAuthUsers = cloudUsers;
-        cloudPatients = cloudPats;
-        
-        console.log(`[list-all-users] ✅ Cloud: ${cloudAuthUsers.length} auth.users, ${cloudPatients.length} patients`);
-      } catch (cloudErr: any) {
-        console.error("[list-all-users] ❌ Erro ao buscar Cloud:", cloudErr.message);
-      }
-    }
-    
-    // =============================================
-    // BUSCAR DA PRODUÇÃO
-    // =============================================
-    if (prodServiceKey) {
-      try {
-        const prodClient = createClient(PRODUCTION_URL, prodServiceKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
-        
-        console.log("[list-all-users] Buscando da Produção...");
-        
-        const [prodUsers, prodPats] = await Promise.all([
-          fetchAllAuthUsers(prodClient, 'Produção'),
-          fetchAllPatients(prodClient, 'Produção'),
-        ]);
-        
-        prodAuthUsers = prodUsers;
-        prodPatients = prodPats;
-        
-        console.log(`[list-all-users] ✅ Produção: ${prodAuthUsers.length} auth.users, ${prodPatients.length} patients`);
-      } catch (prodErr: any) {
-        console.error("[list-all-users] ❌ Erro ao buscar Produção:", prodErr.message);
-      }
-    }
-    
-    console.log(`[list-all-users] Totais brutos: Cloud auth=${cloudAuthUsers.length}, Prod auth=${prodAuthUsers.length}`);
-    
-    // =============================================
-    // MESCLAR RESULTADOS
-    // =============================================
-    
-    // Criar mapas por email para mesclagem
-    const emailToUserMap = new Map<string, UserRecord>();
-    const emailToPatientCloud = new Map<string, any>();
-    const emailToPatientProd = new Map<string, any>();
-    
     // Indexar patients por email
-    for (const p of cloudPatients) {
+    const emailToPatient = new Map<string, any>();
+    for (const p of patients) {
       if (p.email) {
-        emailToPatientCloud.set(p.email.toLowerCase(), p);
+        emailToPatient.set(p.email.toLowerCase(), p);
       }
     }
-    for (const p of prodPatients) {
-      if (p.email) {
-        emailToPatientProd.set(p.email.toLowerCase(), p);
-      }
-    }
-    
-    // Helper: build patient-like object from auth user_metadata (fallback when no patient record)
+
+    // Helper: build patient-like object from auth user_metadata (fallback)
     const patientFromMetadata = (meta: any) => {
       if (!meta) return undefined;
-      // Only return if there's at least a name
       if (!meta.first_name && !meta.last_name) return undefined;
       return {
-        id: '', // no patient record
+        id: '',
         first_name: meta.first_name || null,
         last_name: meta.last_name || null,
         cpf: meta.cpf || null,
@@ -259,57 +191,24 @@ serve(async (req: Request): Promise<Response> => {
         city: meta.city || null,
         state: meta.state || null,
         profile_complete: false,
-        _from_metadata: true, // flag indicating this came from auth metadata, not patients table
+        _from_metadata: true,
       };
     };
 
-    // Processar auth.users do Cloud
-    for (const user of cloudAuthUsers) {
-      const email = user.email?.toLowerCase();
-      if (!email) continue;
+    const allUsers: UserRecord[] = authUsers
+      .filter((u: any) => !!u.email)
+      .map((u: any) => {
+        const email = u.email.toLowerCase();
+        const patient = emailToPatient.get(email);
 
-      const patient = emailToPatientCloud.get(email) || emailToPatientProd.get(email);
-
-      emailToUserMap.set(email, {
-        id: user.id,
-        email: user.email,
-        created_at: user.created_at,
-        last_sign_in_at: user.last_sign_in_at,
-        email_confirmed_at: user.email_confirmed_at,
-        phone: user.phone,
-        source: 'cloud',
-        patient: patient ? {
-          id: patient.id,
-          first_name: patient.first_name,
-          last_name: patient.last_name,
-          cpf: patient.cpf,
-          phone_e164: patient.phone_e164,
-          birth_date: patient.birth_date,
-          gender: patient.gender,
-          cep: patient.cep,
-          address_line: patient.address_line,
-          address_number: patient.address_number,
-          city: patient.city,
-          state: patient.state,
-          profile_complete: patient.profile_complete || false,
-        } : patientFromMetadata(user.user_metadata),
-      });
-    }
-    
-    // Processar auth.users da Produção (marcar como 'both' se já existe)
-    for (const user of prodAuthUsers) {
-      const email = user.email?.toLowerCase();
-      if (!email) continue;
-      
-      const patient = emailToPatientProd.get(email) || emailToPatientCloud.get(email);
-      
-      if (emailToUserMap.has(email)) {
-        // Existe em ambos - manter dados da Produção, marcar como 'both'
-        const existing = emailToUserMap.get(email)!;
-        emailToUserMap.set(email, {
-          ...existing,
-          id: user.id, // Usar ID da Produção
-          source: 'both',
+        return {
+          id: u.id,
+          email: u.email,
+          created_at: u.created_at,
+          last_sign_in_at: u.last_sign_in_at,
+          email_confirmed_at: u.email_confirmed_at,
+          phone: u.phone,
+          source: 'production' as const,
           patient: patient ? {
             id: patient.id,
             first_name: patient.first_name,
@@ -324,70 +223,34 @@ serve(async (req: Request): Promise<Response> => {
             city: patient.city,
             state: patient.state,
             profile_complete: patient.profile_complete || false,
-          } : existing.patient || patientFromMetadata(user.user_metadata),
-        });
-      } else {
-        // Apenas na Produção
-        emailToUserMap.set(email, {
-          id: user.id,
-          email: user.email,
-          created_at: user.created_at,
-          last_sign_in_at: user.last_sign_in_at,
-          email_confirmed_at: user.email_confirmed_at,
-          phone: user.phone,
-          source: 'production',
-          patient: patient ? {
-            id: patient.id,
-            first_name: patient.first_name,
-            last_name: patient.last_name,
-            cpf: patient.cpf,
-            phone_e164: patient.phone_e164,
-            birth_date: patient.birth_date,
-            gender: patient.gender,
-            cep: patient.cep,
-            address_line: patient.address_line,
-            address_number: patient.address_number,
-            city: patient.city,
-            state: patient.state,
-            profile_complete: patient.profile_complete || false,
-          } : patientFromMetadata(user.user_metadata),
-        });
-      }
-    }
-    
-    // Converter map para array e ordenar por created_at
-    const allUsers = Array.from(emailToUserMap.values())
+          } : patientFromMetadata(u.user_metadata),
+        };
+      })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    
-    // Calcular estatísticas
+
     const stats = {
       totalUnique: allUsers.length,
-      cloudOnly: allUsers.filter(u => u.source === 'cloud').length,
-      productionOnly: allUsers.filter(u => u.source === 'production').length,
-      both: allUsers.filter(u => u.source === 'both').length,
-      cloudAuthTotal: cloudAuthUsers.length,
-      prodAuthTotal: prodAuthUsers.length,
-      cloudKeyConfigured: !!cloudServiceKey,
-      prodKeyConfigured: !!prodServiceKey,
+      productionOnly: allUsers.length,
+      cloudOnly: 0,
+      both: 0,
+      prodAuthTotal: authUsers.length,
+      prodKeyConfigured: true,
     };
-    
+
     console.log(`[list-all-users] ========================================`);
     console.log(`[list-all-users] RESULTADO FINAL:`);
-    console.log(`[list-all-users] - Total únicos: ${stats.totalUnique}`);
-    console.log(`[list-all-users] - Somente Cloud: ${stats.cloudOnly}`);
-    console.log(`[list-all-users] - Somente Produção: ${stats.productionOnly}`);
-    console.log(`[list-all-users] - Em ambos: ${stats.both}`);
+    console.log(`[list-all-users] - Total: ${stats.totalUnique} usuários`);
     console.log(`[list-all-users] ========================================`);
-    
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
+      JSON.stringify({
+        success: true,
         users: allUsers,
         stats,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-    
+
   } catch (error: any) {
     console.error("[list-all-users] Erro geral:", error);
     return new Response(
