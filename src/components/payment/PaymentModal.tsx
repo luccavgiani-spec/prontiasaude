@@ -242,6 +242,27 @@ export function PaymentModal({
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
 
+  // Inicializar o SDK do Mercado Pago e carregar security.js ao montar o modal.
+  // Ambos foram removidos do carregamento inicial para não bloquear o render da landing page.
+  useEffect(() => {
+    // Initialize MP React SDK (lazy — moved from main.tsx to avoid vendor-mp in critical bundle)
+    import('@/lib/mercadopago-init').then(({ initializeMercadoPago }) => {
+      initializeMercadoPago();
+    });
+
+    // Load security.js for device fingerprinting (removed from index.html)
+    const script = document.createElement('script');
+    script.src = 'https://www.mercadopago.com/v2/security.js';
+    script.setAttribute('view', 'checkout');
+    script.setAttribute('output', 'MP_DEVICE_SESSION_ID');
+    document.head.appendChild(script);
+    return () => {
+      if (document.head.contains(script)) {
+        document.head.removeChild(script);
+      }
+    };
+  }, []);
+
   // Limpar estados de cupom quando o modal fechar
   useEffect(() => {
     if (!open) {

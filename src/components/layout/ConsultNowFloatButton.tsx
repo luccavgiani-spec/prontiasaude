@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Stethoscope, Clock, Users, MessageCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { PaymentModal } from '@/components/payment/PaymentModal';
+const PaymentModal = lazy(() => import('@/components/payment/PaymentModal').then(m => ({ default: m.PaymentModal })));
 import { CATALOGO_SERVICOS } from '@/lib/constants';
 import { getHybridSession } from '@/lib/auth-hybrid';
 import { checkProfileComplete } from '@/lib/patients';
@@ -176,8 +176,8 @@ const ConsultNowFloatButton = () => {
   return <>
       {createPortal(floatButton, document.body)}
       
-      {/* Payment Modal */}
-      {showPaymentModal && prontoAtendimento && <PaymentModal open={showPaymentModal} onOpenChange={setShowPaymentModal} serviceName={prontoAtendimento.nome} amount={Math.round(prontoAtendimento.precoBase * 100)} sku={prontoAtendimento.sku} />}
+      {/* Payment Modal - lazy loaded to avoid vendor-mp in critical path */}
+      {showPaymentModal && prontoAtendimento && <Suspense fallback={null}><PaymentModal open={showPaymentModal} onOpenChange={setShowPaymentModal} serviceName={prontoAtendimento.nome} amount={Math.round(prontoAtendimento.precoBase * 100)} sku={prontoAtendimento.sku} /></Suspense>}
     </>;
 };
 export default ConsultNowFloatButton;
