@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/integrations/supabase/client';
 import { supabaseProduction } from '@/lib/supabase-production';
-import { invokeEdgeFunction, invokeCloudEdgeFunction } from '@/lib/edge-functions';
+import { invokeEdgeFunction } from '@/lib/edge-functions';
 import { toast } from 'sonner';
 import { Users, Search, Download, Eye, Trash2, Shield, Stethoscope, Loader2, Upload, UserCheck, AlertCircle, AlertTriangle, Edit, HeartPulse, UserPlus, Copy, XCircle, Key } from 'lucide-react';
 import { Label } from '@/components/ui/label';
@@ -267,7 +267,7 @@ export default function UserRegistrationsTab() {
       console.log('[UserRegistrationsTab] ========================================');
       console.log('[UserRegistrationsTab] Buscando via list-all-users...');
       
-      const { data: response, error: fetchError } = await invokeCloudEdgeFunction('list-all-users', {
+      const { data: response, error: fetchError } = await invokeEdgeFunction('list-all-users', {
         body: {}
       });
       
@@ -425,8 +425,7 @@ export default function UserRegistrationsTab() {
     }
 
     try {
-      // Usar invokeCloudEdgeFunction porque a edge function está no Cloud
-      const { data, error } = await invokeCloudEdgeFunction('user-management', {
+      const { data, error } = await invokeEdgeFunction('user-management', {
         body: {
           operation: 'delete_user',
           user_id: userId,
@@ -595,7 +594,7 @@ export default function UserRegistrationsTab() {
       // First, try to get metadata from auth user (Cloud)
       let metadata: Record<string, any> = {};
       try {
-        const { data: cloudUserData } = await invokeCloudEdgeFunction('check-user-exists', {
+        const { data: cloudUserData } = await invokeEdgeFunction('check-user-exists', {
           body: { email: user.email.toLowerCase().trim() }
         });
         // If user exists in Cloud, we use their auth metadata
@@ -645,7 +644,7 @@ export default function UserRegistrationsTab() {
     
     try {
       // Chamar Edge Function para atualizar senha em ambos os ambientes
-      const { data, error } = await invokeCloudEdgeFunction('reset-user-password', {
+      const { data, error } = await invokeEdgeFunction('reset-user-password', {
         body: { email: user.email, new_password: password }
       });
 

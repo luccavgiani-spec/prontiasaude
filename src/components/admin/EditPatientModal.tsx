@@ -42,6 +42,7 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
   useEffect(() => {
     if (patient) {
       setFormData({
+        email: patient.email || '',
         first_name: patient.first_name || '',
         last_name: patient.last_name || '',
         cpf: patient.cpf || '',
@@ -60,6 +61,11 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
+
+    // Validate email
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Email inválido';
+    }
 
     // Validate CPF if provided
     if (formData.cpf) {
@@ -129,10 +135,34 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
         state: formData.state || null,
       };
 
-      console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
-
       const { data: sessionData } = await supabase.auth.getSession();
       const adminToken = sessionData?.session?.access_token;
+
+      // Atualizar email se foi alterado
+      const newEmail = (formData.email || '').toLowerCase().trim();
+      if (newEmail !== patient.email.toLowerCase().trim()) {
+        const emailRes = await fetch(
+          'https://ploqujuhpwutpcibedbr.supabase.co/functions/v1/patient-operations',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${adminToken}`,
+            },
+            body: JSON.stringify({
+              operation: 'admin_update_email',
+              current_email: patient.email,
+              new_email: newEmail,
+            }),
+          }
+        );
+        const emailData = await emailRes.json();
+        if (!emailData.success) {
+          throw new Error(emailData.error || 'Erro ao atualizar email');
+        }
+      }
+
+      console.log('[EditPatientModal] Chamando admin_update_patient para:', patient.email);
 
       const { data, error } = await invokeEdgeFunction('patient-operations', {
         body: {
@@ -200,10 +230,18 @@ export function EditPatientModal({ open, onOpenChange, patient, onSuccess }: Edi
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Email (read-only) */}
-          <div>
-            <Label className="text-muted-foreground">Email</Label>
-            <p className="font-mono text-sm mt-1">{patient.email}</p>
+          {/* Email */}
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email || ''}
+              onChange={(e) => handleInputChange('email', e.target.value)}
+              placeholder="email@exemplo.com.br"
+              className={errors.email ? 'border-destructive' : ''}
+            />
+            {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
           </div>
 
           {/* Nome e Sobrenome */}
