@@ -132,16 +132,21 @@ serve(async (req: Request): Promise<Response> => {
     
     // =============================================
     // OBTER SERVICE KEYS
-    // No Lovable Cloud:
-    //   - SUPABASE_SERVICE_ROLE_KEY = chave do Cloud (automático)
-    //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave da Produção (manual)
+    // A função está deployada no projeto de Produção (ploqujuhpwutpcibedbr).
+    // Nesse contexto:
+    //   - SUPABASE_SERVICE_ROLE_KEY = chave da Produção (fornecida automaticamente)
+    //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave legada (configurada manualmente,
+    //     pode não estar presente no projeto de Produção)
     // =============================================
-    
-    // Cloud: usar SUPABASE_SERVICE_ROLE_KEY padrão (é o Cloud no Lovable)
+
+    // Cloud: usa SUPABASE_SERVICE_ROLE_KEY, mas CLOUD_URL aponta para o projeto
+    // Lovable Cloud desativado — a chamada vai falhar silenciosamente (cloudAuthUsers=[])
     const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    // Produção: usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY 
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
+
+    // Produção: usa ORIGINAL_SUPABASE_SERVICE_ROLE_KEY se configurada; caso contrário,
+    // usa SUPABASE_SERVICE_ROLE_KEY (a chave automática do projeto atual = produção).
+    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY")
+      || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
     console.log("[list-all-users] Cloud URL:", CLOUD_URL);
     console.log("[list-all-users] Prod URL:", PRODUCTION_URL);
