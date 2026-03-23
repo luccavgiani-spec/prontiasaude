@@ -15,14 +15,16 @@ Deno.serve(async (req) => {
 
   try {
     // ===== CLIENTES PARA AMBOS OS AMBIENTES =====
-    const cloudServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const prodServiceKey = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    
+    // SUPABASE_SERVICE_ROLE_KEY é auto-injetado pelo Supabase para o projeto atual (produção)
+    const prodServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    // ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave legada do Cloud (opcional)
+    const cloudServiceKey = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey);
     const prodClient = createClient(PRODUCTION_URL, prodServiceKey);
-    
-    // Usar Cloud como cliente principal para verificação de auth
-    const supabaseClient = cloudClient;
+
+    // Usar Produção como cliente principal para verificação de auth
+    const supabaseClient = prodClient;
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {

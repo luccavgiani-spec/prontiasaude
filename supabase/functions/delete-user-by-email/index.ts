@@ -61,8 +61,10 @@ serve(async (req: Request): Promise<Response> => {
     console.log(`[delete-user-by-email] Deletando usuário: ${email}`);
 
     // Criar clientes
-    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
+    // SUPABASE_SERVICE_ROLE_KEY é auto-injetado para o projeto atual (produção)
+    const prodServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave legada do Cloud (opcional)
+    const cloudServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || prodServiceKey;
 
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }

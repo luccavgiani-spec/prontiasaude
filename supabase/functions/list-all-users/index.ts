@@ -137,23 +137,23 @@ serve(async (req: Request): Promise<Response> => {
     //   - ORIGINAL_SUPABASE_SERVICE_ROLE_KEY = chave da Produção (manual)
     // =============================================
     
-    // Cloud: usar SUPABASE_SERVICE_ROLE_KEY padrão (é o Cloud no Lovable)
-    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    // Produção: usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY 
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
-    
+    // Produção: SUPABASE_SERVICE_ROLE_KEY é auto-injetado pelo Supabase para o projeto atual (produção)
+    const prodServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    // Cloud (legado): usar ORIGINAL_SUPABASE_SERVICE_ROLE_KEY se configurado
+    const cloudServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY");
+
     console.log("[list-all-users] Cloud URL:", CLOUD_URL);
     console.log("[list-all-users] Prod URL:", PRODUCTION_URL);
     console.log("[list-all-users] Cloud key exists:", !!cloudServiceKey);
     console.log("[list-all-users] Cloud key length:", cloudServiceKey?.length || 0);
     console.log("[list-all-users] Prod key exists:", !!prodServiceKey);
     console.log("[list-all-users] Prod key length:", prodServiceKey?.length || 0);
-    
+
     // Validar que temos as credenciais da Produção
     if (!prodServiceKey) {
-      console.error("[list-all-users] ❌ ORIGINAL_SUPABASE_SERVICE_ROLE_KEY não configurada!");
-      console.error("[list-all-users] A função só consegue buscar usuários do Cloud.");
+      console.error("[list-all-users] ❌ SUPABASE_SERVICE_ROLE_KEY não configurada!");
+      console.error("[list-all-users] A função não consegue buscar usuários da Produção.");
     }
     
     // Arrays para armazenar resultados
