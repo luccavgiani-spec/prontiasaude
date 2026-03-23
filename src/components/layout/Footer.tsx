@@ -9,7 +9,7 @@ export function Footer() {
           {/* Logo e Descrição */}
           <div className="md:col-span-2">
             <Link to="/" className="inline-block mb-4 transition-all duration-300 hover:scale-105">
-              <img src={prontiaLogo} alt="Prontìa Saúde" className="h-16 w-auto" />
+              <img src={prontiaLogo} alt="Prontìa Saúde" className="h-16 w-auto" loading="lazy" width="160" height="64" />
             </Link>
             <p className="text-white/80 mb-4 max-w-md">
               Conectamos você aos melhores profissionais de saúde através de consultas online seguras e acessíveis.
