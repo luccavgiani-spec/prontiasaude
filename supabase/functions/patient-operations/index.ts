@@ -534,6 +534,16 @@ serve(async (req) => {
           } catch (e) {}
         }
 
+        // Previne bug de NULL em email_change_token_new que bloqueia login
+        if (authData?.user?.id) {
+          try {
+            await supabase.rpc('fix_auth_user_tokens', { user_uid: authData.user.id });
+          } catch (e) {
+            // Não bloquear o fluxo se a RPC falhar
+            console.error('fix_auth_user_tokens failed:', e);
+          }
+        }
+
         let finalUserId = userId;
         if (!finalUserId) {
           const { data: patientByEmail } = await supabase
