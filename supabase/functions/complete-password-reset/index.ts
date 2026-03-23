@@ -83,8 +83,8 @@ serve(async (req: Request): Promise<Response> => {
     console.log(`[complete-password-reset] Processando reset para token: ${token.substring(0, 8)}...`);
 
     // Criar clientes
-    const cloudServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const prodServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || cloudServiceKey;
+    const prodServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const cloudServiceKey = Deno.env.get("ORIGINAL_SUPABASE_SERVICE_ROLE_KEY") || prodServiceKey;
 
     const cloudClient = createClient(CLOUD_URL, cloudServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
