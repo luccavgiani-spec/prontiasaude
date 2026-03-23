@@ -85,11 +85,8 @@ export default defineConfig(({ mode }) => ({
           // Motion (pesado - lazy load)
           'vendor-motion': ['motion'],
           
-          // Charts (usado apenas em admin)
+          // Charts (admin-only) - mantido para code-split do AdminDashboard
           'vendor-charts': ['recharts'],
-          
-          // Mercado Pago (lazy - só no checkout)
-          'vendor-mp': ['@mercadopago/sdk-react'],
         },
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.');
@@ -105,6 +102,11 @@ export default defineConfig(({ mode }) => ({
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
       }
+    },
+    // Evitar preload de chunks pesados não usados na landing page pública
+    modulePreload: {
+      resolveDependencies: (_url, deps) =>
+        deps.filter(dep => !dep.includes('vendor-charts') && !dep.includes('vendor-mp')),
     },
     chunkSizeWarningLimit: 600,
     minify: true,

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { PaymentModal } from "@/components/payment/PaymentModal";
+const PaymentModal = lazy(() => import("@/components/payment/PaymentModal").then(m => ({ default: m.PaymentModal })));
 import { getHybridSession } from "@/lib/auth-hybrid";
 import { checkPatientPlanActive } from "@/lib/patient-plan";
 import { scheduleWithActivePlan } from "@/lib/schedule-service";
@@ -195,7 +195,9 @@ export function HeroSection() {
         </div>
       </div>
 
-      {/* Payment Modal */}
-      <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku="ITC6534" serviceName="Pronto Atendimento" amount={3990} onSuccess={() => {}} />
+      {/* Payment Modal - lazy loaded to avoid vendor-mp in critical path */}
+      <Suspense fallback={null}>
+        <PaymentModal open={isPaymentModalOpen} onOpenChange={setIsPaymentModalOpen} sku="ITC6534" serviceName="Pronto Atendimento" amount={3990} onSuccess={() => {}} />
+      </Suspense>
     </section>;
 }

@@ -3,11 +3,11 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import "./lib/gtag-events";
-import { initializeMercadoPago } from "./lib/mercadopago-init";
 import { loadMercadoPagoGlobal } from "./lib/mercadopago-global";
 
-initializeMercadoPago();       // React SDK
-loadMercadoPagoGlobal();       // SDK V2 global para o scanner MP
+// initializeMercadoPago() is called lazily by PaymentModal when it first mounts,
+// avoiding a static import of @mercadopago/sdk-react in the main entry bundle.
+loadMercadoPagoGlobal();       // SDK V2 global para o scanner MP (sem heavy imports)
 
 createRoot(document.getElementById("root")!).render(<App />);
 
