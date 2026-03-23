@@ -282,14 +282,16 @@ export default function UserRegistrationsTab() {
       
       if (fetchError) {
         console.error('[UserRegistrationsTab] ❌ Erro ao buscar usuários:', fetchError);
-        toast.error('Erro ao buscar usuários');
+        // Show warning but keep existing users in state (don't clear the list)
+        toast.warning('Não foi possível atualizar a lista. Exibindo dados anteriores.');
         setLoading(false);
         return;
       }
-      
+
       if (!response?.success) {
         console.error('[UserRegistrationsTab] ❌ Resposta inválida:', response);
-        toast.error(response?.error || 'Erro ao processar dados');
+        // Show warning but keep existing users in state
+        toast.warning(response?.error || 'Erro ao processar dados. Exibindo dados anteriores.');
         setLoading(false);
         return;
       }

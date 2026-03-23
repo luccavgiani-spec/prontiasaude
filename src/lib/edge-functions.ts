@@ -56,11 +56,19 @@ export async function invokeEdgeFunction<T = any>(
 
     console.log(`[invokeEdgeFunction] target=production function=${functionName} origin=${typeof window !== 'undefined' ? window?.location?.origin : 'server'}`);
 
-    const response = await fetch(`${EDGE_FUNCTIONS_URL}/${functionName}`, {
-      method: options.method || "POST",
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch(`${EDGE_FUNCTIONS_URL}/${functionName}`, {
+        method: options.method || "POST",
+        headers,
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const text = await response.text();
     let json: any = null;
@@ -107,11 +115,19 @@ export async function invokeCloudEdgeFunction<T = any>(
     // Se tem usuário logado, usa o access_token; se não, usa a anon key.
     headers["Authorization"] = `Bearer ${accessToken || CLOUD_ANON_KEY}`;
 
-    const response = await fetch(`${CLOUD_FUNCTIONS_URL}/${functionName}`, {
-      method: options.method || "POST",
-      headers,
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+    const cloudController = new AbortController();
+    const cloudTimeoutId = setTimeout(() => cloudController.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch(`${CLOUD_FUNCTIONS_URL}/${functionName}`, {
+        method: options.method || "POST",
+        headers,
+        body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        signal: cloudController.signal,
+      });
+    } finally {
+      clearTimeout(cloudTimeoutId);
+    }
 
     const text = await response.text();
     let json: any = null;

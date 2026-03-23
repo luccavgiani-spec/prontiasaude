@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,10 +20,41 @@ import { MeusCuponsCard } from "@/components/patient/MeusCuponsCard";
 import { PlanCardWithActions } from "@/components/patient/PlanCardWithActions";
 import { FamiliaresSection } from "@/components/patient/FamiliaresSection";
 
+// Module-level helper — identical 3-step fallback chain as before, extracted so
+// the retry button can safely call loadPatientData without stale closure issues.
+async function fetchPatientWithFallback(userId: string, email: string) {
+  // Step 1: prod by user_id
+  const { data: prodData } = await supabaseProductionAuth
+    .from('patients')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (prodData) return prodData;
+
+  // Step 2: prod by email
+  if (email) {
+    const { data: byEmail } = await supabaseProductionAuth
+      .from('patients')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+    if (byEmail) return byEmail;
+  }
+
+  // Step 3: cloud fallback
+  const { data: cloudData } = await supabase
+    .from('patients')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  return cloudData;
+}
+
 const AreaDoPaciente = () => {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [patientPlan, setPatientPlan] = useState<PatientPlan | null>(null);
   const [accessingClub, setAccessingClub] = useState(false);
   const [redirectingConsulta, setRedirectingConsulta] = useState(false);
@@ -32,81 +63,52 @@ const AreaDoPaciente = () => {
     toast
   } = useToast();
   const navigate = useNavigate();
+  const hasLoadedRef = useRef(false);
 
-  useEffect(() => {
-    const loadPatientData = async () => {
+  const loadPatientData = async () => {
+    setIsLoading(true);
+    setLoadError(false);
+    try {
       // ✅ CORREÇÃO: Usar getHybridSession para detectar sessão em Cloud OU Produção
       const { session, environment } = await getHybridSession();
-      
-      console.log('[AreaDoPaciente] Sessão híbrida:', { 
-        hasSession: !!session, 
-        environment, 
-        userId: session?.user?.id 
+
+      console.log('[AreaDoPaciente] Sessão híbrida:', {
+        hasSession: !!session,
+        environment,
+        userId: session?.user?.id
       });
-      
+
       // Se não houver sessão em NENHUM ambiente, redirecionar para /entrar (NÃO /completar-perfil)
       if (!session?.user?.id) {
         console.log('[AreaDoPaciente] Nenhuma sessão encontrada, redirecionando para /entrar');
         window.location.replace('/entrar');
         return;
       }
-      
+
       setCurrentUser(session.user);
-      
-      // ✅ CORREÇÃO: SEMPRE buscar na Produção primeiro (onde os dados são editados/salvos)
-      console.log('[AreaDoPaciente] Buscando paciente na Produção primeiro...');
-      let patientFound = null;
 
-      // 1. Tentar por user_id na Produção
-      const { data: prodData } = await supabaseProductionAuth
-        .from('patients')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
-
-      patientFound = prodData;
-
-      // 2. Se não encontrou por user_id, tentar por email na Produção
-      if (!patientFound && session.user.email) {
-        console.log('[AreaDoPaciente] user_id não encontrado na Produção, tentando por email...');
-        const { data: byEmail } = await supabaseProductionAuth
-          .from('patients')
-          .select('*')
-          .eq('email', session.user.email.toLowerCase())
-          .maybeSingle();
-        patientFound = byEmail;
-      }
-
-      // 3. Último fallback: tentar no Cloud
-      if (!patientFound) {
-        console.log('[AreaDoPaciente] Não encontrado na Produção, tentando Cloud...');
-        const { data: cloudData } = await supabase
-          .from('patients')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        patientFound = cloudData;
-      }
+      // ✅ Buscar paciente e plano em paralelo (plano só precisa do email, já disponível na sessão)
+      console.log('[AreaDoPaciente] Buscando paciente e plano em paralelo...');
+      const [patientFound, planData] = await Promise.all([
+        fetchPatientWithFallback(session.user.id, session.user.email || ''),
+        getPatientPlan(session.user.email || '').catch((err) => {
+          console.error('Erro ao carregar plano do paciente:', err);
+          return null;
+        }),
+      ]);
 
       if (patientFound) {
         console.log('[AreaDoPaciente] ✅ Paciente encontrado! CPF:', patientFound.cpf, 'Complement:', patientFound.complement);
       }
-      
+
       if (!patientFound || !patientFound.profile_complete) {
         console.log('[AreaDoPaciente] Perfil incompleto ou não encontrado, redirecionando para /completar-perfil');
         window.location.replace('/completar-perfil');
         return;
       }
-      
-      setPatient(patientFound as Patient);
 
-      // Load patient plan
-      try {
-        const planData = await getPatientPlan(session.user.email);
-        setPatientPlan(planData);
-      } catch (error) {
-        console.error('Erro ao carregar plano do paciente:', error);
-      }
+      setPatient(patientFound as Patient);
+      setPatientPlan(planData);
       setIsLoading(false);
 
       // Verificar returnUrl após login
@@ -128,9 +130,18 @@ const AreaDoPaciente = () => {
           navigate(returnUrl);
         }, 2000);
       }
-    };
+    } catch (err) {
+      console.error('[AreaDoPaciente] Erro ao carregar dados:', err);
+      setIsLoading(false);
+      setLoadError(true);
+    }
+  };
+
+  useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     loadPatientData();
-  }, [navigate, toast]);
+  }, []);
 
   const handleLogout = async () => {
     // ✅ CORRIGIDO: Usar hybridSignOut para limpar sessão em ambos os ambientes com try/catch
@@ -284,6 +295,20 @@ const AreaDoPaciente = () => {
         return 'Não informado';
     }
   };
+  if (loadError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4">
+        <p className="text-gray-600 text-center">Não foi possível carregar. Verifique sua conexão.</p>
+        <button
+          onClick={() => { hasLoadedRef.current = false; loadPatientData(); }}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90"
+        >
+          Tentar novamente
+        </button>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
