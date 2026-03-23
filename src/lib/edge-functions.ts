@@ -8,9 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 const SUPABASE_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 /**
- * ✅ URL do Lovable Cloud para funções deployadas automaticamente
+ * ✅ URL do projeto de produção (ploqujuhpwutpcibedbr) — projeto ativo
  */
-const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
+const CLOUD_URL = "https://ploqujuhpwutpcibedbr.supabase.co";
 
 /**
  * ✅ Chave pública (anon key) do projeto original - hardcoded para segurança
@@ -18,9 +18,9 @@ const CLOUD_URL = "https://yrsjluhhnhxogdgnbnya.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I";
 
 /**
- * ✅ Chave pública (anon key) do Lovable Cloud
+ * ✅ Chave pública (anon key) do projeto de produção
  */
-const CLOUD_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlyc2psdWhobmh4b2dkZ25ibnlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMjY1NzUsImV4cCI6MjA4MzgwMjU3NX0.fdF2KZage73BDDM0Shs7cMRLnJdFPUef866R5vZBmnY";
+const CLOUD_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsb3F1anVocHd1dHBjaWJlZGJyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY3NjYxODQsImV4cCI6MjA3MjM0MjE4NH0.WD3MXt1Y4sYxkaCPGgD0s8LdhPx_7eEQ1ewaFhnQ8-I";
 
 const EDGE_FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 const CLOUD_FUNCTIONS_URL = `${CLOUD_URL}/functions/v1`;
