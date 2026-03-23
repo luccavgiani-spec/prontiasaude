@@ -113,8 +113,6 @@ export default function UserRegistrationsTab() {
     total: 0,
     withPlan: 0,
     criticalWithPlan: 0,
-    cloudOnly: 0,
-    productionOnly: 0,
   });
   const limit = 50;
 
@@ -360,8 +358,6 @@ export default function UserRegistrationsTab() {
         total: response.stats?.totalUnique || allUsers.length,
         withPlan: withPlanCount,
         criticalWithPlan: criticalWithPlanCount,
-        cloudOnly: response.stats?.cloudOnly || 0,
-        productionOnly: response.stats?.productionOnly || 0,
       });
 
       // Store in cache - filtering will happen via applyFilters useEffect
@@ -414,10 +410,6 @@ export default function UserRegistrationsTab() {
       filteredUsers = filteredUsers.filter(u => u.activePlan && u.hasMissingCriticalData);
     } else if (statusFilter === 'no_patient_record') {
       filteredUsers = filteredUsers.filter(u => u._noPatientRecord);
-    } else if (statusFilter === 'cloud_only') {
-      filteredUsers = filteredUsers.filter(u => u.source === 'cloud');
-    } else if (statusFilter === 'production_only') {
-      filteredUsers = filteredUsers.filter(u => u.source === 'production');
     }
 
     // Paginate locally
@@ -933,8 +925,6 @@ export default function UserRegistrationsTab() {
               <SelectItem value="incomplete_data">⚠️ Perfis Incompletos (Migração)</SelectItem>
               <SelectItem value="critical_with_plan">🚨 Críticos com Plano</SelectItem>
               <SelectItem value="no_patient_record">⚠️ Sem Registro de Paciente</SelectItem>
-              <SelectItem value="cloud_only">☁️ Apenas Cloud ({stats.cloudOnly})</SelectItem>
-              <SelectItem value="production_only">🏭 Apenas Produção</SelectItem>
             </SelectContent>
           </Select>
 
