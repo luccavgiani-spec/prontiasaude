@@ -40,6 +40,7 @@ const CompletarPerfil = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteData, setInviteData] = useState<any>(null);
+  const [showFamilyAuthChoice, setShowFamilyAuthChoice] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -100,6 +101,7 @@ const CompletarPerfil = () => {
           title: "Sessão anterior encerrada",
           description: `Complete o cadastro com o email ${invite.email}`,
         });
+        setShowFamilyAuthChoice(true);
       } else if (session) {
         setCurrentUser(session.user);
         const patient = await getPatient(session.user.id);
@@ -120,6 +122,8 @@ const CompletarPerfil = () => {
             terms_accepted: true
           });
         }
+      } else {
+        setShowFamilyAuthChoice(true);
       }
     } catch (error) {
       console.error('Error validating family invite:', error);
@@ -412,6 +416,13 @@ const CompletarPerfil = () => {
     }
     
     return true;
+  };
+
+  const handleGoToLogin = () => {
+    const tokenValue = inviteData?.invite_token || familyToken || '';
+    sessionStorage.setItem('pending_family_invite_token', tokenValue);
+    localStorage.setItem('pending_family_invite_token', tokenValue);
+    window.location.href = `/entrar?email=${encodeURIComponent(inviteData?.email || '')}`;
   };
 
   const handleLogout = async () => {
@@ -710,10 +721,39 @@ const CompletarPerfil = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {inviteData && showFamilyAuthChoice && !currentUser ? (
+            <div className="space-y-6">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 className="font-semibold text-green-800 mb-2">
+                  🏠 Você foi convidado para um Plano Familiar!
+                </h3>
+                <p className="text-sm text-green-700">
+                  O convite foi enviado para <strong>{inviteData.email}</strong>.
+                  Como você deseja prosseguir?
+                </p>
+              </div>
+              <div className="space-y-3">
+                <Button
+                  className="w-full bg-primary hover:bg-primary/90"
+                  onClick={() => setShowFamilyAuthChoice(false)}
+                >
+                  Criar conta
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGoToLogin}
+                >
+                  Já tenho conta
+                </Button>
+              </div>
+            </div>
+          ) : (
+          <>
           {inviteData && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
               <h3 className="font-semibold text-green-800 mb-2">
-                {inviteData.isFamilyInvite 
+                {inviteData.isFamilyInvite
                   ? "🏠 Você foi convidado para um Plano Familiar!"
                   : `✅ Você foi convidado pela ${inviteData.companies?.razao_social || 'sua empresa'}`
                 }
@@ -723,7 +763,7 @@ const CompletarPerfil = () => {
               </p>
             </div>
           )}
-          
+
           <form onSubmit={handleSave} className="space-y-6">
             {inviteData && !currentUser && (
               <div className="border-t border-b py-6 space-y-4">
@@ -1007,6 +1047,8 @@ const CompletarPerfil = () => {
               </Button>
             </div>
           </form>
+          </>
+          )}
         </CardContent>
       </Card>
     </div>
