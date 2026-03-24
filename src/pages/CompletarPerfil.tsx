@@ -60,12 +60,13 @@ const CompletarPerfil = () => {
   const validateFamilyInviteToken = async () => {
     setIsLoading(true);
     try {
-      // Usar função RPC segura para validar token de convite familiar
-      const { data: inviteResult, error } = await supabase
-        .rpc('validate_family_invite_token', { _token: familyToken });
-        
-      const invite = inviteResult?.[0];
-      
+      const { data: invite, error } = await supabase
+        .from('pending_family_invites')
+        .select('id, email, status, expires_at')
+        .eq('token', familyToken)
+        .eq('status', 'pending')
+        .maybeSingle();
+
       if (error || !invite) {
         toast({
           title: "Convite inválido",
@@ -75,22 +76,25 @@ const CompletarPerfil = () => {
         navigate('/entrar');
         return;
       }
-      
-      // Construir objeto de dados do convite para manter compatibilidade
-      const inviteData = {
+
+      if (new Date(invite.expires_at) < new Date()) {
+        toast({
+          title: "Convite expirado",
+          description: "Este convite expirou. Solicite um novo convite ao titular do plano.",
+          variant: "destructive",
+        });
+        navigate('/entrar');
+        return;
+      }
+
+      const newInviteData = {
         email: invite.email,
-        titular_plan_id: invite.titular_plan_id,
-        expires_at: (invite as any).expires_at || '',
-        invite_token: familyToken, // ✅ CRÍTICO: incluir token para ativação posterior
-        patient_plans: {
-          plan_code: (invite as any).plan_code || '',
-          plan_expires_at: (invite as any).plan_expires_at || ''
-        },
+        expires_at: invite.expires_at,
+        invite_token: familyToken,
         isFamilyInvite: true
       };
-      
-      // Marcar como convite familiar
-      setInviteData(inviteData);
+
+      setInviteData(newInviteData);
       
       // Verificar sessão atual
       const { data: { session } } = await supabase.auth.getSession();
