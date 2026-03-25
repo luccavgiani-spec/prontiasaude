@@ -38,6 +38,7 @@ const CompletarPerfil = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteData, setInviteData] = useState<any>(null);
   const [showFamilyAuthChoice, setShowFamilyAuthChoice] = useState(false);
@@ -322,6 +323,7 @@ const CompletarPerfil = () => {
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
+    setSaveError(false);
     if (field === 'phone_e164' && typeof value === 'string') {
       value = formatPhoneE164(value);
     }
@@ -693,6 +695,7 @@ const CompletarPerfil = () => {
         window.location.replace('/area-do-paciente');
       }
     } catch (error: any) {
+      setSaveError(true);
       toast({
         title: "Erro ao salvar",
         description: error.message || "Não foi possível salvar suas informações. Tente novamente.",

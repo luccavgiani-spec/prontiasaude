@@ -167,50 +167,52 @@ export async function upsertPatientBasic(payload: {
   // ✅ Usar user_id retornado pela Edge Function
   const returnedUserId = upsertResult?.user_id || userId;
 
-  // Send to GAS webhook (complete_profile)
-  try {
-    const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
-    
-    const hasActivePlan = patientPlan?.plan_code && 
-                         patientPlan?.status === 'active' && 
-                         patientPlan?.plan_expires_at &&
-                         new Date(patientPlan.plan_expires_at) > new Date();
+  // Enviar para GAS webhook via complete_profile (também valida CPF único)
+  const patientPlan = userEmail ? await getPatientPlan(userEmail) : null;
 
-    console.log('[patients] Verificação de plano:', {
+  const hasActivePlan = patientPlan?.plan_code &&
+                       patientPlan?.status === 'active' &&
+                       patientPlan?.plan_expires_at &&
+                       new Date(patientPlan.plan_expires_at) > new Date();
+
+  console.log('[patients] Verificação de plano:', {
+    email: userEmail,
+    plan_code: patientPlan?.plan_code,
+    status: patientPlan?.status,
+    expires_at: patientPlan?.plan_expires_at,
+    hasActivePlan
+  });
+
+  const headers: Record<string, string> = {};
+  if (accessToken && environment === 'production') {
+    headers['Authorization'] = `Bearer ${accessToken}`;
+  }
+
+  const { data: completeResult, error: completeError } = await invokeEdgeFunction('patient-operations', {
+    body: {
+      operation: 'complete_profile',
+      user_id: returnedUserId,
+      first_name: payload.first_name,
+      last_name: payload.last_name,
       email: userEmail,
-      plan_code: patientPlan?.plan_code,
-      status: patientPlan?.status,
-      expires_at: patientPlan?.plan_expires_at,
-      hasActivePlan
-    });
+      phone: payload.phone_e164,
+      cpf: cleanCpf,
+      birth_date: payload.birth_date,
+      gender: payload.gender || '',
+      cep: payload.cep || '',
+      address_number: payload.address_number || '',
+      address_complement: payload.address_complement || '',
+      city: payload.city || '',
+      state: payload.state || '',
+      plano: hasActivePlan
+    },
+    headers
+  });
 
-    const headers: Record<string, string> = {};
-    if (accessToken && environment === 'production') {
-      headers['Authorization'] = `Bearer ${accessToken}`;
-    }
-
-    await invokeEdgeFunction('patient-operations', {
-      body: {
-        operation: 'complete_profile',
-        user_id: returnedUserId,
-        first_name: payload.first_name,
-        last_name: payload.last_name,
-        email: userEmail,
-        phone: payload.phone_e164,
-        cpf: cleanCpf,
-        birth_date: payload.birth_date,
-        gender: payload.gender || '',
-        cep: payload.cep || '',
-        address_number: payload.address_number || '',
-        address_complement: payload.address_complement || '',
-        city: payload.city || '',
-        state: payload.state || '',
-        plano: hasActivePlan
-      },
-      headers
-    });
-  } catch (gasError) {
-    console.error('GAS webhook error (non-blocking):', gasError);
+  if (completeError || !completeResult?.success) {
+    const msg = completeResult?.error || completeError?.message || 'Erro ao salvar perfil';
+    console.error('[patients] complete_profile error:', msg);
+    throw new Error(msg);
   }
 
   return { success: true, user_id: returnedUserId };
