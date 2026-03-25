@@ -38,8 +38,11 @@ export async function invokeEdgeFunction<T = any>(
 
     // ✅ CORREÇÃO: Se options.headers.Authorization já vier definido, NÃO sobrescrever.
     // Isso permite que chamadas híbridas (Cloud/Produção) enviem o token correto.
+    // Se houver token de sessão ativo, usá-lo; caso contrário, usar a anon key como fallback.
     if (!options.headers?.Authorization) {
-      headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
+      headers["Authorization"] = accessToken
+        ? `Bearer ${accessToken}`
+        : `Bearer ${SUPABASE_ANON_KEY}`;
     }
 
     console.log(`[invokeEdgeFunction] target=production function=${functionName} origin=${typeof window !== 'undefined' ? window?.location?.origin : 'server'}`);
