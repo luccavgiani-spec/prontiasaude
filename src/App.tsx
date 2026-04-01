@@ -93,6 +93,7 @@ const SejaNossParceiro = lazy(() => import("./pages/SejaNossParceiro"));
 const DisqueDenuncia = lazy(() => import("./pages/DisqueDenuncia"));
 const Termos = lazy(() => import("./pages/Termos"));
 const Privacidade = lazy(() => import("./pages/Privacidade"));
+const Contrato = lazy(() => import("./pages/Contrato"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const EmpresaLogin = lazy(() => import("./pages/empresa/Login"));
@@ -202,6 +203,7 @@ const App = () => (
               <Route path="/disque-denuncia" element={<DisqueDenuncia />} />
               <Route path="/termos" element={<Termos />} />
               <Route path="/privacidade" element={<Privacidade />} />
+              <Route path="/contrato" element={<Contrato />} />
               {/* Admin routes */}
               <Route path="/admin/login" element={<AdminLogin />} />
               <Route path="/admin/dashboard" element={<AdminDashboard />} />

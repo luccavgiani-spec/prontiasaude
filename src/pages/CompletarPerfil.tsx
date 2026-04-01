@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import TermosContent from "@/components/legal/TermosContent";
+import PrivacidadeContent from "@/components/legal/PrivacidadeContent";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { getHybridSession, supabaseProductionAuth, hybridSignOut, hybridSignUp, hybridSignIn } from "@/lib/auth-hybrid";
@@ -42,6 +45,8 @@ const CompletarPerfil = () => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [inviteData, setInviteData] = useState<any>(null);
   const [showFamilyAuthChoice, setShowFamilyAuthChoice] = useState(false);
+  const [termosOpen, setTermosOpen] = useState(false);
+  const [privacidadeOpen, setPrivacidadeOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1034,7 +1039,11 @@ const CompletarPerfil = () => {
                 required
               />
               <label htmlFor="terms" className="text-sm font-medium leading-none cursor-pointer select-none">
-                Aceito os termos de uso e política de privacidade *
+                Aceito os{" "}
+                <button type="button" onClick={() => setTermosOpen(true)} className="underline text-primary hover:opacity-80">termos de uso</button>
+                {" "}e{" "}
+                <button type="button" onClick={() => setPrivacidadeOpen(true)} className="underline text-primary hover:opacity-80">política de privacidade</button>
+                {" "}*
               </label>
             </div>
             
@@ -1058,6 +1067,34 @@ const CompletarPerfil = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={termosOpen} onOpenChange={setTermosOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Termo de Consentimento Livre e Esclarecido</DialogTitle>
+          </DialogHeader>
+          <TermosContent />
+          <div className="flex justify-end pt-4">
+            <DialogClose asChild>
+              <Button variant="outline">Fechar</Button>
+            </DialogClose>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={privacidadeOpen} onOpenChange={setPrivacidadeOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Política de Privacidade</DialogTitle>
+          </DialogHeader>
+          <PrivacidadeContent />
+          <div className="flex justify-end pt-4">
+            <DialogClose asChild>
+              <Button variant="outline">Fechar</Button>
+            </DialogClose>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
