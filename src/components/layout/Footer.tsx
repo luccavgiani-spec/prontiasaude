@@ -110,6 +110,9 @@ Todos os serviços de saúde são prestados pela PRIMECARE SERVIÇOS MÉDICOS LT
             <Link to="/privacidade" className="text-white/70 hover:text-white transition-colors">
               Política de Privacidade
             </Link>
+            <Link to="/contrato" className="text-white/70 hover:text-white transition-colors">
+              Contrato de Serviços
+            </Link>
           </div>
         </div>
 
