@@ -1999,7 +1999,7 @@ export function PaymentModal({
             console.log("[Realtime] Appointment ignorado (order_id diferente):", {
               received_order_id: appointment.order_id,
               expected_order_id: orderId,
-            });
+             });
           }
         },
       )
