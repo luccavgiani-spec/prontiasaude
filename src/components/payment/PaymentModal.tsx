@@ -1981,6 +1981,15 @@ export function PaymentModal({
             });
 
             setRedirectUrl(appointment.redirect_url);
+            // 🎯 Track Purchase event (PIX confirmado via Realtime)
+            trackPurchase({
+              value: amount / 100,
+              order_id: appointment.order_id,
+              sku: sku,
+              email: formData.email,
+              content_name: serviceName,
+              contents: [{ id: sku, quantity: 1, item_price: amount / 100 }],
+            });
             toast.success("Agendamento confirmado! Redirecionando...");
 
             setTimeout(() => {
