@@ -1426,6 +1426,15 @@ export function PaymentModal({
           if (planConfirmed) {
             console.log("[handleCardSubmit] ✅ Plano ativado durante polling de payment_pending!");
             setPaymentStatus("approved");
+            // 🎯 Track Purchase event (plano ativado após payment_pending)
+            trackPurchase({
+              value: amount / 100,
+              order_id: orderId,
+              sku: sku,
+              email: formData.email,
+              content_name: serviceName,
+              contents: [{ id: sku, quantity: 1, item_price: amount / 100 }],
+            });
             toast.dismiss();
             toast.success("Plano ativado com sucesso!", {
               description: "Redirecionando para sua área...",
