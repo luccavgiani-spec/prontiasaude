@@ -1963,7 +1963,7 @@ export function PaymentModal({
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "appointments",
           filter: `email=eq.${formData.email}`,
@@ -1973,7 +1973,7 @@ export function PaymentModal({
           const appointment = payload.new as any;
 
           // 🔍 Verificar se é o appointment deste pagamento específico
-          if (appointment.redirect_url && appointment.order_id && appointment.order_id === currentOrderId) {
+          if (appointment.redirect_url && appointment.order_id && appointment.order_id === orderId) {
             console.log("[Realtime] ✅ Appointment CORRETO detectado:", {
               appointment_id: appointment.appointment_id,
               order_id: appointment.order_id,
@@ -1998,7 +1998,7 @@ export function PaymentModal({
           } else {
             console.log("[Realtime] Appointment ignorado (order_id diferente):", {
               received_order_id: appointment.order_id,
-              expected_order_id: currentOrderId,
+              expected_order_id: orderId,
             });
           }
         },
