@@ -669,8 +669,10 @@ export function CouponsTab() {
                       className={use.reviewed ? 'bg-muted/50 text-muted-foreground' : ''}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-2 justify-center">
-                          {!use.reviewed && (
+                        <div className="flex items-center justify-center">
+                          {use.reviewed ? (
+                            <Checkbox checked={true} disabled={true} />
+                          ) : (
                             <Checkbox
                               checked={selectedUseIds.has(use.id)}
                               onCheckedChange={(checked) => {
@@ -682,11 +684,6 @@ export function CouponsTab() {
                               }}
                             />
                           )}
-                          <Checkbox
-                            checked={use.reviewed}
-                            onCheckedChange={() => handleToggleReviewed(use.id, use.reviewed)}
-                            disabled={use.reviewed}
-                          />
                         </div>
                       </TableCell>
                       <TableCell className="font-medium">{use.used_by_name}</TableCell>
@@ -717,10 +714,10 @@ export function CouponsTab() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right text-muted-foreground">
-                        R$ {(use.original_amount / 100).toFixed(2)}
+                        {use.original_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-green-600">
-                        R$ {(use.final_amount / 100).toFixed(2)}
+                        {use.final_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {format(parseISO(use.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
