@@ -100,6 +100,8 @@ export function CouponsTab() {
   const [isVerifyingAll, setIsVerifyingAll] = useState(false);
   const [batchResult, setBatchResult] = useState<BatchVerificationResult | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
+  const [selectedUseIds, setSelectedUseIds] = useState<Set<string>>(new Set());
+  const [isBatchReviewing, setIsBatchReviewing] = useState(false);
 
   useEffect(() => {
     loadCouponUses();
@@ -380,7 +382,7 @@ export function CouponsTab() {
         body: {
           operation: 'mark_reviewed',
           id: id,
-          admin_reviewed: !currentStatus,
+          reviewed: !currentStatus,
         }
       });
 
@@ -393,6 +395,28 @@ export function CouponsTab() {
     } catch (error) {
       console.error('Erro ao marcar cupom:', error);
       toast.error("Erro ao atualizar status de revisão");
+    }
+  };
+
+  const handleBatchMarkReviewed = async () => {
+    if (selectedUseIds.size === 0) return;
+    setIsBatchReviewing(true);
+    try {
+      await Promise.all(
+        Array.from(selectedUseIds).map((id) =>
+          invokeEdgeFunction('admin-coupon-operations', {
+            body: { operation: 'mark_reviewed', id, reviewed: true },
+          })
+        )
+      );
+      toast.success(`${selectedUseIds.size} cupom(s) marcado(s) como conferido(s)!`);
+      setSelectedUseIds(new Set());
+      loadCouponUses();
+    } catch (error) {
+      console.error('Erro ao marcar cupons em lote:', error);
+      toast.error('Erro ao marcar cupons em lote');
+    } finally {
+      setIsBatchReviewing(false);
     }
   };
 
@@ -584,11 +608,22 @@ export function CouponsTab() {
 
       {/* Cupons Utilizados */}
       <Card>
-        <CardHeader>
-          <CardTitle>✅ Cupons Utilizados</CardTitle>
-          <CardDescription>
-            Cupons efetivamente utilizados em compras pagas - Confira e marque como analisados
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle>✅ Cupons Utilizados</CardTitle>
+            <CardDescription>
+              Cupons efetivamente utilizados em compras pagas - Confira e marque como analisados
+            </CardDescription>
+          </div>
+          {selectedUseIds.size > 0 && (
+            <Button onClick={handleBatchMarkReviewed} disabled={isBatchReviewing} size="sm">
+              {isBatchReviewing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Marcando...</>
+              ) : (
+                <><CheckCircle2 className="mr-2 h-4 w-4" />Marcar {selectedUseIds.size} como conferido(s)</>
+              )}
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {couponUses.length === 0 ? (
@@ -600,7 +635,23 @@ export function CouponsTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[80px]">Conferido</TableHead>
+                    <TableHead className="w-[100px]">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={couponUses.filter((u) => !u.reviewed).length > 0 && couponUses.filter((u) => !u.reviewed).every((u) => selectedUseIds.has(u.id))}
+                          onCheckedChange={(checked) => {
+                            const unreviewedIds = couponUses.filter((u) => !u.reviewed).map((u) => u.id);
+                            if (checked) {
+                              setSelectedUseIds(new Set(unreviewedIds));
+                            } else {
+                              setSelectedUseIds(new Set());
+                            }
+                          }}
+                          disabled={couponUses.filter((u) => !u.reviewed).length === 0}
+                        />
+                        Conferido
+                      </div>
+                    </TableHead>
                     <TableHead>Nome de quem usou</TableHead>
                     <TableHead>Código do cupom</TableHead>
                     <TableHead>Produto Vendido</TableHead>
@@ -618,7 +669,19 @@ export function CouponsTab() {
                       className={use.reviewed ? 'bg-muted/50 text-muted-foreground' : ''}
                     >
                       <TableCell>
-                        <div className="flex items-center justify-center">
+                        <div className="flex items-center gap-2 justify-center">
+                          {!use.reviewed && (
+                            <Checkbox
+                              checked={selectedUseIds.has(use.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedUseIds((prev) => {
+                                  const next = new Set(prev);
+                                  checked ? next.add(use.id) : next.delete(use.id);
+                                  return next;
+                                });
+                              }}
+                            />
+                          )}
                           <Checkbox
                             checked={use.reviewed}
                             onCheckedChange={() => handleToggleReviewed(use.id, use.reviewed)}
