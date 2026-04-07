@@ -1,4 +1,4 @@
-// [schedule-redirect] VERSION: 2026-01-31T-v4-self-contained-cors
+// [schedule-redirect] VERSION: 2026-01-31T-v4-self-contained-cors-v262-fix-order-id
 // ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -505,6 +505,11 @@ async function saveAppointment(
   supabase: any,
 ): Promise<{ appointment_id: string; redirect_url: string; existing?: boolean }> {
   try {
+    // ✅ NOVO: log defensivo para rastrear order_id
+    console.log("[saveAppointment] order_id recebido:", payload.order_id ?? "NULL/UNDEFINED");
+    console.log("[saveAppointment] provider:", provider);
+    console.log("[saveAppointment] email:", payload.email);
+
     // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Se já existe appointment com este order_id, retornar existente
     if (payload.order_id) {
       const { data: existingAppointment } = await supabase
@@ -594,7 +599,7 @@ async function saveAppointment(
       provider: provider,
       redirect_url: redirectUrl,
       // meeting_url removido - coluna não existe no projeto original
-      order_id: payload.order_id,
+      order_id: payload.order_id ?? null,  // ✅ ?? null evita que Supabase omita o campo quando undefined
     };
 
     // ✅ CORREÇÃO RACE CONDITION: Tentar INSERT e capturar erro de unique violation

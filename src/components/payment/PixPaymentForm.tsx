@@ -28,7 +28,7 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
     email,
     paymentId,
     enabled: !redirectUrl && (!!orderId || !!email || !!paymentId),
-    maxAttempts: 120, // 6 minutos de polling (120 x 3s = 360s)
+    maxAttempts: 200, // 10 minutos de polling (200 x 3s = 600s)
     intervalMs: 3000  // Verificar a cada 3 segundos
   });
 
@@ -36,7 +36,7 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
   useEffect(() => {
     if (isChecking && attempts > 0) {
       // Calcular progresso: 0% a 95% durante polling (nunca 100% até confirmar)
-      const percentage = Math.min((attempts / 120) * 95, 95);
+      const percentage = Math.min((attempts / 200) * 95, 95);
       setProgress(percentage);
     } else if (redirectUrl || autoRedirectUrl) {
       setProgress(100);
@@ -65,8 +65,11 @@ export function PixPaymentForm({ qrCode, qrCodeBase64, redirectUrl, onCancel, pa
   useEffect(() => {
     if (autoRedirectUrl || redirectUrl) return;
 
+    const startTime = Date.now();
+    const TIMEOUT_MS = 600_000; // 600s
+
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible' && Date.now() - startTime < TIMEOUT_MS) {
         handleCheckPaymentStatus();
       }
     };
