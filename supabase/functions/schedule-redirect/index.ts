@@ -1,4 +1,4 @@
-// [schedule-redirect] VERSION: 2026-01-31T-v4-self-contained-cors-v262-fix-order-id
+// [schedule-redirect] VERSION: 2026-04-08T-v5-restructure-sem-plano-brt
 // ✅ VERSÃO AUTO-CONTIDA - CORS inline (sem import externo)
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -798,16 +798,17 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // HIERARQUIA DE ROTEAMENTO CORRETA (v2 - CORRIGIDA)
+    // HIERARQUIA DE ROTEAMENTO (v5 - REESTRUTURADA)
     // ============================================================
     // ORDEM:
     // 0. ADMIN FORCE PROVIDER (payload) - já verificado acima
-    // 1. EXCEÇÕES FIXAS (Laudos, Psicólogos sem plano, Especialistas, WhatsApp)
-    // 2. PLANO ATIVO → ClickLife (ignora overrides e horário)
-    // 3. OVERRIDES ADMIN (force_clicklife, force_clicklife_pronto_atendimento, force_communicare_clinico)
-    // 4. HORÁRIO (7h-19h BRT dias úteis = Communicare, fora = ClickLife)
-    // 5. ESPECIALIDADE (aceita Communicare ou ClickLife)
-    // 6. FALLBACK → Communicare
+    // 1. EXCEÇÕES FIXAS (Laudos → sempre WhatsApp)
+    // 2. PSICÓLOGO COM PLANO → WhatsApp
+    // 3. PLANO ATIVO → ClickLife
+    // 4. SEM PLANO: force_clicklife → ClickLife
+    // 5. SEM PLANO: horário BRT 07h–23h59:
+    //      ITC6534 → Communicare | demais SKUs → WhatsApp
+    // 6. SEM PLANO: fora horário (00h–06h59) → out_of_hours (sem appointment)
     // ============================================================
 
     // ✅ GUARD: Nunca processar SKUs de PLANO (assinaturas)
@@ -863,86 +864,19 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ✅ BYPASS: Renovação de Receitas e Solicitação de Exames → WhatsApp (SOMENTE SEM PLANO)
-    const WHATSAPP_REDIRECT_SKUS: Record<string, string> = {
-      RZP5755: "https://wa.me/5511933359187?text=Quero%20renovar%20minha%20receita!",
-      ULT3571: "https://wa.me/5511933359187?text=Quero%20agendar%20um%20exame!",
-    };
-
-    if (WHATSAPP_REDIRECT_SKUS[payload.sku] && !payload.plano_ativo) {
-      console.log(`[schedule-redirect] ✓ SKU ${payload.sku} SEM plano ativo → WhatsApp`);
-
-      const whatsappUrl = WHATSAPP_REDIRECT_SKUS[payload.sku];
-
-      // ✅ CRÍTICO: Salvar appointment ANTES de retornar para permitir polling do frontend
-      await saveAppointment(payload, "whatsapp", whatsappUrl, supabase);
-      console.log("[schedule-redirect] ✅ Appointment salvo no banco antes de redirecionar");
-
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          url: whatsappUrl,
-          provider: "whatsapp",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // ✅ EXCEÇÃO: Receitas/Exames COM PLANO ATIVO → ClickLife (como Pronto Atendimento)
-    if ((payload.sku === "RZP5755" || payload.sku === "ULT3571") && payload.plano_ativo) {
-      console.log(`[schedule-redirect] ✓ SKU ${payload.sku} COM plano ativo → ClickLife`);
-      // Continuar fluxo normal para ClickLife (não retornar aqui)
-    }
-
-    // ✅ EXCEÇÃO: Psicólogos SEM plano ativo → WhatsApp para agendamento
-    const isPsicologoSemPlano = PSICOLOGO_SKUS.includes(payload.sku) && !payload.plano_ativo;
-
-    if (isPsicologoSemPlano) {
-      const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
-      const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
-      console.log(`[schedule-redirect] ✓ Psicólogo SEM plano ativo (${payload.sku}) → WhatsApp`);
-
-      await saveAppointment(payload, "whatsapp_psicologo", whatsappUrl, supabase);
-      console.log("[schedule-redirect] ✅ Appointment salvo para WhatsApp Psicólogo");
-
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          url: whatsappUrl,
-          provider: "whatsapp_psicologo",
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // ✅ EXCEÇÃO: Médicos Especialistas OU Psicólogos com Plano Ativo → WhatsApp 0800
-    const isEspecialista = ESPECIALISTA_SKUS.includes(payload.sku);
+    // ✅ EXCEÇÃO: Psicólogos COM Plano Ativo → WhatsApp
     const isPsicologoComPlano = PSICOLOGO_SKUS.includes(payload.sku) && payload.plano_ativo;
 
-    if (isEspecialista || isPsicologoComPlano) {
-      const motivo = isEspecialista
-        ? `Médico especialista (${payload.sku})`
-        : `Psicólogo COM plano ativo (${payload.sku})`;
+    if (isPsicologoComPlano) {
+      console.log(`[schedule-redirect] ✓ Psicólogo COM plano ativo (${payload.sku}) → WhatsApp`);
 
-      console.log(`[schedule-redirect] ✓ ${motivo} → WhatsApp Suporte 0800`);
-
-      // ✅ CORREÇÃO: Usar nome da especialidade na mensagem do WhatsApp
       const especialidadeNome = payload.especialidade || SKU_TO_SPECIALIST_NAME[payload.sku] || "médico especialista";
       const mensagemWhatsApp = `Olá! Acabei de comprar uma consulta de ${especialidadeNome} e gostaria de agendar.`;
       const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagemWhatsApp)}`;
 
-      console.log(`[schedule-redirect] Mensagem WhatsApp: "${mensagemWhatsApp}"`);
-
-      // ✅ CORREÇÃO: Salvar appointment ANTES de retornar para permitir polling do frontend
       try {
         await saveAppointment(payload, "whatsapp_specialist", whatsappUrl, supabase);
-        console.log("[schedule-redirect] ✅ Appointment salvo para especialista/psicólogo com plano");
+        console.log("[schedule-redirect] ✅ Appointment salvo para psicólogo com plano");
       } catch (saveError) {
         console.error("[schedule-redirect] ⚠️ Erro ao salvar appointment (continuando):", saveError);
       }
@@ -1148,14 +1082,14 @@ Deno.serve(async (req) => {
     }
 
     // ========================================
-    // HIERARQUIA DE ROTEAMENTO (v3 - force_provider prioridade máxima)
+    // HIERARQUIA DE ROTEAMENTO (v5 - REESTRUTURADA)
     // ========================================
     // 0. FORCE_PROVIDER (admin) → Prioridade máxima, ignora tudo
     // 1. PLANO ATIVO → ClickLife (ignora overrides e horário)
-    // 2. OVERRIDES ADMIN (force_clicklife, force_clicklife_pronto_atendimento, force_communicare_clinico)
-    // 3. HORÁRIO (7h-19h BRT dias úteis = Communicare, fora = ClickLife)
-    // 4. ESPECIALIDADE (aceita Communicare ou ClickLife)
-    // 5. FALLBACK → Communicare
+    // 2. SEM PLANO: force_clicklife → ClickLife
+    // 3. SEM PLANO: horário BRT 07h–23h59:
+    //      ITC6534 → Communicare | demais SKUs → WhatsApp
+    // 4. SEM PLANO: fora horário (00h–06h59) → out_of_hours (sem appointment)
     // ========================================
 
     // ========================================
@@ -1244,119 +1178,64 @@ Deno.serve(async (req) => {
       return await redirectClickLife(payload, "admin_override_emergency", corsHeaders);
     }
 
-    // 2.2 ✅ Override ClickLife para Pronto Atendimento (SKU ITC6534)
-    const { data: overrideClickLifePA, error: overrideError } = await supabase
-      .from("admin_settings")
-      .select("value")
-      .eq("key", "force_clicklife_pronto_atendimento")
-      .maybeSingle();
+    // ========================================
+    // ETAPA 3 (NOVO): VERIFICAR HORÁRIO BRT
+    // BRT = UTC-3 (offset fixo, sem dependência de DST)
+    // ========================================
 
-    console.log("[schedule-redirect] 🔍 Override ClickLife PA:", {
-      value: overrideClickLifePA?.value,
-      valueType: typeof overrideClickLifePA?.value,
-      error: overrideError?.message || null,
+    const hora_brt = (new Date().getUTCHours() - 3 + 24) % 24;
+    const fora_horario = hora_brt < 7; // 00h00 a 06h59
+
+    console.log("[schedule-redirect] 🕐 Verificação horário BRT:", {
+      hora_brt,
+      fora_horario,
       sku: payload.sku,
-      match:
-        (overrideClickLifePA?.value === true || overrideClickLifePA?.value === "true") && payload.sku === "ITC6534",
     });
 
-    if ((overrideClickLifePA?.value === true || overrideClickLifePA?.value === "true") && payload.sku === "ITC6534") {
-      console.log(
-        "[schedule-redirect] 🚨 OVERRIDE ClickLife PA ATIVO: Forçando ClickLife para Pronto Atendimento (ITC6534)",
+    if (fora_horario) {
+      // Fora do horário → retornar flag sem criar appointment
+      const isClinicoGeral = payload.sku === "ITC6534";
+      const especialidadeNomeOff = payload.especialidade || SKU_TO_SPECIALIST_NAME[payload.sku] || "especialista";
+      const mensagemOff = isClinicoGeral
+        ? `Olá! Comprei uma consulta de clínico geral e gostaria de confirmá-la. O e-mail da minha conta é o ${payload.email}`
+        : `Olá! Acabei de comprar uma consulta de ${especialidadeNomeOff} e gostaria de agendar.`;
+      const whatsapp_url = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagemOff)}`;
+
+      console.log("[schedule-redirect] ⏰ Fora do horário BRT → out_of_hours (sem appointment)");
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          out_of_hours: true,
+          whatsapp_url,
+          provider: "out_of_hours",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
-      return await redirectClickLife(payload, "override_clicklife_pronto_atendimento", corsHeaders);
     }
 
-    // 2.3 ✅ Override Communicare para Clínico Geral (SKU ITC6534)
-    const { data: forceCommData } = await supabase
-      .from("admin_settings")
-      .select("value")
-      .eq("key", "force_communicare_clinico")
-      .maybeSingle();
-
-    console.log("[schedule-redirect] 🔍 Override Communicare Clínico:", {
-      value: forceCommData?.value,
-      valueType: typeof forceCommData?.value,
-      sku: payload.sku,
-      match: (forceCommData?.value === true || forceCommData?.value === "true") && payload.sku === "ITC6534",
-    });
-
-    if ((forceCommData?.value === true || forceCommData?.value === "true") && payload.sku === "ITC6534") {
-      console.log("[schedule-redirect] Override Communicare ativo (usuário SEM plano) → Communicare");
+    // Dentro do horário (07h00–23h59):
+    if (payload.sku === "ITC6534") {
+      console.log("[schedule-redirect] ✅ ITC6534 em horário BRT → Communicare");
       return await redirectCommunicare(payload, supabase, corsHeaders);
     }
 
-    // ========================================
-    // ETAPA 3: VERIFICAR HORÁRIO
-    // ========================================
+    // Demais SKUs → WhatsApp (mensagem padrão)
+    const especialidadeNomeWA = payload.especialidade || SKU_TO_SPECIALIST_NAME[payload.sku] || "especialista";
+    const mensagemWA = `Olá! Acabei de comprar uma consulta de ${especialidadeNomeWA} e gostaria de agendar.`;
+    const whatsappUrlWA = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagemWA)}`;
 
-    const horario = payload.horario_iso ? new Date(payload.horario_iso) : new Date();
+    console.log("[schedule-redirect] ✅ SKU não-ITC6534 em horário BRT → WhatsApp");
+    await saveAppointment(payload, "whatsapp", whatsappUrlWA, supabase);
 
-    const isWeekend = horario.getDay() === 0 || horario.getDay() === 6;
-    const hour = horario.getUTCHours() - 3; // Ajustar para horário de Brasília (UTC-3)
-    const isNighttime = hour < 7 || hour >= 19;
-
-    console.log("[schedule-redirect] 🕐 Verificação de horário:", {
-      horario_iso: payload.horario_iso || "NOW",
-      utc_hour: horario.getUTCHours(),
-      brt_hour: hour,
-      is_weekend: isWeekend,
-      is_nighttime: isNighttime,
-      day_of_week: horario.getDay(),
-    });
-
-    if (isWeekend) {
-      console.log("[schedule-redirect] Fim de semana → ClickLife");
-      return await redirectClickLife(payload, "weekend", corsHeaders);
-    }
-
-    if (isNighttime) {
-      console.log("[schedule-redirect] Horário noturno (fora de 7h-19h BRT) → ClickLife");
-      return await redirectClickLife(payload, "nighttime", corsHeaders);
-    }
-
-    // ========================================
-    // ETAPA 4: VERIFICAR ESPECIALIDADE
-    // ========================================
-
-    const communicareSpecialties = await getCommunicareSpecialties(supabase);
-
-    // ✅ Mapeamento de sinônimos: nome comercial → nome técnico do provider
-    const SPECIALTY_SYNONYMS: Record<string, string> = {
-      "pronto atendimento": "clinico geral", // SKU ITC6534 - nome do site vs nome Communicare
-    };
-
-    // ✅ Normalizar payload.especialidade
-    let especialidadeNormalized = normalize(payload.especialidade || "");
-
-    // ✅ Aplicar mapeamento de sinônimo se existir
-    if (SPECIALTY_SYNONYMS[especialidadeNormalized]) {
-      const mapped = SPECIALTY_SYNONYMS[especialidadeNormalized];
-      console.log("[schedule-redirect] Especialidade mapeada:", especialidadeNormalized, "→", mapped);
-      especialidadeNormalized = mapped;
-    }
-
-    // ✅ Normalizar TODAS as especialidades Communicare
-    const communicareNormalized = communicareSpecialties.map((s) => normalize(s));
-
-    console.log("[schedule-redirect] Comparando:", {
-      payload_original: payload.especialidade,
-      payload_normalized: especialidadeNormalized,
-      communicare_raw: communicareSpecialties,
-      communicare_normalized: communicareNormalized,
-    });
-
-    // ✅ Comparar normalizados
-    if (!communicareNormalized.includes(especialidadeNormalized)) {
-      console.log("[schedule-redirect] Especialidade indisponível na Communicare → ClickLife");
-      return await redirectClickLife(payload, "specialty_unavailable", corsHeaders);
-    }
-
-    // ========================================
-    // ETAPA 5: FALLBACK → Communicare
-    // ========================================
-    console.log("[schedule-redirect] ✅ Todas as condições atendidas → Communicare");
-    return await redirectCommunicare(payload, supabase, corsHeaders);
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        url: whatsappUrlWA,
+        provider: "whatsapp",
+      }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
   } catch (error) {
     console.error("[schedule-redirect] Error:", error);
     return new Response(
