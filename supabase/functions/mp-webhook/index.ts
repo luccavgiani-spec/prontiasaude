@@ -1,3 +1,4 @@
+// [mp-webhook] VERSION: 2026-04-08T-v2-remove-excecao-blocks-out-of-hours
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getWebhookCorsHeaders } from '../common/cors.ts';
 
@@ -1313,452 +1314,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ✅ EXCEÇÃO: Especialistas ou Psicólogos SEM PLANO ATIVO → WhatsApp (EXCETO se vier da ClickLife)
-    const ESPECIALISTA_SKUS = [
-      'BIR7668', 'VPN5132', 'TQP5720', 'HGG3503', 'VHH8883', 'TSB0751',
-      'CCP1566', 'FKS5964', 'TVQ5046', 'HMG9544', 'HME8366', 'DYY8522',
-      'QOP1101', 'LZF3879', 'YZD9932', 'UDH3250', 'PKS9388', 'MYX5186',
-      'URO1099', 'IMU4471', 'PRC6621', 'PNE7783'
-    ];
-    
-    const PSICOLOGO_SKUS = ['ZXW2165', 'HXR8516', 'YME9025'];
-    
-    const SERVICE_NAMES: Record<string, string> = {
-      'BIR7668': 'Personal Trainer',
-      'VPN5132': 'Nutricionista',
-      'TQP5720': 'Cardiologista',
-      'HGG3503': 'Dermatologista',
-      'VHH8883': 'Endocrinologista',
-      'TSB0751': 'Gastroenterologista',
-      'CCP1566': 'Ginecologista',
-      'FKS5964': 'Oftalmologista',
-      'TVQ5046': 'Ortopedista',
-      'HMG9544': 'Pediatra',
-      'HME8366': 'Otorrinolaringologista',
-      'DYY8522': 'Médico da Família',
-      'QOP1101': 'Psiquiatra',
-      'LZF3879': 'Nutrólogo',
-      'YZD9932': 'Geriatria',
-      'UDH3250': 'Reumatologista',
-      'PKS9388': 'Neurologista',
-      'MYX5186': 'Infectologista',
-      'URO1099': 'Urologista',
-      'IMU4471': 'Imunologista',
-      'PRC6621': 'Proctologista',
-      'PNE7783': 'Pneumologista',
-      'ZXW2165': 'Psicólogo - 1 sessão',
-      'HXR8516': 'Psicólogo - 4 sessões',
-      'YME9025': 'Psicólogo - 8 sessões',
-    };
-
-    const isEspecialista = ESPECIALISTA_SKUS.includes(schedulePayload.sku);
-    const isPsicologo = PSICOLOGO_SKUS.includes(schedulePayload.sku);
-    const semPlanoAtivo = !schedulePayload.plano_ativo;
-    const fromClicklife = schedulePayload.source === 'clicklife';
-
-    // ✅ EXCEÇÃO 1: PSICÓLOGOS SEM plano → WhatsApp para agendamento
-    if (isPsicologo && semPlanoAtivo && !fromClicklife) {
-      const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
-      const mensagem = "Olá! Comprei uma consulta de psicólogo e gostaria de agendar!";
-      const whatsappUrl = `https://wa.me/5511933359187?text=${encodeURIComponent(mensagem)}`;
-      
-      console.log(`[mp-webhook] 🧠 ${serviceName} SEM plano ativo → WhatsApp`);
-      console.log('[mp-webhook] URL:', whatsappUrl);
-
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-      );
-
-      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
-      const orderId = payment.metadata?.order_id;
-      if (orderId) {
-        const { data: existingAppointment } = await supabaseAdmin
-          .from('appointments')
-          .select('id, appointment_id, redirect_url')
-          .eq('order_id', orderId)
-          .maybeSingle();
-        
-        if (existingAppointment) {
-          console.log('[mp-webhook] ⚠️ Appointment duplicado detectado (psicólogo)! Order já processado:', orderId);
-          return new Response(
-            JSON.stringify({ 
-              ok: true, 
-              message: 'Order already processed', 
-              appointment_id: existingAppointment.appointment_id,
-              redirect_url: existingAppointment.redirect_url 
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-          );
-        }
-      }
-
-      const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      await supabaseAdmin.from('appointments').insert({
-        appointment_id: appointmentId,
-        email: schedulePayload.email,
-        service_code: schedulePayload.sku,
-        service_name: serviceName,
-        start_at_local: new Date().toISOString(),
-        duration_min: 30,
-        status: 'pending_schedule',
-        provider: 'whatsapp_psicologo',
-        redirect_url: whatsappUrl,
-        order_id: orderId
-      });
-
-      await supabaseAdmin.from('metrics').insert({
-        metric_type: 'sale',
-        plan_code: schedulePayload.sku,
-        platform: 'whatsapp_psicologo',
-        metadata: { 
-          payment_id: payment.id, 
-          mp_status: payment.status,
-          order_id: payment.metadata?.order_id,
-          redirect_type: 'psicologo_sem_plano_whatsapp'
-        }
-      });
-
-      // ✅ CAPI: Enviar purchase_confirmed para Meta
-      await sendPurchaseConfirmedCAPI(
-        supabaseAdmin,
-        payment.metadata?.order_id || null,
-        payment.id,
-        payment.transaction_amount,
-        schedulePayload
-      );
-
-      if (payment.metadata?.order_id) {
-        await supabaseAdmin
-          .from('pending_payments')
-          .update({ 
-            processed: true,
-            processed_at: new Date().toISOString(),
-            status: 'approved'
-          })
-          .eq('order_id', payment.metadata.order_id);
-      }
-
-      console.log('[mp-webhook] ✅ Redirecionamento WhatsApp configurado (psicólogo SEM plano)');
-
-      return new Response(JSON.stringify({ 
-        success: true, 
-        payment_id: payment.id,
-        redirect_url: whatsappUrl,
-        provider: 'whatsapp_psicologo'
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    // ✅ EXCEÇÃO 2: ESPECIALISTAS SEM plano → Cadastrar ClickLife + WhatsApp manual
-    if (isEspecialista && semPlanoAtivo && !fromClicklife) {
-      const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
-      
-      console.log(`[mp-webhook] ✓ ${serviceName} SEM plano ativo → Cadastrar ClickLife + WhatsApp`);
-
-      // ✅ CORRIGIDO: Usar URL e KEY fixa do projeto original
-      const ORIGINAL_SRK = Deno.env.get('ORIGINAL_SUPABASE_SERVICE_ROLE_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-      const supabaseAdmin = createClient(
-        ORIGINAL_SUPABASE_URL,
-        ORIGINAL_SRK
-      );
-
-      // ✅ BUSCAR/CRIAR dados completos do paciente
-      let patientData = (await supabaseAdmin
-        .from('patients')
-        .select('first_name, last_name, cpf, phone_e164, gender, birth_date, email')
-        .eq('email', schedulePayload.email)
-        .maybeSingle()).data;
-
-      if (!patientData) {
-        console.log('[mp-webhook] 📝 Paciente não encontrado - criando registro no banco');
-        
-        // ✅ CORRIGIDO: NÃO usar fallback '1990-01-01' ao criar paciente
-        // O birth_date será preenchido depois quando o usuário completar o perfil
-        const newPatientData = {
-          email: schedulePayload.email,
-          cpf: schedulePayload.cpf?.replace(/\D/g, '') || payment.payer?.identification?.number?.replace(/\D/g, ''),
-          first_name: schedulePayload.nome?.split(' ')[0] || payment.payer?.first_name || 'Nome',
-          last_name: schedulePayload.nome?.split(' ').slice(1).join(' ') || payment.payer?.last_name || 'Sobrenome',
-          phone_e164: schedulePayload.telefone || payment.payer?.phone?.area_code + payment.payer?.phone?.number,
-          gender: schedulePayload.sexo || 'F',
-          birth_date: (schedulePayload.birth_date && schedulePayload.birth_date !== '1990-01-01') 
-            ? schedulePayload.birth_date 
-            : null, // ✅ NULL em vez de fallback genérico
-          profile_complete: false,
-          source: 'pix_payment'
-        };
-        
-        console.log('[mp-webhook] 📝 Criando paciente com birth_date:', newPatientData.birth_date || 'NULL (sem fallback)');
-        
-        const { data: createdPatient, error: createError } = await supabaseAdmin
-          .from('patients')
-          .upsert(newPatientData)
-          .select('first_name, last_name, cpf, phone_e164, gender, birth_date, email')
-          .single();
-        
-        if (createError) {
-          console.error('[mp-webhook] ❌ Erro ao criar paciente:', createError);
-        } else {
-          console.log('[mp-webhook] ✅ Paciente criado com sucesso');
-          patientData = createdPatient;
-        }
-      }
-
-      // ✅ CADASTRAR na ClickLife ANTES do WhatsApp
-      let clicklifeResult = { success: false, error: 'Patient data not available' };
-      
-      if (patientData) {
-        console.log('[mp-webhook] 📝 Cadastrando especialista sem plano na ClickLife...');
-        console.log('[mp-webhook] Dados do paciente:', {
-          cpf: patientData.cpf?.substring(0, 3) + '***',
-          nome: `${patientData.first_name} ${patientData.last_name}`,
-          email: patientData.email,
-          phone: patientData.phone_e164,
-          gender: patientData.gender,
-          birth_date: patientData.birth_date
-        });
-        
-        const nomeCompleto = `${patientData.first_name} ${patientData.last_name}`;
-        
-        clicklifeResult = await registerClickLifePatientSimple(
-          patientData.cpf || '',
-          nomeCompleto,
-          patientData.email || schedulePayload.email,
-          patientData.phone_e164 || '',
-          864, // planoId para consultas avulsas
-          patientData.gender || 'F',
-          patientData.birth_date
-        );
-        
-        // ✅ REGISTRAR NA TABELA DE AUDITORIA (usando schema correto)
-        const serviceName = SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku;
-        try {
-          // Buscar patient_id pelo email
-          let auditPatientId = null;
-          const { data: auditPatient } = await supabaseAdmin
-            .from('patients')
-            .select('id')
-            .eq('email', patientData.email || schedulePayload.email)
-            .maybeSingle();
-          auditPatientId = auditPatient?.id || null;
-          
-          await supabaseAdmin.from('clicklife_registrations').insert({
-            cpf: patientData.cpf,
-            patient_id: auditPatientId,
-            status: clicklifeResult.success ? 'success' : 'failed',
-            error_message: clicklifeResult.error || null,
-            registration_data: {
-              patient_email: patientData.email || schedulePayload.email,
-              patient_name: nomeCompleto,
-              order_id: payment.metadata?.order_id,
-              payment_id: String(payment.id),
-              sku: schedulePayload.sku,
-              service_name: serviceName,
-              clicklife_empresa_id: 9083,
-              clicklife_plano_id: 864,
-              success: clicklifeResult.success,
-              response: clicklifeResult
-            }
-          });
-          console.log('[mp-webhook] 📝 Registro de auditoria ClickLife salvo');
-        } catch (auditError) {
-          console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
-        }
-        
-        if (clicklifeResult.success) {
-          console.log('[mp-webhook] ✅ Paciente cadastrado na ClickLife com sucesso');
-          
-          // ✅ Atualizar timestamp de registro ClickLife
-          await supabaseAdmin
-            .from('patients')
-            .update({ clicklife_registered_at: new Date().toISOString() })
-            .eq('email', patientData.email || schedulePayload.email);
-        } else {
-          console.warn('[mp-webhook] ⚠️ Falha no cadastro ClickLife (continuando para WhatsApp):', clicklifeResult.error);
-        }
-        
-        // ✅ NOVO: CADASTRO SIMULTÂNEO NA COMMUNICARE (especialista sem plano)
-        console.log('[mp-webhook] 🏥 Cadastro Communicare (especialista sem plano)...');
-        
-        const communicareResult = await registerCommunicarePatientSimple(
-          patientData.cpf || '',
-          nomeCompleto,
-          patientData.email || schedulePayload.email,
-          patientData.phone_e164 || '',
-          patientData.gender || 'F',
-          patientData.birth_date
-        );
-        
-        if (communicareResult.success) {
-          console.log('[mp-webhook] ✅ Paciente cadastrado na Communicare com sucesso');
-          
-          const updateData: any = { 
-            communicare_registered_at: new Date().toISOString() 
-          };
-          if (communicareResult.patientId) {
-            updateData.communicare_patient_id = String(communicareResult.patientId);
-          }
-          
-          await supabaseAdmin
-            .from('patients')
-            .update(updateData)
-            .eq('email', patientData.email || schedulePayload.email);
-        } else {
-          console.warn('[mp-webhook] ⚠️ Falha no cadastro Communicare:', communicareResult.error);
-        }
-      } else {
-        // Registrar falha quando não há dados do paciente (usando schema correto)
-        try {
-          await supabaseAdmin.from('clicklife_registrations').insert({
-            cpf: schedulePayload.cpf?.replace(/\D/g, '') || 'UNKNOWN',
-            patient_id: null,
-            status: 'failed',
-            error_message: 'Patient data not available - patientData is null',
-            registration_data: {
-              patient_email: schedulePayload.email,
-              patient_name: schedulePayload.nome || 'Desconhecido',
-              order_id: payment.metadata?.order_id,
-              payment_id: String(payment.id),
-              sku: schedulePayload.sku,
-              service_name: SERVICE_NAMES[schedulePayload.sku] || schedulePayload.sku,
-              clicklife_empresa_id: 9083,
-              clicklife_plano_id: 864,
-              success: false,
-              schedulePayload: schedulePayload,
-              payerInfo: payment.payer
-            }
-          });
-        } catch (auditError) {
-          console.error('[mp-webhook] ⚠️ Erro ao salvar auditoria ClickLife:', auditError);
-        }
-      }
-
-      // ✅ VERIFICAÇÃO DE DUPLICAÇÃO: Checar se já existe appointment com este order_id
-      const orderId = payment.metadata?.order_id;
-      if (orderId) {
-        const { data: existingAppointment } = await supabaseAdmin
-          .from('appointments')
-          .select('id, appointment_id, redirect_url')
-          .eq('order_id', orderId)
-          .maybeSingle();
-        
-        if (existingAppointment) {
-          console.log('[mp-webhook] ⚠️ Appointment duplicado detectado (especialista)! Order já processado:', orderId);
-          
-          // ✅ CORREÇÃO: Marcar como processado mesmo quando encontra duplicado
-          await supabaseAdmin
-            .from('pending_payments')
-            .update({ 
-              processed: true, 
-              processed_at: new Date().toISOString(),
-              status: 'approved'
-            })
-            .eq('order_id', orderId);
-          console.log('[mp-webhook] ✅ pending_payment marcado como processed=true (duplicação especialista)');
-          
-          return new Response(
-            JSON.stringify({ 
-              ok: true, 
-              message: 'Order already processed', 
-              appointment_id: existingAppointment.appointment_id,
-              redirect_url: existingAppointment.redirect_url 
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-          );
-        }
-      }
-
-      // ✅ Continuar com WhatsApp como hoje
-      const whatsappUrl = `https://wa.me/5511933359187?text=Olá!%20Acabei%20de%20comprar%20uma%20consulta%20de%20${encodeURIComponent(serviceName)}%20e%20gostaria%20de%20agendar.`;
-      console.log('[mp-webhook] WhatsApp URL:', whatsappUrl);
-
-      const appointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      const { error: appointmentError } = await supabaseAdmin.from('appointments').insert({
-        appointment_id: appointmentId,
-        email: schedulePayload.email,
-        service_code: schedulePayload.sku,
-        service_name: serviceName,
-        start_at_local: new Date().toISOString(),
-        duration_min: 30,
-        status: 'pending_schedule',
-        provider: 'whatsapp_manual',
-        redirect_url: whatsappUrl,
-        teams_join_url: whatsappUrl,
-        order_id: orderId
-      });
-
-      if (appointmentError) {
-        console.error('[mp-webhook] ❌ ERRO ao criar appointment (especialista):', appointmentError);
-        // Retorna erro para permitir retry do webhook
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: 'Failed to create appointment',
-          details: appointmentError.message
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      console.log('[mp-webhook] ✅ Appointment criado com sucesso:', appointmentId);
-
-      await supabaseAdmin.from('metrics').insert({
-        metric_type: 'sale',
-        amount_cents: Math.round(payment.transaction_amount * 100),
-        plan_code: schedulePayload.sku,
-        platform: 'whatsapp_manual',
-        status: 'approved',
-        patient_email: schedulePayload.email,
-        metadata: { 
-          payment_id: payment.id, 
-          mp_status: payment.status,
-          order_id: payment.metadata?.order_id,
-          redirect_type: 'whatsapp_specialist_no_plan',
-          clicklife_registered: clicklifeResult.success,
-          clicklife_error: clicklifeResult.error || null
-        }
-      });
-
-      // ✅ CAPI: Enviar purchase_confirmed para Meta
-      await sendPurchaseConfirmedCAPI(
-        supabaseAdmin,
-        payment.metadata?.order_id || null,
-        payment.id,
-        payment.transaction_amount,
-        schedulePayload
-      );
-
-      // Marcar como processado
-      if (payment.metadata?.order_id) {
-        await supabaseAdmin
-          .from('pending_payments')
-          .update({ 
-            processed: true,
-            processed_at: new Date().toISOString(),
-            status: 'approved'
-          })
-          .eq('order_id', payment.metadata.order_id);
-      }
-
-      console.log('[mp-webhook] ✅ Cadastro ClickLife + Redirecionamento WhatsApp configurado');
-      
-      return new Response(JSON.stringify({ 
-        success: true, 
-        payment_id: payment.id,
-        redirect_url: whatsappUrl,
-        provider: 'whatsapp_manual',
-        clicklife_registered: clicklifeResult.success
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
     // Fluxo normal: Chamar schedule-redirect
     // ✅ CORRIGIDO: Usar URL fixa do projeto original para evitar split-brain
     // NÃO usar mais supabase.functions.invoke, usar fetch direto
@@ -2010,6 +1565,66 @@ Deno.serve(async (req) => {
         console.error(`[mp-webhook] ❌ FALHA após ${maxScheduleRetries} tentativas de agendamento`);
         console.error('[mp-webhook] Último erro:', scheduleError?.message || 'Resposta inválida');
       }
+    }
+
+    // ✅ out_of_hours: Fora do horário BRT → criar appointment e retornar link WhatsApp
+    if (!scheduleError && scheduleData?.out_of_hours === true) {
+      const whatsappUrl = scheduleData.whatsapp_url;
+      const outOrderId = payment.metadata?.order_id;
+
+      // Idempotência: evitar duplicação
+      if (outOrderId) {
+        const { data: existingApt } = await supabaseAdmin
+          .from('appointments')
+          .select('id, appointment_id, redirect_url')
+          .eq('order_id', outOrderId)
+          .maybeSingle();
+
+        if (existingApt) {
+          console.log('[mp-webhook] ⚠️ Appointment out_of_hours duplicado! Order já processado:', outOrderId);
+          return new Response(
+            JSON.stringify({ success: true, out_of_hours: true, redirect_url: existingApt.redirect_url }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      const outAppointmentId = `APT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+      await supabaseAdmin.from('appointments').insert({
+        appointment_id: outAppointmentId,
+        email: schedulePayload.email,
+        service_code: schedulePayload.sku,
+        service_name: mapSkuToName(schedulePayload.sku),
+        start_at_local: new Date().toISOString(),
+        duration_min: 30,
+        status: 'out_of_hours',
+        provider: 'out_of_hours',
+        redirect_url: whatsappUrl,
+        order_id: outOrderId || null
+      });
+
+      if (outOrderId) {
+        await supabaseAdmin
+          .from('pending_payments')
+          .update({
+            processed: true,
+            processed_at: new Date().toISOString(),
+            status: 'approved'
+          })
+          .eq('order_id', outOrderId);
+      }
+
+      console.log('[mp-webhook] ⏰ out_of_hours processado:', outAppointmentId);
+
+      return new Response(JSON.stringify({
+        success: true,
+        out_of_hours: true,
+        redirect_url: whatsappUrl
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
 
     // ✅ Determinar sucesso do agendamento
