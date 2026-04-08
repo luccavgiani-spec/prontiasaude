@@ -241,6 +241,7 @@ export function PaymentModal({
   } | null>(null);
   const [isValidatingCoupon, setIsValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [isFreeOrderProcessing, setIsFreeOrderProcessing] = useState(false);
 
   // Inicializar o SDK do Mercado Pago e carregar security.js ao montar o modal.
   // Ambos foram removidos do carregamento inicial para não bloquear o render da landing page.
@@ -270,6 +271,7 @@ export function PaymentModal({
       setAppliedCoupon(null);
       setCouponError("");
       setIsValidatingCoupon(false);
+      setIsFreeOrderProcessing(false);
     }
   }, [open]);
 
@@ -1147,6 +1149,104 @@ export function PaymentModal({
       toast.dismiss();
       toast.error("Erro ao processar pedido gratuito. Tente novamente.");
       setPaymentStatus("idle");
+    }
+  };
+
+  // ✅ Handler para cupom 100%: chama mp-create-payment sem MercadoPago SDK
+  const handleConfirmFreeOrder = async () => {
+    console.log("[handleConfirmFreeOrder] START - Free order via mp-create-payment");
+
+    if (!appliedCoupon || (appliedCoupon.discount_percentage !== 100 && appliedCoupon.amount_discounted !== 0)) {
+      console.error("[handleConfirmFreeOrder] Called without valid 100% coupon");
+      toast.error("Erro interno. Tente novamente.");
+      return;
+    }
+
+    if (!formData.email || !formData.cpf || !formData.name) {
+      toast.error("Preencha todos os dados obrigatórios");
+      return;
+    }
+
+    setIsFreeOrderProcessing(true);
+    setPaymentStatus("processing");
+
+    try {
+      const orderId = `order_free_${Date.now()}`;
+      const schedulePayload = buildSchedulePayload();
+
+      const paymentRequest = {
+        items: [{
+          id: sku,
+          title: serviceName,
+          unit_price: 0,
+          quantity: 1,
+        }],
+        payer: {
+          email: formData.email,
+          first_name: formData.name.split(" ")[0],
+          last_name: formData.name.split(" ").slice(1).join(" "),
+          identification: {
+            type: "CPF",
+            number: formData.cpf.replace(/\D/g, ""),
+          },
+        },
+        metadata: {
+          order_id: orderId,
+          is_free_order: true,
+          schedulePayload,
+          coupon_id: appliedCoupon.coupon_id,
+          coupon_code: appliedCoupon.coupon_code,
+          amount_original: appliedCoupon.amount_original,
+          amount_discounted: 0,
+          discount_percentage: appliedCoupon.discount_percentage,
+          owner_user_id: appliedCoupon.owner_user_id,
+          owner_email: appliedCoupon.owner_email,
+          owner_pix_key: appliedCoupon.owner_pix_key,
+        },
+      };
+
+      console.log("[handleConfirmFreeOrder] Calling mp-create-payment:", paymentRequest);
+
+      const { data, error } = await invokeEdgeFunction("mp-create-payment", {
+        body: paymentRequest,
+      });
+
+      if (error || !data) {
+        console.error("[handleConfirmFreeOrder] Error:", error);
+        throw new Error("Erro ao gerar consulta");
+      }
+
+      if (data.success && data.is_free) {
+        setPaymentStatus("approved");
+
+        trackPurchase({
+          value: 0,
+          order_id: orderId,
+          sku,
+          email: formData.email,
+          content_name: serviceName,
+          contents: [{ id: sku, quantity: 1, item_price: 0 }],
+        });
+
+        toast.dismiss();
+        toast.success("Consulta gerada com sucesso! Redirecionando...");
+
+        setTimeout(() => {
+          window.location.href = data.url;
+        }, 5000);
+      } else if (data.success === false) {
+        throw new Error(data.error_message || "Erro ao gerar consulta");
+      } else {
+        throw new Error("Resposta inesperada do servidor");
+      }
+    } catch (err) {
+      console.error("[handleConfirmFreeOrder] Error:", err);
+      setPaymentStatus("idle");
+      setError("Erro ao gerar consulta. Entre em contato com o suporte.");
+      toast.dismiss();
+      toast.error("Erro ao gerar consulta. Entre em contato com o suporte.");
+    } finally {
+      setIsFreeOrderProcessing(false);
     }
   };
 
@@ -2279,6 +2379,8 @@ export function PaymentModal({
               frequencyType={frequencyType}
               sku={sku}
               onSelectPaymentMethod={handlePaymentMethodSelect}
+              onConfirmFreeOrder={handleConfirmFreeOrder}
+              isFreeOrderProcessing={isFreeOrderProcessing}
               couponCode={couponCode}
               setCouponCode={setCouponCode}
               appliedCoupon={appliedCoupon}
@@ -2720,6 +2822,8 @@ export function PaymentModal({
                 frequency={frequency}
                 frequencyType={frequencyType}
                 onSelectPaymentMethod={handlePaymentMethodSelect}
+                onConfirmFreeOrder={handleConfirmFreeOrder}
+                isFreeOrderProcessing={isFreeOrderProcessing}
                 couponCode={couponCode}
                 setCouponCode={setCouponCode}
                 appliedCoupon={appliedCoupon}

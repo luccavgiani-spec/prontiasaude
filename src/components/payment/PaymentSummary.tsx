@@ -20,7 +20,9 @@ interface PaymentSummaryProps {
   frequencyType?: 'months' | 'days';
   sku?: string; // Para detectar se é um plano
   onSelectPaymentMethod: (method: 'card' | 'pix') => void;
-  
+  onConfirmFreeOrder?: () => void;
+  isFreeOrderProcessing?: boolean;
+
   // Props de cupom
   couponCode: string;
   setCouponCode: (code: string) => void;
@@ -56,6 +58,8 @@ export function PaymentSummary({
   frequencyType,
   sku,
   onSelectPaymentMethod,
+  onConfirmFreeOrder,
+  isFreeOrderProcessing,
   couponCode,
   setCouponCode,
   appliedCoupon,
@@ -66,6 +70,9 @@ export function PaymentSummary({
 }: PaymentSummaryProps) {
   // PIX é bloqueado para planos (IND_* ou FAM_*) e para recorrências
   const isPixBlocked = recurring || isPlanSku(sku);
+  // Detectar cupom de 100% de desconto (consulta gratuita)
+  const isFreeOrder = appliedCoupon !== null &&
+    (appliedCoupon.discount_percentage === 100 || appliedCoupon.amount_discounted === 0);
   const formatRecurringText = () => {
     if (!recurring || !frequency) return null;
     
@@ -207,55 +214,83 @@ export function PaymentSummary({
         )}
       </div>
 
-      {/* Métodos de Pagamento */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-foreground text-center">
-          Escolha a forma de pagamento:
-        </h4>
-        
-        <div className="grid grid-cols-1 gap-3">
+      {/* Métodos de Pagamento / Botão de consulta gratuita */}
+      {isFreeOrder ? (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-foreground text-center">
+            Consulta 100% gratuita!
+          </h4>
           <Button
-            onClick={() => onSelectPaymentMethod('card')}
+            onClick={onConfirmFreeOrder}
             size="lg"
-            variant="outline"
-            className="w-full h-auto py-4 flex flex-col gap-2 hover:border-primary hover:bg-primary/5 transition-all group"
+            disabled={isFreeOrderProcessing}
+            className="w-full h-auto py-4 flex flex-col gap-2 transition-all"
           >
-            <CreditCard className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
-            <span className="font-semibold">Cartão de Crédito</span>
-            <span className="text-xs text-muted-foreground">
-              Aprovação imediata
-            </span>
+            {isFreeOrderProcessing ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin" />
+                <span className="font-semibold">Gerando sua consulta...</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-6 w-6" />
+                <span className="font-semibold">Confirmar consulta gratuita</span>
+              </>
+            )}
           </Button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-foreground text-center">
+            Escolha a forma de pagamento:
+          </h4>
 
-          {/* PIX disponível apenas para serviços avulsos (não planos e não recorrentes) */}
-          {!isPixBlocked && (
+          <div className="grid grid-cols-1 gap-3">
             <Button
-              onClick={() => onSelectPaymentMethod('pix')}
+              onClick={() => onSelectPaymentMethod('card')}
               size="lg"
               variant="outline"
               className="w-full h-auto py-4 flex flex-col gap-2 hover:border-primary hover:bg-primary/5 transition-all group"
             >
-              <QrCode className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
-              <span className="font-semibold">PIX</span>
+              <CreditCard className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
+              <span className="font-semibold">Cartão de Crédito</span>
               <span className="text-xs text-muted-foreground">
-                Pagamento instantâneo
+                Aprovação imediata
               </span>
             </Button>
+
+            {/* PIX disponível apenas para serviços avulsos (não planos e não recorrentes) */}
+            {!isPixBlocked && (
+              <Button
+                onClick={() => onSelectPaymentMethod('pix')}
+                size="lg"
+                variant="outline"
+                className="w-full h-auto py-4 flex flex-col gap-2 hover:border-primary hover:bg-primary/5 transition-all group"
+              >
+                <QrCode className="h-6 w-6 text-primary group-hover:scale-110 transition-transform" />
+                <span className="font-semibold">PIX</span>
+                <span className="text-xs text-muted-foreground">
+                  Pagamento instantâneo
+                </span>
+              </Button>
+            )}
+          </div>
+
+          {/* Aviso quando PIX não está disponível */}
+          {isPixBlocked && (
+            <p className="text-xs text-center text-muted-foreground mt-2">
+              Para planos, apenas cartao de credito esta disponivel
+            </p>
           )}
         </div>
-        
-        {/* Aviso quando PIX não está disponível */}
-        {isPixBlocked && (
-          <p className="text-xs text-center text-muted-foreground mt-2">
-            ℹ️ Para planos, apenas cartão de crédito está disponível
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Informações adicionais */}
       <div className="text-center pt-4 border-t">
         <p className="text-xs text-muted-foreground">
-          🔒 Pagamento 100% seguro e criptografado
+          {isFreeOrder
+            ? "Consulta garantida pelo seu cupom de desconto"
+            : "Pagamento 100% seguro e criptografado"}
         </p>
       </div>
     </div>
