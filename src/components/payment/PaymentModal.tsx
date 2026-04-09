@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, CheckCircle2, AlertCircle, CreditCard } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, CreditCard, Moon } from "lucide-react";
 import { validateCPF } from "@/lib/cpf-validator";
 import { validatePhoneE164 } from "@/lib/validations";
 import { supabase } from "@/integrations/supabase/client";
@@ -203,6 +203,7 @@ export function PaymentModal({
   const [pixPaymentId, setPixPaymentId] = useState<string | null>(null);
   const [isPollingPayment, setIsPollingPayment] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  const [outOfHoursWhatsAppUrl, setOutOfHoursWhatsAppUrl] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [patientAddress, setPatientAddress] = useState<{
     cep?: string;
@@ -828,6 +829,7 @@ export function PaymentModal({
 
     const maxAttempts = 240; // 32 minutos (8s x 240) - aumentado para cobrir processamento lento do PIX
     let attempts = 0;
+    let outOfHoursChecked = false; // Garante que schedule-redirect seja chamado só uma vez para out_of_hours
 
     const interval = setInterval(async () => {
       attempts++;
@@ -882,6 +884,33 @@ export function PaymentModal({
                 window.location.href = checkData.redirect_url;
               }, 1500);
               return; // Sair do interval
+            } else if (!checkError && checkData?.approved && !checkData?.redirect_url && !outOfHoursChecked) {
+              // Aprovado mas sem redirect_url — pode ser out_of_hours (schedule-redirect não cria appointment)
+              outOfHoursChecked = true;
+              console.log("[pollPaymentStatus] 🌙 Aprovado sem redirect_url — verificando out_of_hours...");
+              try {
+                const schedPayload = buildSchedulePayload();
+                const { data: schedData } = await invokeEdgeFunction("schedule-redirect", {
+                  body: { ...schedPayload, order_id: orderId },
+                });
+                if (schedData?.out_of_hours && schedData?.whatsapp_url) {
+                  console.log("[pollPaymentStatus] 🌙 Out_of_hours confirmado:", schedData.whatsapp_url);
+                  clearInterval(interval);
+                  setIsPollingPayment(false);
+                  localStorage.removeItem("pendingPixOrderId");
+                  localStorage.removeItem("pendingPixEmail");
+                  setOutOfHoursWhatsAppUrl(schedData.whatsapp_url);
+                  setPaymentStatus("approved");
+                  toast.success("✅ Compra confirmada!");
+                  return;
+                } else {
+                  // Não é out_of_hours — permitir retry
+                  outOfHoursChecked = false;
+                }
+              } catch (oohError) {
+                console.warn("[pollPaymentStatus] ⚠️ Falha ao verificar out_of_hours:", oohError);
+                outOfHoursChecked = false; // retry na próxima tentativa
+              }
             } else if (checkData?.status) {
               console.log(`[pollPaymentStatus] check-payment-status status: ${checkData.status}`);
             }
@@ -1667,6 +1696,11 @@ export function PaymentModal({
           setTimeout(() => {
             window.location.href = scheduleData.url;
           }, 1500);
+        } else if (scheduleData.out_of_hours && scheduleData.whatsapp_url) {
+          // Compra fora do horário de atendimento (00h–06h59 BRT)
+          toast.success("✅ Compra confirmada!");
+          setOutOfHoursWhatsAppUrl(scheduleData.whatsapp_url);
+          setPaymentStatus("approved");
         } else {
           // Fallback: URL não veio imediatamente, iniciar polling
           console.log("[Card Payment] ⚠️ URL não retornada, iniciando polling de fallback");
@@ -2253,6 +2287,31 @@ export function PaymentModal({
     }
 
     if (paymentStatus === "approved") {
+      if (outOfHoursWhatsAppUrl) {
+        return (
+          <div className="flex flex-col items-center justify-center py-8 gap-4 text-center">
+            <CheckCircle2 className="h-16 w-16 text-green-500" />
+            <p className="text-xl font-bold text-green-600">Compra confirmada!</p>
+            <div className="flex flex-col items-center gap-2">
+              <Moon className="h-8 w-8 text-blue-400" />
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Nosso horário de atendimento é das 07h às 23h59.<br />
+                Mande-nos uma mensagem no WhatsApp para confirmar sua consulta.
+              </p>
+            </div>
+            <Button
+              asChild
+              size="lg"
+              className="bg-green-500 hover:bg-green-600 text-white w-full max-w-xs"
+            >
+              <a href={outOfHoursWhatsAppUrl} target="_blank" rel="noopener noreferrer">
+                Confirmar Consulta
+              </a>
+            </Button>
+          </div>
+        );
+      }
+
       return (
         <div className="flex flex-col items-center justify-center py-8">
           <CheckCircle2 className="h-16 w-16 text-green-500 mb-4" />
