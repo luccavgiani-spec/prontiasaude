@@ -123,11 +123,10 @@ export function HeroSection() {
             {/* Modern headline */}
             <div className="space-y-3 md:space-y-6">
               <h1 className="text-3xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight">
-                <span className="text-foreground">Médico 24 horas por dia,</span>
+                <span className="text-foreground">Consulta online imediata por apenas</span>
                 <br />
-                <span className="text-foreground">consulta online imediata por apenas</span>
-                <br />
-                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$39,90!</span>
+                <span className="font-black text-4xl md:text-6xl lg:text-7xl xl:text-8xl text-green-600">R$39,90</span>
+                <span className="text-foreground"> com médico de verdade!</span>
               </h1>
               
               <p className="hero-subtitle text-lg md:text-xl lg:text-2xl text-muted-foreground max-w-2xl leading-relaxed font-light">
