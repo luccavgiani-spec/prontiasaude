@@ -10,7 +10,7 @@ export const CATALOGO_SERVICOS = [
     nome: "Pronto Atendimento", 
     precoBase: 39.90, 
     sku: "ITC6534",
-    descricao: "Consulta médica online 24h por dia com clínico geral.",
+    descricao: "Consulta médica online com clínico geral.",
     tempo: "30-45 minutos",
     inclui: ["Consulta por videochamada", "Receituário digital", "Orientações médicas"]
   },

@@ -2295,7 +2295,7 @@ export function PaymentModal({
             <div className="flex flex-col items-center gap-2">
               <Moon className="h-8 w-8 text-blue-400" />
               <p className="text-sm text-muted-foreground max-w-xs">
-                Nosso horário de atendimento é das 07h às 23h59.<br />
+                Nosso horário de atendimento é das 06h50 às 23h59.<br />
                 Mande-nos uma mensagem no WhatsApp para confirmar sua consulta.
               </p>
             </div>
