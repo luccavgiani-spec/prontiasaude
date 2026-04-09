@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ArrowRight, CheckCircle2, ChevronDown, AlertTriangle, Zap, Clock, Calendar, FileText } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown, AlertTriangle, Zap, Clock, FileText, Moon } from "lucide-react";
 import { useState } from "react";
 
 export default function RedirectFlowMap() {
@@ -27,7 +27,7 @@ export default function RedirectFlowMap() {
         {/* Início do Fluxo */}
         <div className="flex items-center gap-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 p-4 rounded-lg border-2 border-blue-200 dark:border-blue-800">
           <Badge variant="default" className="px-4 py-2 text-base">
-            📥 Requisição de Agendamento Recebida
+            📥 Pagamento Aprovado — Serviço Avulso (sem plano ativo)
           </Badge>
         </div>
 
@@ -86,34 +86,43 @@ export default function RedirectFlowMap() {
               </div>
             </div>
 
-            {/* Exceção 3: Renovação/Exames SEM plano */}
+            {/* Exceção 3: Receitas SEM plano */}
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <Badge className="bg-green-100 text-green-900 border-green-300 px-3 py-1.5">📱 WhatsApp</Badge>
-                <span className="font-medium">É Renovação/Exame SEM plano? (RZP5755/ULT3571)</span>
+                <span className="font-medium">É Receita SEM plano? (RZP5755)</span>
               </div>
-              <div className="ml-8 space-y-1">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <span className="text-sm">SIM + SEM plano</span>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  <Badge className="bg-green-100 text-green-900 border-green-300">
-                    📱 WhatsApp Suporte (5511933359187)
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="text-sm">COM plano ativo</span>
-                  <ArrowRight className="h-4 w-4" />
-                  <span className="text-xs">🏥 ClickLife (como Pronto Atendimento)</span>
-                </div>
+              <div className="ml-8 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm">SIM + SEM plano</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                <Badge className="bg-green-100 text-green-900 border-green-300">
+                  📱 WhatsApp Suporte (5511933359187)
+                </Badge>
               </div>
             </div>
 
-            {/* Exceção 4: Médicos Especialistas (SEMPRE WhatsApp) */}
+            {/* Exceção 4: Exames SEM plano */}
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <Badge className="bg-green-100 text-green-900 border-green-300 px-3 py-1.5">📱 WhatsApp</Badge>
-                <span className="font-medium">É Médico Especialista? (TQP5720, HGG3503, etc.)</span>
+                <span className="font-medium">É Exame SEM plano? (ULT3571)</span>
+              </div>
+              <div className="ml-8 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <span className="text-sm">SIM + SEM plano</span>
+                <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                <Badge className="bg-green-100 text-green-900 border-green-300">
+                  📱 WhatsApp Suporte (5511933359187)
+                </Badge>
+              </div>
+            </div>
+
+            {/* Exceção 5: Médicos Especialistas (SEMPRE WhatsApp) */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <Badge className="bg-green-100 text-green-900 border-green-300 px-3 py-1.5">📱 WhatsApp</Badge>
+                <span className="font-medium">É Médico Especialista? (18 SKUs)</span>
               </div>
               <div className="ml-8 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -124,24 +133,24 @@ export default function RedirectFlowMap() {
               <div className="ml-8 text-xs text-muted-foreground">
                 🩺 Pediatra, Cardiologista, Ginecologista, Dermatologista, Gastroenterologista, Otorrino, Ortopedista,
                 Oftalmologista, Endocrinologista, Psiquiatra, Urologista, Neurologista, Nutrólogo, Infectologista,
-                Imunologista, Médico da Família, Geriatra, Reumatologista, Proctologista, Pneumologista
+                Imunologista, Médico da Família, Geriatra, Reumatologista
               </div>
             </div>
 
-            {/* Exceção 5: Psicólogo COM plano */}
+            {/* Exceção 6: Psicólogo SEM plano */}
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <Badge className="bg-green-100 text-green-900 border-green-300 px-3 py-1.5">📱 WhatsApp</Badge>
-                <span className="font-medium">É Psicólogo COM plano ativo? (ZXW2165/HXR8516/YME9025)</span>
+                <span className="font-medium">É Psicólogo SEM plano ativo? (ZXW2165/HXR8516/YME9025)</span>
               </div>
               <div className="ml-8 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span className="text-sm">SIM + COM plano</span>
+                <span className="text-sm">SIM + SEM plano</span>
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
                 <Badge className="bg-green-100 text-green-900 border-green-300">📱 WhatsApp 0800 (5508000008780)</Badge>
               </div>
               <div className="ml-8 text-xs text-muted-foreground">
-                🧠 Psicólogo 1/4/8 sessões com plano ativo sempre vai para WhatsApp
+                🧠 Psicólogo sem plano ativo sempre vai para WhatsApp
               </div>
             </div>
           </CollapsibleContent>
@@ -181,7 +190,7 @@ export default function RedirectFlowMap() {
                     <span className="text-sm">SIM (qualquer SKU)</span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                      🏥 CLICKLIFE (empresaId: 9083 | planoId: 863/864)
+                      🏥 CLICKLIFE emergência (empresaId: 9083)
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
@@ -191,53 +200,52 @@ export default function RedirectFlowMap() {
                 </div>
               </div>
 
-              {/* Decisão 2: NOVO - Override Clínico → Communicare */}
-              <div className="ml-4 border-l-2 border-blue-300 dark:border-blue-700 pl-6 space-y-3">
+              {/* Decisão 2: Override PA ClickLife */}
+              <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
                 <div className="flex items-start gap-3">
-                  <Badge variant="outline" className="px-3 py-1.5 bg-blue-50 border-blue-300">
-                    🆕 2️⃣
+                  <Badge variant="outline" className="px-3 py-1.5">
+                    2️⃣
                   </Badge>
                   <div className="flex-1 space-y-2">
                     <div className="font-medium flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-blue-600" />
-                      OVERRIDE CLÍNICO → COMMUNICARE? (force_communicare_clinico)
+                      <FileText className="h-4 w-4" />
+                      OVERRIDE PA ATIVO? (force_clicklife_pronto_atendimento) + SKU = ITC6534?
                     </div>
-                    <div className="text-xs text-muted-foreground mb-2 bg-blue-50 dark:bg-blue-950/30 p-2 rounded border border-blue-200 dark:border-blue-800">
-                      🎯 <strong>Caso de uso:</strong> Atender Pronto Atendimento via Communicare em finais de
-                      semana/noites (contornar regra de horário noturno/fim de semana)
+                    <div className="text-xs text-muted-foreground mb-2">
+                      🎯 <strong>Caso de uso:</strong> Forçar clínico geral para ClickLife Pronto Atendimento
                     </div>
                     <div className="flex items-center gap-2">
-                      <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                      <span className="text-sm font-medium">SIM + SKU = ITC6534</span>
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">SIM + SKU = ITC6534</span>
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <Badge className="bg-blue-50 text-blue-900 border-blue-300">
-                        💙 COMMUNICARE (override manual)
+                      <Badge className="bg-slate-100 text-slate-900 border-slate-300">
+                        🏥 CLICKLIFE PA (planoId: 863)
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <span className="text-sm">NÃO (ou outro SKU)</span>
+                      <span className="text-sm">NÃO</span>
                       <ArrowRight className="h-4 w-4" />
                     </div>
                   </div>
                 </div>
 
-                {/* Decisão 3: Funcionário de Empresa */}
+                {/* Decisão 3: Plano Ativo no Banco */}
                 <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
                   <div className="flex items-start gap-3">
                     <Badge variant="outline" className="px-3 py-1.5">
                       3️⃣
                     </Badge>
                     <div className="flex-1 space-y-2">
-                      <div className="font-medium">FUNCIONÁRIO DE EMPRESA COM PLANO? (company_employees)</div>
+                      <div className="font-medium">PLANO ATIVO NO BANCO? (patient_plans)</div>
                       <div className="text-xs text-muted-foreground mb-2">
-                        Verifica se CPF existe em <code>company_employees</code> com <code>has_active_plan = true</code>
+                        Verifica se o paciente possui plano ativo em <code>patient_plans</code>
                       </div>
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
                         <span className="text-sm">SIM</span>
                         <ArrowRight className="h-4 w-4 text-muted-foreground" />
                         <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                          🏥 CLICKLIFE (planoId: 864 p/ especialistas)
+                          🏥 CLICKLIFE (plano ativo — 863/864)
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-muted-foreground">
@@ -247,110 +255,69 @@ export default function RedirectFlowMap() {
                     </div>
                   </div>
 
-                  {/* Decisão 4: Plano Ativo */}
+                  {/* Decisão 4: Hora BRT < 7h */}
                   <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
                     <div className="flex items-start gap-3">
                       <Badge variant="outline" className="px-3 py-1.5">
                         4️⃣
                       </Badge>
                       <div className="flex-1 space-y-2">
-                        <div className="font-medium">PLANO ATIVO? (plano_ativo = true no payload)</div>
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          <span className="text-sm">SIM</span>
-                          <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                          <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                            🏥 CLICKLIFE (863 Clínico / 864 Especialistas)
-                          </Badge>
+                        <div className="font-medium flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          HORA BRT &lt; 7h? (00h00–06h59, UTC-3)
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-blue-500 mt-0.5" />
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">SIM</span>
+                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                              <Badge className="bg-indigo-50 text-indigo-900 border-indigo-300">
+                                <Moon className="h-3 w-3 mr-1 inline" />
+                                OUT OF HOURS
+                              </Badge>
+                            </div>
+                            <div className="ml-2 text-xs text-muted-foreground space-y-0.5 bg-indigo-50 dark:bg-indigo-950/30 p-2 rounded border border-indigo-200 dark:border-indigo-800">
+                              <p>• <strong>status:</strong> out_of_hours</p>
+                              <p>• <strong>Frontend:</strong> tela especial + botão WhatsApp</p>
+                              <p>• <strong>ITC6534:</strong> "Comprei clínico geral, email: [email]"</p>
+                              <p>• <strong>Demais SKUs:</strong> "Comprei [especialidade] e gostaria de agendar"</p>
+                            </div>
+                          </div>
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
-                          <span className="text-sm">NÃO</span>
+                          <span className="text-sm">NÃO (07h00–23h59)</span>
                           <ArrowRight className="h-4 w-4" />
                         </div>
                       </div>
                     </div>
 
-                    {/* Decisão 5: Fim de Semana */}
+                    {/* Decisão 5: SKU = ITC6534 */}
                     <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
                       <div className="flex items-start gap-3">
                         <Badge variant="outline" className="px-3 py-1.5">
                           5️⃣
                         </Badge>
                         <div className="flex-1 space-y-2">
-                          <div className="font-medium flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            FIM DE SEMANA? (Sábado/Domingo)
+                          <div className="font-medium">SKU = ITC6534? (Clínico Geral)</div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                            <span className="text-sm font-medium">SIM</span>
+                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                            <Badge className="bg-blue-50 text-blue-900 border-blue-300">
+                              💙 COMMUNICARE (fila)
+                            </Badge>
                           </div>
                           <div className="flex items-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-green-600" />
-                            <span className="text-sm">SIM</span>
+                            <span className="text-sm">NÃO (outros SKUs)</span>
                             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                            <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                              🏥 CLICKLIFE (planoId: 863)
+                            <Badge className="bg-green-100 text-green-900 border-green-300">
+                              📱 WhatsApp 5511933359187
                             </Badge>
                           </div>
-                          <div className="flex items-center gap-2 text-muted-foreground">
-                            <span className="text-sm">NÃO</span>
-                            <ArrowRight className="h-4 w-4" />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Decisão 6: Horário Noturno */}
-                      <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Badge variant="outline" className="px-3 py-1.5">
-                            6️⃣
-                          </Badge>
-                          <div className="flex-1 space-y-2">
-                            <div className="font-medium flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              HORÁRIO NOTURNO? (&lt;07h ou ≥19h horário Brasília UTC-3)
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <CheckCircle2 className="h-4 w-4 text-green-600" />
-                              <span className="text-sm">SIM</span>
-                              <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                              <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                                🏥 CLICKLIFE (planoId: 863)
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <span className="text-sm">NÃO</span>
-                              <ArrowRight className="h-4 w-4" />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Decisão 7: Especialidade Disponível */}
-                        <div className="ml-4 border-l-2 border-border pl-6 space-y-3">
-                          <div className="flex items-start gap-3">
-                            <Badge variant="outline" className="px-3 py-1.5">
-                              7️⃣
-                            </Badge>
-                            <div className="flex-1 space-y-2">
-                              <div className="font-medium">ESPECIALIDADE DISPONÍVEL NA COMMUNICARE?</div>
-                              <div className="text-xs text-muted-foreground mb-2">
-                                Comparação via <code>normalize()</code> entre payload e especialidades configuradas em{" "}
-                                <strong>Admin → Especialidades Communicare</strong>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                                <span className="text-sm font-medium">SIM (configurada)</span>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                <Badge className="bg-blue-50 text-blue-900 border-blue-300">
-                                  💙 COMMUNICARE (padrão)
-                                </Badge>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="h-4 w-4 text-slate-600" />
-                                <span className="text-sm">NÃO (não configurada)</span>
-                                <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                                <Badge className="bg-slate-100 text-slate-900 border-slate-300">
-                                  🏥 CLICKLIFE (planoId: 863)
-                                </Badge>
-                              </div>
-                            </div>
+                          <div className="ml-8 text-xs text-muted-foreground">
+                            Mensagem: "Acabei de comprar [especialidade] e gostaria de agendar"
                           </div>
                         </div>
                       </div>
@@ -380,13 +347,31 @@ export default function RedirectFlowMap() {
                   <Badge className="bg-green-100 text-green-900 border-green-300">📱 WhatsApp</Badge>
                   <span>Atendimento manual via WhatsApp Business</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-indigo-50 text-indigo-900 border-indigo-300">🌙 Out of Hours</Badge>
+                  <span>Fora do horário comercial (00h–06h59 BRT)</span>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                ⚙️ Configurações disponíveis em: <strong>Admin → Testes → Admin Override</strong>
+                ⚙️ Override disponível em: <strong>Admin → Configurações → Forçar Pronto Atendimento → ClickLife</strong>
               </p>
             </div>
           </AlertDescription>
         </Alert>
+
+        {/* Itens Removidos do Fluxo Antigo */}
+        <div className="p-4 bg-muted/20 rounded-lg border border-dashed border-muted-foreground/30">
+          <p className="font-semibold mb-2 text-muted-foreground text-sm">
+            🗑️ Removido do fluxo anterior:
+          </p>
+          <ul className="space-y-1 text-xs text-muted-foreground">
+            <li className="line-through">❌ Verificação de fim de semana → ClickLife</li>
+            <li className="line-through">❌ Verificação de horário noturno (≥19h) → ClickLife</li>
+            <li className="line-through">❌ Override force_communicare_clinico</li>
+            <li className="line-through">❌ Verificação de especialidade disponível na Communicare</li>
+            <li className="line-through">❌ Fallback ClickLife em horário noturno/fim de semana</li>
+          </ul>
+        </div>
 
         {/* Tabela de Resumo SKUs */}
         <div className="mt-6 p-4 bg-muted/30 rounded-lg border">
@@ -394,22 +379,18 @@ export default function RedirectFlowMap() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
               <p className="font-medium mb-1">🩺 Clínico Geral:</p>
-              <p className="text-xs text-muted-foreground">ITC6534</p>
+              <p className="text-xs text-muted-foreground">ITC6534 → Communicare (horário comercial) ou Out of Hours</p>
             </div>
             <div>
               <p className="font-medium mb-1">🧠 Psicologia:</p>
               <p className="text-xs text-muted-foreground">ZXW2165, HXR8516, YME9025</p>
             </div>
             <div>
-              <p className="font-medium mb-1">👨‍⚕️ Médicos Especialistas:</p>
+              <p className="font-medium mb-1">👨‍⚕️ Médicos Especialistas (18 SKUs):</p>
               <p className="text-xs text-muted-foreground">
                 TQP5720, HGG3503, VHH8883, TSB0751, CCP1566, FKS5964, TVQ5046, HMG9544, HME8366, DYY8522, QOP1101,
-                LZF3879, YZD9932, UDH3250, PKS9388, MYX5186
+                LZF3879, YZD9932, UDH3250, PKS9388, MYX5186, ZXW2165, HXR8516
               </p>
-            </div>
-            <div>
-              <p className="font-medium mb-1">🍎 Nutrição/Fitness:</p>
-              <p className="text-xs text-muted-foreground">VPN5132, BIR7668</p>
             </div>
             <div>
               <p className="font-medium mb-1">📄 Laudos/Receitas/Exames:</p>
