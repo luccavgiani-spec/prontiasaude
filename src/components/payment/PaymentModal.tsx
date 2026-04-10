@@ -2819,8 +2819,6 @@ export function PaymentModal({
   // Versão com componentes Radix para produção
   const modalBodyRadix = (
     <>
-      {renderStatus()}
-
       {(paymentStatus === "processing" || paymentStatus === "in_process") && (
         <>
           <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center rounded-lg">

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CreditCard, QrCode, User, Mail, Phone, FileText, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { CreditCard, QrCode, User, Mail, Phone, FileText, Loader2, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { formataPreco } from "@/lib/utils";
 
 interface PaymentSummaryProps {
@@ -70,6 +70,8 @@ export function PaymentSummary({
 }: PaymentSummaryProps) {
   // PIX é bloqueado para planos (IND_* ou FAM_*) e para recorrências
   const isPixBlocked = recurring || isPlanSku(sku);
+  const hora = new Date().getHours();
+  const isMadrugada = hora >= 0 && hora < 7;
   // Detectar cupom de 100% de desconto (consulta gratuita)
   const isFreeOrder = appliedCoupon !== null &&
     (appliedCoupon.discount_percentage === 100 || appliedCoupon.amount_discounted === 0);
@@ -109,6 +111,16 @@ export function PaymentSummary({
           )}
         </div>
       </div>
+
+      {/* Aviso de horário de atendimento (apenas madrugada 0h–6h59) */}
+      {isMadrugada && (
+        <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            Nosso atendimento médico online acontece das 07h às 0h. Dessa forma, às 07h você receberá automaticamente o link da sua consulta para realizar o atendimento com o médico, podendo utilizar o link durante todo o período das 07h às 0h.
+          </p>
+        </div>
+      )}
 
       {/* Dados do Cliente */}
       <Card className="bg-muted/30">
