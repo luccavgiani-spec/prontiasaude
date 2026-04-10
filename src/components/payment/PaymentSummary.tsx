@@ -117,7 +117,7 @@ export function PaymentSummary({
         <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
           <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            Nosso atendimento médico online acontece das 07h às 0h. Dessa forma, às 07h você receberá automaticamente o link da sua consulta para realizar o atendimento com o médico, podendo utilizar o link durante todo o período das 07h às 0h.
+            Pagamentos realizados entre 00h e 06h59 estão fora do horário de atendimento. Após a confirmação do pagamento, o link da consulta será enviado às 07h, para utilização durante o dia.
           </p>
         </div>
       )}
