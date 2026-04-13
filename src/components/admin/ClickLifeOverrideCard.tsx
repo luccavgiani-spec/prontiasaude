@@ -50,9 +50,9 @@ export default function ClickLifeOverrideCard() {
     try {
       // Usar Edge Function para escrever na Produção
       const { data, error } = await invokeEdgeFunction('admin-settings-update', {
-        body: { 
-          key: 'force_clicklife_pronto_atendimento', 
-          value: newValue 
+        body: {
+          key: 'force_clicklife_pronto_atendimento',
+          value: newValue ? "true" : "false"
         }
       });
 
