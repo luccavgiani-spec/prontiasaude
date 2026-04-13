@@ -683,35 +683,87 @@ export default function UserRegistrationsTab() {
     setQuickConsultLoading(true);
 
     try {
-      console.log('[QuickConsult] Gerando consulta ClickLife para:', quickConsultUser.email);
+      if (quickConsultProvider === 'clicklife') {
+        // ClickLife: ativar paciente via activate-clicklife-manual (busca dados pelo email)
+        console.log('[QuickConsult] Ativando paciente na ClickLife:', quickConsultUser.email);
 
-      const { data, error } = await invokeEdgeFunction('patient-operations', {
-        body: {
-          operation: 'generate_clicklife_consultation',
-          patient_email: quickConsultUser.email,
-        },
-      });
+        const { data, error } = await invokeEdgeFunction('activate-clicklife-manual', {
+          body: { email: quickConsultUser.email },
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data?.success) {
-        setGeneratedConsultUrl('success');
-        setQuickConsultLoading(false);
-        toast.success('Consulta ClickLife gerada com sucesso!');
+        if (data?.success) {
+          setGeneratedConsultUrl('clicklife-success');
+          setQuickConsultLoading(false);
+          toast.success('Paciente ativado na ClickLife com sucesso!');
+        } else {
+          const errorMsg = data?.error || 'Erro desconhecido';
+          const debugHint = data?.debug_hint || '';
+          const userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
+          console.error('[QuickConsult] Erro ClickLife:', { error: errorMsg, debug_hint: debugHint });
+          toast.error(userMessage);
+          setQuickConsultLoading(false);
+          setQuickConsultUser(null);
+          setGeneratedConsultUrl(null);
+        }
       } else {
-        const errorMsg = data?.error || 'Erro desconhecido';
-        const debugHint = data?.debug_hint || '';
-        let userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
+        // Communicare: criar consulta via schedule-redirect com payload completo
+        const missingFields: string[] = [];
+        if (!quickConsultUser.patient?.cpf) missingFields.push('CPF');
+        if (!quickConsultUser.email) missingFields.push('Email');
+        if (!quickConsultUser.patient?.first_name && !quickConsultUser.patient?.last_name) missingFields.push('Nome');
+        if (!quickConsultUser.patient?.phone_e164) missingFields.push('Telefone');
 
-        console.error('[QuickConsult] Erro:', { error: errorMsg, debug_hint: debugHint });
-        toast.error(userMessage);
-        setQuickConsultLoading(false);
-        setQuickConsultUser(null);
-        setGeneratedConsultUrl(null);
+        if (missingFields.length > 0) {
+          toast.error(`Dados obrigatórios faltando: ${missingFields.join(', ')}. Edite o paciente primeiro.`);
+          setQuickConsultLoading(false);
+          return;
+        }
+
+        const payload = {
+          cpf: quickConsultUser.patient?.cpf || '',
+          email: quickConsultUser.email,
+          nome: `${quickConsultUser.patient?.first_name || ''} ${quickConsultUser.patient?.last_name || ''}`.trim(),
+          telefone: quickConsultUser.patient?.phone_e164 || '',
+          sku: 'ITC6534',
+          plano_ativo: !!quickConsultUser.activePlan,
+          sexo: quickConsultUser.patient?.gender || 'F',
+          birth_date: quickConsultUser.patient?.birth_date,
+          force_provider: 'communicare',
+          skip_registration: true,
+        };
+
+        console.log('[QuickConsult] Criando consulta Communicare:', payload.email);
+
+        const { data, error } = await invokeEdgeFunction('schedule-redirect', { body: payload });
+        if (error) throw error;
+
+        if (data?.ok && data?.url) {
+          setGeneratedConsultUrl(data.url);
+          setQuickConsultLoading(false);
+          try {
+            await navigator.clipboard.writeText(data.url);
+            toast.success('Consulta Communicare criada! Link copiado.');
+          } catch {
+            toast.success('Consulta Communicare criada! Copie o link abaixo.');
+          }
+        } else {
+          const errorMsg = data?.error || 'Erro desconhecido';
+          const debugHint = data?.debug_hint || '';
+          const requestId = data?.request_id || '';
+          let userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
+          if (requestId) userMessage += ` [ID: ${requestId.substring(0, 8)}]`;
+          console.error('[QuickConsult] Erro Communicare:', { error: errorMsg, debug_hint: debugHint });
+          toast.error(userMessage);
+          setQuickConsultLoading(false);
+          setQuickConsultUser(null);
+          setGeneratedConsultUrl(null);
+        }
       }
     } catch (error: any) {
-      console.error('Erro ao gerar consulta:', error);
-      toast.error(`Erro ao gerar consulta: ${error?.message || 'Erro de conexão'}`);
+      console.error('Erro ao criar consulta:', error);
+      toast.error(`Erro ao criar consulta: ${error?.message || 'Erro de conexão'}`);
       setQuickConsultLoading(false);
       setQuickConsultUser(null);
       setGeneratedConsultUrl(null);
@@ -1166,7 +1218,7 @@ export default function UserRegistrationsTab() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <HeartPulse className="h-5 w-5 text-purple-600" />
-              Gerar Consulta ClickLife
+              Criar Consulta Rápida
             </DialogTitle>
           </DialogHeader>
 
@@ -1180,11 +1232,64 @@ export default function UserRegistrationsTab() {
               <p className="text-sm font-mono">{formatCPF(quickConsultUser?.patient?.cpf)}</p>
             </div>
 
-            {/* Confirmação de sucesso */}
-            {generatedConsultUrl && (
+            {/* Seleção de Provedor */}
+            {!generatedConsultUrl && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Escolha o Provedor:</label>
+                <RadioGroup
+                  value={quickConsultProvider}
+                  onValueChange={(v) => setQuickConsultProvider(v as 'clicklife' | 'communicare')}
+                >
+                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted cursor-pointer">
+                    <RadioGroupItem value="clicklife" id="qc-clicklife" />
+                    <label htmlFor="qc-clicklife" className="cursor-pointer flex-1">
+                      <span className="font-medium">ClickLife</span>
+                      <p className="text-sm text-muted-foreground">Pronto atendimento imediato</p>
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-muted cursor-pointer">
+                    <RadioGroupItem value="communicare" id="qc-communicare" />
+                    <label htmlFor="qc-communicare" className="cursor-pointer flex-1">
+                      <span className="font-medium">Communicare</span>
+                      <p className="text-sm text-muted-foreground">Fila de atendimento</p>
+                    </label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+
+            {/* Sucesso ClickLife — sem URL */}
+            {generatedConsultUrl === 'clicklife-success' && (
               <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
                 <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  ✅ Consulta gerada com sucesso! O paciente receberá acesso via ClickLife.
+                  ✅ Paciente ativado na ClickLife com sucesso!
+                </p>
+              </div>
+            )}
+
+            {/* Sucesso Communicare — exibe URL */}
+            {generatedConsultUrl && generatedConsultUrl !== 'clicklife-success' && (
+              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
+                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">✅ Consulta Communicare criada!</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={generatedConsultUrl}
+                    readOnly
+                    className="flex-1 text-xs font-mono"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedConsultUrl);
+                      toast.success('Link copiado!');
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-green-600 dark:text-green-400 mt-2">
+                  Envie este link para o paciente iniciar a consulta.
                 </p>
               </div>
             )}
@@ -1206,12 +1311,12 @@ export default function UserRegistrationsTab() {
                 {quickConsultLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Gerando...
+                    {quickConsultProvider === 'clicklife' ? 'Ativando...' : 'Criando...'}
                   </>
                 ) : (
                   <>
                     <HeartPulse className="h-4 w-4 mr-2" />
-                    Gerar Consulta
+                    {quickConsultProvider === 'clicklife' ? 'Gerar Consulta ClickLife' : 'Criar Consulta Communicare'}
                   </>
                 )}
               </Button>
