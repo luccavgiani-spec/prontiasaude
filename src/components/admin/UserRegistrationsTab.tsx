@@ -683,83 +683,63 @@ export default function UserRegistrationsTab() {
     setQuickConsultLoading(true);
 
     try {
-      if (quickConsultProvider === 'clicklife') {
-        // ClickLife: ativar paciente via activate-clicklife-manual (busca dados pelo email)
-        console.log('[QuickConsult] Ativando paciente na ClickLife:', quickConsultUser.email);
+      // Validar campos obrigatórios para schedule-redirect (ClickLife e Communicare)
+      const missingFields: string[] = [];
+      if (!quickConsultUser.patient?.cpf) missingFields.push('CPF');
+      if (!quickConsultUser.patient?.first_name && !quickConsultUser.patient?.last_name) missingFields.push('Nome');
+      if (!quickConsultUser.patient?.phone_e164) missingFields.push('Telefone');
 
-        const { data, error } = await invokeEdgeFunction('activate-clicklife-manual', {
-          body: { email: quickConsultUser.email },
-        });
+      if (missingFields.length > 0) {
+        toast.error(`Dados obrigatórios faltando: ${missingFields.join(', ')}. Edite o paciente primeiro.`);
+        setQuickConsultLoading(false);
+        return;
+      }
 
-        if (error) throw error;
+      // Ambos os provedores usam schedule-redirect com force_provider
+      // - ClickLife: usa o endpoint robusto /atendimentos/atendimentos do v5 (safe JSON parsing)
+      // - Communicare: enfileira na fila de atendimento e retorna URL
+      const payload = {
+        cpf: quickConsultUser.patient?.cpf || '',
+        email: quickConsultUser.email,
+        nome: `${quickConsultUser.patient?.first_name || ''} ${quickConsultUser.patient?.last_name || ''}`.trim(),
+        telefone: quickConsultUser.patient?.phone_e164 || '',
+        sku: 'ITC6534',
+        plano_ativo: !!quickConsultUser.activePlan,
+        sexo: quickConsultUser.patient?.gender || 'F',
+        birth_date: quickConsultUser.patient?.birth_date,
+        force_provider: quickConsultProvider,
+        skip_registration: true,
+      };
 
-        if (data?.success) {
-          setGeneratedConsultUrl('clicklife-success');
-          setQuickConsultLoading(false);
-          toast.success('Paciente ativado na ClickLife com sucesso!');
-        } else {
-          const errorMsg = data?.error || 'Erro desconhecido';
-          const debugHint = data?.debug_hint || '';
-          const userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
-          console.error('[QuickConsult] Erro ClickLife:', { error: errorMsg, debug_hint: debugHint });
-          toast.error(userMessage);
-          setQuickConsultLoading(false);
-          setQuickConsultUser(null);
-          setGeneratedConsultUrl(null);
+      console.log('[QuickConsult] Criando consulta via schedule-redirect:', {
+        provider: quickConsultProvider,
+        email: payload.email,
+      });
+
+      const { data, error } = await invokeEdgeFunction('schedule-redirect', { body: payload });
+      if (error) throw error;
+
+      if (data?.ok && data?.url) {
+        setGeneratedConsultUrl(data.url);
+        setQuickConsultLoading(false);
+        const providerLabel = quickConsultProvider === 'clicklife' ? 'ClickLife' : 'Communicare';
+        try {
+          await navigator.clipboard.writeText(data.url);
+          toast.success(`Consulta ${providerLabel} criada! Link copiado.`);
+        } catch {
+          toast.success(`Consulta ${providerLabel} criada! Copie o link abaixo.`);
         }
       } else {
-        // Communicare: criar consulta via schedule-redirect com payload completo
-        const missingFields: string[] = [];
-        if (!quickConsultUser.patient?.cpf) missingFields.push('CPF');
-        if (!quickConsultUser.email) missingFields.push('Email');
-        if (!quickConsultUser.patient?.first_name && !quickConsultUser.patient?.last_name) missingFields.push('Nome');
-        if (!quickConsultUser.patient?.phone_e164) missingFields.push('Telefone');
-
-        if (missingFields.length > 0) {
-          toast.error(`Dados obrigatórios faltando: ${missingFields.join(', ')}. Edite o paciente primeiro.`);
-          setQuickConsultLoading(false);
-          return;
-        }
-
-        const payload = {
-          cpf: quickConsultUser.patient?.cpf || '',
-          email: quickConsultUser.email,
-          nome: `${quickConsultUser.patient?.first_name || ''} ${quickConsultUser.patient?.last_name || ''}`.trim(),
-          telefone: quickConsultUser.patient?.phone_e164 || '',
-          sku: 'ITC6534',
-          plano_ativo: !!quickConsultUser.activePlan,
-          sexo: quickConsultUser.patient?.gender || 'F',
-          birth_date: quickConsultUser.patient?.birth_date,
-          force_provider: 'communicare',
-          skip_registration: true,
-        };
-
-        console.log('[QuickConsult] Criando consulta Communicare:', payload.email);
-
-        const { data, error } = await invokeEdgeFunction('schedule-redirect', { body: payload });
-        if (error) throw error;
-
-        if (data?.ok && data?.url) {
-          setGeneratedConsultUrl(data.url);
-          setQuickConsultLoading(false);
-          try {
-            await navigator.clipboard.writeText(data.url);
-            toast.success('Consulta Communicare criada! Link copiado.');
-          } catch {
-            toast.success('Consulta Communicare criada! Copie o link abaixo.');
-          }
-        } else {
-          const errorMsg = data?.error || 'Erro desconhecido';
-          const debugHint = data?.debug_hint || '';
-          const requestId = data?.request_id || '';
-          let userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
-          if (requestId) userMessage += ` [ID: ${requestId.substring(0, 8)}]`;
-          console.error('[QuickConsult] Erro Communicare:', { error: errorMsg, debug_hint: debugHint });
-          toast.error(userMessage);
-          setQuickConsultLoading(false);
-          setQuickConsultUser(null);
-          setGeneratedConsultUrl(null);
-        }
+        const errorMsg = data?.error || 'Erro desconhecido';
+        const debugHint = data?.debug_hint || '';
+        const requestId = data?.request_id || '';
+        let userMessage = debugHint ? `${errorMsg} (${debugHint})` : errorMsg;
+        if (requestId) userMessage += ` [ID: ${requestId.substring(0, 8)}]`;
+        console.error('[QuickConsult] Erro:', { provider: quickConsultProvider, error: errorMsg, debug_hint: debugHint });
+        toast.error(userMessage);
+        setQuickConsultLoading(false);
+        setQuickConsultUser(null);
+        setGeneratedConsultUrl(null);
       }
     } catch (error: any) {
       console.error('Erro ao criar consulta:', error);
@@ -1258,19 +1238,10 @@ export default function UserRegistrationsTab() {
               </div>
             )}
 
-            {/* Sucesso ClickLife — sem URL */}
-            {generatedConsultUrl === 'clicklife-success' && (
+            {/* Sucesso — exibe URL gerada (ClickLife e Communicare) */}
+            {generatedConsultUrl && (
               <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  ✅ Paciente ativado na ClickLife com sucesso!
-                </p>
-              </div>
-            )}
-
-            {/* Sucesso Communicare — exibe URL */}
-            {generatedConsultUrl && generatedConsultUrl !== 'clicklife-success' && (
-              <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">✅ Consulta Communicare criada!</p>
+                <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-2">✅ Consulta criada com sucesso!</p>
                 <div className="flex items-center gap-2">
                   <Input
                     value={generatedConsultUrl}
@@ -1311,12 +1282,12 @@ export default function UserRegistrationsTab() {
                 {quickConsultLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    {quickConsultProvider === 'clicklife' ? 'Ativando...' : 'Criando...'}
+                    Criando...
                   </>
                 ) : (
                   <>
                     <HeartPulse className="h-4 w-4 mr-2" />
-                    {quickConsultProvider === 'clicklife' ? 'Gerar Consulta ClickLife' : 'Criar Consulta Communicare'}
+                    {quickConsultProvider === 'clicklife' ? 'Criar Consulta ClickLife' : 'Criar Consulta Communicare'}
                   </>
                 )}
               </Button>
